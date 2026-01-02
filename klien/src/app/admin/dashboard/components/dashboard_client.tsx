@@ -180,7 +180,7 @@ export default function DashboardClient() {
                         </div>
                     </div>
                     <button
-                        onClick={() => handleNavigation('/admin/data_ekstrakurikuler')}
+                        onClick={() => handleNavigation('/admin/ekstrakurikuler')}
                         className="flex items-center space-x-2 text-orange-600 hover:text-orange-700 transition"
                     >
                         <span className="text-sm font-medium">Lihat detail</span>

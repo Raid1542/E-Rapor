@@ -10,10 +10,10 @@
 import { Metadata } from 'next';
 import ArsipRaporClient from './components/arsip_rapor_client';
 
-export const meta: Metadata = {
-    title: 'Arsip Rapor',
+export const metadata: Metadata = {
+    title: 'Data Arsip Rapor',
 };
 
-export default function ArsipRaporPage() {
-    return <ArsipRaporClient />;
+export default function ArsipRapor() {
+    return <ArsipRaporClient/>;
 }

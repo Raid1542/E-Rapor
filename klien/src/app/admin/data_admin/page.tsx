@@ -10,10 +10,10 @@
 import { Metadata } from 'next';
 import DataAdminClient from './components/data_admin_client';
 
-export const meta: Metadata = {
-  title: 'Data Admin',
+export const metadata: Metadata = {
+    title: 'Data Admin',
 };
 
-export default function DataAdminPage() {
-  return <DataAdminClient />;
+export default function DataAdmin() {
+    return <DataAdminClient/>;
 }
