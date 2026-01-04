@@ -65,18 +65,60 @@ router.put('/ganti-password', authenticate, guruKelasOnly, guruKelasController.g
 router.put('/upload_foto', authenticate, uploadFoto.single('foto'), guruKelasController.uploadFotoProfil);
 
 // --- Absensi ---
-router.get('/absensi', authenticate, guruKelasOnly, guruKelasController.getAbsensiTotal);
+router.get('/absensi/:jenis/:semester', 
+  authenticate, 
+  guruKelasOnly, 
+  (req, res, next) => {
+    const { jenis, semester } = req.params;
+    if (!['PTS', 'PAS'].includes(jenis.toUpperCase())) {
+      return res.status(400).json({ message: 'Jenis harus PTS atau PAS' });
+    }
+    if (!['Ganjil', 'Genap'].includes(semester)) {
+      return res.status(400).json({ message: 'Semester harus Ganjil atau Genap' });
+    }
+    req.penilaianContext = { jenis, semester };
+    next();
+  },
+  cekPenilaianStatus,
+  guruKelasController.getAbsensiTotal
+);
 router.put('/absensi/:siswa_id', authenticate, guruKelasOnly, cekPenilaianStatus, guruKelasController.updateAbsensiTotal);
 
 // --- Catatan Wali Kelas ---
-router.get('/catatan-wali-kelas', authenticate, guruKelasOnly, guruKelasController.getCatatanWaliKelas);
-router.put('/catatan-wali-kelas/:siswa_id', authenticate, guruKelasOnly, cekPenilaianStatus, guruKelasController.updateCatatanWaliKelas);
+router.get('/catatan-wali-kelas/:jenis/:semester', 
+  authenticate, 
+  guruKelasOnly, 
+  (req, res, next) => {
+    const { jenis, semester } = req.params;
+    if (!['PTS', 'PAS'].includes(jenis.toUpperCase())) {
+      return res.status(400).json({ message: 'Jenis harus PTS atau PAS' });
+    }
+    if (!['Ganjil', 'Genap'].includes(semester)) {
+      return res.status(400).json({ message: 'Semester harus Ganjil atau Genap' });
+    }
+    req.penilaianContext = { jenis, semester };
+    next();
+  },
+  cekPenilaianStatus,
+  guruKelasController.getCatatanWaliKelas
+);
+router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester', authenticate, guruKelasOnly, (req, res, next) => {
+  const { siswa_id, jenis, semester } = req.params;
+  if (!['PTS', 'PAS'].includes(jenis.toUpperCase())) {
+    return res.status(400).json({ message: 'Jenis harus PTS atau PAS' });
+  }
+  if (!['Ganjil', 'Genap'].includes(semester)) {
+    return res.status(400).json({ message: 'Semester harus Ganjil atau Genap' });
+  }
+  req.penilaianContext = { jenis, semester };
+  next();
+}, cekPenilaianStatus, guruKelasController.updateCatatanWaliKelas);
 
 // --- Ekstrakurikuler & Kokurikuler ---
 router.get('/ekskul', authenticate, guruKelasOnly, guruKelasController.getEkskulSiswa);
 router.put('/ekskul/:siswaId', authenticate, guruKelasOnly, guruKelasController.updateEkskulSiswa);
 
-router.get('/kokurikuler', authenticate, guruKelasOnly, guruKelasController.getNilaiKokurikuler);
+router.get('/kokurikuler', authenticate, guruKelasOnly, cekPenilaianStatus, guruKelasController.getNilaiKokurikuler);
 router.get('/kokurikuler/:siswaId', authenticate, guruKelasOnly, (req, res, next) => {
   const siswaId = parseInt(req.params.siswaId);
   if (isNaN(siswaId) || siswaId <= 0) {
@@ -221,30 +263,57 @@ router.get('/generate-rapor/:siswaId/:jenis/:semester', authenticate, authorize(
 }, guruKelasController.generateRaporPDF);
 
 // Versi dengan tahunAjaranId → untuk arsip (admin/guru kelas)
-router.get('/generate-rapor/:siswaId/:jenis/:semester/:tahunAjaranId', authenticate, authorize(['admin', 'guru kelas']), (req, res, next) => {
-  const siswaId = parseInt(req.params.siswaId, 10);
-  if (isNaN(siswaId) || siswaId <= 0) {
-    return res.status(400).json({ success: false, message: 'ID siswa tidak valid' });
-  }
+router.get('/generate-rapor/:siswaId/:jenis/:semester/:tahunAjaranId', 
+  authenticate, 
+  authorize(['admin', 'guru kelas']), 
+  (req, res, next) => {
+    const siswaId = parseInt(req.params.siswaId, 10);
+    if (isNaN(siswaId) || siswaId <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'ID siswa tidak valid' 
+      });
+    }
 
-  const jenis = req.params.jenis.toUpperCase();
-  if (!['PTS', 'PAS'].includes(jenis)) {
-    return res.status(400).json({ success: false, message: 'Jenis rapor harus PTS atau PAS' });
-  }
+    const jenis = req.params.jenis.toUpperCase();
+    if (!['PTS', 'PAS'].includes(jenis)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Jenis rapor harus PTS atau PAS' 
+      });
+    }
 
-  const semester = req.params.semester.toLowerCase();
-  if (!['ganjil', 'genap'].includes(semester)) {
-    return res.status(400).json({ success: false, message: 'Semester harus ganjil atau genap' });
-  }
+    const rawSemester = req.params.semester.trim().toLowerCase();
+    let normalizedSemester = '';
+    if (rawSemester === 'ganjil') {
+      normalizedSemester = 'Ganjil';
+    } else if (rawSemester === 'genap') {
+      normalizedSemester = 'Genap';
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Semester harus Ganjil atau Genap' 
+      });
+    }
 
-  const tahunAjaranId = parseInt(req.params.tahunAjaranId, 10);
-  if (isNaN(tahunAjaranId) || tahunAjaranId <= 0) {
-    return res.status(400).json({ success: false, message: 'ID tahun ajaran tidak valid' });
-  }
+    const tahunAjaranId = parseInt(req.params.tahunAjaranId, 10);
+    if (isNaN(tahunAjaranId) || tahunAjaranId <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'ID tahun ajaran tidak valid' 
+      });
+    }
 
-  req.raporParams = { siswaId, jenis, semester, tahunAjaranId };
-  next();
-}, guruKelasController.generateRaporPDF);
+    req.raporParams = { 
+      siswaId, 
+      jenis, 
+      semester: normalizedSemester, 
+      tahunAjaranId 
+    };
+    next();
+  }, 
+  guruKelasController.generateRaporPDF
+);
 
 // --- Input Nilai Komponen ---
 router.put('/nilai-komponen/:mapelId/:siswaId', authenticate, guruKelasOnly, (req, res, next) => {

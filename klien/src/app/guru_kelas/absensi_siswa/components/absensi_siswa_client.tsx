@@ -23,7 +23,6 @@ interface SiswaAbsensi {
 }
 
 export default function DataAbsensiPage() {
-
     const [siswaList, setSiswaList] = useState<SiswaAbsensi[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -43,46 +42,81 @@ export default function DataAbsensiPage() {
     const [kelasNama, setKelasNama] = useState<string>('Kelas Anda');
     const [showModal, setShowModal] = useState(false);
     const [isModalClosing, setIsModalClosing] = useState(false);
+    const [semester, setSemester] = useState<'Ganjil' | 'Genap'>('Ganjil');
+    const [jenisPenilaian, setJenisPenilaian] = useState<'PTS' | 'PAS'>('PAS');
 
-    // Fetch data
+    // Ambil periode aktif dan data absensi
     useEffect(() => {
-        const fetchAbsensi = async () => {
-            setLoading(true);
+        const loadData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Silakan login terlebih dahulu');
+                return;
+            }
+
             try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    alert('Silakan login terlebih dahulu');
+                // Ambil tahun ajaran aktif
+                const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (!taRes.ok) {
+                    const err = await taRes.json();
+                    alert(err.message || 'Gagal memuat periode aktif');
                     return;
                 }
 
-                const res = await fetch('http://localhost:5000/api/guru-kelas/absensi', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const taData = await taRes.json();
+                const { semester: sem, status_pts, status_pas } = taData.data;
 
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success) {
-                        setSiswaList(data.data || []);
-                        setKelasNama(data.kelas || 'Kelas Anda');
-                    } else {
-                        alert(data.message || 'Gagal memuat data absensi');
-                    }
-                } else {
-                    const error = await res.json();
-                    alert(error.message || 'Gagal memuat data absensi');
-                }
+                let jenis = 'PAS';
+                if (status_pts === 'aktif') jenis = 'PTS';
+                else if (status_pas === 'aktif') jenis = 'PAS';
+
+                setSemester(sem);
+                setJenisPenilaian(jenis as 'PTS' | 'PAS');
+
+                // Ambil data absensi berdasarkan periode
+                await fetchAbsensi(sem, jenis, token);
             } catch (err) {
-                console.error('Error fetch absensi:', err);
+                console.error('Error load data:', err);
                 alert('Gagal terhubung ke server');
-            } finally {
-                setLoading(false);
             }
         };
 
-        fetchAbsensi();
+        loadData();
     }, []);
 
-    // Handle edit click
+    const fetchAbsensi = async (sem: string, jenis: string, token: string) => {
+        setLoading(true);
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/guru-kelas/absensi/${jenis}/${sem}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    setSiswaList(data.data || []);
+                    setKelasNama(data.kelas || 'Kelas Anda');
+                } else {
+                    alert(data.message || 'Gagal memuat data absensi');
+                }
+            } else {
+                const error = await res.json();
+                alert(error.message || 'Gagal memuat data absensi');
+            }
+        } catch (err) {
+            console.error('Error fetch absensi:', err);
+            alert('Gagal terhubung ke server');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleEdit = (siswa: SiswaAbsensi) => {
         const initialData = {
             jumlah_sakit: siswa.jumlah_sakit.toString(),
@@ -96,46 +130,48 @@ export default function DataAbsensiPage() {
         setIsModalClosing(false);
     };
 
-    // Helper: close modal with animation
     const handleCloseModal = () => {
         setIsModalClosing(true);
     };
 
-    // Handle save
     const handleSave = async () => {
         if (!editingId) return;
 
-        if (
-            editData.jumlah_sakit === originalEditData.jumlah_sakit &&
-            editData.jumlah_izin === originalEditData.jumlah_izin &&
-            editData.jumlah_alpha === originalEditData.jumlah_alpha
-        ) {
+        const hasChanges =
+            editData.jumlah_sakit !== originalEditData.jumlah_sakit ||
+            editData.jumlah_izin !== originalEditData.jumlah_izin ||
+            editData.jumlah_alpha !== originalEditData.jumlah_alpha;
+
+        if (!hasChanges) {
             alert('Tidak ada perubahan data.');
             handleCloseModal();
             return;
         }
 
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Sesi login habis.');
+            return;
+        }
+
+        const payload = {
+            jumlah_sakit: editData.jumlah_sakit === '' ? 0 : Number(editData.jumlah_sakit),
+            jumlah_izin: editData.jumlah_izin === '' ? 0 : Number(editData.jumlah_izin),
+            jumlah_alpha: editData.jumlah_alpha === '' ? 0 : Number(editData.jumlah_alpha)
+        };
+
         try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                alert('Sesi login habis.');
-                return;
-            }
-
-            const payload = {
-                jumlah_sakit: editData.jumlah_sakit === '' ? 0 : Number(editData.jumlah_sakit),
-                jumlah_izin: editData.jumlah_izin === '' ? 0 : Number(editData.jumlah_izin),
-                jumlah_alpha: editData.jumlah_alpha === '' ? 0 : Number(editData.jumlah_alpha)
-            };
-
-            const res = await fetch(`http://localhost:5000/api/guru-kelas/absensi/${editingId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
+            const res = await fetch(
+                `http://localhost:5000/api/guru-kelas/absensi/${editingId}/${jenisPenilaian}/${semester}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                }
+            );
 
             if (res.ok) {
                 alert('Data absensi berhasil disimpan');
@@ -146,18 +182,16 @@ export default function DataAbsensiPage() {
                             : s
                     )
                 );
+                handleCloseModal();
             } else {
                 const err = await res.json();
                 alert(err.message || 'Gagal menyimpan data absensi');
             }
         } catch (err) {
             alert('Gagal terhubung ke server');
-        } finally {
-            handleCloseModal();
         }
     };
 
-    // Handle input change
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         if (value === '' || /^\d*$/.test(value)) {
@@ -207,15 +241,15 @@ export default function DataAbsensiPage() {
             <div className="max-w-7xl mx-auto">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">Absensi Siswa</h1>
 
-                {/* Header Informasi Kelas */}
                 <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
                     <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
                         <div>
                             <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Kelas: {kelasNama}</h2>
-                            <p className="text-xs sm:text-sm text-gray-600">Isi jumlah absensi untuk setiap siswa.</p>
+                            <p className="text-xs sm:text-sm text-gray-600">
+                                Periode: {jenisPenilaian} - Semester {semester}
+                            </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                            {/* Tampilkan per halaman */}
                             <div className="flex items-center gap-1 sm:gap-2 whitespace-nowrap">
                                 <span className="text-xs sm:text-sm text-gray-700">Tampilkan</span>
                                 <select
@@ -233,7 +267,6 @@ export default function DataAbsensiPage() {
                                 </select>
                                 <span className="text-xs sm:text-sm text-gray-700">data</span>
                             </div>
-                            {/* Pencarian */}
                             <div className="relative flex-1 min-w-[180px] sm:min-w-[240px] max-w-[400px]">
                                 <div className="absolute inset-y-0 left-2.5 sm:left-3 flex items-center pointer-events-none">
                                     <Search className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
@@ -265,7 +298,6 @@ export default function DataAbsensiPage() {
                     </div>
                 </div>
 
-                {/* Tabel Absensi - Responsif */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-x-auto">
                     <table className="w-full min-w-[500px] sm:min-w-[600px] table-auto text-xs sm:text-sm">
                         <thead>
@@ -316,7 +348,7 @@ export default function DataAbsensiPage() {
                                                     onClick={() => handleEdit(siswa)}
                                                     className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded flex items-center gap-1 text-xs sm:text-sm font-medium ${
                                                         siswa.sudah_diinput
-                                                            ? 'bg-yellow-400 hover:bg-yellow-500 text-gray-800 text-xs sm:text-sm'
+                                                            ? 'bg-yellow-400 hover:bg-yellow-500 text-gray-800'
                                                             : 'bg-green-500 hover:bg-green-600 text-white'
                                                     }`}
                                                 >
@@ -337,7 +369,6 @@ export default function DataAbsensiPage() {
                     </table>
                 </div>
 
-                {/* Pagination */}
                 <div className="flex flex-col sm:flex-row flex-wrap justify-between items-center gap-2 sm:gap-3 mt-4">
                     <div className="text-xs sm:text-sm text-gray-600">
                         Menampilkan {startIndex + 1} - {Math.min(endIndex, filteredSiswa.length)} dari{' '}
@@ -349,7 +380,6 @@ export default function DataAbsensiPage() {
                 </div>
             </div>
 
-            {/* Modal Edit dengan Animasi */}
             {showModal && editingId !== null && (
                 <div
                     className={`fixed inset-0 flex items-center justify-center z-50 transition-opacity duration-200 ${
@@ -390,6 +420,9 @@ export default function DataAbsensiPage() {
                                     <>
                                         <div className="text-center">
                                             <h3 className="text-base font-semibold text-gray-800">{siswa.nama}</h3>
+                                            <p className="text-xs text-gray-600">
+                                                Periode: {jenisPenilaian} - {semester}
+                                            </p>
                                         </div>
 
                                         <div className="space-y-3">

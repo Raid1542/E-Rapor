@@ -72,6 +72,35 @@ const RekapanNilaiClient = () => {
         fetchRekapanNilai();
     }, []);
 
+    // Tambahkan useEffect ini (di luar useEffect yang sudah ada)
+useEffect(() => {
+  const checkForUpdate = () => {
+    const lastSignal = localStorage.getItem('rekapan_perlu_update');
+    const lastFetch = localStorage.getItem('rekapan_terakhir_diambil') || '0';
+
+    if (lastSignal && lastSignal > lastFetch) {
+      fetchRekapanNilai();
+      localStorage.setItem('rekapan_terakhir_diambil', lastSignal);
+    }
+  };
+
+  // Jalankan saat halaman dibuka
+  checkForUpdate();
+
+  // Dengarkan perubahan dari tab lain
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === 'rekapan_perlu_update') {
+      checkForUpdate();
+    }
+  };
+
+  window.addEventListener('storage', handleStorage);
+
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+  };
+}, []);
+
     // Fungsi untuk menampilkan detail siswa
     const handleDetail = (siswa: SiswaRekapan) => {
         setDetailSiswa(siswa);

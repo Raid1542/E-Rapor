@@ -23,7 +23,6 @@ interface SiswaCatatan {
 }
 
 export default function DataCatatanWaliKelasPage() {
-
     const [siswaList, setSiswaList] = useState<SiswaCatatan[]>([]);
     const [filteredSiswa, setFilteredSiswa] = useState<SiswaCatatan[]>([]);
     const [loading, setLoading] = useState(true);
@@ -39,6 +38,7 @@ export default function DataCatatanWaliKelasPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [kelasNama, setKelasNama] = useState<string>('Kelas Anda');
     const [semester, setSemester] = useState<'Ganjil' | 'Genap'>('Ganjil');
+    const [jenisPenilaian, setJenisPenilaian] = useState<'PTS' | 'PAS'>('PAS');
     const [editClosing, setEditClosing] = useState(false);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
@@ -57,48 +57,78 @@ export default function DataCatatanWaliKelasPage() {
         }, 200);
     };
 
-    // Fetch data
+    // Fetch periode aktif dan data catatan
     useEffect(() => {
-        const fetchCatatan = async () => {
-            setLoading(true);
-            try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    alert('Silakan login terlebih dahulu');
-                    return;
-                }
+        const loadData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Silakan login terlebih dahulu');
+                return;
+            }
 
-                const res = await fetch('http://localhost:5000/api/guru-kelas/catatan-wali-kelas', {
+            try {
+                // Ambil tahun ajaran aktif
+                const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success) {
-                        const siswa = data.data || [];
-
-
-                        setSiswaList(siswa);
-                        setFilteredSiswa(siswa);
-                        setKelasNama(data.kelas || 'Kelas Anda');
-                        setSemester(data.semester || 'Ganjil');
-                    } else {
-                        alert(data.message || 'Gagal memuat data catatan wali kelas');
-                    }
-                } else {
-                    const error = await res.json();
-                    alert(error.message || 'Gagal memuat data catatan wali kelas');
+                if (!taRes.ok) {
+                    const err = await taRes.json();
+                    alert(err.message || 'Gagal memuat periode aktif');
+                    return;
                 }
+
+                const taData = await taRes.json();
+                const { semester: sem, status_pts, status_pas } = taData.data;
+
+                let jenis = 'PAS';
+                if (status_pts === 'aktif') jenis = 'PTS';
+                else if (status_pas === 'aktif') jenis = 'PAS';
+
+                setSemester(sem);
+                setJenisPenilaian(jenis as 'PTS' | 'PAS');
+
+                // Ambil data catatan berdasarkan periode
+                await fetchCatatan(sem, jenis, token);
             } catch (err) {
-                console.error('Error:', err);
+                console.error('Error load catatan: ', err);
                 alert('Gagal terhubung ke server');
-            } finally {
-                setLoading(false);
             }
         };
 
-        fetchCatatan();
+        loadData();
     }, []);
+
+    const fetchCatatan = async (sem: string, jenis: string, token: string) => {
+        setLoading(true);
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/guru-kelas/catatan-wali-kelas/${jenis}/${sem}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    setSiswaList(data.data || []);
+                    setFilteredSiswa(data.data || []);
+                    setKelasNama(data.kelas || 'Kelas Anda');
+                } else {
+                    alert(data.message || 'Gagal memuat data catatan wali kelas');
+                }
+            } else {
+                const error = await res.json();
+                alert(error.message || 'Gagal memuat data catatan wali kelas');
+            }
+        } catch (err) {
+            console.error('Error fetch catatan:', err);
+            alert('Gagal terhubung ke server');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Filter pencarian
     useEffect(() => {
@@ -132,7 +162,6 @@ export default function DataCatatanWaliKelasPage() {
     const handleSave = async () => {
         if (!editId || !originalData) return;
 
-        // Perbaikan: Di semester Ganjil, bandingkan semua field yang bisa diubah
         const hasChanges = semester === 'Ganjil'
             ? editData.catatan_wali_kelas !== originalData.catatan_wali_kelas
             : (
@@ -146,37 +175,38 @@ export default function DataCatatanWaliKelasPage() {
             return;
         }
 
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                alert('Sesi login habis.');
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Sesi login habis.');
+            return;
+        }
+
+        const payload: any = {
+            catatan_wali_kelas: editData.catatan_wali_kelas
+        };
+
+        if (semester === 'Ganjil') {
+            payload.naik_tingkat = editData.naik_tingkat;
+        } else if (semester === 'Genap') {
+            if (editData.naik_tingkat !== 'ya' && editData.naik_tingkat !== 'tidak') {
+                alert('Di semester Genap, keputusan naik tingkat wajib diisi.');
                 return;
             }
+            payload.naik_tingkat = editData.naik_tingkat;
+        }
 
-            const payload: any = {
-                catatan_wali_kelas: editData.catatan_wali_kelas
-            };
-
-            if (semester === 'Ganjil') {
-                // Di semester Ganjil, naik_tingkat bisa null atau diisi
-                payload.naik_tingkat = editData.naik_tingkat;
-            } else if (semester === 'Genap') {
-                // Di semester Genap, naik_tingkat wajib diisi
-                if (editData.naik_tingkat !== 'ya' && editData.naik_tingkat !== 'tidak') {
-                    alert('Di semester Genap, keputusan naik tingkat wajib diisi.');
-                    return;
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/guru-kelas/catatan-wali-kelas/${editId}/${jenisPenilaian}/${semester}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
                 }
-                payload.naik_tingkat = editData.naik_tingkat;
-            }
-
-            const res = await fetch(`http://localhost:5000/api/guru-kelas/catatan-wali-kelas/${editId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
+            );
 
             if (res.ok) {
                 alert('Catatan wali kelas berhasil disimpan');
@@ -208,7 +238,6 @@ export default function DataCatatanWaliKelasPage() {
     const endIndex = startIndex + itemsPerPage;
     const currentSiswa = filteredSiswa.slice(startIndex, endIndex);
 
-    // Render pagination — aman dari error key
     const renderPagination = () => {
         const pages: ReactNode[] = [];
         const maxVisible = 5;
@@ -237,12 +266,13 @@ export default function DataCatatanWaliKelasPage() {
             <div className="max-w-7xl mx-auto">
                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Catatan Wali Kelas</h1>
 
-                {/* Header — Mirip Ekstrakurikuler */}
                 <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                         <div>
                             <h2 className="text-xl font-semibold text-gray-800">Kelas: {kelasNama}</h2>
                             <p className="text-sm text-gray-600">
+                                Periode: {jenisPenilaian} - Semester {semester}
+                                <br />
                                 {semester === 'Genap'
                                     ? 'Isi catatan dan keputusan naik tingkat.'
                                     : 'Isi catatan. Keputusan naik tingkat hanya di semester Genap.'}
@@ -297,7 +327,6 @@ export default function DataCatatanWaliKelasPage() {
                     </div>
                 </div>
 
-                {/* Tabel Responsif */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-x-auto">
                     <table className="w-full min-w-[800px] table-auto text-sm">
                         <thead>
@@ -368,7 +397,6 @@ export default function DataCatatanWaliKelasPage() {
                     </table>
                 </div>
 
-                {/* Pagination */}
                 <div className="flex flex-wrap justify-between items-center gap-3 mt-4">
                     <div className="text-sm text-gray-600">
                         Menampilkan {startIndex + 1} - {Math.min(endIndex, filteredSiswa.length)} dari{' '}
@@ -380,7 +408,6 @@ export default function DataCatatanWaliKelasPage() {
                 </div>
             </div>
 
-            {/* Modal Edit */}
             {showEdit && editId !== null && (
                 <div
                     className={`fixed inset-0 flex items-center justify-center z-50 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'} p-3 sm:p-4`}
@@ -402,7 +429,18 @@ export default function DataCatatanWaliKelasPage() {
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-4 sm:p-6 space-y-4">
+                        <div className="p-4 sm:p-6 space-y-6">
+                            {/* Header Modal */}
+                            <div className="text-center">
+                                <h3 className="text-base font-semibold text-gray-800">
+                                    {siswaList.find(s => s.id_siswa === editId)?.nama}
+                                </h3>
+                                <p className="text-xs text-gray-600">
+                                    Periode: {jenisPenilaian} - Semester {semester}
+                                </p>
+                            </div>
+
+                            {/* Form Catatan */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Catatan Wali Kelas
@@ -417,6 +455,7 @@ export default function DataCatatanWaliKelasPage() {
                                 />
                             </div>
 
+                            {/* Form Naik Tingkat (jika Genap) */}
                             {semester === 'Genap' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -434,21 +473,22 @@ export default function DataCatatanWaliKelasPage() {
                                     </select>
                                 </div>
                             ) : (
-                                <div className="text-sm text-gray-500 italic p-2 bg-gray-50 rounded">
+                                <div className="text-sm text-gray-500 italic p-3 bg-gray-50 rounded">
                                     Keputusan naik tingkat hanya diisi pada semester <strong>Genap</strong>.
                                 </div>
                             )}
 
-                            <div className="mt-6 flex justify-end gap-2">
+                            {/* Footer Modal */}
+                            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
                                 <button
                                     onClick={closeEdit}
-                                    className="px-4 sm:px-6 py-2 border border-gray-300 rounded hover:bg-gray-100 transition text-xs sm:text-sm font-medium"
+                                    className="px-4 sm:px-6 py-2 border border-gray-300 rounded hover:bg-gray-100 transition text-sm font-medium"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     onClick={handleSave}
-                                    className="px-4 sm:px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition text-xs sm:text-sm font-medium"
+                                    className="px-4 sm:px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition text-sm font-medium"
                                 >
                                     Simpan
                                 </button>

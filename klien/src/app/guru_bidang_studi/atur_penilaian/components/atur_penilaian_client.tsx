@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Pencil, X, Plus, Trash2 } from 'lucide-react';
 
 // ====== TYPES ======
@@ -55,7 +55,8 @@ export default function AturPenilaianClient() {
         max_nilai: 100,
         deskripsi: '',
     });
-    const [initialEditKategoriData, setInitialEditKategoriData] = useState<null | typeof editKategoriData>(null);
+
+    const initialEditKategoriDataRef = useRef<typeof editKategoriData | null>(null);
 
     // Mapel selection
     const [selectedMapelAkademik, setSelectedMapelAkademik] = useState<number | null>(null);
@@ -66,7 +67,7 @@ export default function AturPenilaianClient() {
     const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
     const [bobotList, setBobotList] = useState<BobotItem[]>([]);
     const [bobotLoading, setBobotLoading] = useState(false);
-    const [initialBobotList, setInitialBobotList] = useState<BobotItem[]>([]);
+    const initialBobotListRef = useRef<BobotItem[]>([]);
 
     // ====== FETCH DATA DUKUNGAN ======
     useEffect(() => {
@@ -86,7 +87,6 @@ export default function AturPenilaianClient() {
                 const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
                 setJenisPenilaianAktif(jenisAktif);
 
-                // ✅ Ganti ke endpoint guru bidang studi
                 const [resKomponen, resMapel] = await Promise.all([
                     fetch('http://localhost:5000/api/guru-bidang-studi/atur-penilaian/komponen', {
                         headers: { Authorization: `Bearer ${token}` },
@@ -147,13 +147,14 @@ export default function AturPenilaianClient() {
     useEffect(() => {
         if (selectedMapelId === null) {
             setBobotList([]);
+            initialBobotListRef.current = [];
             return;
         }
 
         const fetchBobot = async () => {
             setBobotLoading(true);
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage === null ? null : localStorage.getItem('token');
                 const res = await fetch(
                     `http://localhost:5000/api/guru-bidang-studi/atur-penilaian/bobot/${selectedMapelId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -178,7 +179,7 @@ export default function AturPenilaianClient() {
                 }));
 
                 setBobotList(fullBobot);
-                setInitialBobotList(JSON.parse(JSON.stringify(fullBobot)));
+                initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
             } catch (err) {
                 alert('Gagal mengambil bobot penilaian');
             } finally {
@@ -198,11 +199,16 @@ export default function AturPenilaianClient() {
                 max_nilai: kategori.max_nilai,
                 deskripsi: kategori.deskripsi,
             });
+            initialEditKategoriDataRef.current = {
+                min_nilai: kategori.min_nilai,
+                max_nilai: kategori.max_nilai,
+                deskripsi: kategori.deskripsi,
+            };
         } else {
             setEditKategoriId(null);
             setEditKategoriData({ min_nilai: 0, max_nilai: 100, deskripsi: '' });
+            initialEditKategoriDataRef.current = null;
         }
-        setInitialEditKategoriData(JSON.parse(JSON.stringify(editKategoriData)));
         setShowEditKategori(true);
     };
 
@@ -212,16 +218,19 @@ export default function AturPenilaianClient() {
             setShowEditKategori(false);
             setEditKategoriClosing(false);
             setEditKategoriId(null);
-            setInitialEditKategoriData(null);
         }, 200);
     };
 
     // ====== SIMPAN KATEGORI ======
     const handleSaveKategori = async () => {
-        if (
-            initialEditKategoriData &&
-            JSON.stringify(editKategoriData) === JSON.stringify(initialEditKategoriData)
-        ) {
+        const initial = initialEditKategoriDataRef.current;
+        const isUnchanged =
+            initial &&
+            editKategoriData.min_nilai === initial.min_nilai &&
+            editKategoriData.max_nilai === initial.max_nilai &&
+            editKategoriData.deskripsi === initial.deskripsi;
+
+        if (isUnchanged) {
             alert('Tidak ada perubahan data.');
             return;
         }
@@ -327,11 +336,13 @@ export default function AturPenilaianClient() {
 
     const handleSaveBobot = async () => {
         if (!selectedMapelId) return;
-        const isUnchanged = bobotList.every(
-            (b, i) =>
-                b.komponen_id === initialBobotList[i]?.komponen_id &&
-                b.bobot === initialBobotList[i]?.bobot
-        );
+
+        // Cek apakah bobot berubah
+        const isUnchanged = bobotList.every((b, i) => {
+            const initial = initialBobotListRef.current[i];
+            return initial && b.komponen_id === initial.komponen_id && b.bobot === initial.bobot;
+        });
+
         if (isUnchanged) {
             alert('Tidak ada perubahan data.');
             return;
@@ -340,6 +351,11 @@ export default function AturPenilaianClient() {
         const total = bobotList.reduce((sum, b) => sum + b.bobot, 0);
         if (Math.abs(total - 100) > 0.1) {
             alert('Total bobot harus 100%');
+            return;
+        }
+
+        if (hasInvalidBobot()) {
+            alert('Di periode PTS, hanya bobot PTS yang boleh > 0. Harap atur bobot UH dan PAS menjadi 0.');
             return;
         }
 
@@ -357,14 +373,9 @@ export default function AturPenilaianClient() {
                 }
             );
 
-            if (hasInvalidBobot()) {
-                alert('Di periode PTS, hanya bobot PTS yang boleh > 0. Harap atur bobot UH dan PAS menjadi 0.');
-                return;
-            }
-
             if (res.ok) {
                 alert('Bobot penilaian berhasil disimpan');
-                setInitialBobotList(JSON.parse(JSON.stringify(bobotList)));
+                initialBobotListRef.current = JSON.parse(JSON.stringify(bobotList));
             } else {
                 const err = await res.json();
                 alert(err.message || 'Gagal menyimpan bobot');

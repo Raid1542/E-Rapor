@@ -240,7 +240,7 @@ export default function ArsipRaporClient() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `rapor_${selectedJenisPenilaian.toLowerCase()}_${ta.semester.toLowerCase()}_${siswaId}.docx`;
+            a.download = `rapor_${selectedJenisPenilaian.toLowerCase()}.docx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -293,22 +293,27 @@ export default function ArsipRaporClient() {
     };
 
     return (
-        <div className="flex-1 p-4 sm:p-6 bg-gray-50 min-h-screen">
-            <div className="max-w-6xl mx-auto">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6">Arsip Rapor</h1>
+        <div className="flex-1 p-4 md:p-6 bg-gray-50 min-h-screen">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-6 md:mb-8">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Arsip Rapor</h1>
+                </div>
 
                 {/* Filter Section */}
-                <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6">
                         {/* Tahun Ajaran */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Tahun Ajaran</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Tahun Ajaran
+                            </label>
                             <select
                                 value={selectedTahunAjaran ?? ''}
                                 onChange={(e) =>
                                     setSelectedTahunAjaran(e.target.value ? Number(e.target.value) : null)
                                 }
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm md:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
                                 disabled={loadingTA}
                             >
                                 <option value="">-- Pilih Tahun Ajaran --</option>
@@ -325,11 +330,13 @@ export default function ArsipRaporClient() {
 
                         {/* Jenis Penilaian */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Penilaian</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Jenis Penilaian
+                            </label>
                             <select
                                 value={selectedJenisPenilaian ?? ''}
                                 onChange={(e) => setSelectedJenisPenilaian(e.target.value as 'PTS' | 'PAS' | null)}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm md:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
                                 disabled={!selectedTahunAjaran}
                             >
                                 <option value="">-- Pilih Jenis --</option>
@@ -340,13 +347,15 @@ export default function ArsipRaporClient() {
 
                         {/* Kelas */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Kelas</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Kelas
+                            </label>
                             <select
                                 value={selectedKelas ?? ''}
                                 onChange={(e) =>
                                     setSelectedKelas(e.target.value ? Number(e.target.value) : null)
                                 }
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm md:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
                                 disabled={!selectedJenisPenilaian || loadingKelas}
                             >
                                 <option value="">-- Pilih Kelas --</option>
@@ -361,22 +370,27 @@ export default function ArsipRaporClient() {
 
                     {/* PANEL KONTROL STATUS */}
                     {selectedTahunAjaran && selectedJenisPenilaian && (
-                        <div className="mt-6 pt-4 border-t border-gray-200">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                {/* Status Display */}
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm font-medium text-gray-700">Status Saat Ini:</span>
-                                    <span
-                                        className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${getStatusDisplay(statusSaatIni || 'nonaktif').color
-                                            }`}
-                                    >
-                                        {getStatusDisplay(statusSaatIni || 'nonaktif').text}
+                        <div className="mt-6 pt-6 border-t border-gray-200">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                    <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                        Status Saat Ini:
                                     </span>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`px-4 py-2 rounded-lg font-semibold ${getStatusDisplay(statusSaatIni || 'nonaktif').color}`}
+                                        >
+                                            {getStatusDisplay(statusSaatIni || 'nonaktif').text}
+                                        </span>
+                                        {statusSaatIni === 'selesai' && (
+                                            <Lock className="text-gray-500" size={18} />
+                                        )}
+                                    </div>
                                 </div>
 
-                                {/* Action Buttons */}
+                                {/* Tombol Aksi */}
                                 <div className="flex flex-wrap gap-2">
-                                    {statusSaatIni !== 'aktif' && (
+                                    {statusSaatIni !== 'aktif' && statusSaatIni !== 'selesai' && (
                                         <button
                                             onClick={() => {
                                                 if (
@@ -388,72 +402,69 @@ export default function ArsipRaporClient() {
                                                 }
                                             }}
                                             disabled={loadingAction}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white ${loadingAction
-                                                    ? 'bg-green-400 cursor-not-allowed'
-                                                    : 'bg-green-600 hover:bg-green-700 shadow-sm'
-                                                }`}
+                                            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-white ${
+                                                loadingAction ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+                                            } min-w-[120px] transition`}
                                         >
-                                            <Play size={16} />
-                                            Aktifkan
+                                            <Play size={18} />
+                                            <span>Aktifkan</span>
                                         </button>
                                     )}
 
                                     {statusSaatIni === 'aktif' && (
-                                        <button
-                                            onClick={() => {
-                                                if (
-                                                    window.confirm(
-                                                        `Yakin ingin menonaktifkan ${selectedJenisPenilaian}?\n\nGuru tidak akan bisa mengedit nilai sementara.`
-                                                    )
-                                                ) {
-                                                    handleUbahStatus('nonaktif');
-                                                }
-                                            }}
-                                            disabled={loadingAction}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white ${loadingAction
-                                                    ? 'bg-yellow-400 cursor-not-allowed'
-                                                    : 'bg-yellow-600 hover:bg-yellow-700 shadow-sm'
-                                                }`}
-                                        >
-                                            <Pause size={16} />
-                                            Nonaktifkan
-                                        </button>
-                                    )}
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    if (
+                                                        window.confirm(
+                                                            `Yakin ingin menonaktifkan ${selectedJenisPenilaian}?\n\nGuru tidak akan bisa mengedit nilai sementara.`
+                                                        )
+                                                    ) {
+                                                        handleUbahStatus('nonaktif');
+                                                    }
+                                                }}
+                                                disabled={loadingAction}
+                                                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-white ${
+                                                    loadingAction ? 'bg-yellow-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700'
+                                                } min-w-[140px] transition`}
+                                            >
+                                                <Pause size={18} />
+                                                <span>Nonaktifkan</span>
+                                            </button>
 
-                                    {statusSaatIni === 'aktif' && (
-                                        <button
-                                            onClick={() => {
-                                                if (
-                                                    window.confirm(
-                                                        `⚠️ PERHATIAN!\n\nAnda yakin ingin mengarsipkan dan mengunci ${selectedJenisPenilaian}?\n\n🔒 Setelah dikunci:\n- Guru TIDAK BISA mengedit nilai lagi\n- Status tidak bisa diubah kembali\n- Data akan permanen terkunci\n\nLanjutkan?`
-                                                    )
-                                                ) {
-                                                    handleArsipkanRapor();
-                                                }
-                                            }}
-                                            disabled={loadingAction}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white ${loadingAction
-                                                    ? 'bg-red-400 cursor-not-allowed'
-                                                    : 'bg-red-600 hover:bg-red-700 shadow-sm'
-                                                }`}
-                                        >
-                                            <Lock size={16} />
-                                            Arsipkan & Kunci
-                                        </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (
+                                                        window.confirm(
+                                                            `⚠️ PERHATIAN!\n\nAnda yakin ingin mengarsipkan dan mengunci ${selectedJenisPenilaian}?\n\n🔒 Setelah dikunci:\n- Guru TIDAK BISA mengedit nilai lagi\n- Status tidak bisa diubah kembali\n- Data akan permanen terkunci\n\nLanjutkan?`
+                                                        )
+                                                    ) {
+                                                        handleArsipkanRapor();
+                                                    }
+                                                }}
+                                                disabled={loadingAction}
+                                                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-white ${
+                                                    loadingAction ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+                                                } min-w-[160px] transition`}
+                                            >
+                                                <Lock size={18} />
+                                                <span>Arsipkan & Kunci</span>
+                                            </button>
+                                        </>
                                     )}
 
                                     {statusSaatIni === 'selesai' && (
-                                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">
-                                            <Lock size={16} />
+                                        <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg">
+                                            <Lock size={18} />
                                             <span className="font-medium">Data Terkunci Permanen</span>
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                                <p className="text-xs text-orange-800">
-                                    <strong>Info:</strong>
+                            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                <p className="text-sm text-orange-800">
+                                    <span className="font-semibold">Info:</span>
                                     {statusSaatIni === 'nonaktif' &&
                                         ' Penilaian belum dibuka. Guru tidak bisa input nilai.'}
                                     {statusSaatIni === 'aktif' &&
@@ -468,84 +479,126 @@ export default function ArsipRaporClient() {
 
                 {/* Error Message */}
                 {error && (
-                    <div className="mb-6 flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
-                        <AlertCircle size={20} />
-                        <span>{error}</span>
+                    <div className="mb-6 flex items-start gap-3 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
+                        <AlertCircle size={22} className="flex-shrink-0 mt-0.5" />
+                        <div>
+                            <span className="font-medium">Error:</span> {error}
+                        </div>
                     </div>
                 )}
 
                 {/* Data Siswa */}
                 {readyToPrint ? (
                     loadingSiswa ? (
-                        <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-blue-600 mb-3"></div>
-                            <p className="text-gray-600">Memuat data arsip rapor...</p>
+                        <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                            <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+                            <p className="text-gray-600 text-lg">Memuat data arsip rapor...</p>
                         </div>
                     ) : siswaList.length === 0 ? (
-                        <div className="bg-white rounded-lg shadow-sm p-8 text-center border border-dashed border-gray-300">
-                            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-600">Tidak ada data arsip rapor untuk filter ini.</p>
+                        <div className="bg-white rounded-xl shadow-sm p-8 text-center border-2 border-dashed border-gray-300">
+                            <FileText className="w-20 h-20 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-gray-700 mb-2">Data tidak ditemukan</h3>
+                            <p className="text-gray-600">Tidak ada data arsip rapor untuk filter yang dipilih.</p>
                         </div>
                     ) : (
                         <>
-                            <div className="mb-4 sm:mb-6">
-                                <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
-                                    Daftar Siswa {selectedJenisPenilaian} -{' '}
-                                    {kelasList.find((k) => k.id_kelas === selectedKelas)?.nama_kelas}
-                                </h2>
+                            <div className="mb-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-gray-800">
+                                            Daftar Siswa {selectedJenisPenilaian}
+                                        </h2>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-                                <table className="w-full min-w-[500px] table-auto text-sm">
-                                    <thead className="bg-gray-800 text-white">
-                                        <tr>
-                                            <th className="px-3 py-3 text-center font-semibold">No.</th>
-                                            <th className="px-3 py-3 text-left font-semibold">Nama Siswa</th>
-                                            <th className="px-3 py-3 text-center font-semibold">NIS</th>
-                                            <th className="px-3 py-3 text-center font-semibold">NISN</th>
-                                            <th className="px-3 py-3 text-center font-semibold">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {siswaList.map((siswa, index) => (
-                                            <tr
-                                                key={siswa.id_siswa}
-                                                className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                                    } hover:bg-blue-50 transition-colors`}
-                                            >
-                                                <td className="px-3 py-3 text-center">{index + 1}</td>
-                                                <td className="px-3 py-3 font-medium text-gray-800">{siswa.nama}</td>
-                                                <td className="px-3 py-3 text-center text-gray-700">{siswa.nis}</td>
-                                                <td className="px-3 py-3 text-center text-gray-700">{siswa.nisn}</td>
-                                                <td className="px-3 py-3 text-center">
-                                                    <button
-                                                        onClick={() => handleDownloadRapor(siswa.id_siswa)}
-                                                        className="inline-flex items-center justify-center bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm px-2.5 py-1.5 rounded-md transition gap-1.5 min-w-[90px]"
-                                                    >
-                                                        <Download size={14} />
-                                                        <span>Unduh</span>
-                                                    </button>
-                                                </td>
+                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[600px]">
+                                        <thead className="bg-gray-800 text-white">
+                                            <tr>
+                                                <th className="px-4 py-3 text-center font-semibold w-16">No.</th>
+                                                <th className="px-4 py-3 text-center font-semibold w-30">Nama Siswa</th>
+                                                <th className="px-4 py-3 text-center font-semibold w-32">NIS</th>
+                                                <th className="px-4 py-3 text-center font-semibold w-40">NISN</th>
+                                                <th className="px-4 py-3 text-center font-semibold w-32">Aksi</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {siswaList.map((siswa, index) => (
+                                                <tr
+                                                    key={siswa.id_siswa}
+                                                    className={`border-b hover:bg-gray-50 transition-colors ${
+                                                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <td className="px-4 py-3 text-center font-medium">
+                                                        {index + 1}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-medium text-gray-900">{siswa.nama}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center text-gray-700 font-mono">
+                                                        {siswa.nis}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center text-gray-700 font-mono">
+                                                        {siswa.nisn}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <button
+                                                            onClick={() => handleDownloadRapor(siswa.id_siswa)}
+                                                            className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+                                                        >
+                                                            <Download size={18} />
+                                                            <span>Unduh</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
 
-                            <div className="mt-6 p-4 bg-gray-100 rounded-lg text-sm text-gray-700">
-                                <p className="font-medium mb-1.5">Catatan:</p>
-                                <ul className="list-disc pl-4 space-y-1">
-                                    <li>Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
-                                    <li>Buka dengan Microsoft Word untuk tampilan terbaik</li>
-                                    <li>PAS Semester Genap mencantumkan status kenaikan kelas</li>
+                            {/* Catatan */}
+                            <div className="mt-6 p-5 bg-orange-50 rounded-xl border border-orange-200">
+                                <h4 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
+                                    <FileText size={18} />
+                                    Informasi Unduhan
+                                </h4>
+                                <ul className="text-orange-700 space-y-1.5">
+                                    <li className="flex items-start gap-2">
+                                        <span className="mt-1">•</span>
+                                        <span>Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="mt-1">•</span>
+                                        <span>Buka dengan Microsoft Word atau LibreOffice untuk tampilan terbaik</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="mt-1">•</span>
+                                        <span>PAS Semester Genap mencantumkan status kenaikan kelas</span>
+                                    </li>
                                 </ul>
                             </div>
                         </>
                     )
                 ) : (
-                    <div className="bg-white rounded-lg shadow-sm p-8 text-center border border-dashed border-gray-300">
-                        <FileText className="w-14 h-14 text-gray-400 mx-auto mb-3" />
-                        <p className="text-gray-600">Silakan pilih filter untuk menampilkan arsip rapor.</p>
+                    <div className="bg-white rounded-xl shadow-sm p-8 text-center border-2 border-dashed border-gray-300">
+                        <div className="max-w-md mx-auto">
+                            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                                Pilih Filter untuk Melihat Data
+                            </h3>
+                            <p className="text-gray-600 mb-4">
+                                Silakan pilih tahun ajaran, jenis penilaian, dan kelas untuk menampilkan arsip rapor.
+                            </p>
+                            <div className="flex items-center justify-center gap-2 text-gray-500">
+                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

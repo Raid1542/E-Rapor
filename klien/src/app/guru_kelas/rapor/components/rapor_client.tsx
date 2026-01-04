@@ -3,11 +3,13 @@
 //         rapor berdasarkan jenis penilaian (PTS/PAS) sesuai status periode aktif.
 // Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
 // Tanggal: 15 September 2025
+// Diperbarui: 3 Januari 2026 - Perbaikan struktur, error handling, dan coding convention
+// DIPERBAIKI: 3 Januari 2026 - Perbaikan nama file unduhan sesuai backend (rapor_pts.docx / rapor_pas.docx)
 
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, AlertCircle, RefreshCw } from 'lucide-react';
+import { FileText, Download, AlertCircle } from 'lucide-react';
 
 interface Siswa {
     id: number;
@@ -28,20 +30,11 @@ const RaporGuruKelasClient = () => {
 
     const [jenisPenilaian, setJenisPenilaian] = useState<string>('');
     const [siswaList, setSiswaList] = useState<Siswa[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState<boolean>(true);
     const [tahunAjaranInfo, setTahunAjaranInfo] = useState<TahunAjaranInfo | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const getOptionsBySemester = () => {
-        if (!tahunAjaranInfo) return [];
-        const { semester } = tahunAjaranInfo;
-        return [
-            { value: `PTS-${semester.toLowerCase()}`, label: `Penilaian Tengah Semester (${semester})` },
-            { value: `PAS-${semester.toLowerCase()}`, label: `Penilaian Akhir Semester (${semester})` }
-        ];
-    };
-
-    // === Fungsi untuk fetch tahun ajaran aktif ===
+    // === Fetch tahun ajaran aktif ===
     const fetchTahunAjaranAktif = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -49,9 +42,11 @@ const RaporGuruKelasClient = () => {
                 setError('Silakan login terlebih dahulu');
                 return;
             }
+
             const res = await fetch(`${API_BASE}/guru-kelas/tahun-ajaran/aktif`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
+
             const data = await res.json();
             if (res.ok && data.success) {
                 const ta = data.data;
@@ -59,10 +54,10 @@ const RaporGuruKelasClient = () => {
                     tahun_ajaran: ta.tahun_ajaran,
                     semester: ta.semester as 'Ganjil' | 'Genap',
                     status_pts: ta.status_pts,
-                    status_pas: ta.status_pas
+                    status_pas: ta.status_pas,
                 });
             } else {
-                setError('Gagal mengambil tahun ajaran aktif');
+                setError(data.message || 'Gagal mengambil tahun ajaran aktif');
             }
         } catch (err) {
             console.error('Gagal ambil tahun ajaran aktif:', err);
@@ -70,53 +65,60 @@ const RaporGuruKelasClient = () => {
         }
     };
 
-    // === Ambil tahun ajaran aktif saat pertama kali ===
+    // === Fetch daftar siswa ===
+    const fetchSiswaList = async () => {
+        if (!tahunAjaranInfo) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setError('Silakan login terlebih dahulu');
+                return;
+            }
+
+            const res = await fetch(`${API_BASE}/guru-kelas/siswa`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setSiswaList(data.data);
+            } else {
+                setError(data.message || 'Gagal memuat data siswa');
+            }
+        } catch (err) {
+            console.error('Error fetch siswa:', err);
+            setError('Gagal terhubung ke server');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // === Ambil tahun ajaran aktif saat mount ===
     useEffect(() => {
         fetchTahunAjaranAktif();
     }, []);
 
-    // === Ambil daftar siswa ===
+    // === Ambil daftar siswa saat jenisPenilaian dipilih ===
     useEffect(() => {
-        if (!jenisPenilaian || !tahunAjaranInfo) {
+        if (jenisPenilaian && tahunAjaranInfo) {
+            setLoading(true);
+            fetchSiswaList();
+        } else {
             setSiswaList([]);
-            return;
+            setLoading(false);
         }
-        const fetchSiswa = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    setError('Silakan login terlebih dahulu');
-                    return;
-                }
-                const res = await fetch(`${API_BASE}/guru-kelas/siswa`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (res.ok && data.success) {
-                    setSiswaList(data.data);
-                } else {
-                    setError('Gagal memuat data siswa');
-                }
-            } catch (err) {
-                console.error('Error fetch siswa:', err);
-                setError('Gagal terhubung ke server');
-            } finally {
-                setLoading(false);
-            }
-        };
-        setLoading(true);
-        fetchSiswa();
     }, [jenisPenilaian, tahunAjaranInfo]);
 
-    // === Helper: dapatkan status penilaian saat ini ===
-    const getCurrentStatus = () => {
+    // === Helper: status penilaian saat ini ===
+    const getCurrentStatus = (): 'nonaktif' | 'aktif' | 'selesai' | null => {
         if (!jenisPenilaian || !tahunAjaranInfo) return null;
         return jenisPenilaian.includes('PTS')
             ? tahunAjaranInfo.status_pts
             : tahunAjaranInfo.status_pas;
     };
 
-    // === Download rapor ===
+    // === Perbaikan: Unduh rapor dengan nama file yang sesuai (tanpa parsing header) ===
     const handleDownloadRapor = async (siswaId: number) => {
         const token = localStorage.getItem('token');
         if (!token || !jenisPenilaian || !tahunAjaranInfo) {
@@ -124,59 +126,46 @@ const RaporGuruKelasClient = () => {
             return;
         }
 
-        const jenisMurni = jenisPenilaian.split('-')[0];
-        if (!['PTS', 'PAS'].includes(jenisMurni)) {
-            alert('Jenis penilaian tidak valid');
-            return;
-        }
+        const jenisMurni = jenisPenilaian.startsWith('PTS') ? 'PTS' : 'PAS';
 
         try {
             const res = await fetch(
-                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${jenisMurni}/${tahunAjaranInfo.semester}`,
+                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${jenisMurni}/${tahunAjaranInfo.semester.toLowerCase()}`,
                 {
-                    method: 'GET',
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 }
             );
 
             if (!res.ok) {
-                const errorText = await res.text();
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    throw new Error(errorJson.message || 'Gagal mengunduh rapor');
-                } catch {
-                    throw new Error('Terjadi kesalahan pada server');
-                }
-            }
-
-            const contentType = res.headers.get('content-type');
-            if (!contentType?.includes('application/vnd.openxmlformats')) {
-                const errorText = await res.text();
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    throw new Error(errorJson.message || 'Data rapor tidak tersedia');
-                } catch {
-                    throw new Error('Respons bukan file rapor yang valid');
-                }
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Gagal mengunduh rapor');
             }
 
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `rapor_${jenisMurni.toLowerCase()}_${tahunAjaranInfo.semester.toLowerCase()}_${siswaId}.docx`;
+            // ✅ Langsung gunakan nama file sesuai backend
+            a.download = `rapor_${jenisMurni.toLowerCase()}.docx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (err: any) {
             console.error('Download error:', err);
-            alert('Gagal mengunduh rapor: ' + (err.message || 'Silakan coba lagi'));
+            alert('Gagal mengunduh: ' + (err.message || 'Coba lagi'));
         }
     };
 
+    // === State derived ===
     const currentStatus = getCurrentStatus();
     const isDownloadAllowed = currentStatus === 'aktif';
+    const optionsJenisPenilaian = tahunAjaranInfo
+        ? [
+            { value: `PTS-${tahunAjaranInfo.semester.toLowerCase()}`, label: `Penilaian Tengah Semester (${tahunAjaranInfo.semester})` },
+            { value: `PAS-${tahunAjaranInfo.semester.toLowerCase()}`, label: `Penilaian Akhir Semester (${tahunAjaranInfo.semester})` },
+        ]
+        : [];
 
     return (
         <div className="flex-1 p-4 sm:p-6 bg-gray-50 min-h-screen">
@@ -193,7 +182,7 @@ const RaporGuruKelasClient = () => {
                     </div>
                 )}
 
-                {/* Error */}
+                {/* Error Message */}
                 {error && (
                     <div className="mb-6 flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg">
                         <AlertCircle size={20} />
@@ -212,12 +201,11 @@ const RaporGuruKelasClient = () => {
                         className="w-full md:w-72 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                         <option value="">-- Pilih Jenis --</option>
-                        {tahunAjaranInfo &&
-                            getOptionsBySemester().map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </option>
-                            ))}
+                        {optionsJenisPenilaian.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
@@ -226,26 +214,30 @@ const RaporGuruKelasClient = () => {
                     <div className="mb-6 p-3 bg-gray-100 rounded-lg">
                         <p className="text-gray-700">
                             Status {jenisPenilaian.includes('PTS') ? 'PTS' : 'PAS'}:
-                            <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
-                                currentStatus === 'aktif'
-                                    ? 'bg-green-100 text-green-800'
-                                    : currentStatus === 'selesai'
-                                    ? 'bg-gray-200 text-gray-700'
-                                    : 'bg-yellow-100 text-yellow-800'
-                            }`}>
+                            <span
+                                className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${currentStatus === 'aktif'
+                                        ? 'bg-green-100 text-green-800'
+                                        : currentStatus === 'selesai'
+                                            ? 'bg-gray-200 text-gray-700'
+                                            : 'bg-yellow-100 text-yellow-800'
+                                    }`}
+                            >
                                 {currentStatus === 'aktif'
                                     ? 'Aktif'
                                     : currentStatus === 'selesai'
-                                    ? 'Terkunci'
-                                    : 'Belum Dibuka'}
+                                        ? 'Terkunci'
+                                        : 'Belum Dibuka'}
                             </span>
                         </p>
                     </div>
                 )}
 
+                {/* Konten Dinamis */}
                 {jenisPenilaian === '' ? (
                     <div className="mt-8 text-center py-10 bg-yellow-50 border border-dashed border-yellow-300 rounded-xl">
-                        <p className="text-gray-700 text-lg font-medium">Silakan pilih jenis penilaian terlebih dahulu.</p>
+                        <p className="text-gray-700 text-lg font-medium">
+                            Silakan pilih jenis penilaian terlebih dahulu.
+                        </p>
                     </div>
                 ) : loading ? (
                     <div className="mt-8 text-center py-10">
@@ -268,32 +260,31 @@ const RaporGuruKelasClient = () => {
                             <table className="w-full min-w-[500px] table-auto text-sm">
                                 <thead className="bg-gray-800 text-white">
                                     <tr>
-                                        <th className="px-3 py-3 text-center">No.</th>
-                                        <th className="px-3 py-3 text-left">Nama</th>
-                                        <th className="px-3 py-3 text-center">NIS</th>
-                                        <th className="px-3 py-3 text-center">Aksi</th>
+                                        <th className="px-3 py-3 text-center font-semibold">No.</th>
+                                        <th className="px-3 py-3 text-left font-semibold">Nama</th>
+                                        <th className="px-3 py-3 text-center font-semibold">NIS</th>
+                                        <th className="px-3 py-3 text-center font-semibold">NISN</th>
+                                        <th className="px-3 py-3 text-center font-semibold">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {siswaList.map((siswa, index) => (
                                         <tr
                                             key={siswa.id}
-                                            className={`border-b ${
-                                                index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                            } hover:bg-blue-50 transition-colors`}
+                                            className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}
                                         >
                                             <td className="px-3 py-3 text-center">{index + 1}</td>
                                             <td className="px-3 py-3 font-medium text-gray-800">{siswa.nama}</td>
                                             <td className="px-3 py-3 text-center text-gray-700">{siswa.nis}</td>
+                                            <td className="px-3 py-3 text-center text-gray-700">{siswa.nisn}</td>
                                             <td className="px-3 py-3 text-center">
                                                 <button
                                                     onClick={() => handleDownloadRapor(siswa.id)}
                                                     disabled={!isDownloadAllowed}
-                                                    className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs sm:text-sm gap-1 min-w-[90px] ${
-                                                        isDownloadAllowed
+                                                    className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-xs sm:text-sm gap-1 min-w-[90px] ${isDownloadAllowed
                                                             ? 'bg-green-600 hover:bg-green-700 text-white'
                                                             : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <Download size={14} />
                                                     <span>{isDownloadAllowed ? 'Unduh' : 'Tidak Tersedia'}</span>

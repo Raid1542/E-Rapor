@@ -275,7 +275,7 @@ const DataInputNilaiPage = () => {
             const updatedSiswa = {
                 ...editingSiswa,
                 nilai: editingKomponenNilai,
-                nilai_rapor: data.nilai_rapor,
+                nilai_rapor: Math.floor(data.nilai_rapor),
                 deskripsi: data.deskripsi,
             };
             setSiswaList(prev =>
@@ -287,6 +287,8 @@ const DataInputNilaiPage = () => {
 
             setEditingSiswa(null);
             alert('Nilai komponen berhasil disimpan');
+
+            localStorage.setItem('rekapan_perlu_update', Date.now().toString());
         } catch (err) {
             console.error('Error simpan nilai komponen:', err);
             alert('Gagal menyimpan: ' + (err instanceof Error ? err.message : 'Coba lagi.'));
@@ -651,7 +653,9 @@ const DataInputNilaiPage = () => {
                                             <div className="space-y-3 mb-6">
                                                 {komponenList.map(komponen => {
                                                     const isPtsKomponen = /PTS/i.test(komponen.nama);
-                                                    const isDisabled = jenisPenilaianAktif === 'PTS' && !isPtsKomponen;
+                                                    const isDisabled =
+                                                        (jenisPenilaianAktif === 'PTS' && !isPtsKomponen) ||
+                                                        (jenisPenilaianAktif === 'PAS' && isPtsKomponen);
 
                                                     return (
                                                         <div key={komponen.id} className="flex flex-col">
@@ -674,8 +678,8 @@ const DataInputNilaiPage = () => {
                                                                 }}
                                                                 disabled={isDisabled}
                                                                 className={`w-full border rounded px-3 py-2 text-sm ${isDisabled
-                                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                                        : 'border-gray-300'
+                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                                    : 'border-gray-300'
                                                                     }`}
                                                                 placeholder="0–100"
                                                             />

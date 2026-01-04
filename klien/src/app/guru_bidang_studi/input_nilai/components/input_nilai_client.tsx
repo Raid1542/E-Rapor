@@ -1,15 +1,13 @@
 /**
- * Nama File: input_nilai_client.tsx
- * Fungsi: Komponen klien untuk mengelola input nilai siswa oleh guru bidang studi,
- *         mencakup pemilihan mata pelajaran dan kelas, tampilan tabel nilai,
- *         serta fitur edit dan detail nilai per komponen.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Syahrul Ramadhan - NIM: 3312301093
- * Tanggal: 15 September 2025
- */
-
+* Nama File: input_nilai_client.tsx
+* Fungsi: Komponen klien untuk mengelola input nilai siswa oleh guru bidang studi,
+*         mencakup pemilihan mata pelajaran dan kelas, tampilan tabel nilai,
+*         serta fitur edit dan detail nilai per komponen.
+* Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Syahrul Ramadhan - NIM: 3312301093
+* Tanggal: 15 September 2025
+*/
 'use client';
-
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import { Pencil, Eye, Search, X } from 'lucide-react';
 
 // ====== TYPES ======
@@ -60,9 +58,10 @@ export default function InputNilaiClient() {
     const [detailSiswa, setDetailSiswa] = useState<NilaiSiswa | null>(null);
     const [detailClosing, setDetailClosing] = useState(false);
 
-    // Modal Edit Komponen (BUKAN Nilai Rapor)
+    // Modal Edit Komponen
     const [editingSiswa, setEditingSiswa] = useState<NilaiSiswa | null>(null);
     const [editingKomponenNilai, setEditingKomponenNilai] = useState<Record<number, number | null>>({});
+    const initialEditingKomponenNilaiRef = useRef<Record<number, number | null>>({});
     const [editKomponenClosing, setEditKomponenClosing] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -104,7 +103,6 @@ export default function InputNilaiClient() {
             setSelectedKelasId(null);
             return;
         }
-
         const fetchKelas = async () => {
             try {
                 const token = localStorage.getItem('token');
@@ -125,7 +123,6 @@ export default function InputNilaiClient() {
                 setKelasList([]);
             }
         };
-
         fetchKelas();
     }, [selectedMapelId]);
 
@@ -152,7 +149,6 @@ export default function InputNilaiClient() {
                 console.error('Error fetch komponen:', err);
             }
         };
-
         fetchKomponen();
     }, []);
 
@@ -164,35 +160,28 @@ export default function InputNilaiClient() {
             setCurrentMapel(null);
             return;
         }
-
         const fetchNilai = async () => {
             setLoading(true);
             try {
                 const token = localStorage.getItem('token');
                 if (!token) throw new Error('Token tidak ditemukan');
-
                 const res = await fetch(
                     `http://localhost:5000/api/guru-bidang-studi/nilai/${selectedMapelId}/${selectedKelasId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
-
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
                     throw new Error(errorData.message || 'Gagal mengambil data nilai');
                 }
-
                 const data = await res.json();
                 if (!data.success) {
                     throw new Error(data.message || 'Operasi gagal');
                 }
-
                 const jenisAktif = data.jenis_penilaian_aktif || null;
                 setJenisPenilaianAktif(jenisAktif);
-
                 if (!Array.isArray(data.siswaList)) {
                     throw new Error('Data siswa tidak valid');
                 }
-
                 const komponenUntukRender = komponenList.length > 0
                     ? komponenList
                     : [
@@ -204,7 +193,6 @@ export default function InputNilaiClient() {
                         { id: 6, nama: 'PTS', bobot: 0 },
                         { id: 7, nama: 'PAS', bobot: 0 },
                     ];
-
                 const siswaWithNilai = data.siswaList.map((s: any) => {
                     const nilaiRecord: Record<number, number | null> = {};
                     komponenUntukRender.forEach(k => {
@@ -221,7 +209,6 @@ export default function InputNilaiClient() {
                         nilai: nilaiRecord,
                     };
                 });
-
                 setSiswaList(siswaWithNilai);
                 setFilteredSiswa(siswaWithNilai);
                 setKelasNama(data.kelas || '');
@@ -234,7 +221,6 @@ export default function InputNilaiClient() {
                 setLoading(false);
             }
         };
-
         fetchNilai();
     }, [selectedMapelId, selectedKelasId, komponenList]);
 
@@ -255,6 +241,7 @@ export default function InputNilaiClient() {
     const simpanNilaiKomponen = async () => {
         if (!editingSiswa || !selectedMapelId || !selectedKelasId) return;
 
+        // Cek validasi nilai
         for (const [idStr, nilai] of Object.entries(editingKomponenNilai)) {
             if (nilai !== null) {
                 if (typeof nilai !== 'number' || isNaN(nilai) || nilai < 0 || nilai > 100) {
@@ -269,13 +256,24 @@ export default function InputNilaiClient() {
             }
         }
 
+        // === Cek apakah ada perubahan ===
+        const hasChanges = Object.keys(editingKomponenNilai).some(key => {
+            const kId = Number(key);
+            const current = editingKomponenNilai[kId];
+            const initial = initialEditingKomponenNilaiRef.current[kId];
+            return current !== initial;
+        });
+
+        if (!hasChanges) {
+            alert('Tidak ada perubahan data.');
+            return;
+        }
+
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
             if (!token) throw new Error('Token tidak ditemukan');
-
             const payload = { nilai: editingKomponenNilai };
-
             const res = await fetch(
                 `http://localhost:5000/api/guru-bidang-studi/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`,
                 {
@@ -287,12 +285,10 @@ export default function InputNilaiClient() {
                     body: JSON.stringify(payload),
                 }
             );
-
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.message || 'Gagal menyimpan nilai komponen');
             }
-
             const data = await res.json();
             const updatedSiswa = {
                 ...editingSiswa,
@@ -300,7 +296,6 @@ export default function InputNilaiClient() {
                 nilai_rapor: data.nilai_rapor,
                 deskripsi: data.deskripsi,
             };
-
             setSiswaList(prev => prev.map(s => (s.id === editingSiswa.id ? updatedSiswa : s)));
             setFilteredSiswa(prev => prev.map(s => (s.id === editingSiswa.id ? updatedSiswa : s)));
             setEditingSiswa(null);
@@ -322,6 +317,7 @@ export default function InputNilaiClient() {
         const nilaiAwal = { ...siswa.nilai };
         setEditingSiswa(siswa);
         setEditingKomponenNilai(nilaiAwal);
+        initialEditingKomponenNilaiRef.current = { ...nilaiAwal };
     };
 
     // ====== PAGINATION ======
@@ -334,7 +330,6 @@ export default function InputNilaiClient() {
     const renderPagination = () => {
         const pages: ReactNode[] = [];
         const maxVisible = 5;
-
         if (currentPage > 1) {
             pages.push(
                 <button
@@ -346,7 +341,6 @@ export default function InputNilaiClient() {
                 </button>
             );
         }
-
         if (totalPages <= maxVisible) {
             for (let i = 1; i <= totalPages; i++) {
                 pages.push(
@@ -371,9 +365,7 @@ export default function InputNilaiClient() {
                     1
                 </button>
             );
-
             if (currentPage > 3) pages.push(<span key="dots1" className="px-2 text-gray-600">...</span>);
-
             const start = Math.max(2, currentPage - 1);
             const end = Math.min(totalPages - 1, currentPage + 1);
             for (let i = start; i <= end; i++) {
@@ -388,10 +380,8 @@ export default function InputNilaiClient() {
                     </button>
                 );
             }
-
             if (currentPage < totalPages - 2)
                 pages.push(<span key="dots2" className="px-2 text-gray-600">...</span>);
-
             pages.push(
                 <button
                     key={totalPages}
@@ -403,7 +393,6 @@ export default function InputNilaiClient() {
                 </button>
             );
         }
-
         if (currentPage < totalPages) {
             pages.push(
                 <button
@@ -415,7 +404,6 @@ export default function InputNilaiClient() {
                 </button>
             );
         }
-
         return pages;
     };
 
@@ -453,7 +441,6 @@ export default function InputNilaiClient() {
                             </select>
                         )}
                     </div>
-
                     {/* Dropdown Kelas */}
                     {selectedMapelId && (
                         <div className="mb-4">
@@ -478,7 +465,6 @@ export default function InputNilaiClient() {
                             )}
                         </div>
                     )}
-
                     {selectedMapelId && selectedKelasId ? (
                         <>
                             {/* Pencarian */}
@@ -502,7 +488,6 @@ export default function InputNilaiClient() {
                                     </button>
                                 )}
                             </div>
-
                             {/* Tabel */}
                             <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm mb-6">
                                 <table className="w-full table-auto text-sm">
@@ -585,7 +570,6 @@ export default function InputNilaiClient() {
                                     </tbody>
                                 </table>
                             </div>
-
                             {/* Pagination */}
                             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                                 <div className="text-sm text-gray-600">
@@ -594,7 +578,6 @@ export default function InputNilaiClient() {
                                 </div>
                                 <div className="flex gap-1">{renderPagination()}</div>
                             </div>
-
                             {/* Modal Detail */}
                             {showDetail && detailSiswa && (
                                 <div
@@ -679,7 +662,6 @@ export default function InputNilaiClient() {
                                     </div>
                                 </div>
                             )}
-
                             {/* Modal Edit Komponen */}
                             {editingSiswa && (
                                 <div
@@ -742,8 +724,8 @@ export default function InputNilaiClient() {
                                                             }}
                                                             disabled={jenisPenilaianAktif === 'PTS' && !/PTS/i.test(komponen.nama)}
                                                             className={`w-full border rounded px-3 py-2 text-sm ${jenisPenilaianAktif === 'PTS' && !/PTS/i.test(komponen.nama)
-                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300'
-                                                                    : 'border-gray-300'
+                                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300'
+                                                                : 'border-gray-300'
                                                                 }`}
                                                             placeholder="0–100"
                                                         />

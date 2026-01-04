@@ -18,6 +18,7 @@ const absensiModel = {
           gk.kelas_id, 
           ta.id_tahun_ajaran, 
           ta.tahun_ajaran,
+          ta.semester,
           k.nama_kelas
         FROM guru_kelas gk
         JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
@@ -30,27 +31,29 @@ const absensiModel = {
   },
 
   // Mengambil data absensi semua siswa di kelas tertentu pada tahun ajaran aktif
-  async getAbsensiByKelas(kelasId, tahunAjaranId) {
+  async getAbsensiByKelas(kelasId, tahunAjaranId, semester, jenis_penilaian) {
     const [rows] = await db.execute(
       `
-        SELECT 
-          s.id_siswa AS id,
-          s.nama_lengkap AS nama,
-          s.nis,
-          s.nisn,
-          COALESCE(a.sakit, 0) AS jumlah_sakit,
-          COALESCE(a.izin, 0) AS jumlah_izin,
-          COALESCE(a.alpha, 0) AS jumlah_alpha,
-          CASE WHEN a.id_absensi IS NOT NULL THEN 1 ELSE 0 END AS sudah_diinput
-        FROM siswa s
-        JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-        LEFT JOIN absensi a ON s.id_siswa = a.siswa_id 
-          AND sk.kelas_id = a.kelas_id 
-          AND sk.tahun_ajaran_id = a.tahun_ajaran_id
-        WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ?
-        ORDER BY s.nama_lengkap
-      `,
-      [kelasId, tahunAjaranId]
+    SELECT 
+      s.id_siswa AS id,
+      s.nama_lengkap AS nama,
+      s.nis,
+      s.nisn,
+      COALESCE(a.sakit, 0) AS jumlah_sakit,
+      COALESCE(a.izin, 0) AS jumlah_izin,
+      COALESCE(a.alpha, 0) AS jumlah_alpha,
+      CASE WHEN a.id_absensi IS NOT NULL THEN 1 ELSE 0 END AS sudah_diinput
+    FROM siswa s
+    JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+    LEFT JOIN absensi a ON s.id_siswa = a.siswa_id 
+      AND sk.kelas_id = a.kelas_id 
+      AND sk.tahun_ajaran_id = a.tahun_ajaran_id
+      AND a.semester = ?
+      AND a.jenis_penilaian = ?
+    WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ?
+    ORDER BY s.nama_lengkap
+    `,
+      [semester, jenis_penilaian, kelasId, tahunAjaranId]
     );
     return rows;
   },
