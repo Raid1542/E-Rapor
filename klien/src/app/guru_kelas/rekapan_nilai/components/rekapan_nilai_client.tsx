@@ -9,12 +9,11 @@
 import { useState, useEffect } from 'react';
 import { Search, Upload, X, Eye } from 'lucide-react';
 
-// Tipe data siswa dalam rekapan nilai
 interface SiswaRekapan {
     id: number;
     nama: string;
     nis: string;
-    nilaiMapel: Record<string, number | null>; // key: kode_mapel
+    nilaiMapel: Record<string, number | null>; 
     rataRata: number | null;
     deskripsiRataRata: string;
     ranking: number | null;
@@ -22,7 +21,7 @@ interface SiswaRekapan {
 
 const RekapanNilaiClient = () => {
     const [siswaList, setSiswaList] = useState<SiswaRekapan[]>([]);
-    const [mapelList, setMapelList] = useState<string[]>([]);
+    const [mapelList, setMapelList] = useState<string[]>([]); 
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [showDetail, setShowDetail] = useState(false);
@@ -43,7 +42,7 @@ const RekapanNilaiClient = () => {
             });
 
             const data = await res.json();
-            if (res.ok && data.siswa && data.mapel_list) {
+            if (res.ok && data.siswa && Array.isArray(data.mapel_list)) {
                 const siswa: SiswaRekapan[] = data.siswa.map((s: any) => ({
                     id: s.id_siswa,
                     nama: s.nama,
@@ -53,7 +52,7 @@ const RekapanNilaiClient = () => {
                     deskripsiRataRata: s.deskripsi_rata_rata || 'Belum ada deskripsi',
                     ranking: s.ranking || null,
                 }));
-                const mapel: string[] = data.mapel_list;
+                const mapel: string[] = data.mapel_list; 
 
                 setSiswaList(siswa);
                 setMapelList(mapel);
@@ -72,43 +71,30 @@ const RekapanNilaiClient = () => {
         fetchRekapanNilai();
     }, []);
 
-    // Tambahkan useEffect ini (di luar useEffect yang sudah ada)
-useEffect(() => {
-  const checkForUpdate = () => {
-    const lastSignal = localStorage.getItem('rekapan_perlu_update');
-    const lastFetch = localStorage.getItem('rekapan_terakhir_diambil') || '0';
+    // Auto-refresh jika ada signal dari input nilai
+    useEffect(() => {
+        const checkForUpdate = () => {
+            const lastSignal = localStorage.getItem('rekapan_perlu_update');
+            const lastFetch = localStorage.getItem('rekapan_terakhir_diambil') || '0';
+            if (lastSignal && lastSignal > lastFetch) {
+                fetchRekapanNilai();
+                localStorage.setItem('rekapan_terakhir_diambil', lastSignal);
+            }
+        };
+        checkForUpdate();
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'rekapan_perlu_update') checkForUpdate();
+        };
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, []);
 
-    if (lastSignal && lastSignal > lastFetch) {
-      fetchRekapanNilai();
-      localStorage.setItem('rekapan_terakhir_diambil', lastSignal);
-    }
-  };
-
-  // Jalankan saat halaman dibuka
-  checkForUpdate();
-
-  // Dengarkan perubahan dari tab lain
-  const handleStorage = (e: StorageEvent) => {
-    if (e.key === 'rekapan_perlu_update') {
-      checkForUpdate();
-    }
-  };
-
-  window.addEventListener('storage', handleStorage);
-
-  return () => {
-    window.removeEventListener('storage', handleStorage);
-  };
-}, []);
-
-    // Fungsi untuk menampilkan detail siswa
     const handleDetail = (siswa: SiswaRekapan) => {
         setDetailSiswa(siswa);
         setShowDetail(true);
         setDetailClosing(false);
     };
 
-    // Filter berdasarkan pencarian DAN urutkan berdasarkan ranking
     const filteredSiswa = siswaList
         .filter((siswa) => {
             const q = searchQuery.toLowerCase().trim();
@@ -121,7 +107,6 @@ useEffect(() => {
             return a.ranking - b.ranking;
         });
 
-    // Ekspor Excel
     const handleExportExcel = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -148,7 +133,6 @@ useEffect(() => {
             <div className="max-w-7xl mx-auto">
                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Rekapan Nilai Rapor</h1>
                 <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    {/* Tombol Aksi & Pencarian */}
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                         <button
                             onClick={handleExportExcel}
@@ -157,7 +141,6 @@ useEffect(() => {
                             <Upload size={20} /> Ekspor Excel
                         </button>
 
-                        {/* Pencarian */}
                         <div className="relative flex-1 min-w-[200px] sm:min-w-[240px] max-w-[400px]">
                             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                 <Search className="w-4 h-4 text-gray-400" />
@@ -181,20 +164,14 @@ useEffect(() => {
                         </div>
                     </div>
 
-                    {/* Tabel Rekapan Nilai */}
                     <div className="overflow-x-auto rounded-lg border border-gray-100 shadow-sm">
                         <table className="w-full min-w-[600px] table-auto text-sm">
                             <thead>
                                 <tr>
-                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
-                                        No
-                                    </th>
-                                    <th className="px-4 py-3 text-left sticky top-0 bg-gray-800 text-white z-10 font-semibold">
-                                        Nama
-                                    </th>
-                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
-                                        NIS
-                                    </th>
+                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">No</th>
+                                    <th className="px-4 py-3 text-left sticky top-0 bg-gray-800 text-white z-10 font-semibold">Nama</th>
+                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">NIS</th>
+                                    {/* Tampilkan SEMUA mapel dari mapelList */}
                                     {mapelList.map((kodeMapel) => (
                                         <th
                                             key={kodeMapel}
@@ -203,15 +180,9 @@ useEffect(() => {
                                             {kodeMapel}
                                         </th>
                                     ))}
-                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
-                                        Rata-rata
-                                    </th>
-                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
-                                        Detail
-                                    </th>
-                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
-                                        Ranking
-                                    </th>
+                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Rata-rata</th>
+                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Detail</th>
+                                    <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Ranking</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -236,9 +207,10 @@ useEffect(() => {
                                             <td className="px-4 py-3 text-center align-middle">{index + 1}</td>
                                             <td className="px-4 py-3 align-middle font-medium">{siswa.nama}</td>
                                             <td className="px-4 py-3 text-center align-middle">{siswa.nis}</td>
+                                            {/* Tampilkan nilai untuk SETIAP mapel, meskipun null */}
                                             {mapelList.map((kodeMapel) => (
                                                 <td key={kodeMapel} className="px-3 py-3 text-center align-middle">
-                                                    {siswa.nilaiMapel[kodeMapel] !== null && siswa.nilaiMapel[kodeMapel] !== undefined
+                                                    {siswa.nilaiMapel[kodeMapel] !== undefined && siswa.nilaiMapel[kodeMapel] !== null
                                                         ? Math.floor(siswa.nilaiMapel[kodeMapel]!)
                                                         : '-'}
                                                 </td>
@@ -264,7 +236,7 @@ useEffect(() => {
                         </table>
                     </div>
 
-                    {/* Modal Detail - Rekapan Nilai */}
+                    {/* Modal Detail */}
                     {showDetail && detailSiswa && (
                         <div
                             className={`fixed inset-0 flex items-center justify-center z-50 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'} p-4`}
@@ -288,7 +260,6 @@ useEffect(() => {
                                     </button>
                                 </div>
                                 <div className="p-6">
-                                    {/* Info Siswa */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                                         <div>
                                             <span className="font-medium text-gray-700">Nama:</span>
@@ -312,7 +283,6 @@ useEffect(() => {
                                         </div>
                                     </div>
 
-                                    {/* Deskripsi Lengkap */}
                                     <div className="mb-6">
                                         <h3 className="font-semibold text-gray-800 mb-2">Deskripsi:</h3>
                                         <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded border whitespace-pre-wrap break-words">
@@ -320,10 +290,10 @@ useEffect(() => {
                                         </p>
                                     </div>
 
-                                    {/* Nilai per Mata Pelajaran */}
                                     <div>
                                         <h3 className="font-semibold text-gray-800 mb-3">Nilai per Mata Pelajaran:</h3>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            {/* Tampilkan SEMUA mapel, meskipun nilainya null */}
                                             {mapelList.map((kodeMapel) => (
                                                 <div key={kodeMapel} className="bg-orange-50 p-3 rounded text-center">
                                                     <div className="text-xs font-medium text-orange-700">{kodeMapel}</div>
@@ -337,7 +307,6 @@ useEffect(() => {
                                         </div>
                                     </div>
 
-                                    {/* Tombol Tutup */}
                                     <div className="mt-8 flex justify-end">
                                         <button
                                             onClick={() => setDetailClosing(true)}

@@ -710,8 +710,8 @@ const DataInputNilaiPage = () => {
                             )}
                         </>
                     ) : (
-                        <div className="text-center py-12 bg-yellow-50 rounded-lg border border-dashed border-yellow-300">
-                            <p className="text-gray-700 text-lg font-medium">Silakan pilih Mata Pelajaran terlebih dahulu.</p>
+                        <div className="text-center py-12 bg-orange-50 rounded-lg border border-dashed border-orange-300">
+                            <p className="text-orange-800 text-lg font-medium">Pilih Mata Pelajaran Terlebih Dahulu.</p>
                         </div>
                     )}
                 </div>

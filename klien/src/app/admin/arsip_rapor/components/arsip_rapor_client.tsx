@@ -313,7 +313,7 @@ export default function ArsipRaporClient() {
                                 onChange={(e) =>
                                     setSelectedTahunAjaran(e.target.value ? Number(e.target.value) : null)
                                 }
-                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm md:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm"
                                 disabled={loadingTA}
                             >
                                 <option value="">-- Pilih Tahun Ajaran --</option>
@@ -336,7 +336,7 @@ export default function ArsipRaporClient() {
                             <select
                                 value={selectedJenisPenilaian ?? ''}
                                 onChange={(e) => setSelectedJenisPenilaian(e.target.value as 'PTS' | 'PAS' | null)}
-                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm md:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm"
                                 disabled={!selectedTahunAjaran}
                             >
                                 <option value="">-- Pilih Jenis --</option>
@@ -355,7 +355,7 @@ export default function ArsipRaporClient() {
                                 onChange={(e) =>
                                     setSelectedKelas(e.target.value ? Number(e.target.value) : null)
                                 }
-                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm md:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm"
                                 disabled={!selectedJenisPenilaian || loadingKelas}
                             >
                                 <option value="">-- Pilih Kelas --</option>
@@ -498,7 +498,7 @@ export default function ArsipRaporClient() {
                         <div className="bg-white rounded-xl shadow-sm p-8 text-center border-2 border-dashed border-gray-300">
                             <FileText className="w-20 h-20 text-gray-400 mx-auto mb-4" />
                             <h3 className="text-lg font-semibold text-gray-700 mb-2">Data tidak ditemukan</h3>
-                            <p className="text-gray-600">Tidak ada data arsip rapor untuk filter yang dipilih.</p>
+                            <p className="text-gray-600">Tidak ada data arsip rapor untuk filter yang di.</p>
                         </div>
                     ) : (
                         <>
@@ -584,20 +584,15 @@ export default function ArsipRaporClient() {
                         </>
                     )
                 ) : (
-                    <div className="bg-white rounded-xl shadow-sm p-8 text-center border-2 border-dashed border-gray-300">
+                    <div className="bg-orange-50 rounded-xl shadow-sm p-8 text-center border-2 border-dashed border-orange-300">
                         <div className="max-w-md mx-auto">
-                            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                            <FileText className="w-16 h-16 text-orange-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-orange-800 mb-2">
                                 Pilih Filter untuk Melihat Data
                             </h3>
-                            <p className="text-gray-600 mb-4">
+                            <p className="text-orange-600 mb-4">
                                 Silakan pilih tahun ajaran, jenis penilaian, dan kelas untuk menampilkan arsip rapor.
                             </p>
-                            <div className="flex items-center justify-center gap-2 text-gray-500">
-                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                            </div>
                         </div>
                     </div>
                 )}

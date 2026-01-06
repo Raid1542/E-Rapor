@@ -565,8 +565,8 @@ export default function DataKelasClient() {
                     </div>
 
                     {selectedTahunAjaranId === null ? (
-                        <div className="mt-8 text-center py-8 bg-yellow-50 border border-dashed border-yellow-300 rounded-lg">
-                            <p className="text-gray-700 text-lg font-medium">Silakan pilih Tahun Ajaran terlebih dahulu.</p>
+                        <div className="mt-8 text-center py-8 bg-orange-50 border border-dashed border-orange-300 rounded-lg">
+                            <p className="text-orange-800 text-lg font-medium">Pilih Tahun Ajaran Terlebih Dahulu.</p>
                         </div>
                     ) : (
                         <>

@@ -754,11 +754,11 @@ export default function InputNilaiClient() {
                             )}
                         </>
                     ) : (
-                        <div className="text-center py-12 bg-yellow-50 rounded-lg border border-dashed border-yellow-300">
-                            <p className="text-gray-700 text-lg font-medium">
+                        <div className="text-center py-12 bg-orange-50 rounded-lg border border-dashed border-orange-300">
+                            <p className="text-orange-800 text-lg font-medium">
                                 {selectedMapelId && !selectedKelasId
-                                    ? 'Silakan pilih Kelas terlebih dahulu.'
-                                    : 'Silakan pilih Mata Pelajaran terlebih dahulu.'}
+                                    ? 'Pilih Kelas Terlebih Dahulu.'
+                                    : 'Pilih Mata Pelajaran Terlebih Dahulu.'}
                             </p>
                         </div>
                     )}

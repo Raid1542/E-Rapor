@@ -345,7 +345,10 @@ exports.getBobotPenilaian = async (req, res) => {
     const userId = req.user.id;
 
     const [taRows] = await db.execute(`
-      SELECT id_tahun_ajaran FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
+      SELECT id_tahun_ajaran, status_pts, status_pas
+      FROM tahun_ajaran 
+      WHERE status = 'aktif' 
+      LIMIT 1
     `);
     if (taRows.length === 0) {
       return res
@@ -353,6 +356,8 @@ exports.getBobotPenilaian = async (req, res) => {
         .json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
     }
     const taId = taRows[0].id_tahun_ajaran;
+    const status_pts = taRows[0].status_pts;
+    const status_pas = taRows[0].status_pas;
 
     const [valid] = await db.execute(
       `
@@ -372,12 +377,32 @@ exports.getBobotPenilaian = async (req, res) => {
       });
     }
 
+    // Ambil komponen penilaian
+    const [komponenList] = await db.execute(`
+      SELECT id_komponen, nama_komponen, urutan
+      FROM komponen_penilaian
+      ORDER BY urutan ASC
+    `);
+
+    const ptsKomponen = komponenList.find(k => /^PTS$/i.test(k.nama_komponen));
+
+    // Jika periode PTS aktif → kirim bobot PTS = 100%, lainnya 0
+    if (status_pts === 'aktif') {
+      const result = komponenList.map(k => ({
+        komponen_id: k.id_komponen,
+        bobot: k.id_komponen === ptsKomponen?.id_komponen ? 100 : 0,
+        locked: true, // Tambahkan flag locked untuk frontend (opsional)
+      }));
+      return res.json({ success: true, data: result, is_locked: true });
+    }
+
+    // Jika bukan periode PTS, ambil bobot dari database seperti biasa
     const [bobot] = await db.execute(
       `
       SELECT komponen_id, bobot
       FROM konfigurasi_mapel_komponen
       WHERE mapel_id = ? AND is_active = 1
-    `,
+      `,
       [mapelId]
     );
 
@@ -386,18 +411,12 @@ exports.getBobotPenilaian = async (req, res) => {
       bobotMap[b.komponen_id] = parseFloat(b.bobot) || 0;
     });
 
-    const [komponenList] = await db.execute(`
-      SELECT id_komponen, nama_komponen, urutan
-      FROM komponen_penilaian
-      ORDER BY urutan ASC
-    `);
-
     const result = komponenList.map(k => ({
       komponen_id: k.id_komponen,
       bobot: bobotMap[k.id_komponen] || 0,
     }));
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: result, is_locked: false });
   } catch (err) {
     console.error('Error get bobot:', err);
     res.status(500).json({ success: false, message: 'Gagal mengambil bobot' });
@@ -406,7 +425,6 @@ exports.getBobotPenilaian = async (req, res) => {
 
 /**
  * Memperbarui konfigurasi bobot penilaian untuk suatu mata pelajaran.
- * Termasuk validasi khusus jika periode PTS sedang aktif.
  */
 exports.updateBobotPenilaian = async (req, res) => {
   try {
@@ -414,6 +432,30 @@ exports.updateBobotPenilaian = async (req, res) => {
     const bobotList = req.body;
     const userId = req.user.id;
 
+    // Cek status periode aktif
+    const [taRows] = await db.execute(`
+      SELECT id_tahun_ajaran, status_pts
+      FROM tahun_ajaran 
+      WHERE status = 'aktif' 
+      LIMIT 1
+    `);
+    if (taRows.length === 0) {
+      return res
+        .status(500)
+        .json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
+    }
+    const taId = taRows[0].id_tahun_ajaran;
+    const status_pts = taRows[0].status_pts;
+
+    // 🔒 BLOKIR EDIT JIKA PERIODE PTS AKTIF
+    if (status_pts === 'aktif') {
+      return res.status(403).json({
+        success: false,
+        message: 'Bobot penilaian tidak dapat diubah saat periode PTS aktif. Nilai rapor otomatis = nilai PTS.',
+      });
+    }
+
+    // Validasi total bobot = 100%
     const total = bobotList.reduce(
       (sum, b) => sum + (parseFloat(b.bobot) || 0),
       0
@@ -424,79 +466,25 @@ exports.updateBobotPenilaian = async (req, res) => {
         .json({ success: false, message: 'Total bobot harus 100%' });
     }
 
-    const [statusRows] = await db.execute(`
-      SELECT status_pts, status_pas FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
-    `);
-    if (statusRows.length === 0) {
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: 'Tahun ajaran aktif tidak ditemukan',
-        });
-    }
-    const { status_pts } = statusRows[0];
-    const isPeriodePTS = status_pts === 'aktif';
-
-    if (isPeriodePTS) {
-      const [ptsKomponen] = await db.execute(`
-        SELECT id_komponen FROM komponen_penilaian WHERE nama_komponen LIKE '%PTS%' LIMIT 1
-      `);
-      if (ptsKomponen.length === 0) {
-        return res
-          .status(500)
-          .json({ success: false, message: 'Komponen PTS tidak ditemukan' });
-      }
-      const ptsKomponenId = ptsKomponen[0].id_komponen;
-
-      const adaBobotNonPTS = bobotList.some(
-        b => b.komponen_id !== ptsKomponenId && (parseFloat(b.bobot) || 0) > 0
-      );
-      if (adaBobotNonPTS) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Di periode PTS, hanya bobot PTS yang boleh diisi. Semua bobot lain harus 0.',
-        });
-      }
-
-      const bobotPTS = bobotList.find(b => b.komponen_id === ptsKomponenId);
-      if (!bobotPTS || Math.abs(parseFloat(bobotPTS.bobot) - 100) > 0.1) {
-        return res.status(400).json({
-          success: false,
-          message: 'Di periode PTS, bobot PTS harus diatur 100%.',
-        });
-      }
-    }
-
-    const [taRows] = await db.execute(`
-      SELECT id_tahun_ajaran FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
-    `);
-    if (taRows.length === 0) {
-      return res
-        .status(500)
-        .json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
-    }
-    const taId = taRows[0].id_tahun_ajaran;
-
+    // Validasi akses
     const [valid] = await db.execute(
       `
       SELECT 1 
       FROM pembelajaran 
       WHERE user_id = ? AND mata_pelajaran_id = ? AND tahun_ajaran_id = ?
-    `,
+      `,
       [userId, mapelId, taId]
     );
-
     if (valid.length === 0) {
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
 
+    // Simpan bobot
     await db.execute(
       `
       DELETE FROM konfigurasi_mapel_komponen 
       WHERE mapel_id = ?
-    `,
+      `,
       [mapelId]
     );
 
@@ -505,16 +493,157 @@ exports.updateBobotPenilaian = async (req, res) => {
         `
         INSERT INTO konfigurasi_mapel_komponen (mapel_id, komponen_id, bobot, is_active, created_at, updated_at)
         VALUES (?, ?, ?, 1, NOW(), NOW())
-      `,
+        `,
         [mapelId, b.komponen_id, parseFloat(b.bobot) || 0]
       );
     }
+
+    await recomputeAllNilaiRapor(mapelId, userId);
 
     res.json({ success: true, message: 'Bobot penilaian berhasil disimpan' });
   } catch (err) {
     console.error('Error update bobot:', err);
     res.status(500).json({ success: false, message: 'Gagal menyimpan bobot' });
   }
+};
+
+// Helper: Hitung ulang semua nilai rapor untuk suatu mata pelajaran setelah bobot diubah
+const recomputeAllNilaiRapor = async (mapelId, userId) => {
+  // Ambil tahun ajaran aktif
+  const [taRows] = await db.execute(`
+    SELECT id_tahun_ajaran, semester, status_pts, status_pas
+    FROM tahun_ajaran
+    WHERE status = 'aktif'
+    LIMIT 1
+  `);
+  if (taRows.length === 0) {
+    throw new Error('Tahun ajaran aktif tidak ditemukan');
+  }
+  const { id_tahun_ajaran: tahun_ajaran_id, semester } = taRows[0];
+
+  // Tentukan jenis penilaian aktif
+  let jenisAktif = 'PAS';
+  if (taRows[0].status_pts === 'aktif') {
+    jenisAktif = 'PTS';
+  } else if (taRows[0].status_pas === 'aktif') {
+    jenisAktif = 'PAS';
+  }
+
+  // Ambil semua siswa yang belajar mapel ini di tahun ajaran aktif
+  const [siswaRows] = await db.execute(`
+  SELECT sk.siswa_id, sk.kelas_id
+  FROM siswa_kelas sk
+  WHERE sk.tahun_ajaran_id = ?
+    AND sk.kelas_id IN (
+      SELECT DISTINCT p.kelas_id
+      FROM pembelajaran p
+      WHERE p.mata_pelajaran_id = ?
+        AND p.tahun_ajaran_id = ?
+    )
+  `, [tahun_ajaran_id, mapelId, tahun_ajaran_id]);
+
+  if (siswaRows.length === 0) {
+    console.log(`Tidak ada siswa untuk mapel ${mapelId}.`);
+    return;
+  }
+
+  // Ambil komponen dan bobot
+  const [komponenRows] = await db.execute(`
+    SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan
+  `);
+  const [bobotRows] = await db.execute(
+    `SELECT komponen_id, bobot FROM konfigurasi_mapel_komponen WHERE mapel_id = ?`,
+    [mapelId]
+  );
+  const bobotMap = new Map(bobotRows.map(b => [b.komponen_id, parseFloat(b.bobot) || 0]));
+  const uhKomponenIds = komponenRows.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(k => k.id_komponen);
+  const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
+  const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
+
+  // Proses setiap siswa
+  for (const row of siswaRows) {
+    const siswaId = row.siswa_id;
+    const kelas_id = row.kelas_id;
+
+    // Ambil nilai detail
+    const [nilaiDetailRows] = await db.execute(
+      `SELECT komponen_id, nilai 
+       FROM nilai_detail 
+       WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
+      [siswaId, mapelId, tahun_ajaran_id]
+    );
+    const nilaiFromDB = {};
+    nilaiDetailRows.forEach(r => {
+      if (r.nilai != null) nilaiFromDB[r.komponen_id] = Math.floor(parseFloat(r.nilai));
+    });
+
+    // Hitung nilai rapor
+    let nilaiRapor = 0;
+    if (jenisAktif === 'PTS') {
+      // PTS: nilai rapor = nilai PTS
+      nilaiRapor = ptsKomponen ? nilaiFromDB[ptsKomponen.id_komponen] || 0 : 0;
+    } else {
+      // PAS: ambil nilai PTS final dari nilai_rapor periode PTS
+      let nilaiPTSFinal = 0;
+      if (ptsKomponen) {
+        const [ptsRow] = await db.execute(
+          `SELECT nilai_rapor FROM nilai_rapor
+           WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?
+             AND semester = ? AND jenis_penilaian = 'PTS'`,
+          [siswaId, mapelId, tahun_ajaran_id, semester]
+        );
+        nilaiPTSFinal = ptsRow.length > 0 ? ptsRow[0].nilai_rapor : 0;
+      }
+
+      const nilaiUH = uhKomponenIds.map(id => nilaiFromDB[id]).filter(v => v != null && !isNaN(v));
+      const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
+      const nilaiPAS = pasKomponen ? nilaiFromDB[pasKomponen.id_komponen] || 0 : 0;
+
+      const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
+      const bobotPTS = ptsKomponen ? bobotMap.get(ptsKomponen.id_komponen) || 0 : 0;
+      const bobotPAS = pasKomponen ? bobotMap.get(pasKomponen.id_komponen) || 0 : 0;
+      const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
+
+      if (totalBobot > 0) {
+        nilaiRapor = (rataUH * totalBobotUH + nilaiPTSFinal * bobotPTS + nilaiPAS * bobotPAS) / totalBobot;
+      } else {
+        nilaiRapor = (rataUH + nilaiPTSFinal + nilaiPAS) / 3;
+      }
+    }
+
+    nilaiRapor = Math.floor(nilaiRapor);
+
+    // Ambil deskripsi
+    const [kategoriRows] = await db.execute(
+      `SELECT min_nilai, max_nilai, deskripsi
+       FROM konfigurasi_nilai_rapor
+       WHERE (mapel_id = ? OR mapel_id IS NULL)
+       ORDER BY min_nilai DESC`,
+      [mapelId]
+    );
+    let deskripsi = 'Belum ada deskripsi';
+    for (const k of kategoriRows) {
+      if (nilaiRapor >= k.min_nilai && nilaiRapor <= k.max_nilai) {
+        deskripsi = k.deskripsi;
+        break;
+      }
+    }
+
+    // SIMPAN DENGAN kelas_id YANG BENAR
+    await db.execute(
+      `INSERT INTO nilai_rapor (
+        siswa_id, mapel_id, kelas_id, tahun_ajaran_id, semester, jenis_penilaian,
+        nilai_rapor, deskripsi, created_by_user_id, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        nilai_rapor = VALUES(nilai_rapor),
+        deskripsi = VALUES(deskripsi),
+        updated_at = NOW()`,
+      [siswaId, mapelId, kelas_id, tahun_ajaran_id, semester, jenisAktif, nilaiRapor, deskripsi, userId]
+    );
+  }
+
+  console.log(`Berhasil menghitung ulang nilai rapor untuk ${siswaRows.length} siswa di mapel ${mapelId}`);
 };
 
 /**
@@ -753,12 +882,10 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
     const userId = req.user.id;
 
     if (!mapelId || !kelasId) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: 'ID mata pelajaran dan kelas wajib diisi',
-        });
+      return res.status(400).json({
+        success: false,
+        message: 'ID mata pelajaran dan kelas wajib diisi',
+      });
     }
 
     const [taRows] = await db.execute(`
@@ -768,12 +895,10 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
       LIMIT 1
     `);
     if (taRows.length === 0) {
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: 'Tahun ajaran aktif tidak ditemukan',
-        });
+      return res.status(500).json({
+        success: false,
+        message: 'Tahun ajaran aktif tidak ditemukan',
+      });
     }
     const {
       id_tahun_ajaran: tahun_ajaran_id,
@@ -790,26 +915,20 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
     } else {
       return res.status(403).json({
         success: false,
-        message:
-          'Periode penilaian tidak aktif. Tidak dapat mengambil data nilai.',
+        message: 'Periode penilaian tidak aktif. Tidak dapat mengambil data nilai.',
       });
     }
 
     const [valid] = await db.execute(
-      `
-      SELECT 1 FROM pembelajaran 
-      WHERE user_id = ? AND mata_pelajaran_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?
-    `,
+      `SELECT 1 FROM pembelajaran 
+       WHERE user_id = ? AND mata_pelajaran_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?`,
       [userId, mapelId, kelasId, tahun_ajaran_id]
     );
-
     if (valid.length === 0) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: 'Anda tidak mengajar mata pelajaran ini di kelas ini',
-        });
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak mengajar mata pelajaran ini di kelas ini',
+      });
     }
 
     const [namaKelasRow] = await db.execute(
@@ -819,13 +938,11 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
     const kelasNama = namaKelasRow[0]?.nama_kelas || 'Kelas Tidak Diketahui';
 
     const [siswaRows] = await db.execute(
-      `
-      SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama
-      FROM siswa s
-      JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-      WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ?
-      ORDER BY s.nama_lengkap
-    `,
+      `SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama
+       FROM siswa s
+       JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+       WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ?
+       ORDER BY s.nama_lengkap`,
       [kelasId, tahun_ajaran_id]
     );
 
@@ -836,25 +953,20 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
     `);
 
     const [bobotRows] = await db.execute(
-      `
-      SELECT komponen_id, bobot 
-      FROM konfigurasi_mapel_komponen 
-      WHERE mapel_id = ?
-    `,
+      `SELECT komponen_id, bobot 
+       FROM konfigurasi_mapel_komponen 
+       WHERE mapel_id = ?`,
       [mapelId]
     );
 
     const [configRows] = await db.execute(
-      `
-      SELECT min_nilai, max_nilai, deskripsi 
-      FROM konfigurasi_nilai_rapor 
-      WHERE mapel_id = ?
-      ORDER BY min_nilai DESC
-    `,
+      `SELECT min_nilai, max_nilai, deskripsi 
+       FROM konfigurasi_nilai_rapor 
+       WHERE mapel_id = ?
+       ORDER BY min_nilai DESC`,
       [mapelId]
     );
 
-    // Ambil nilai rapor yang sudah disimpan (PTS/PAS terpisah)
     const [nilaiRaporRows] = await db.execute(
       `SELECT siswa_id, nilai_rapor, deskripsi, jenis_penilaian
        FROM nilai_rapor
@@ -866,61 +978,38 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
     nilaiRaporRows.forEach(row => {
       nilaiRaporMap.set(row.siswa_id, {
         nilai_rapor: row.nilai_rapor,
-        deskripsi: row.deskripsi
+        deskripsi: row.deskripsi,
       });
     });
 
     const bobotMap = new Map();
-    bobotRows.forEach(b =>
-      bobotMap.set(b.komponen_id, parseFloat(b.bobot) || 0)
-    );
+    bobotRows.forEach(b => bobotMap.set(b.komponen_id, parseFloat(b.bobot) || 0));
 
     const uhKomponenIds = komponenRows
-  .filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen))
-  .map(k => k.id_komponen);
-const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
-const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
-
-console.log('🔍 [getNilaiByMapelAndKelas] uhKomponenIds:', uhKomponenIds);
+      .filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen))
+      .map(k => k.id_komponen);
+    const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
+    const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
 
     const siswaList = [];
     for (const s of siswaRows) {
       const [nilaiDetailRows] = await db.execute(
-        `
-        SELECT komponen_id, nilai 
-        FROM nilai_detail 
-        WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?
-      `,
+        `SELECT komponen_id, nilai 
+         FROM nilai_detail 
+         WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
         [s.id, mapelId, tahun_ajaran_id]
       );
 
       const nilaiMap = {};
       nilaiDetailRows.forEach(n => (nilaiMap[n.komponen_id] = n.nilai));
 
-      // Jika sudah ada nilai rapor final, gunakan itu (jangan hitung ulang)
+      // Jika nilai rapor sudah disimpan, gunakan data itu
       if (nilaiRaporMap.has(s.id)) {
         const dataRapor = nilaiRaporMap.get(s.id);
         const nilaiRecord = {};
         komponenRows.forEach(k => {
           nilaiRecord[k.id_komponen] = nilaiMap[k.id_komponen] ?? null;
         });
-
-        // Jika jenis_penilaian aktif adalah PTS, dan bobot PTS = 100%, maka nilai rapor harus sama dengan nilai PTS
-        if (jenis_penilaian_aktif === 'PTS') {
-          const ptsKomponen = komponenRows.find(k => /PTS/i.test(k.nama_komponen));
-          if (ptsKomponen) {
-            const nilaiPTS = nilaiMap[ptsKomponen.id_komponen] || 0;
-            // Jika nilai PTS berubah, update nilai rapor
-            if (dataRapor.nilai_rapor !== nilaiPTS) {
-              // Update nilai rapor ke nilai PTS terbaru
-              await db.execute(
-                `UPDATE nilai_rapor SET nilai_rapor = ?, updated_at = NOW() WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
-                [nilaiPTS, s.id, mapelId, tahun_ajaran_id, semester, jenis_penilaian_aktif]
-              );
-              dataRapor.nilai_rapor = nilaiPTS;
-            }
-          }
-        }
 
         siswaList.push({
           id: s.id,
@@ -931,63 +1020,69 @@ console.log('🔍 [getNilaiByMapelAndKelas] uhKomponenIds:', uhKomponenIds);
           deskripsi: dataRapor.deskripsi,
           nilai: nilaiRecord,
         });
-        continue;
-      }
+      } else {
+        // Jika belum disimpan, hitung preview nilai rapor
+        const nilaiUH = uhKomponenIds
+          .map(id => nilaiMap[id])
+          .filter(v => v != null);
+        const rataUH =
+          nilaiUH.length > 0
+            ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length
+            : 0;
+        const totalBobotUH = uhKomponenIds.reduce(
+          (sum, id) => sum + (bobotMap.get(id) || 0),
+          0
+        );
+        const nilaiPTS = ptsKomponen ? nilaiMap[ptsKomponen.id_komponen] || 0 : 0;
+        const bobotPTS = ptsKomponen ? bobotMap.get(ptsKomponen.id_komponen) || 0 : 0;
+        const nilaiPAS = pasKomponen ? nilaiMap[pasKomponen.id_komponen] || 0 : 0;
+        const bobotPAS = pasKomponen ? bobotMap.get(pasKomponen.id_komponen) || 0 : 0;
 
-      // Jika belum disimpan, hitung preview
-      const nilaiUH = uhKomponenIds
-        .map(id => nilaiMap[id])
-        .filter(v => v != null);
-      const rataUH =
-        nilaiUH.length > 0
-          ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length
-          : 0;
-      const totalBobotUH = uhKomponenIds.reduce(
-        (sum, id) => sum + (bobotMap.get(id) || 0),
-        0
-      );
-      const nilaiPTS = ptsKomponen ? nilaiMap[ptsKomponen.id_komponen] || 0 : 0;
-      const bobotPTS = ptsKomponen
-        ? bobotMap.get(ptsKomponen.id_komponen) || 0
-        : 0;
-      const nilaiPAS = pasKomponen ? nilaiMap[pasKomponen.id_komponen] || 0 : 0;
-      const bobotPAS = pasKomponen
-        ? bobotMap.get(pasKomponen.id_komponen) || 0
-        : 0;
+        const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
+        let nilaiRapor = 0;
+        let deskripsi = 'Belum ada deskripsi';
 
-      let nilaiRapor = 0;
-      if (totalBobotUH > 0) nilaiRapor += rataUH * totalBobotUH;
-      if (bobotPTS > 0) nilaiRapor += nilaiPTS * bobotPTS;
-      if (bobotPAS > 0) nilaiRapor += nilaiPAS * bobotPAS;
-      nilaiRapor =
-        totalBobotUH + bobotPTS + bobotPAS > 0 ? nilaiRapor / 100 : 0;
-      const nilaiRaporBulat = Math.floor(nilaiRapor);
+        // Cek apakah bobot pernah diatur (ada entri di konfigurasi_mapel_komponen)
+        const hasBobotConfig = bobotRows.length > 0;
 
-      let deskripsi = 'Belum ada deskripsi';
-      for (const config of configRows) {
-        if (
-          nilaiRaporBulat >= config.min_nilai &&
-          nilaiRaporBulat <= config.max_nilai
-        ) {
-          deskripsi = config.deskripsi;
-          break;
+        if (hasBobotConfig && totalBobot > 0) {
+          nilaiRapor = (
+            (rataUH * totalBobotUH) +
+            (nilaiPTS * bobotPTS) +
+            (nilaiPAS * bobotPAS)
+          ) / totalBobot;
+        } else {
+          // Jika bobot belum diatur atau total bobot = 0, nilai rapor = 0
+          nilaiRapor = 0;
         }
+
+        const nilaiRaporBulat = Math.floor(nilaiRapor);
+
+        for (const config of configRows) {
+          if (
+            nilaiRaporBulat >= config.min_nilai &&
+            nilaiRaporBulat <= config.max_nilai
+          ) {
+            deskripsi = config.deskripsi;
+            break;
+          }
+        }
+
+        const nilaiRecord = {};
+        komponenRows.forEach(k => {
+          nilaiRecord[k.id_komponen] = nilaiMap[k.id_komponen] ?? null;
+        });
+
+        siswaList.push({
+          id: s.id,
+          nama: s.nama,
+          nis: s.nis,
+          nisn: s.nisn,
+          nilai_rapor: nilaiRaporBulat,
+          deskripsi: deskripsi,
+          nilai: nilaiRecord,
+        });
       }
-
-      const nilaiRecord = {};
-      komponenRows.forEach(k => {
-        nilaiRecord[k.id_komponen] = nilaiMap[k.id_komponen] ?? null;
-      });
-
-      siswaList.push({
-        id: s.id,
-        nama: s.nama,
-        nis: s.nis,
-        nisn: s.nisn,
-        nilai_rapor: nilaiRaporBulat,
-        deskripsi: deskripsi,
-        nilai: nilaiRecord,
-      });
     }
 
     res.json({
@@ -999,9 +1094,7 @@ console.log('🔍 [getNilaiByMapelAndKelas] uhKomponenIds:', uhKomponenIds);
     });
   } catch (err) {
     console.error('Error getNilaiByMapelAndKelas:', err);
-    res
-      .status(500)
-      .json({ success: false, message: 'Gagal mengambil data nilai' });
+    res.status(500).json({ success: false, message: 'Gagal mengambil data nilai' });
   }
 };
 
@@ -1077,18 +1170,12 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
   try {
     const { mapelId, siswaId } = req.params;
     const { nilai } = req.body;
-
     const mapelIdNum = parseInt(mapelId, 10);
     const siswaIdNum = parseInt(siswaId, 10);
     if (isNaN(mapelIdNum) || isNaN(siswaIdNum)) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'ID tidak valid' });
+      return res.status(400).json({ success: false, message: 'ID tidak valid' });
     }
-
     const userId = req.user.id;
-
-    // Ambil jenis_penilaian dari middleware
     const jenis_penilaian = req.jenis_penilaian;
     if (!jenis_penilaian) {
       return res.status(400).json({
@@ -1096,54 +1183,41 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
         message: 'Periode penilaian tidak aktif'
       });
     }
-
     const [taRows] = await db.execute(`
       SELECT id_tahun_ajaran FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
     `);
     if (taRows.length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: 'Tahun ajaran aktif tidak ditemukan',
-        });
+      return res.status(400).json({
+        success: false,
+        message: 'Tahun ajaran aktif tidak ditemukan',
+      });
     }
     const tahun_ajaran_id = taRows[0].id_tahun_ajaran;
 
-    // Simpan semua nilai ke nilai_detail (NULL jadi 0)
+    // Simpan semua nilai ke nilai_detail
     for (const [komponenIdStr, nilaiSiswa] of Object.entries(nilai)) {
       const komponenId = parseInt(komponenIdStr, 10);
-      let nilaiBulat = 0; // 🔹 Default 0 jika kosong
-
+      let nilaiBulat = 0;
       if (nilaiSiswa != null && nilaiSiswa !== '' && !isNaN(nilaiSiswa)) {
         nilaiBulat = Math.floor(parseFloat(nilaiSiswa));
         if (nilaiBulat < 0) nilaiBulat = 0;
         if (nilaiBulat > 100) nilaiBulat = 100;
       }
-
       await db.execute(
         `INSERT INTO nilai_detail (siswa_id, mapel_id, komponen_id, nilai, tahun_ajaran_id, created_by_user_id)
          VALUES (?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            nilai = VALUES(nilai),
            updated_at = NOW()`,
-        [
-          siswaIdNum,
-          mapelIdNum,
-          komponenId,
-          nilaiBulat, 
-          tahun_ajaran_id,
-          userId,
-        ]
+        [siswaIdNum, mapelIdNum, komponenId, nilaiBulat, tahun_ajaran_id, userId]
       );
     }
 
-    // Ambil data untuk perhitungan
+    // Ambil data komponen, bobot, dan nilai dari database
     const [nilaiRows] = await db.execute(
       `SELECT komponen_id, nilai FROM nilai_detail WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
       [siswaIdNum, mapelIdNum, tahun_ajaran_id]
     );
-
     const [komponenRows] = await db.execute(`
       SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan
     `);
@@ -1153,45 +1227,50 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
     );
 
     const nilaiMap = new Map();
-    nilaiRows.forEach(row => nilaiMap.set(row.komponen_id, row.nilai || 0)); // 🔹 Jika NULL, jadi 0
+    nilaiRows.forEach(row => nilaiMap.set(row.komponen_id, row.nilai || 0));
     const bobotMap = new Map();
     bobotRows.forEach(row => bobotMap.set(row.komponen_id, parseFloat(row.bobot) || 0));
 
     const uhKomponenIds = komponenRows
-      .filter(k => /^UH\s+\d+$/i.test(k.nama_komponen))
+      .filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen))
       .map(k => k.id_komponen);
+    const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
+    const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
 
-    console.log('🔍 [simpanNilaiKomponenBanyak] uhKomponenIds:', uhKomponenIds);
-    const ptsKomponen = komponenRows.find(k => /PTS/i.test(k.nama_komponen));
-    const pasKomponen = komponenRows.find(k => /PAS/i.test(k.nama_komponen));
+    const nilaiUH = uhKomponenIds.map(id => nilaiMap.get(id) || 0);
+    const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
+    const nilaiPTS = ptsKomponen ? nilaiMap.get(ptsKomponen.id_komponen) || 0 : 0;
+    const nilaiPAS = pasKomponen ? nilaiMap.get(pasKomponen.id_komponen) || 0 : 0;
 
-    let nilaiRaporBulat = 0;
-    let deskripsi = 'Belum ada deskripsi';
+    const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
+    const bobotPTS = ptsKomponen ? bobotMap.get(ptsKomponen.id_komponen) || 0 : 0;
+    const bobotPAS = pasKomponen ? bobotMap.get(pasKomponen.id_komponen) || 0 : 0;
 
-    if (jenis_penilaian === 'PTS') {
-      const nilaiPTS = ptsKomponen ? nilaiMap.get(ptsKomponen.id_komponen) || 0 : 0;
-      nilaiRaporBulat = Math.floor(nilaiPTS);
+    const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
+    let nilaiRapor = 0;
+
+    // Cek apakah bobot pernah diatur
+    const hasBobotConfig = bobotRows.length > 0;
+
+    if (hasBobotConfig && totalBobot > 0) {
+      const totalNilaiBobot =
+        (rataUH * totalBobotUH) +
+        (nilaiPTS * bobotPTS) +
+        (nilaiPAS * bobotPAS);
+      nilaiRapor = totalNilaiBobot / totalBobot;
     } else {
-      // Ambil nilai (jika NULL, jadi 0)
-      const nilaiUH = uhKomponenIds.map(id => nilaiMap.get(id) || 0);
-      const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
-      const nilaiPTS = ptsKomponen ? nilaiMap.get(ptsKomponen.id_komponen) || 0 : 0;
-      const nilaiPAS = pasKomponen ? nilaiMap.get(pasKomponen.id_komponen) || 0 : 0;
-
-      // Ambil bobot
-      const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
-      const bobotPTS = ptsKomponen ? bobotMap.get(ptsKomponen.id_komponen) || 0 : 0;
-      const bobotPAS = pasKomponen ? bobotMap.get(pasKomponen.id_komponen) || 0 : 0;
-
-      // SELALU bagi dengan 100 (total bobot tetap 100%)
-      const nilaiRapor =
-        (rataUH * totalBobotUH + nilaiPTS * bobotPTS + nilaiPAS * bobotPAS) / 100;
-      nilaiRaporBulat = Math.floor(nilaiRapor);
+      // Jika bobot belum diatur atau total bobot = 0, nilai rapor = 0
+      nilaiRapor = 0;
     }
 
-    // Ambil deskripsi
+    const nilaiRaporBulat = Math.floor(nilaiRapor);
+
+    let deskripsi = 'Belum ada deskripsi';
     const [configRows] = await db.execute(
-      `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? ORDER BY min_nilai DESC`,
+      `SELECT min_nilai, max_nilai, deskripsi 
+       FROM konfigurasi_nilai_rapor 
+       WHERE mapel_id = ? 
+       ORDER BY min_nilai DESC`,
       [mapelIdNum]
     );
     for (const config of configRows) {
@@ -1203,7 +1282,8 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
 
     // Simpan ke nilai_rapor
     const [kelasRows] = await db.execute(
-      `SELECT kelas_id FROM pembelajaran WHERE mata_pelajaran_id = ? AND user_id = ? AND tahun_ajaran_id = ? LIMIT 1`,
+      `SELECT kelas_id FROM pembelajaran 
+       WHERE mata_pelajaran_id = ? AND user_id = ? AND tahun_ajaran_id = ? LIMIT 1`,
       [mapelIdNum, userId, tahun_ajaran_id]
     );
     if (kelasRows.length === 0) {
@@ -1252,7 +1332,6 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
     res.status(500).json({ success: false, message: 'Gagal menyimpan nilai' });
   }
 };
-
 
 /**
  * Mengambil informasi tahun ajaran aktif (termasuk status PTS/PAS).

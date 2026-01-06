@@ -122,8 +122,8 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const administrasiSubmenu = [
     { name: 'Data Sekolah', url: '/admin/data_sekolah' },
-    { name: 'Data Siswa', url: '/admin/data_siswa' },
     { name: 'Data Kelas', url: '/admin/data_kelas' },
+    { name: 'Data Siswa', url: '/admin/data_siswa' },
     { name: 'Data Mata Pelajaran', url: '/admin/data_mata_pelajaran' },
     { name: 'Data Pembelajaran', url: '/admin/data_pembelajaran' },
   ];

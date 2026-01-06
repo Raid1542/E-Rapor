@@ -11,7 +11,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Pencil, X, Plus, Trash2 } from 'lucide-react';
 
-// ====== TYPES ======
+// ====== TIPE DATA (SESUAI DENGAN BACKEND - SNAKE_CASE) ======
 interface MapelItem {
     mata_pelajaran_id: number;
     nama_mapel: string;
@@ -38,14 +38,13 @@ interface BobotItem {
     is_active: boolean;
 }
 
-// ====== MAIN COMPONENT ======
+// ====== KOMPONEN UTAMA ======
 export default function AturPenilaianClient() {
     const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
     const [activeTab, setActiveTab] = useState<'akademik' | 'bobot'>('akademik');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Kategori Akademik
     const [kategoriList, setKategoriList] = useState<KategoriAkademik[]>([]);
     const [showEditKategori, setShowEditKategori] = useState(false);
     const [editKategoriId, setEditKategoriId] = useState<number | null>(null);
@@ -58,15 +57,14 @@ export default function AturPenilaianClient() {
 
     const initialEditKategoriDataRef = useRef<typeof editKategoriData | null>(null);
 
-    // Mapel selection
     const [selectedMapelAkademik, setSelectedMapelAkademik] = useState<number | null>(null);
     const [selectedMapelId, setSelectedMapelId] = useState<number | null>(null);
 
-    // Mapel & Komponen
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
     const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
     const [bobotList, setBobotList] = useState<BobotItem[]>([]);
     const [bobotLoading, setBobotLoading] = useState(false);
+
     const initialBobotListRef = useRef<BobotItem[]>([]);
 
     // ====== FETCH DATA DUKUNGAN ======
@@ -154,7 +152,7 @@ export default function AturPenilaianClient() {
         const fetchBobot = async () => {
             setBobotLoading(true);
             try {
-                const token = localStorage === null ? null : localStorage.getItem('token');
+                const token = localStorage.getItem('token');
                 const res = await fetch(
                     `http://localhost:5000/api/guru-bidang-studi/atur-penilaian/bobot/${selectedMapelId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -221,7 +219,6 @@ export default function AturPenilaianClient() {
         }, 200);
     };
 
-    // ====== SIMPAN KATEGORI ======
     const handleSaveKategori = async () => {
         const initial = initialEditKategoriDataRef.current;
         const isUnchanged =
@@ -267,7 +264,6 @@ export default function AturPenilaianClient() {
                 alert(editKategoriId ? 'Kategori berhasil diperbarui' : 'Kategori berhasil ditambahkan');
                 closeEditKategori();
 
-                // Reload
                 const reloadRes = await fetch(
                     `http://localhost:5000/api/guru-bidang-studi/atur-penilaian/kategori?mapel_id=${selectedMapelAkademik}`,
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -283,7 +279,6 @@ export default function AturPenilaianClient() {
         }
     };
 
-    // ====== HAPUS KATEGORI ======
     const handleDeleteKategori = async (id: number) => {
         if (!confirm('Hapus kategori ini?')) return;
         try {
@@ -306,27 +301,8 @@ export default function AturPenilaianClient() {
         }
     };
 
-    const hasInvalidBobot = () => {
-        if (!jenisPenilaianAktif || jenisPenilaianAktif !== 'PTS') return false;
-        const ptsKomponenIds = komponenList
-            .filter((k) => k.nama_komponen.toLowerCase().includes('pts'))
-            .map((k) => k.id_komponen);
-        return bobotList.some((b) => {
-            return !ptsKomponenIds.includes(b.komponen_id) && b.bobot > 0;
-        });
-    };
+    const isPTSActive = jenisPenilaianAktif === 'PTS';
 
-    const getPTSPesan = () => {
-        if (!jenisPenilaianAktif || jenisPenilaianAktif !== 'PTS') return null;
-        return (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded text-sm text-yellow-800">
-                ⚠️ <strong>Periode PTS aktif.</strong> Hanya komponen <strong>PTS</strong> yang boleh memiliki bobot.
-                Semua bobot lain harus 0.
-            </div>
-        );
-    };
-
-    // ====== BOBOT HANDLERS ======
     const handleBobotChange = (komponenId: number, value: string) => {
         const newValue = parseFloat(value) || 0;
         setBobotList((prev) =>
@@ -337,10 +313,9 @@ export default function AturPenilaianClient() {
     const handleSaveBobot = async () => {
         if (!selectedMapelId) return;
 
-        // Cek apakah bobot berubah
-        const isUnchanged = bobotList.every((b, i) => {
-            const initial = initialBobotListRef.current[i];
-            return initial && b.komponen_id === initial.komponen_id && b.bobot === initial.bobot;
+        const isUnchanged = bobotList.every((b) => {
+            const initial = initialBobotListRef.current.find((i) => i.komponen_id === b.komponen_id);
+            return initial && Math.abs(b.bobot - initial.bobot) < 0.01;
         });
 
         if (isUnchanged) {
@@ -354,9 +329,15 @@ export default function AturPenilaianClient() {
             return;
         }
 
-        if (hasInvalidBobot()) {
-            alert('Di periode PTS, hanya bobot PTS yang boleh > 0. Harap atur bobot UH dan PAS menjadi 0.');
-            return;
+        if (isPTSActive) {
+            const ptsKomponenIds = komponenList
+                .filter((k) => /^PTS$/i.test(k.nama_komponen))
+                .map((k) => k.id_komponen);
+            const adaNonPTS = bobotList.some((b) => !ptsKomponenIds.includes(b.komponen_id) && b.bobot > 0);
+            if (adaNonPTS) {
+                alert('Di periode PTS, hanya bobot PTS yang boleh diisi. Harap atur bobot UH dan PAS menjadi 0.');
+                return;
+            }
         }
 
         try {
@@ -385,7 +366,6 @@ export default function AturPenilaianClient() {
         }
     };
 
-    // ====== RENDER ======
     if (loading) {
         return (
             <div className="flex-1 p-4 sm:p-6 bg-gray-50 min-h-screen flex items-center justify-center">
@@ -407,11 +387,10 @@ export default function AturPenilaianClient() {
             <div className="max-w-7xl mx-auto">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Atur Penilaian</h1>
 
-                {/* Tabs */}
                 <div className="flex border-b border-gray-200 mb-6 gap-2">
                     <button
                         className={`px-3 py-2 sm:px-4 sm:py-2 font-medium text-xs sm:text-sm ${activeTab === 'akademik'
-                                ? 'text-blue-600 border-b-2 border-blue-600'
+                                ? 'text-orange-600 border-b-2 border-orange-600'
                                 : 'text-gray-500 hover:text-gray-700'
                             }`}
                         onClick={() => setActiveTab('akademik')}
@@ -420,7 +399,7 @@ export default function AturPenilaianClient() {
                     </button>
                     <button
                         className={`px-3 py-2 sm:px-4 sm:py-2 font-medium text-xs sm:text-sm ${activeTab === 'bobot'
-                                ? 'text-blue-600 border-b-2 border-blue-600'
+                                ? 'text-orange-600 border-b-2 border-orange-600'
                                 : 'text-gray-500 hover:text-gray-700'
                             }`}
                         onClick={() => setActiveTab('bobot')}
@@ -429,7 +408,6 @@ export default function AturPenilaianClient() {
                     </button>
                 </div>
 
-                {/* Tab Content */}
                 {activeTab === 'akademik' ? (
                     <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
                         <div className="mb-6">
@@ -440,14 +418,17 @@ export default function AturPenilaianClient() {
                                     onChange={(e) =>
                                         setSelectedMapelAkademik(e.target.value ? Number(e.target.value) : null)
                                     }
-                                    className="w-full border border-gray-300 rounded px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full border border-gray-300 rounded px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm"
                                 >
                                     <option value="">-- Pilih Mata Pelajaran --</option>
                                     {mapelList
                                         .filter((mapel) => mapel.jenis === 'pilihan')
                                         .map((mapel) => (
-                                            <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
-                                                {mapel.nama_mapel} ({mapel.jenis})
+                                            <option
+                                                key={mapel.mata_pelajaran_id}
+                                                value={mapel.mata_pelajaran_id}
+                                            >
+                                                {mapel.nama_mapel || 'Nama tidak tersedia'} ({mapel.jenis})
                                             </option>
                                         ))}
                                 </select>
@@ -542,14 +523,17 @@ export default function AturPenilaianClient() {
                                     onChange={(e) =>
                                         setSelectedMapelId(e.target.value ? Number(e.target.value) : null)
                                     }
-                                    className="w-full border border-gray-300 rounded px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full border border-gray-300 rounded px-2 py-1 sm:px-3 sm:py-2 text-xs sm:text-sm"
                                 >
                                     <option value="">-- Pilih Mata Pelajaran --</option>
                                     {mapelList
                                         .filter((mapel) => mapel.jenis === 'pilihan')
                                         .map((mapel) => (
-                                            <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
-                                                {mapel.nama_mapel} ({mapel.jenis})
+                                            <option
+                                                key={mapel.mata_pelajaran_id}
+                                                value={mapel.mata_pelajaran_id}
+                                            >
+                                                {mapel.nama_mapel || 'Nama tidak tersedia'} ({mapel.jenis})
                                             </option>
                                         ))}
                                 </select>
@@ -561,9 +545,20 @@ export default function AturPenilaianClient() {
                                 <div className="text-gray-500 text-xs sm:text-sm">Memuat bobot...</div>
                             ) : (
                                 <div className="space-y-3 sm:space-y-4">
-                                    {getPTSPesan()}
+                                    {isPTSActive && (
+                                        <div className="mb-4 p-3 bg-orange-50 border border-orange-300 rounded text-sm text-orange-800">
+                                            <strong>ℹ️ Periode PTS Aktif</strong>
+                                            <br />
+                                            Sistem otomatis menetapkan: <strong>PTS = 100%</strong>.
+                                            <br />
+                                            Anda <strong>tidak perlu mengatur bobot manual</strong>.
+                                        </div>
+                                    )}
                                     {bobotList.map((bobot) => {
                                         const komponen = komponenList.find((k) => k.id_komponen === bobot.komponen_id);
+                                        const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
+                                        const isEditable = !isPTSActive || isPTS;
+
                                         return (
                                             <div
                                                 key={bobot.komponen_id}
@@ -577,9 +572,17 @@ export default function AturPenilaianClient() {
                                                         type="number"
                                                         min="0"
                                                         max="100"
-                                                        value={bobot.bobot}
-                                                        onChange={(e) => handleBobotChange(bobot.komponen_id, e.target.value)}
-                                                        className="w-full sm:w-20 border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                                        value={isPTSActive && !isPTS ? 0 : bobot.bobot}
+                                                        onChange={(e) => {
+                                                            if (isEditable) {
+                                                                handleBobotChange(bobot.komponen_id, e.target.value);
+                                                            }
+                                                        }}
+                                                        disabled={!isEditable}
+                                                        className={`w-full sm:w-20 border rounded px-2 py-1 text-xs sm:text-sm ${!isEditable
+                                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300'
+                                                                : 'border-gray-300'
+                                                            }`}
                                                     />
                                                     <span className="text-gray-600 text-xs sm:text-sm">%</span>
                                                 </div>
@@ -599,14 +602,16 @@ export default function AturPenilaianClient() {
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="flex justify-end mt-3 sm:mt-6">
-                                        <button
-                                            onClick={handleSaveBobot}
-                                            className="px-3 py-2 sm:px-4 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-medium text-xs sm:text-sm"
-                                        >
-                                            Simpan Bobot
-                                        </button>
-                                    </div>
+                                    {!isPTSActive && (
+                                        <div className="flex justify-end mt-3 sm:mt-6">
+                                            <button
+                                                onClick={handleSaveBobot}
+                                                className="px-3 py-2 sm:px-4 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-medium text-xs sm:text-sm"
+                                            >
+                                                Simpan Bobot
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )
                         ) : (

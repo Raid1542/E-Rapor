@@ -8,9 +8,8 @@
  * Tanggal: 15 September 2025
  */
 
-
 'use client';
-import { useState, useEffect, ChangeEvent, ReactNode } from 'react';
+import { useState, useEffect, useRef, ChangeEvent, ReactNode } from 'react';
 import { Pencil, Plus, Search, X, Trash2 } from 'lucide-react';
 
 interface MataPelajaran {
@@ -63,6 +62,9 @@ export default function DataMataPelajaranPage() {
         confirmData: false
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // 🔑 Simpan snapshot awal untuk deteksi perubahan
+    const initialFormDataRef = useRef<FormDataType | null>(null);
 
     // === Fetch Tahun Ajaran ===
     const fetchTahunAjaran = async () => {
@@ -131,57 +133,46 @@ export default function DataMataPelajaranPage() {
         fetchTahunAjaran();
     }, []);
 
-    // === Handle Form ===
+    // === Handle Form (tanpa trim saat input) ===
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
 
-        // ✅ Auto-lowercase untuk field jenis
         if (name === 'jenis') {
-            setFormData(prev => ({ ...prev, [name]: value.toLowerCase().trim() }));
-        } 
-        // Handle checkbox
-        else if (type === 'checkbox') {
+            // ✅ Lowercase, tapi jangan trim saat input (biar spasi tetap bisa diketik)
+            setFormData(prev => ({ ...prev, [name]: value.toLowerCase() }));
+        } else if (type === 'checkbox') {
             const checked = (e.target as HTMLInputElement).checked;
             setFormData(prev => ({ ...prev, [name]: checked }));
-        } 
-        // Handle input lain
-        else {
-            setFormData(prev => ({ ...prev, [name]: value.trim() }));
+        } else {
+            // ✅ Biarkan spasi tetap ada saat input
+            setFormData(prev => ({ ...prev, [name]: value }));
         }
     };
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        // Trim semua string
+        // ✅ Trim hanya saat validasi (bukan saat input)
         const kodeMapel = formData.kode_mapel?.trim() || '';
         const namaMapel = formData.nama_mapel?.trim() || '';
         const kurikulum = formData.kurikulum?.trim() || '';
-        const jenis = formData.jenis?.toLowerCase()?.trim() || '';
+        const jenis = formData.jenis?.toLowerCase().trim() || '';
 
         if (!kodeMapel) newErrors.kode_mapel = 'Kode mapel wajib diisi';
         if (!namaMapel) newErrors.nama_mapel = 'Nama mapel wajib diisi';
         if (!kurikulum) newErrors.kurikulum = 'Kurikulum wajib diisi';
 
-        // ✅ Validasi jenis dengan pesan jelas
         if (!jenis) {
             newErrors.jenis = 'Jenis mapel wajib dipilih';
         } else if (!['wajib', 'pilihan'].includes(jenis)) {
             newErrors.jenis = `Jenis tidak valid: "${jenis}". Harus "wajib" atau "pilihan"`;
         }
 
-        // Validasi checkbox
         if (!formData.confirmData) {
             newErrors.confirmData = 'Harap konfirmasi data terlebih dahulu';
         }
 
         setErrors(newErrors);
-
-        // ✅ Tampilkan error di console untuk debug
-        if (Object.keys(newErrors).length > 0) {
-            console.log('❌ Validasi gagal:', newErrors);
-        }
-
         return Object.keys(newErrors).length === 0;
     };
 
@@ -197,19 +188,20 @@ export default function DataMataPelajaranPage() {
             return;
         }
         try {
+            const payload = {
+                kode_mapel: formData.kode_mapel.trim().toUpperCase(),
+                nama_mapel: formData.nama_mapel.trim(),
+                jenis: formData.jenis.trim(),
+                kurikulum: formData.kurikulum.trim(),
+                tahun_ajaran_id: selectedTahunAjaranId
+            };
             const res = await fetch("http://localhost:5000/api/admin/mata-pelajaran", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({
-                    kode_mapel: formData.kode_mapel.trim().toUpperCase(),
-                    nama_mapel: formData.nama_mapel.trim(),
-                    jenis: formData.jenis,
-                    kurikulum: formData.kurikulum.trim(),
-                    tahun_ajaran_id: selectedTahunAjaranId
-                })
+                body: JSON.stringify(payload)
             });
             if (res.ok) {
                 alert("Mata pelajaran berhasil ditambahkan");
@@ -226,67 +218,78 @@ export default function DataMataPelajaranPage() {
     };
 
     const handleEdit = (mapel: MataPelajaran) => {
-        setEditId(mapel.id);
-        setFormData({
+        const initialData: FormDataType = {
             kode_mapel: mapel.kode_mapel,
             nama_mapel: mapel.nama_mapel,
-            jenis: mapel.jenis.toLowerCase().trim(), // ✅ Pastikan lowercase & trim
+            jenis: mapel.jenis.toLowerCase(),
             kurikulum: mapel.kurikulum,
             urutan_rapor: mapel.urutan_rapor !== null ? String(mapel.urutan_rapor) : '',
             confirmData: false
-        });
+        };
+        setEditId(mapel.id);
+        setFormData(initialData);
+        initialFormDataRef.current = { ...initialData }; // 🔑 Simpan snapshot
         setShowEdit(true);
     };
 
     const handleSubmitEdit = async () => {
-    console.log('=== DEBUG: Mulai edit ===');
-    if (!validate()) return;
-    const token = localStorage.getItem('token');
-    if (!token) {
-        alert('Sesi login telah habis. Silakan login ulang.');
-        return;
-    }
-    if (!editId) return;
+        // ✅ Cek apakah ada perubahan
+        const initial = initialFormDataRef.current;
+        const hasChanges =
+            formData.kode_mapel !== initial?.kode_mapel ||
+            formData.nama_mapel !== initial?.nama_mapel ||
+            formData.jenis !== initial?.jenis ||
+            formData.kurikulum !== initial?.kurikulum ||
+            formData.urutan_rapor !== initial?.urutan_rapor;
 
-    try {
-        // ✅ Pastikan nama variabel konsisten
-        const urutanRaporInput = formData.urutan_rapor?.trim() || '';
-        const urutan_rapor = urutanRaporInput ? Number(urutanRaporInput) : null;
+        if (!hasChanges) {
+            alert('Tidak ada perubahan data.');
+            return;
+        }
 
-        // ✅ Logging untuk memastikan nilai
-        console.log('Urutan rapor final:', urutan_rapor);
+        if (!validate()) return;
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Sesi login telah habis. Silakan login ulang.');
+            return;
+        }
+        if (!editId) return;
 
-        const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran/${editId}`, {
-            method: "PUT",
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
+        try {
+            const urutanRaporInput = formData.urutan_rapor.trim() || '';
+            const urutan_rapor = urutanRaporInput ? Number(urutanRaporInput) : null;
+
+            const payload = {
                 kode_mapel: formData.kode_mapel.trim().toUpperCase(),
                 nama_mapel: formData.nama_mapel.trim(),
-                jenis: formData.jenis,
+                jenis: formData.jenis.trim(),
                 kurikulum: formData.kurikulum.trim(),
-                urutan_rapor // ✅ Pakai nama yang sama dengan yang didefinisikan
-            })
-        });
+                urutan_rapor
+            };
 
-        if (res.ok) {
-            alert("Data mata pelajaran berhasil diperbarui");
-            setShowEdit(false);
-            setEditId(null);
-            if (selectedTahunAjaranId) fetchMataPelajaran(selectedTahunAjaranId);
-            handleReset();
-        } else {
-            const error = await res.json();
-            console.error('Error dari backend:', error);
-            alert('Error: ' + (error.message || 'Gagal memperbarui'));
+            const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran/${editId}`, {
+                method: "PUT",
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert("Data mata pelajaran berhasil diperbarui");
+                setShowEdit(false);
+                setEditId(null);
+                if (selectedTahunAjaranId) fetchMataPelajaran(selectedTahunAjaranId);
+                handleReset();
+            } else {
+                const error = await res.json();
+                alert('Error: ' + (error.message || 'Gagal memperbarui'));
+            }
+        } catch (err) {
+            alert("Gagal terhubung ke server");
         }
-    } catch (err) {
-        console.error('Error saat edit:', err);
-        alert("Gagal terhubung ke server");
-    }
-};
+    };
 
     const handleDelete = async (id: number) => {
         if (!confirm('Yakin ingin menghapus mata pelajaran ini?')) return;
@@ -427,7 +430,7 @@ export default function DataMataPelajaranPage() {
                             >
                                 <option value="">-- Pilih --</option>
                                 <option value="wajib">Wajib</option>
-                                <option value="pilihan">pilihan</option>
+                                <option value="pilihan">Pilihan</option>
                             </select>
                             {errors.jenis && <p className="text-red-500 text-xs mt-1">{errors.jenis}</p>}
                         </div>
@@ -555,8 +558,8 @@ export default function DataMataPelajaranPage() {
                     </div>
 
                     {selectedTahunAjaranId === null ? (
-                        <div className="mt-8 text-center py-8 bg-yellow-50 border border-dashed border-yellow-300 rounded-lg">
-                            <p className="text-gray-700 text-lg font-medium">Silakan pilih Tahun Ajaran terlebih dahulu.</p>
+                        <div className="mt-8 text-center py-8 bg-orange-50 border border-dashed border-orange-300 rounded-lg">
+                            <p className="text-orange-800 text-lg font-medium">Pilih Tahun Ajaran Terlebih Dahulu.</p>
                         </div>
                     ) : (
                         <>

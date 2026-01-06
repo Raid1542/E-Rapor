@@ -76,7 +76,7 @@ export default function DataAbsensiPage() {
                 setSemester(sem);
                 setJenisPenilaian(jenis as 'PTS' | 'PAS');
 
-                // Ambil data absensi berdasarkan periode
+                // Ambil data absensi
                 await fetchAbsensi(sem, jenis, token);
             } catch (err) {
                 console.error('Error load data:', err);
@@ -161,8 +161,9 @@ export default function DataAbsensiPage() {
         };
 
         try {
+            // ✅ PERBAIKAN: Hanya kirim siswa_id di URL (sesuai backend route)
             const res = await fetch(
-                `http://localhost:5000/api/guru-kelas/absensi/${editingId}/${jenisPenilaian}/${semester}`,
+                `http://localhost:5000/api/guru-kelas/absensi/${editingId}`, // <-- HANYA siswa_id
                 {
                     method: 'PUT',
                     headers: {

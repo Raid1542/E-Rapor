@@ -1,10 +1,10 @@
 /**
  * Nama File: catatan_wali_kelas_client.tsx
  * Fungsi: Komponen client-side untuk mengelola catatan wali kelas dan keputusan
- *         naik tingkat siswa. Di semester Ganjil hanya catatan yang bisa diisi,
- *         sedangkan di semester Genap juga mencakup keputusan naik/tidak naik.
+ *         naik tingkat siswa. Field "naik tingkat" hanya aktif dan wajib diisi
+ *         saat jenis penilaian = PAS dan semester = Genap.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
- * Tanggal: 15 Septemebr 2025
+ * Tanggal: 15 September 2025
  */
 
 'use client';
@@ -33,7 +33,7 @@ export default function DataCatatanWaliKelasPage() {
         naik_tingkat: 'ya' | 'tidak' | null;
     }>({
         catatan_wali_kelas: '',
-        naik_tingkat: null
+        naik_tingkat: null,
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [kelasNama, setKelasNama] = useState<string>('Kelas Anda');
@@ -69,7 +69,7 @@ export default function DataCatatanWaliKelasPage() {
             try {
                 // Ambil tahun ajaran aktif
                 const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 });
 
                 if (!taRes.ok) {
@@ -85,7 +85,7 @@ export default function DataCatatanWaliKelasPage() {
                 if (status_pts === 'aktif') jenis = 'PTS';
                 else if (status_pas === 'aktif') jenis = 'PAS';
 
-                setSemester(sem);
+                setSemester(sem as 'Ganjil' | 'Genap');
                 setJenisPenilaian(jenis as 'PTS' | 'PAS');
 
                 // Ambil data catatan berdasarkan periode
@@ -105,7 +105,7 @@ export default function DataCatatanWaliKelasPage() {
             const res = await fetch(
                 `http://localhost:5000/api/guru-kelas/catatan-wali-kelas/${jenis}/${sem}`,
                 {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 }
             );
 
@@ -136,10 +136,11 @@ export default function DataCatatanWaliKelasPage() {
             setFilteredSiswa(siswaList);
         } else {
             const q = searchQuery.toLowerCase().trim();
-            const filtered = siswaList.filter(s =>
-                s.nama.toLowerCase().includes(q) ||
-                s.nis.includes(q) ||
-                s.nisn.includes(q)
+            const filtered = siswaList.filter(
+                (s) =>
+                    s.nama.toLowerCase().includes(q) ||
+                    s.nis.includes(q) ||
+                    s.nisn.includes(q)
             );
             setFilteredSiswa(filtered);
         }
@@ -150,7 +151,7 @@ export default function DataCatatanWaliKelasPage() {
     const handleEdit = (siswa: SiswaCatatan) => {
         const data = {
             catatan_wali_kelas: siswa.catatan_wali_kelas || '',
-            naik_tingkat: siswa.naik_tingkat
+            naik_tingkat: siswa.naik_tingkat,
         };
         setEditId(siswa.id_siswa);
         setEditData(data);
@@ -162,12 +163,12 @@ export default function DataCatatanWaliKelasPage() {
     const handleSave = async () => {
         if (!editId || !originalData) return;
 
-        const hasChanges = semester === 'Ganjil'
-            ? editData.catatan_wali_kelas !== originalData.catatan_wali_kelas
-            : (
-                editData.catatan_wali_kelas !== originalData.catatan_wali_kelas ||
-                editData.naik_tingkat !== originalData.naik_tingkat
-            );
+        const isPASGenap = jenisPenilaian === 'PAS' && semester === 'Genap';
+
+        const hasChanges = isPASGenap
+            ? editData.catatan_wali_kelas !== originalData.catatan_wali_kelas ||
+            editData.naik_tingkat !== originalData.naik_tingkat
+            : editData.catatan_wali_kelas !== originalData.catatan_wali_kelas;
 
         if (!hasChanges) {
             alert('Tidak ada perubahan yang dilakukan.');
@@ -182,17 +183,18 @@ export default function DataCatatanWaliKelasPage() {
         }
 
         const payload: any = {
-            catatan_wali_kelas: editData.catatan_wali_kelas
+            catatan_wali_kelas: editData.catatan_wali_kelas,
         };
 
-        if (semester === 'Ganjil') {
-            payload.naik_tingkat = editData.naik_tingkat;
-        } else if (semester === 'Genap') {
+        if (isPASGenap) {
             if (editData.naik_tingkat !== 'ya' && editData.naik_tingkat !== 'tidak') {
-                alert('Di semester Genap, keputusan naik tingkat wajib diisi.');
+                alert('Di PAS Semester Genap, keputusan naik tingkat wajib diisi.');
                 return;
             }
             payload.naik_tingkat = editData.naik_tingkat;
+        } else {
+            // Untuk semua kasus lain (termasuk PTS Genap), kirim null
+            payload.naik_tingkat = null;
         }
 
         try {
@@ -202,16 +204,16 @@ export default function DataCatatanWaliKelasPage() {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        Authorization: `Bearer ${token}`,
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
                 }
             );
 
             if (res.ok) {
                 alert('Catatan wali kelas berhasil disimpan');
                 closeEdit();
-                const updatedSiswa = siswaList.map(s =>
+                const updatedSiswa = siswaList.map((s) =>
                     s.id_siswa === editId ? { ...s, ...payload } : s
                 );
                 setSiswaList(updatedSiswa);
@@ -226,10 +228,20 @@ export default function DataCatatanWaliKelasPage() {
 
     const handleChange = (e: ChangeEvent<HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setEditData(prev => ({
-            ...prev,
-            [name]: value === '' ? null : value as any
-        }));
+
+        if (name === 'catatan_wali_kelas') {
+            // Selalu simpan sebagai string (jangan null)
+            setEditData((prev) => ({
+                ...prev,
+                catatan_wali_kelas: value, // value dari textarea selalu string
+            }));
+        } else if (name === 'naik_tingkat') {
+            // Untuk select, boleh null jika kosong
+            setEditData((prev) => ({
+                ...prev,
+                naik_tingkat: value === '' ? null : (value as 'ya' | 'tidak'),
+            }));
+        }
     };
 
     // Pagination
@@ -241,23 +253,78 @@ export default function DataCatatanWaliKelasPage() {
     const renderPagination = () => {
         const pages: ReactNode[] = [];
         const maxVisible = 5;
-        if (currentPage > 1) pages.push(<button key="prev" onClick={() => setCurrentPage(c => c - 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100">«</button>);
+        if (currentPage > 1)
+            pages.push(
+                <button
+                    key="prev"
+                    onClick={() => setCurrentPage((c) => c - 1)}
+                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                >
+                    «
+                </button>
+            );
         if (totalPages <= maxVisible) {
             for (let i = 1; i <= totalPages; i++) {
-                pages.push(<button key={`page-${i}`} onClick={() => setCurrentPage(i)} className={`px-3 py-1 border border-gray-300 rounded ${currentPage === i ? "bg-blue-500 text-white" : "hover:bg-gray-100"}`}>{i}</button>);
+                pages.push(
+                    <button
+                        key={`page-${i}`}
+                        onClick={() => setCurrentPage(i)}
+                        className={`px-3 py-1 border border-gray-300 rounded ${currentPage === i ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                            }`}
+                    >
+                        {i}
+                    </button>
+                );
             }
         } else {
-            pages.push(<button key="page-1" onClick={() => setCurrentPage(1)} className={`px-3 py-1 border border-gray-300 rounded ${currentPage === 1 ? "bg-blue-500 text-white" : "hover:bg-gray-100"}`}>1</button>);
+            pages.push(
+                <button
+                    key="page-1"
+                    onClick={() => setCurrentPage(1)}
+                    className={`px-3 py-1 border border-gray-300 rounded ${currentPage === 1 ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                        }`}
+                >
+                    1
+                </button>
+            );
             if (currentPage > 3) pages.push(<span key="dots1" className="px-2 text-gray-600">...</span>);
             const start = Math.max(2, currentPage - 1);
             const end = Math.min(totalPages - 1, currentPage + 1);
             for (let i = start; i <= end; i++) {
-                pages.push(<button key={`page-${i}`} onClick={() => setCurrentPage(i)} className={`px-3 py-1 border border-gray-300 rounded ${currentPage === i ? "bg-blue-500 text-white" : "hover:bg-gray-100"}`}>{i}</button>);
+                pages.push(
+                    <button
+                        key={`page-${i}`}
+                        onClick={() => setCurrentPage(i)}
+                        className={`px-3 py-1 border border-gray-300 rounded ${currentPage === i ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                            }`}
+                    >
+                        {i}
+                    </button>
+                );
             }
-            if (currentPage < totalPages - 2) pages.push(<span key="dots2" className="px-2 text-gray-600">...</span>);
-            pages.push(<button key={`page-${totalPages}`} onClick={() => setCurrentPage(totalPages)} className={`px-3 py-1 border border-gray-300 rounded ${currentPage === totalPages ? "bg-blue-500 text-white" : "hover:bg-gray-100"}`}>{totalPages}</button>);
+            if (currentPage < totalPages - 2)
+                pages.push(<span key="dots2" className="px-2 text-gray-600">...</span>);
+            pages.push(
+                <button
+                    key={`page-${totalPages}`}
+                    onClick={() => setCurrentPage(totalPages)}
+                    className={`px-3 py-1 border border-gray-300 rounded ${currentPage === totalPages ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                        }`}
+                >
+                    {totalPages}
+                </button>
+            );
         }
-        if (currentPage < totalPages) pages.push(<button key="next" onClick={() => setCurrentPage(c => c + 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100">»</button>);
+        if (currentPage < totalPages)
+            pages.push(
+                <button
+                    key="next"
+                    onClick={() => setCurrentPage((c) => c + 1)}
+                    className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                >
+                    »
+                </button>
+            );
         return pages;
     };
 
@@ -273,9 +340,9 @@ export default function DataCatatanWaliKelasPage() {
                             <p className="text-sm text-gray-600">
                                 Periode: {jenisPenilaian} - Semester {semester}
                                 <br />
-                                {semester === 'Genap'
+                                {jenisPenilaian === 'PAS' && semester === 'Genap'
                                     ? 'Isi catatan dan keputusan naik tingkat.'
-                                    : 'Isi catatan. Keputusan naik tingkat hanya di semester Genap.'}
+                                    : 'Isi catatan. Keputusan naik tingkat hanya di PAS Semester Genap.'}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
@@ -331,19 +398,35 @@ export default function DataCatatanWaliKelasPage() {
                     <table className="w-full min-w-[800px] table-auto text-sm">
                         <thead>
                             <tr>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">No.</th>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Nama</th>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">NIS</th>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">NISN</th>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold min-w-[200px]">Catatan</th>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold min-w-[120px]">Naik Tingkat</th>
-                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold min-w-[80px]">Aksi</th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
+                                    No.
+                                </th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
+                                    Nama
+                                </th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
+                                    NIS
+                                </th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">
+                                    NISN
+                                </th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold min-w-[200px]">
+                                    Catatan
+                                </th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold min-w-[120px]">
+                                    Naik Tingkat
+                                </th>
+                                <th className="px-3 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold min-w-[80px]">
+                                    Aksi
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 <tr key="loading">
-                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Memuat data...</td>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                                        Memuat data...
+                                    </td>
                                 </tr>
                             ) : currentSiswa.length === 0 ? (
                                 <tr key="empty">
@@ -357,7 +440,9 @@ export default function DataCatatanWaliKelasPage() {
                                         key={siswa.id_siswa}
                                         className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition`}
                                     >
-                                        <td className="px-3 py-3 text-center align-middle font-medium">{startIndex + index + 1}</td>
+                                        <td className="px-3 py-3 text-center align-middle font-medium">
+                                            {startIndex + index + 1}
+                                        </td>
                                         <td className="px-3 py-3 text-center align-middle font-medium">{siswa.nama}</td>
                                         <td className="px-3 py-3 text-center align-middle">{siswa.nis}</td>
                                         <td className="px-3 py-3 text-center align-middle">{siswa.nisn}</td>
@@ -367,7 +452,7 @@ export default function DataCatatanWaliKelasPage() {
                                             </div>
                                         </td>
                                         <td className="px-3 py-3 text-center align-middle">
-                                            {semester === 'Genap' ? (
+                                            {jenisPenilaian === 'PAS' && semester === 'Genap' ? (
                                                 siswa.naik_tingkat === 'ya' ? (
                                                     <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">Ya</span>
                                                 ) : siswa.naik_tingkat === 'tidak' ? (
@@ -402,22 +487,22 @@ export default function DataCatatanWaliKelasPage() {
                         Menampilkan {startIndex + 1} - {Math.min(endIndex, filteredSiswa.length)} dari{' '}
                         {filteredSiswa.length} data
                     </div>
-                    <div className="flex gap-1 flex-wrap justify-center">
-                        {renderPagination()}
-                    </div>
+                    <div className="flex gap-1 flex-wrap justify-center">{renderPagination()}</div>
                 </div>
             </div>
 
             {showEdit && editId !== null && (
                 <div
-                    className={`fixed inset-0 flex items-center justify-center z-50 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'} p-3 sm:p-4`}
+                    className={`fixed inset-0 flex items-center justify-center z-50 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'
+                        } p-3 sm:p-4`}
                     onClick={(e) => {
                         if (e.target === e.currentTarget) closeEdit();
                     }}
                 >
                     <div className="absolute inset-0 bg-gray-900/70"></div>
                     <div
-                        className={`relative bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                        className={`relative bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+                            }`}
                     >
                         <div className="sticky top-0 bg-white border-b px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center">
                             <h2 className="text-lg sm:text-xl font-bold text-gray-800">Edit Catatan Wali Kelas</h2>
@@ -430,14 +515,10 @@ export default function DataCatatanWaliKelasPage() {
                             </button>
                         </div>
                         <div className="p-4 sm:p-6 space-y-6">
-                            {/* Header Modal */}
                             <div className="text-center">
                                 <h3 className="text-base font-semibold text-gray-800">
-                                    {siswaList.find(s => s.id_siswa === editId)?.nama}
+                                    {siswaList.find((s) => s.id_siswa === editId)?.nama}
                                 </h3>
-                                <p className="text-xs text-gray-600">
-                                    Periode: {jenisPenilaian} - Semester {semester}
-                                </p>
                             </div>
 
                             {/* Form Catatan */}
@@ -455,8 +536,8 @@ export default function DataCatatanWaliKelasPage() {
                                 />
                             </div>
 
-                            {/* Form Naik Tingkat (jika Genap) */}
-                            {semester === 'Genap' ? (
+                            {/* Form Naik Tingkat: Hanya tampil jika PAS Genap */}
+                            {jenisPenilaian === 'PAS' && semester === 'Genap' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Keputusan Naik Tingkat <span className="text-red-500">*</span>
@@ -474,11 +555,11 @@ export default function DataCatatanWaliKelasPage() {
                                 </div>
                             ) : (
                                 <div className="text-sm text-gray-500 italic p-3 bg-gray-50 rounded">
-                                    Keputusan naik tingkat hanya diisi pada semester <strong>Genap</strong>.
+                                    Keputusan naik tingkat hanya diisi pada periode{' '}
+                                    <strong>PAS Semester Genap</strong>.
                                 </div>
                             )}
 
-                            {/* Footer Modal */}
                             <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
                                 <button
                                     onClick={closeEdit}
