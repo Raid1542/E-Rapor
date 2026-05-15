@@ -436,7 +436,7 @@ export default function DataKelasClient() {
                                 value={formData.nama_kelas}
                                 onChange={handleInputChange}
                                 placeholder="Contoh: 1 A"
-                                className={`w-full border ${errors.nama_kelas ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.nama_kelas ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.nama_kelas && <p className="text-red-500 text-xs mt-1">{errors.nama_kelas}</p>}
                         </div>
@@ -450,7 +450,7 @@ export default function DataKelasClient() {
                                 value={formData.fase}
                                 onChange={handleInputChange}
                                 placeholder="A, B, atau C"
-                                className={`w-full border ${errors.fase ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.fase ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.fase && <p className="text-red-500 text-xs mt-1">{errors.fase}</p>}
                         </div>
@@ -464,7 +464,7 @@ export default function DataKelasClient() {
                                         name="user_id"
                                         value={formData.user_id}
                                         onChange={handleInputChange}
-                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="">-- pilih --</option>
                                         {guruList.map((g) => (
@@ -484,7 +484,7 @@ export default function DataKelasClient() {
                                 name="confirmData"
                                 checked={formData.confirmData}
                                 onChange={handleInputChange}
-                                className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                                className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                             />
                             <span className="text-sm text-gray-700">Saya yakin data yang diisi sudah benar</span>
                         </label>
@@ -550,7 +550,7 @@ export default function DataKelasClient() {
                                 setLoading(true);
                                 fetchKelas(id);
                             }}
-                            className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-0"
+                            className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="">-- Pilih Tahun Ajaran --</option>
                             {tahunAjaranList.map((ta) => {
@@ -591,7 +591,7 @@ export default function DataKelasClient() {
                                                 setItemsPerPage(Number(e.target.value));
                                                 setCurrentPage(1);
                                             }}
-                                            className="border border-gray-300 rounded px-3 py-1 text-sm"
+                                            className="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         >
                                             <option value={10}>10</option>
                                             <option value={25}>25</option>
@@ -612,7 +612,7 @@ export default function DataKelasClient() {
                                                 setSearchQuery(e.target.value);
                                                 setCurrentPage(1);
                                             }}
-                                            className="w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm"
+                                            className="w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                         {searchQuery && (
                                             <button

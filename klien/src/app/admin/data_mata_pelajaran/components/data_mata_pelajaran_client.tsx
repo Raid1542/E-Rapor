@@ -63,7 +63,6 @@ export default function DataMataPelajaranPage() {
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // 🔑 Simpan snapshot awal untuk deteksi perubahan
     const initialFormDataRef = useRef<FormDataType | null>(null);
 
     // === Fetch Tahun Ajaran ===
@@ -93,7 +92,7 @@ export default function DataMataPelajaranPage() {
         }
     };
 
-    // === Fetch Data Mata Pelajaran (berdasarkan tahun ajaran) ===
+    // === Fetch Data Mata Pelajaran ===
     const fetchMataPelajaran = async (tahunAjaranId: number) => {
         try {
             const token = localStorage.getItem('token');
@@ -133,26 +132,20 @@ export default function DataMataPelajaranPage() {
         fetchTahunAjaran();
     }, []);
 
-    // === Handle Form (tanpa trim saat input) ===
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-
         if (name === 'jenis') {
-            // ✅ Lowercase, tapi jangan trim saat input (biar spasi tetap bisa diketik)
             setFormData(prev => ({ ...prev, [name]: value.toLowerCase() }));
         } else if (type === 'checkbox') {
             const checked = (e.target as HTMLInputElement).checked;
             setFormData(prev => ({ ...prev, [name]: checked }));
         } else {
-            // ✅ Biarkan spasi tetap ada saat input
             setFormData(prev => ({ ...prev, [name]: value }));
         }
     };
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
-
-        // ✅ Trim hanya saat validasi (bukan saat input)
         const kodeMapel = formData.kode_mapel?.trim() || '';
         const namaMapel = formData.nama_mapel?.trim() || '';
         const kurikulum = formData.kurikulum?.trim() || '';
@@ -228,12 +221,11 @@ export default function DataMataPelajaranPage() {
         };
         setEditId(mapel.id);
         setFormData(initialData);
-        initialFormDataRef.current = { ...initialData }; // 🔑 Simpan snapshot
+        initialFormDataRef.current = { ...initialData };
         setShowEdit(true);
     };
 
     const handleSubmitEdit = async () => {
-        // ✅ Cek apakah ada perubahan
         const initial = initialFormDataRef.current;
         const hasChanges =
             formData.kode_mapel !== initial?.kode_mapel ||
@@ -400,7 +392,7 @@ export default function DataMataPelajaranPage() {
                                 value={formData.kode_mapel}
                                 onChange={handleInputChange}
                                 placeholder="Contoh: MAT, BINDO"
-                                className={`w-full border ${errors.kode_mapel ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.kode_mapel ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.kode_mapel && <p className="text-red-500 text-xs mt-1">{errors.kode_mapel}</p>}
                         </div>
@@ -414,7 +406,7 @@ export default function DataMataPelajaranPage() {
                                 value={formData.nama_mapel}
                                 onChange={handleInputChange}
                                 placeholder="Contoh: Matematika Wajib"
-                                className={`w-full border ${errors.nama_mapel ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.nama_mapel ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.nama_mapel && <p className="text-red-500 text-xs mt-1">{errors.nama_mapel}</p>}
                         </div>
@@ -426,7 +418,7 @@ export default function DataMataPelajaranPage() {
                                 name="jenis"
                                 value={formData.jenis}
                                 onChange={handleInputChange}
-                                className={`w-full border ${errors.jenis ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.jenis ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             >
                                 <option value="">-- Pilih --</option>
                                 <option value="wajib">Wajib</option>
@@ -444,12 +436,12 @@ export default function DataMataPelajaranPage() {
                                 value={formData.kurikulum}
                                 onChange={handleInputChange}
                                 placeholder="Contoh: Kurikulum Merdeka"
-                                className={`w-full border ${errors.kurikulum ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.kurikulum ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.kurikulum && <p className="text-red-500 text-xs mt-1">{errors.kurikulum}</p>}
                         </div>
 
-                        {/* 🔹 Input Urutan Rapor (HANYA di form EDIT) */}
+                        {/* Input Urutan Rapor (HANYA di form EDIT) */}
                         {isEdit && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -461,7 +453,7 @@ export default function DataMataPelajaranPage() {
                                     value={formData.urutan_rapor}
                                     onChange={handleInputChange}
                                     placeholder="Contoh: 1, 2, 3..."
-                                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     min="1"
                                 />
                             </div>
@@ -474,7 +466,7 @@ export default function DataMataPelajaranPage() {
                                 name="confirmData"
                                 checked={formData.confirmData}
                                 onChange={handleInputChange}
-                                className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                                className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                             />
                             <span className="text-sm text-gray-700">
                                 Saya yakin data yang diisi sudah benar
@@ -543,7 +535,7 @@ export default function DataMataPelajaranPage() {
                                 setLoading(true);
                                 fetchMataPelajaran(id);
                             }}
-                            className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-0"
+                            className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="">-- Pilih Tahun Ajaran --</option>
                             {tahunAjaranList.map(ta => {
@@ -587,7 +579,7 @@ export default function DataMataPelajaranPage() {
                                             setSearchQuery(e.target.value);
                                             setCurrentPage(1);
                                         }}
-                                        className="w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm"
+                                        className="w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
                                     {searchQuery && (
                                         <button
