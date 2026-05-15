@@ -94,7 +94,7 @@ export default function GuruKelasDashboard() {
     if (!user || !kelasInfo) {
         return (
             <div className="p-6 text-center text-gray-600">
-                Anda belum ditugaskan sebagai guru kelas di tahun ajaran ini.
+                Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini.
             </div>
         );
     }
@@ -102,54 +102,160 @@ export default function GuruKelasDashboard() {
     return (
         <>
             {/* Welcome Card */}
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 mb-8 text-white">
-                <h2 className="text-2xl font-bold mb-2">
-                    Selamat Datang, {user.nama_lengkap || 'Guru'}! 👋
-                </h2>
-                <p className="text-orange-100">
-                    Anda login sebagai <strong>Guru Kelas</strong>. Silakan kelola siswa Anda.
-                </p>
+            <div
+                className="rounded-2xl shadow-lg p-6 mb-8 text-white relative overflow-hidden"
+                style={{
+                    background: 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)',
+                }}
+            >
+                {/* Lingkaran dekorasi */}
+                <div
+                    className="absolute -top-6 -right-6 w-32 h-32 rounded-full opacity-20"
+                    style={{ background: 'rgba(255,255,255,0.4)' }}
+                />
+                <div
+                    className="absolute -bottom-8 -right-2 w-48 h-48 rounded-full opacity-10"
+                    style={{ background: 'rgba(255,255,255,0.4)' }}
+                />
+                <div className="relative z-10">
+                    <h2 className="text-2xl font-bold mb-2">
+                        Selamat Datang, {user.nama_lengkap || 'Guru'}! 👋
+                    </h2>
+                    <p style={{ color: 'rgba(255,237,213,0.95)' }}>
+                        Anda login sebagai <strong>Wali Kelas</strong>. Silakan kelola siswa Anda.
+                    </p>
+                </div>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
                 {/* 1. Data Siswa */}
-                <div className="bg-white rounded-xl shadow p-6 flex items-center justify-between max-w-[320px] w-full md:w-auto">
-                    <div>
-                        <p className="text-sm text-gray-600 mb-1">Data Siswa</p>
-                        <p className="text-3xl font-bold text-gray-900">{kelasInfo.jumlah_siswa}</p>
+                <div
+                    className="rounded-2xl shadow hover:shadow-lg transition-all duration-300 p-6 cursor-pointer hover:-translate-y-0.5"
+                    style={{
+                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
+                        border: '1px solid rgba(251,146,60,0.2)',
+                    }}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-sm font-medium mb-1" style={{ color: '#9a3412' }}>
+                                Data Siswa
+                            </p>
+                            <p className="text-3xl font-bold" style={{ color: '#c2410c' }}>
+                                {kelasInfo.jumlah_siswa}
+                            </p>
+                        </div>
+                        <div
+                            className="p-3 rounded-xl flex items-center justify-center"
+                            style={{
+                                background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                color: 'white',
+                                boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                            }}
+                        >
+                            <Users className="w-8 h-8" />
+                        </div>
                     </div>
-                    <div className="flex-shrink-0 bg-orange-100 p-3 rounded-lg">
-                        <Users className="w-6 h-6 text-orange-600" />
-                    </div>
+                    <div
+                        className="mb-3"
+                        style={{
+                            height: '1px',
+                            background: 'linear-gradient(90deg, rgba(251,146,60,0.3), transparent)',
+                        }}
+                    />
+                    <p className="text-sm font-medium" style={{ color: '#ea580c' }}>
+                        Total siswa di kelas Anda
+                    </p>
                 </div>
 
                 {/* 2. Kelas Anda */}
-                <div className="bg-white rounded-xl shadow p-6 flex items-center justify-between max-w-[320px] w-full md:w-auto">
-                    <div>
-                        <p className="text-sm text-gray-600 mb-1">Kelas Anda</p>
-                        <p className="text-3xl font-bold text-gray-900">{kelasInfo.kelas}</p>
+                <div
+                    className="rounded-2xl shadow hover:shadow-lg transition-all duration-300 p-6 cursor-pointer hover:-translate-y-0.5"
+                    style={{
+                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
+                        border: '1px solid rgba(251,146,60,0.2)',
+                    }}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-sm font-medium mb-1" style={{ color: '#9a3412' }}>
+                                Kelas Anda
+                            </p>
+                            <p className="text-3xl font-bold" style={{ color: '#c2410c' }}>
+                                {kelasInfo.kelas}
+                            </p>
+                        </div>
+                        <div
+                            className="p-3 rounded-xl flex items-center justify-center"
+                            style={{
+                                background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                color: 'white',
+                                boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                            }}
+                        >
+                            <User className="w-8 h-8" />
+                        </div>
                     </div>
-                    <div className="flex-shrink-0 bg-orange-100 p-3 rounded-lg">
-                        <User className="w-6 h-6 text-orange-600" />
-                    </div>
+                    <div
+                        className="mb-3"
+                        style={{
+                            height: '1px',
+                            background: 'linear-gradient(90deg, rgba(251,146,60,0.3), transparent)',
+                        }}
+                    />
+                    <p className="text-sm font-medium" style={{ color: '#ea580c' }}>
+                        Kelas yang Anda ampu
+                    </p>
                 </div>
 
-                {/* 3. Tahun Ajaran + Semester (Semester di Bawah) */}
-                <div className="bg-white rounded-xl shadow p-6 flex items-start gap-4 max-w-[350px] w-full md:w-auto">
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-600 mb-1">Tahun Ajaran</p>
-                        <p className="text-3xl font-bold text-gray-900 truncate">
-                            {kelasInfo.tahun_ajaran}
-                        </p>
-                        <span className="mt-2 inline-block text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
-                            {kelasInfo.semester}
-                        </span>
+                {/* 3. Tahun Ajaran */}
+                <div
+                    className="rounded-2xl shadow hover:shadow-lg transition-all duration-300 p-6 cursor-pointer hover:-translate-y-0.5"
+                    style={{
+                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
+                        border: '1px solid rgba(251,146,60,0.2)',
+                    }}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-sm font-medium mb-1" style={{ color: '#9a3412' }}>
+                                Tahun Ajaran
+                            </p>
+                            <p className="text-3xl font-bold truncate" style={{ color: '#c2410c' }}>
+                                {kelasInfo.tahun_ajaran}
+                            </p>
+                        </div>
+                        <div
+                            className="p-3 rounded-xl flex items-center justify-center"
+                            style={{
+                                background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                color: 'white',
+                                boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                            }}
+                        >
+                            <Calendar className="w-8 h-8" />
+                        </div>
                     </div>
-                    <div className="flex-shrink-0 bg-orange-100 p-3 rounded-lg">
-                        <Calendar className="w-6 h-6 text-orange-600" />
-                    </div>
+                    <div
+                        className="mb-3"
+                        style={{
+                            height: '1px',
+                            background: 'linear-gradient(90deg, rgba(251,146,60,0.3), transparent)',
+                        }}
+                    />
+                    <span
+                        className="inline-block px-3 py-1 text-xs font-semibold rounded-full"
+                        style={{
+                            background: 'linear-gradient(135deg, #ea580c, #fb923c)',
+                            color: 'white',
+                        }}
+                    >
+                        {kelasInfo.semester}
+                    </span>
                 </div>
+
             </div>
         </>
     );

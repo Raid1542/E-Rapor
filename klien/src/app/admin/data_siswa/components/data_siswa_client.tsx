@@ -141,9 +141,8 @@ export default function DataSiswaPage() {
         }
     };
 
-    // ✅ BARU: Fetch daftar kelas dari API
     const fetchKelasDropdown = async () => {
-        setKelasLoading(true); // ✅ Mulai loading
+        setKelasLoading(true);
         try {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -160,14 +159,13 @@ export default function DataSiswaPage() {
         } catch (err) {
             console.error('Error fetch kelas dropdown:', err);
         } finally {
-            setKelasLoading(false); // ✅ Selesai loading
+            setKelasLoading(false);
         }
     };
 
-    // Panggil di useEffect
     useEffect(() => {
         fetchTahunAjaran();
-        fetchKelasDropdown(); // ✅ Tambahkan ini
+        fetchKelasDropdown();
     }, []);
 
     // === Fetch Data Siswa ===
@@ -231,7 +229,6 @@ export default function DataSiswaPage() {
 
     const handleEdit = (siswa: Siswa) => {
         setEditId(siswa.id);
-        // ✅ Cari kelas_id berdasarkan nama_kelas
         const kelasItem = kelasList.find(k => k.nama === siswa.kelas);
         setFormData({
             nama: siswa.nama,
@@ -253,7 +250,6 @@ export default function DataSiswaPage() {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         if (name === 'kelas') {
-            // ✅ Ambil fase dari kelasList berdasarkan ID
             const selectedKelas = kelasList.find(k => k.id === Number(value));
             setFormData(prev => ({ ...prev, fase: selectedKelas?.fase || '' }));
         }
@@ -500,7 +496,7 @@ export default function DataSiswaPage() {
                                 value={formData.nama}
                                 onChange={handleInputChange}
                                 placeholder="Masukkan nama lengkap"
-                                className={`w-full border ${errors.nama ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.nama ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.nama && <p className="text-red-500 text-xs mt-1">{errors.nama}</p>}
                         </div>
@@ -512,7 +508,7 @@ export default function DataSiswaPage() {
                                 name="kelas"
                                 value={formData.kelas}
                                 onChange={handleInputChange}
-                                className={`w-full border ${errors.kelas ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.kelas ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             >
                                 <option value="">-- Pilih --</option>
                                 {kelasList.map(kls => (
@@ -531,7 +527,7 @@ export default function DataSiswaPage() {
                                 value={formData.nis}
                                 onChange={handleInputChange}
                                 placeholder="NIS"
-                                className={`w-full border ${errors.nis ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.nis ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.nis && <p className="text-red-500 text-xs mt-1">{errors.nis}</p>}
                         </div>
@@ -545,7 +541,7 @@ export default function DataSiswaPage() {
                                 value={formData.nisn}
                                 onChange={handleInputChange}
                                 placeholder="NISN"
-                                className={`w-full border ${errors.nisn ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.nisn ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             />
                             {errors.nisn && <p className="text-red-500 text-xs mt-1">{errors.nisn}</p>}
                         </div>
@@ -557,7 +553,7 @@ export default function DataSiswaPage() {
                                 value={formData.tempatLahir}
                                 onChange={handleInputChange}
                                 placeholder="Tempat Lahir"
-                                className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                         <div>
@@ -567,7 +563,7 @@ export default function DataSiswaPage() {
                                 name="tanggalLahir"
                                 value={formData.tanggalLahir}
                                 onChange={handleInputChange}
-                                className="w-full border border-gray-300 rounded px-4 py-2.5"
+                                className="w-full border border-gray-300 rounded px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                         <div>
@@ -578,7 +574,7 @@ export default function DataSiswaPage() {
                                 name="jenisKelamin"
                                 value={formData.jenisKelamin}
                                 onChange={handleInputChange}
-                                className={`w-full border ${errors.jenisKelamin ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                className={`w-full border ${errors.jenisKelamin ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                             >
                                 <option value="">-- Pilih --</option>
                                 <option value="LAKI-LAKI">Laki-laki</option>
@@ -595,7 +591,7 @@ export default function DataSiswaPage() {
                                     name="statusSiswa"
                                     value={formData.statusSiswa || 'aktif'}
                                     onChange={handleInputChange}
-                                    className={`w-full border ${errors.statusSiswa ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5`}
+                                    className={`w-full border ${errors.statusSiswa ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                                 >
                                     <option value="aktif">Aktif</option>
                                     <option value="lulus">Lulus</option>
@@ -613,7 +609,7 @@ export default function DataSiswaPage() {
                                 onChange={handleInputChange}
                                 placeholder="Masukkan alamat lengkap"
                                 rows={2}
-                                className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                     </div>
@@ -624,7 +620,7 @@ export default function DataSiswaPage() {
                                 name="confirmData"
                                 checked={formData.confirmData}
                                 onChange={handleInputChange}
-                                className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                                className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                             />
                             <span className="text-sm text-gray-700">
                                 Saya yakin data yang diisi sudah benar
@@ -695,7 +691,7 @@ export default function DataSiswaPage() {
                                 setLoading(true);
                                 fetchSiswa(id);
                             }}
-                            className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-0"
+                            className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="">-- Pilih Tahun Ajaran --</option>
                             {tahunAjaranList.map(ta => {
@@ -735,7 +731,7 @@ export default function DataSiswaPage() {
                                                 setItemsPerPage(Number(e.target.value));
                                                 setCurrentPage(1);
                                             }}
-                                            className="border border-gray-300 rounded px-3 py-1 text-sm"
+                                            className="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         >
                                             <option value={10}>10</option>
                                             <option value={25}>25</option>
@@ -756,7 +752,7 @@ export default function DataSiswaPage() {
                                                 setSearchQuery(e.target.value);
                                                 setCurrentPage(1);
                                             }}
-                                            className="w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm"
+                                            className="w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                         {searchQuery && (
                                             <button
@@ -1139,7 +1135,7 @@ export default function DataSiswaPage() {
                                     name="kelas"
                                     value={filterValues.kelas}
                                     onChange={(e) => setFilterValues(prev => ({ ...prev, kelas: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 >
                                     <option value="">Semua Kelas</option>
                                     {kelasList.map(kls => (
@@ -1152,7 +1148,7 @@ export default function DataSiswaPage() {
                                 <select
                                     value={filterValues.jenisKelamin}
                                     onChange={(e) => setFilterValues(prev => ({ ...prev, jenisKelamin: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 >
                                     <option value="">Semua Jenis Kelamin</option>
                                     <option value="LAKI-LAKI">Laki-laki</option>
@@ -1164,7 +1160,7 @@ export default function DataSiswaPage() {
                                 <select
                                     value={filterValues.status}
                                     onChange={(e) => setFilterValues(prev => ({ ...prev, status: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 >
                                     <option value="">Semua Status</option>
                                     <option value="aktif">Aktif</option>

@@ -2,7 +2,7 @@
  * Nama File: Header.tsx
  * Fungsi: Komponen header untuk halaman admin.
  *         Menampilkan judul halaman dan dropdown profil pengguna dengan foto,
- *         nama, role, serta opsi menu Profil dan Logout.
+ *         nama, role, serta opsi menu Profil, Ubah Kata Sandi, dan Logout.
  *         Mendukung deteksi klik di luar dropdown untuk menutupnya secara otomatis.
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
@@ -10,7 +10,7 @@
 
 'use client';
 
-import { LogOut, ChevronDown, User } from 'lucide-react';
+import { LogOut, ChevronDown, User, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 
@@ -34,7 +34,7 @@ export default function Header() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null); // ✅ referensi ke dropdown
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadUserData = () => {
@@ -83,7 +83,6 @@ export default function Header() {
     };
   }, []);
 
-  // ✅ Tutup dropdown
   const closeDropdown = () => {
     const dropdown = document.getElementById('profile-dropdown');
     if (dropdown) dropdown.classList.add('hidden');
@@ -109,7 +108,11 @@ export default function Header() {
     router.push('/admin/profil');
   };
 
-  // ✅ ✨ TUTUP DROPDOWN SAAT KLIK DI LUAR
+  const handleUbahPassword = () => {
+    closeDropdown();
+    router.push('/admin/ubah_password');
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -132,7 +135,7 @@ export default function Header() {
         <div className="px-6 py-4">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-900">Dashboard Admin</h1>
-            <div className="w-32 h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-48 h-10 bg-gray-200 rounded-xl animate-pulse"></div>
           </div>
         </div>
       </header>
@@ -143,16 +146,38 @@ export default function Header() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="px-6 py-4">
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard Admin</h1>
-          </div>
 
-          <div className="relative" ref={dropdownRef}> {/* ✅ pasang ref di sini */}
+          {/* Judul halaman */}
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard Admin</h1>
+
+          {/* Profil dropdown */}
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={toggleDropdown}
-              className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+              className="flex items-center space-x-3 pl-3 pr-2 py-2 rounded-xl transition-all duration-200 hover:shadow-md"
+              style={{
+                background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                border: '1px solid rgba(251,146,60,0.25)',
+              }}
             >
-              <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center overflow-hidden">
+              {/* Nama dan role */}
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-semibold leading-tight" style={{ color: '#c2410c' }}>
+                  {user.nama_lengkap}
+                </p>
+                <p className="text-xs leading-tight" style={{ color: '#ea580c', opacity: 0.75 }}>
+                  {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                </p>
+              </div>
+
+              {/* Avatar */}
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                  boxShadow: '0 2px 8px rgba(249,115,22,0.35)',
+                }}
+              >
                 {profileImage ? (
                   <img
                     src={profileImage}
@@ -161,44 +186,126 @@ export default function Header() {
                     onError={() => setProfileImage(null)}
                   />
                 ) : (
-                  <span className="text-black text-xs font-semibold">
+                  <span className="text-white text-xs font-bold">
                     {getInitials(user.nama_lengkap)}
                   </span>
                 )}
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-600" />
+
+              <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: '#ea580c' }} />
             </button>
 
-            {/* Profile Dropdown — tetap pakai id untuk kompatibilitas */}
+            {/* Dropdown menu */}
             <div
               id="profile-dropdown"
-              className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 hidden"
+              className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg z-50 hidden overflow-hidden"
+              style={{ border: '1px solid rgba(251,146,60,0.2)' }}
             >
-              <div className="p-4 border-b border-gray-200">
-                <p className="font-semibold text-gray-900">{user.nama_lengkap}</p>
-                <p className="text-sm text-gray-500">{user.email_sekolah}</p>
-                <span className="inline-block mt-2 px-3 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
-                  {user.role.toUpperCase()}
-                </span>
+              {/* Info user */}
+              <div
+                className="p-4"
+                style={{
+                  background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                  borderBottom: '1px solid rgba(251,146,60,0.15)',
+                }}
+              >
+                <div className="flex items-center space-x-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                    style={{
+                      background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                      boxShadow: '0 2px 8px rgba(249,115,22,0.35)',
+                    }}
+                  >
+                    {profileImage ? (
+                      <img
+                        src={profileImage}
+                        alt="Foto Profil"
+                        className="w-full h-full object-cover"
+                        onError={() => setProfileImage(null)}
+                      />
+                    ) : (
+                      <span className="text-white text-sm font-bold">
+                        {getInitials(user.nama_lengkap)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate" style={{ color: '#c2410c' }}>
+                      {user.nama_lengkap}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: '#9a3412', opacity: 0.75 }}>
+                      {user.email_sekolah}
+                    </p>
+                    <span
+                      className="inline-block mt-1 px-2 py-0.5 text-xs font-semibold rounded-full"
+                      style={{
+                        background: 'linear-gradient(135deg, #ea580c, #fb923c)',
+                        color: 'white',
+                      }}
+                    >
+                      {user.role.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
               </div>
+
+              {/* Menu */}
               <div className="p-2">
+                {/* Profil Saya */}
                 <button
                   onClick={handleProfile}
-                  className="w-full flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                  className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group"
+                  style={{ color: '#374151' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#fff7ed';
+                    e.currentTarget.style.color = '#ea580c';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#374151';
+                  }}
                 >
                   <User className="w-4 h-4" />
-                  <span className="text-sm">Profil Saya</span>
+                  <span className="text-sm font-medium">Profil Saya</span>
                 </button>
+
+                {/* Ubah Kata Sandi */}
+                <button
+                  onClick={handleUbahPassword}
+                  className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200"
+                  style={{ color: '#374151' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#fff7ed';
+                    e.currentTarget.style.color = '#ea580c';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#374151';
+                  }}
+                >
+                  <Lock className="w-4 h-4" />
+                  <span className="text-sm font-medium">Ubah Kata Sandi</span>
+                </button>
+
+                {/* Divider */}
+                <div className="my-1 border-t border-gray-100" />
+
+                {/* Logout */}
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center space-x-3 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                  className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200"
+                  style={{ color: '#dc2626' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
                   <LogOut className="w-4 h-4" />
-                  <span className="text-sm">Logout</span>
+                  <span className="text-sm font-medium">Logout</span>
                 </button>
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </header>

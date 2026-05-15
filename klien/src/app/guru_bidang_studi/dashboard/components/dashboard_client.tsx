@@ -9,7 +9,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Book, Calendar, School, Users } from 'lucide-react';
+import { Book, Calendar } from 'lucide-react';
 
 interface UserData {
     id: string;
@@ -112,7 +112,14 @@ export default function DashboardClient() {
     if (!user || !dashboard || dashboard.mata_pelajaran_list.length === 0) {
         return (
             <div className="p-6 text-center">
-                <div className="bg-orange-50 text-orange-700 px-4 py-3 rounded-lg inline-block">
+                <div
+                    className="inline-block px-4 py-3 rounded-xl text-sm font-medium"
+                    style={{
+                        background: 'linear-gradient(135deg, #fff7ed, #ffedd5)',
+                        color: '#c2410c',
+                        border: '1px solid rgba(251,146,60,0.2)',
+                    }}
+                >
                     Anda belum ditugaskan mengajar mata pelajaran apapun di tahun ajaran ini.
                 </div>
             </div>
@@ -122,58 +129,141 @@ export default function DashboardClient() {
     return (
         <>
             {/* Welcome Card */}
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 mb-8 text-white">
-                <h2 className="text-2xl font-bold mb-2">
-                    Selamat Datang, {user.nama_lengkap || 'Guru'}! 👋
-                </h2>
-                <p className="text-orange-100">
-                    Anda login sebagai <strong>Guru Bidang Studi</strong>. Silakan input nilai siswa berdasarkan mata pelajaran yang diampu.
-                </p>
+            <div
+                className="rounded-2xl shadow-lg p-6 mb-8 text-white relative overflow-hidden"
+                style={{
+                    background: 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)',
+                }}
+            >
+                {/* Lingkaran dekorasi */}
+                <div
+                    className="absolute -top-6 -right-6 w-32 h-32 rounded-full opacity-20"
+                    style={{ background: 'rgba(255,255,255,0.4)' }}
+                />
+                <div
+                    className="absolute -bottom-8 -right-2 w-48 h-48 rounded-full opacity-10"
+                    style={{ background: 'rgba(255,255,255,0.4)' }}
+                />
+                <div className="relative z-10">
+                    <h2 className="text-2xl font-bold mb-2">
+                        Selamat Datang, {user.nama_lengkap || 'Guru'}! 👋
+                    </h2>
+                    <p style={{ color: 'rgba(255,237,213,0.95)' }}>
+                        Anda login sebagai <strong>Guru Bidang Studi</strong>. Silakan input nilai siswa berdasarkan mata pelajaran yang diampu.
+                    </p>
+                </div>
             </div>
 
-            {/* Flexbox for better control */}
-            <div className="flex flex-wrap gap-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
                 {/* Card: Tahun Ajaran */}
-                <div className="bg-white rounded-xl shadow p-6 flex items-start space-x-4 w-full md:w-[30%] min-w-[280px]">
-                    <div className="bg-orange-100 p-3 rounded-lg">
-                        <Calendar className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500">Tahun Ajaran</p>
-                        <div className="flex items-baseline gap-2 mt-1">
-                            <span className="text-2xl font-bold text-gray-900">{dashboard.tahun_ajaran}</span>
-                            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
-                                {dashboard.semester}
-                            </span>
+                <div
+                    className="rounded-2xl shadow hover:shadow-lg transition-all duration-300 p-6 hover:-translate-y-0.5"
+                    style={{
+                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
+                        border: '1px solid rgba(251,146,60,0.2)',
+                    }}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-sm font-medium mb-1" style={{ color: '#9a3412' }}>
+                                Tahun Ajaran
+                            </p>
+                            <p className="text-3xl font-bold" style={{ color: '#c2410c' }}>
+                                {dashboard.tahun_ajaran}
+                            </p>
+                        </div>
+                        <div
+                            className="p-3 rounded-xl flex items-center justify-center"
+                            style={{
+                                background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                color: 'white',
+                                boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                            }}
+                        >
+                            <Calendar className="w-8 h-8" />
                         </div>
                     </div>
+                    <div
+                        className="mb-3"
+                        style={{
+                            height: '1px',
+                            background: 'linear-gradient(90deg, rgba(251,146,60,0.3), transparent)',
+                        }}
+                    />
+                    <span
+                        className="inline-block px-3 py-1 text-xs font-semibold rounded-full"
+                        style={{
+                            background: 'linear-gradient(135deg, #ea580c, #fb923c)',
+                            color: 'white',
+                        }}
+                    >
+                        {dashboard.semester}
+                    </span>
                 </div>
 
                 {/* Cards Per Mata Pelajaran */}
                 {dashboard.mata_pelajaran_list.map((mapel, index) => (
                     <div
                         key={index}
-                        className="bg-white rounded-xl shadow hover:shadow-md transition-all duration-200 p-6 w-full md:w-[30%] min-w-[280px]"
+                        className="rounded-2xl shadow hover:shadow-lg transition-all duration-300 p-6 hover:-translate-y-0.5"
+                        style={{
+                            background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
+                            border: '1px solid rgba(251,146,60,0.2)',
+                        }}
                     >
-                        <div className="flex items-start space-x-4">
-                            <div className="bg-orange-100 p-3 rounded-lg">
-                                <Book className="w-6 h-6 text-orange-600" />
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex-1 min-w-0 pr-3">
+                                <p className="text-sm font-medium mb-1 truncate" style={{ color: '#9a3412' }}>
+                                    {mapel.nama}
+                                </p>
+                                <p className="text-3xl font-bold" style={{ color: '#c2410c' }}>
+                                    {mapel.total_siswa}
+                                </p>
                             </div>
-                            <div className="flex-1">
-                                <p className="text-sm text-gray-600 mb-1">{mapel.nama}</p>
-                                <h3 className="text-3xl font-bold text-gray-900">{mapel.total_siswa}</h3>
-                                <div className="flex items-center space-x-2 mt-2">
-                                    <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-                                        {mapel.total_kelas} Kelas
-                                    </span>
-                                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
-                                        {mapel.total_siswa} Siswa
-                                    </span>
-                                </div>
+                            <div
+                                className="p-3 rounded-xl flex items-center justify-center flex-shrink-0"
+                                style={{
+                                    background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                    color: 'white',
+                                    boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                                }}
+                            >
+                                <Book className="w-8 h-8" />
                             </div>
+                        </div>
+                        <div
+                            className="mb-3"
+                            style={{
+                                height: '1px',
+                                background: 'linear-gradient(90deg, rgba(251,146,60,0.3), transparent)',
+                            }}
+                        />
+                        <div className="flex items-center space-x-2">
+                            <span
+                                className="inline-block px-3 py-1 text-xs font-semibold rounded-full"
+                                style={{
+                                    background: 'linear-gradient(135deg, #ea580c, #fb923c)',
+                                    color: 'white',
+                                }}
+                            >
+                                {mapel.total_kelas} Kelas
+                            </span>
+                            <span
+                                className="inline-block px-3 py-1 text-xs font-semibold rounded-full"
+                                style={{
+                                    background: 'linear-gradient(160deg, #ffffff, #ffedd5)',
+                                    color: '#c2410c',
+                                    border: '1px solid rgba(251,146,60,0.3)',
+                                }}
+                            >
+                                {mapel.total_siswa} Siswa
+                            </span>
                         </div>
                     </div>
                 ))}
+
             </div>
         </>
     );

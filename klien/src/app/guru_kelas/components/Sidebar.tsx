@@ -229,7 +229,7 @@ export default function Sidebar({ user }: SidebarProps) {
     }`}
 >
     <BookOpen className="w-5 h-5 flex-shrink-0" />
-    {isExpanded && <span className="font-medium">Rapor</span>}
+    {isExpanded && <span className="font-medium">Cetak Rapor</span>}
 </button>
             </div>
 

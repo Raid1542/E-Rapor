@@ -47,7 +47,7 @@ export default function GuruBidangStudiLayout({
             <Sidebar user={user} />
             <div className="flex flex-col flex-1 overflow-hidden">
                 <Header user={user} />
-                <main className="flex-1 overflow-y-auto p-6">{children}</main>
+                <main className="flex-1 overflow-y-auto">{children}</main>
             </div>
         </div>
     );
