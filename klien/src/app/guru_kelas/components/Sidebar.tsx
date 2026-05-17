@@ -117,7 +117,7 @@ export default function Sidebar({ user }: SidebarProps) {
         { name: 'Absensi', url: '/guru_kelas/absensi_siswa' },
         { name: 'Kokurikuler', url: '/guru_kelas/kokurikuler' },
         { name: 'Ekstrakurikuler', url: '/guru_kelas/ekstrakurikuler' },
-        { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_wali_kelas' },
+        { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_Wali_Kelas' },
     ];
 
     
