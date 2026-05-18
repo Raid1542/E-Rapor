@@ -711,26 +711,43 @@ const tambahTahunAjaran = async (req, res) => {
       tanggal_pembagian_pts,
       tanggal_pembagian_pas,
     } = req.body;
+    
     if (!tahun1 || !tahun2 || !semester) {
       return res
         .status(400)
         .json({ message: 'Tahun dan semester wajib diisi' });
     }
+    
     const tahun_ajaran = `${tahun1}/${tahun2}`;
+    
     const success = await tahunAjaranModel.createTahunAjaran({
       tahun_ajaran,
       semester,
       tanggal_pembagian_pts,
       tanggal_pembagian_pas,
     });
+    
     if (!success)
       return res
         .status(500)
         .json({ message: 'Gagal membuat tahun ajaran baru' });
+    
     res.status(201).json({ message: 'Tahun ajaran berhasil ditambahkan' });
+    
   } catch (err) {
     console.error('Error tambah tahun ajaran:', err);
-    res.status(500).json({ message: 'Gagal menambah tahun ajaran' });
+    
+    
+    if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+      return res.status(400).json({ 
+        message: `Tahun ajaran ${tahun1}/${tahun2} semester ${semester} sudah ada. Silakan gunakan kombinasi tahun dan semester yang berbeda.` 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Gagal menambah tahun ajaran',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
 
