@@ -129,8 +129,8 @@ const formatTanggalIndonesia = (dateStr: string | null | undefined): string => {
     const [year, month, day] = cleanDate.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     if (isNaN(date.getTime())) return '-';
-    const hari  = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][date.getDay()];
-    const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][date.getMonth()];
+    const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()];
+    const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
     return `${hari}, ${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
 
@@ -139,17 +139,17 @@ const formatTanggalIndonesia = (dateStr: string | null | undefined): string => {
 export default function DataTahunAjaranPage() {
 
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
-    const [loading, setLoading]   = useState(true);
+    const [loading, setLoading] = useState(true);
     const [showTambah, setShowTambah] = useState(false);
-    const [showEdit,   setShowEdit]   = useState(false);
-    const [editId,     setEditId]     = useState<number | null>(null);
-    const [currentPage]    = useState(1);
-    const [itemsPerPage]   = useState(10);
-    const [page, setPage]  = useState(1);
+    const [showEdit, setShowEdit] = useState(false);
+    const [editId, setEditId] = useState<number | null>(null);
+    const [currentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
+    const [page, setPage] = useState(1);
 
     // ── popup state ──
     const [modal, setModal] = useState<ModalConfig | null>(null);
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
     const [formData, setFormData] = useState({
@@ -170,7 +170,7 @@ export default function DataTahunAjaranPage() {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
                 return;
             }
-            const res  = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
@@ -199,8 +199,8 @@ export default function DataTahunAjaranPage() {
     const validate = (): boolean => {
         const errs: Record<string, string> = {};
         if (!formData.tahun1 || !formData.tahun2) errs.tahun = 'Tahun ajaran wajib diisi';
-        if (!formData.semester)                   errs.semester = 'Semester wajib dipilih';
-        if (!formData.tanggal_pembagian_pas)       errs.tanggal_pas = 'Tanggal pembagian PAS wajib diisi';
+        if (!formData.semester) errs.semester = 'Semester wajib dipilih';
+        if (!formData.tanggal_pembagian_pas) errs.tanggal_pas = 'Tanggal pembagian PAS wajib diisi';
         setErrors(errs);
         return Object.keys(errs).length === 0;
     };
@@ -303,7 +303,7 @@ export default function DataTahunAjaranPage() {
             const item = tahunAjaranList.find(t => t.id_tahun_ajaran === editId);
             if (item) {
                 const [thn1, thn2] = item.tahun_ajaran.split('/');
-                setFormData({ tahun1: thn1||'2024', tahun2: thn2||'2025', semester: item.semester, tanggal_pembagian_pts: item.tanggal_pembagian_pts||'', tanggal_pembagian_pas: item.tanggal_pembagian_pas||'' });
+                setFormData({ tahun1: thn1 || '2024', tahun2: thn2 || '2025', semester: item.semester, tanggal_pembagian_pts: item.tanggal_pembagian_pts || '', tanggal_pembagian_pas: item.tanggal_pembagian_pas || '' });
             }
         } else {
             setFormData({ tahun1: '2024', tahun2: '2025', semester: 'Ganjil', tanggal_pembagian_pts: '', tanggal_pembagian_pas: '' });
@@ -313,14 +313,14 @@ export default function DataTahunAjaranPage() {
 
     // ── pagination ─────────────────────────────────────────────────────────
 
-    const sortedData  = [...tahunAjaranList].sort((a, b) => {
+    const sortedData = [...tahunAjaranList].sort((a, b) => {
         if (a.status === b.status) return b.id_tahun_ajaran - a.id_tahun_ajaran;
         return a.status === 'aktif' ? -1 : 1;
     });
-    const startIndex  = (page - 1) * itemsPerPage;
-    const endIndex    = startIndex + itemsPerPage;
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const currentData = sortedData.slice(startIndex, endIndex);
-    const totalPages  = Math.ceil(sortedData.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedData.length / itemsPerPage);
 
     const renderPagination = () => {
         const pages: React.ReactNode[] = [];
@@ -357,9 +357,51 @@ export default function DataTahunAjaranPage() {
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Tahun Ajaran <span className="text-red-500">*</span></label>
                                 <div className="flex items-center gap-2">
-                                    <input type="text" name="tahun1" value={formData.tahun1} onChange={handleInputChange} className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="2024" />
+                                    <input
+                                        type="text"
+                                        name="tahun1"
+                                        value={formData.tahun1}
+                                        onChange={handleInputChange}
+                                        onKeyDown={(e) => {
+                                            if (!/^[0-9\b]+$/.test(e.key) &&
+                                                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                                                e.preventDefault();
+                                            }
+                                        }}
+                                        onPaste={(e) => {
+                                            const pasteData = e.clipboardData.getData('text');
+                                            if (!/^\d+$/.test(pasteData)) {
+                                                e.preventDefault();
+                                                setErrors(prev => ({ ...prev, tahun1: 'Tahun harus berupa angka' }));
+                                            }
+                                        }}
+                                        className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="2024"
+                                        inputMode="numeric"
+                                    />
                                     <span className="text-xl font-bold">/</span>
-                                    <input type="text" name="tahun2" value={formData.tahun2} onChange={handleInputChange} className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="2025" />
+                                    <input
+                                        type="text"
+                                        name="tahun2"
+                                        value={formData.tahun2}
+                                        onChange={handleInputChange}
+                                        onKeyDown={(e) => {
+                                            if (!/^[0-9\b]+$/.test(e.key) &&
+                                                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                                                e.preventDefault();
+                                            }
+                                        }}
+                                        onPaste={(e) => {
+                                            const pasteData = e.clipboardData.getData('text');
+                                            if (!/^\d+$/.test(pasteData)) {
+                                                e.preventDefault();
+                                                setErrors(prev => ({ ...prev, tahun2: 'Tahun harus berupa angka' }));
+                                            }
+                                        }}
+                                        className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="2025"
+                                        inputMode="numeric"
+                                    />
                                 </div>
                                 {errors.tahun && <p className="text-red-500 text-xs mt-1">{errors.tahun}</p>}
                             </div>
@@ -397,7 +439,7 @@ export default function DataTahunAjaranPage() {
     );
 
     if (showTambah) return renderForm(false);
-    if (showEdit)   return renderForm(true);
+    if (showEdit) return renderForm(true);
 
     // ── table view ─────────────────────────────────────────────────────────
 
@@ -423,7 +465,7 @@ export default function DataTahunAjaranPage() {
                             <table className="w-full min-w-[600px] table-auto text-sm">
                                 <thead>
                                     <tr>
-                                        {['No.','Tahun Ajaran','Semester','Pembagian Rapor PTS','Pembagian Rapor PAS','Status','Aksi'].map(h => (
+                                        {['No.', 'Tahun Ajaran', 'Semester', 'Pembagian Rapor PTS', 'Pembagian Rapor PAS', 'Status', 'Aksi'].map(h => (
                                             <th key={h} className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">{h}</th>
                                         ))}
                                     </tr>
