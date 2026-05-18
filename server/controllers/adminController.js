@@ -713,9 +713,11 @@ const tambahTahunAjaran = async (req, res) => {
     } = req.body;
     
     if (!tahun1 || !tahun2 || !semester) {
-      return res
-        .status(400)
-        .json({ message: 'Tahun dan semester wajib diisi' });
+      return res.status(400).json({ message: 'Tahun dan semester wajib diisi' });
+    }
+
+    if (!/^\d+$/.test(tahun1) || !/^\d+$/.test(tahun2)) {
+      return res.status(400).json({ message: 'Tahun ajaran harus berupa angka' });
     }
     
     const tahun_ajaran = `${tahun1}/${tahun2}`;
@@ -727,20 +729,18 @@ const tambahTahunAjaran = async (req, res) => {
       tanggal_pembagian_pas,
     });
     
-    if (!success)
-      return res
-        .status(500)
-        .json({ message: 'Gagal membuat tahun ajaran baru' });
+    if (!success) {
+      return res.status(500).json({ message: 'Gagal membuat tahun ajaran baru' });
+    }
     
     res.status(201).json({ message: 'Tahun ajaran berhasil ditambahkan' });
     
   } catch (err) {
     console.error('Error tambah tahun ajaran:', err);
     
-    
     if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
       return res.status(400).json({ 
-        message: `Tahun ajaran ${tahun1}/${tahun2} semester ${semester} sudah ada. Silakan gunakan kombinasi tahun dan semester yang berbeda.` 
+        message: `Tahun ajaran ${req.body.tahun1}/${req.body.tahun2} semester ${req.body.semester} sudah ada. Silakan input tahun dan semester yang berbeda.` 
       });
     }
     
