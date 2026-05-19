@@ -64,7 +64,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
         </div>
         <div className="text-center">
           <h3 className="text-xl font-bold text-gray-900 mb-1">{modal.title}</h3>
-          <p className="text-sm text-gray-500 leading-relaxed">{modal.message}</p>
+          <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-4">{modal.message}</p>
         </div>
         <button onClick={onClose} className={`w-full ${s.btnClass} text-white font-semibold py-3 rounded-xl transition-all duration-150 shadow-lg ${s.btnShadow}`}>
           OK, Mengerti
@@ -105,7 +105,7 @@ const formatTanggalIndonesia = (dateStr?: string | null): string => {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '-';
-  const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][date.getMonth()];
+  const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
   return `${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
 
@@ -124,28 +124,28 @@ export default function DataGuruClient() {
     return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
   };
 
-  const [guruList,      setGuruList]      = useState<Guru[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [showDetail,    setShowDetail]    = useState(false);
-  const [showTambah,    setShowTambah]    = useState(false);
-  const [showEdit,      setShowEdit]      = useState(false);
-  const [editId,        setEditId]        = useState<number | null>(null);
-  const [selectedGuru,  setSelectedGuru]  = useState<Guru | null>(null);
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [itemsPerPage,  setItemsPerPage]  = useState(10);
-  const [currentPage,   setCurrentPage]   = useState(1);
-  const [showImport,    setShowImport]    = useState(false);
-  const [importFile,    setImportFile]    = useState<File | null>(null);
+  const [guruList, setGuruList] = useState<Guru[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showDetail, setShowDetail] = useState(false);
+  const [showTambah, setShowTambah] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [selectedGuru, setSelectedGuru] = useState<Guru | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [importClosing, setImportClosing] = useState(false);
   const [filterClosing, setFilterClosing] = useState(false);
-  const [showFilter,    setShowFilter]    = useState(false);
-  const [filterValues,     setFilterValues]     = useState({ role: '', jenisKelamin: '', status: '' });
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterValues, setFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
   const [tempFilterValues, setTempFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
 
   // ── popup modal state ──
   const [modal, setModal] = useState<ModalConfig | null>(null);
-  const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
 
   // ── fetch ──
@@ -156,7 +156,7 @@ export default function DataGuruClient() {
         showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
         return;
       }
-      const res  = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok) {
         const validRoles = ['guru kelas', 'guru bidang studi'];
@@ -211,9 +211,15 @@ export default function DataGuruClient() {
 
   const validate = (isEdit: boolean): boolean => {
     const ne: Record<string, string> = {};
+
+    //  Field Wajib
     if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
+    if (!formData.email?.trim()) ne.email = 'Email sekolah wajib diisi'; // ← TAMBAHKAN INI
+    if (!formData.tempatLahir?.trim()) ne.tempatLahir = 'Tempat lahir wajib diisi'; // ← TAMBAHKAN INI
     if (!formData.jenisKelamin) ne.jenisKelamin = 'Pilih jenis kelamin';
     if (!formData.roles || formData.roles.length === 0) ne.roles = 'Pilih minimal satu role';
+
+    // Validasi Tanggal Lahir
     if (!formData.tanggalLahir) {
       ne.tanggalLahir = 'Tanggal lahir wajib diisi';
     } else {
@@ -223,15 +229,19 @@ export default function DataGuruClient() {
       } else if (dob > new Date()) {
         ne.tanggalLahir = 'Tanggal lahir tidak boleh di masa depan';
       } else {
+        // Optional: Validasi usia minimal 18 tahun
         let age = new Date().getFullYear() - dob.getFullYear();
         const m = new Date().getMonth() - dob.getMonth();
         if (m < 0 || (m === 0 && new Date().getDate() < dob.getDate())) age--;
         if (age < 18) ne.tanggalLahir = 'Usia minimal 18 tahun';
       }
     }
+
     if (isEdit && (!formData.statusGuru || formData.statusGuru === '')) ne.statusGuru = 'Status wajib dipilih';
     if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data sebelum melanjutkan';
+
     setErrors(ne);
+
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah sebelum melanjutkan.' });
       return false;
@@ -261,7 +271,19 @@ export default function DataGuruClient() {
         showModal({ type: 'success', title: 'Data Ditambahkan!', message: `Data guru ${formData.nama} berhasil ditambahkan.` });
       } else {
         const err = await res.json();
-        showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan data guru.' });
+
+        //  DETEKSI ERROR DUPLIKAT
+        const isDuplicate = err.message && (
+          err.message.includes('sudah terdaftar') ||
+          err.message.includes('sudah ada')
+        );
+
+        showModal({
+          type: 'error',
+          // Judul dinamis: "Data Sudah Ada" atau "Gagal Menambahkan"
+          title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Menambahkan',
+          message: err.message || 'Terjadi kesalahan saat menambahkan data guru.'
+        });
       }
     } catch {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
@@ -306,7 +328,18 @@ export default function DataGuruClient() {
         showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data guru ${formData.nama} berhasil diperbarui.` });
       } else {
         const err = await res.json();
-        showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan saat memperbarui data guru.' });
+
+        const isDuplicate = err.message && (
+          err.message.includes('sudah terdaftar') ||
+          err.message.includes('sudah ada')
+        );
+
+        showModal({
+          type: 'error',
+          // Judul dinamis: "Data Sudah Ada" atau "Gagal Memperbarui"
+          title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Memperbarui',
+          message: err.message || 'Terjadi kesalahan saat memperbarui data guru.'
+        });
       }
     } catch {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
@@ -319,25 +352,44 @@ export default function DataGuruClient() {
   };
 
   const handleImportExcel = async () => {
-    if (!importFile) { showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file Excel terlebih dahulu sebelum mengimpor.' }); return; }
+    if (!importFile) { showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file Excel terlebih dahulu.' }); return; }
+
     const fd = new FormData();
     fd.append('file', importFile);
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch('http://localhost:5000/api/admin/guru/import', {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       });
       const result = await res.json();
+
       if (res.ok) {
         setShowImport(false);
         setImportFile(null);
         await fetchGuru();
-        showModal({ type: 'success', title: 'Import Berhasil!', message: `Berhasil mengimpor ${result.total} data guru.` });
+
+        if (result.skipped && result.skipped.length > 0) {
+          showModal({
+            type: 'warning',
+            title: 'Import Selesai dengan Peringatan',
+            message: `${result.success} data berhasil diimport.\n\n${result.skipped.length} data dilewati (duplikat):\n` +
+              result.skipped.map((d: any) => `• Baris ${d.row} (${d.nama}) - ${d.reason}`).join('\n')
+          });
+        } else {
+          // Sukses total
+          showModal({
+            type: 'success',
+            title: 'Import Berhasil!',
+            message: result.message || `Berhasil mengimport ${result.total} data guru.`
+          });
+        }
       } else {
+        // Error format/template
         showModal({ type: 'error', title: 'Import Gagal', message: result.message || 'Terjadi kesalahan saat mengimpor data guru.' });
       }
     } catch {
-      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
     }
   };
 
@@ -347,14 +399,14 @@ export default function DataGuruClient() {
     const ms = !query || guru.nama?.toLowerCase().includes(query) || guru.email?.toLowerCase().includes(query) ||
       guru.niy?.includes(query) || guru.nuptk?.includes(query) ||
       guru.tempat_lahir?.toLowerCase().includes(query) || guru.no_telepon?.includes(query);
-    const mr  = !filterValues.role || (guru.roles && guru.roles.includes(filterValues.role));
-    const mj  = !filterValues.jenisKelamin || guru.jenisKelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
+    const mr = !filterValues.role || (guru.roles && guru.roles.includes(filterValues.role));
+    const mj = !filterValues.jenisKelamin || guru.jenisKelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
     const ms2 = !filterValues.status || guru.statusGuru?.toLowerCase() === filterValues.status.toLowerCase();
     return ms && mr && mj && ms2;
   });
-  const totalPages  = Math.ceil(filteredGuru.length / itemsPerPage);
-  const startIndex  = (currentPage - 1) * itemsPerPage;
-  const endIndex    = startIndex + itemsPerPage;
+  const totalPages = Math.ceil(filteredGuru.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
   const currentGuru = filteredGuru.slice(startIndex, endIndex);
 
   const renderPagination = () => {
@@ -376,13 +428,13 @@ export default function DataGuruClient() {
     return pages;
   };
 
-  const resetFilter      = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
-  const openFilterModal  = () => { setTempFilterValues(filterValues); setShowFilter(true); };
-  const applyFilter      = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
+  const resetFilter = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
+  const openFilterModal = () => { setTempFilterValues(filterValues); setShowFilter(true); };
+  const applyFilter = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
   const closeFilterModal = () => { setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
 
   const focusClass = 'focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400';
-  const cardStyle  = { background: 'linear-gradient(160deg,#ffffff 0%,#fff7ed 60%,#ffedd5 100%)', border: '1px solid rgba(251,146,60,0.2)' };
+  const cardStyle = { background: 'linear-gradient(160deg,#ffffff 0%,#fff7ed 60%,#ffedd5 100%)', border: '1px solid rgba(251,146,60,0.2)' };
   const bgGradient = { background: 'linear-gradient(160deg,#fff7ed 0%,#ffedd5 50%,#fed7aa 100%)' };
 
   // ── Render Form ──
@@ -407,9 +459,10 @@ export default function DataGuruClient() {
                 {errors.nama && <p className="text-red-500 text-xs mt-1">{errors.nama}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Akun</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Akun <span className="text-red-500">*</span></label>
                 <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="contoh@sekolah.sch.id"
                   className={`w-full border border-orange-200 rounded-lg px-4 py-2.5 bg-white ${focusClass}`} />
+                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">NIY</label>
@@ -422,9 +475,10 @@ export default function DataGuruClient() {
                   className={`w-full border border-orange-200 rounded-lg px-4 py-2.5 bg-white ${focusClass}`} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tempat Lahir</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tempat Lahir <span className="text-red-500">*</span></label>
                 <input type="text" name="tempatLahir" value={formData.tempatLahir} onChange={handleInputChange} placeholder="Misal: Jakarta"
                   className={`w-full border border-orange-200 rounded-lg px-4 py-2.5 bg-white ${focusClass}`} />
+                {errors.tempatLahir && <p className="text-red-500 text-xs mt-1">{errors.tempatLahir}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Tanggal Lahir <span className="text-red-500">*</span></label>
@@ -511,7 +565,7 @@ export default function DataGuruClient() {
   );
 
   if (showTambah) return renderForm(false);
-  if (showEdit)   return renderForm(true);
+  if (showEdit) return renderForm(true);
 
   // ── Halaman Utama ──
   return (
@@ -639,15 +693,15 @@ export default function DataGuruClient() {
                 <div className="space-y-2 sm:space-y-3">
                   {[
                     { label: 'Status', value: <span className={`inline-block px-3 py-1 rounded text-xs sm:text-sm font-medium ${selectedGuru.statusGuru === 'aktif' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>{selectedGuru.statusGuru?.toUpperCase() || 'AKTIF'}</span> },
-                    { label: 'NIY',          value: selectedGuru.niy || '-' },
-                    { label: 'NUPTK',        value: selectedGuru.nuptk || '-' },
-                    { label: 'Jenis Kelamin',value: formatGender(selectedGuru.jenisKelamin) },
+                    { label: 'NIY', value: selectedGuru.niy || '-' },
+                    { label: 'NUPTK', value: selectedGuru.nuptk || '-' },
+                    { label: 'Jenis Kelamin', value: formatGender(selectedGuru.jenisKelamin) },
                     { label: 'Tempat Lahir', value: selectedGuru.tempat_lahir || '-' },
-                    { label: 'Tanggal Lahir',value: formatTanggalIndonesia(selectedGuru.tanggal_lahir) },
-                    { label: 'Telepon',      value: selectedGuru.no_telepon || '-' },
-                    { label: 'Alamat',       value: selectedGuru.alamat || '-' },
-                    { label: 'Email',        value: selectedGuru.email || '-' },
-                    { label: 'Hak Akses',    value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ') : '-' },
+                    { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedGuru.tanggal_lahir) },
+                    { label: 'Telepon', value: selectedGuru.no_telepon || '-' },
+                    { label: 'Alamat', value: selectedGuru.alamat || '-' },
+                    { label: 'Email', value: selectedGuru.email || '-' },
+                    { label: 'Hak Akses', value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ') : '-' },
                   ].map((item, i) => (
                     <div key={i} className="grid grid-cols-3 sm:grid-cols-4 gap-2 border-b border-orange-100 pb-2">
                       <span className="font-semibold text-xs sm:text-sm">{item.label}</span>

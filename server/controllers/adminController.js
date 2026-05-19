@@ -15,6 +15,7 @@ const tahunAjaranModel = require('../models/tahunAjaranModel');
 const siswaModel = require('../models/siswaModel');
 const kelasModel = require('../models/kelasModel');
 const mapelModel = require('../models/mapelModel');
+const pembinaEkskulModel = require('../models/pembinaEkskulModel');
 const ekstrakurikulerModel = require('../models/ekstrakurikulerModel');
 const path = require('path');
 const fs = require('fs');
@@ -92,17 +93,55 @@ const getAdminById = async (req, res) => {
 };
 
 const tambahAdmin = async (req, res) => {
+  const {
+    nama_lengkap,
+    email_sekolah,
+    tempat_lahir,
+    tanggal_lahir,
+    jenis_kelamin,
+    niy,
+    nuptk,
+    alamat,
+    no_telepon,
+  } = req.body;
+
+  if (!nama_lengkap) return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
+  if (!email_sekolah) return res.status(400).json({ message: 'Email sekolah wajib diisi' });
+  if (!tempat_lahir) return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
+  if (!tanggal_lahir) return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
+  if (!jenis_kelamin) return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
+
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    const id_user = await userModel.createAdmin(req.body, connection);
+
+    const adminData = {
+      email_sekolah,
+      nama_lengkap,
+      tempat_lahir,
+      tanggal_lahir,
+      jenis_kelamin,
+      niy: niy || null,
+      nuptk: nuptk || null,
+      alamat: alamat || null,
+      no_telepon: no_telepon || null,
+    };
+
+    const id_user = await userModel.createAdmin(adminData, connection);
+    
     await connection.commit();
-    res
-      .status(201)
-      .json({ message: 'Admin berhasil ditambahkan', id: id_user });
+    res.status(201).json({ message: 'Admin berhasil ditambahkan', id: id_user });
+
   } catch (err) {
     await connection.rollback();
-    console.error('Error tambah admin:', err.message);
+    console.error('Error tambah admin:', err);
+
+    if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+      return res.status(400).json({
+        message: 'Email sudah terdaftar. Silakan gunakan email yang berbeda.'
+      });
+    }
+
     res.status(500).json({ message: 'Gagal menambah admin' });
   } finally {
     connection.release();
@@ -110,16 +149,58 @@ const tambahAdmin = async (req, res) => {
 };
 
 const editAdmin = async (req, res) => {
+  const { id } = req.params;
+  const {
+    nama_lengkap,
+    email_sekolah,
+    tempat_lahir,
+    tanggal_lahir,
+    jenis_kelamin,
+    niy,
+    nuptk,
+    alamat,
+    no_telepon,
+    status,
+  } = req.body;
+
+  if (!nama_lengkap) return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
+  if (!email_sekolah) return res.status(400).json({ message: 'Email sekolah wajib diisi' });
+  if (!tempat_lahir) return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
+  if (!tanggal_lahir) return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
+  if (!jenis_kelamin) return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
+
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    const { id } = req.params;
-    await userModel.updateAdmin(id, req.body, connection);
+
+    const adminData = {
+      email_sekolah,
+      nama_lengkap,
+      tempat_lahir,
+      tanggal_lahir,
+      jenis_kelamin,
+      niy: niy || null,
+      nuptk: nuptk || null,
+      alamat: alamat || null,
+      no_telepon: no_telepon || null,
+      status: status || 'aktif',
+    };
+
+    await userModel.updateAdmin(id, adminData, connection);
+    
     await connection.commit();
     res.json({ message: 'Data admin berhasil diperbarui' });
+
   } catch (err) {
     await connection.rollback();
-    console.error('Error edit admin:', err.message);
+    console.error('Error edit admin:', err);
+
+    if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+      return res.status(400).json({
+        message: 'Email sudah terdaftar. Silakan gunakan email yang berbeda.'
+      });
+    }
+
     res.status(500).json({ message: 'Gagal memperbarui data admin' });
   } finally {
     connection.release();
@@ -237,9 +318,14 @@ const tambahGuru = async (req, res) => {
     alamat,
     no_telepon,
   } = req.body;
-  if (!email_sekolah || !nama_lengkap) {
-    return res.status(400).json({ message: 'Email dan nama wajib diisi' });
-  }
+
+  if (!nama_lengkap) return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
+  if (!email_sekolah) return res.status(400).json({ message: 'Email sekolah wajib diisi' });
+  if (!tempat_lahir) return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
+  if (!tanggal_lahir) return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
+  if (!jenis_kelamin) return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
+
+
   if (!Array.isArray(roles)) {
     return res.status(400).json({ message: 'Roles harus berupa array' });
   }
@@ -247,14 +333,12 @@ const tambahGuru = async (req, res) => {
     .map(role => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
     .filter(Boolean);
   const allowedRoles = ['guru kelas', 'guru bidang studi'];
-  const validRoles = normalizedRoles.filter(role =>
-    allowedRoles.includes(role)
-  );
+  const validRoles = normalizedRoles.filter(role => allowedRoles.includes(role));
+
   if (validRoles.length === 0) {
-    return res
-      .status(400)
-      .json({ message: 'Pilih minimal satu hak akses yang valid' });
+    return res.status(400).json({ message: 'Pilih minimal satu hak akses yang valid' });
   }
+
   try {
     const DEFAULT_PASSWORD = process.env.DEFAULT_GURU_PASSWORD || 'sekolah123';
     const userData = {
@@ -272,10 +356,25 @@ const tambahGuru = async (req, res) => {
       alamat,
       no_telepon,
     };
+
     const userId = await guruModel.createGuru(userData, guruData, validRoles);
     res.status(201).json({ message: 'Guru berhasil ditambahkan', id: userId });
+
   } catch (err) {
     console.error('Error tambah guru:', err);
+
+    if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+      let duplicateField = 'Data';
+      if (err.sqlMessage) {
+        if (err.sqlMessage.includes('email_sekolah')) duplicateField = 'Email';
+        else if (err.sqlMessage.includes('niy')) duplicateField = 'NIY';
+        else if (err.sqlMessage.includes('nuptk')) duplicateField = 'NUPTK';
+      }
+      return res.status(400).json({
+        message: `${duplicateField} sudah terdaftar. Silakan gunakan data yang berbeda.`
+      });
+    }
+
     res.status(500).json({ message: 'Gagal menambah guru' });
   }
 };
@@ -296,6 +395,27 @@ const editGuru = async (req, res) => {
     roles,
     password,
   } = req.body;
+
+  if (!nama_lengkap) return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
+  if (!email_sekolah) return res.status(400).json({ message: 'Email sekolah wajib diisi' });
+  if (!tempat_lahir) return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
+  if (!tanggal_lahir) return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
+  if (!jenis_kelamin) return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
+
+
+  if (!Array.isArray(roles) || roles.length === 0) {
+    return res.status(400).json({ message: 'Role wajib dipilih minimal satu' });
+  }
+  const normalizedRoles = roles
+    .map(role => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
+    .filter(Boolean);
+  const allowedRoles = ['guru kelas', 'guru bidang studi'];
+  const validRoles = normalizedRoles.filter(role => allowedRoles.includes(role));
+
+  if (validRoles.length === 0) {
+    return res.status(400).json({ message: 'Pilih role yang valid (guru kelas / guru bidang studi)' });
+  }
+
   try {
     const userData = { email_sekolah, nama_lengkap, password, status };
     const guruData = {
@@ -307,10 +427,25 @@ const editGuru = async (req, res) => {
       alamat,
       no_telepon,
     };
+
     await guruModel.updateGuru(id, userData, guruData, roles);
     res.json({ message: 'Data guru berhasil diperbarui' });
+
   } catch (err) {
     console.error('Error edit guru:', err);
+
+    if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+      let duplicateField = 'Data';
+      if (err.sqlMessage) {
+        if (err.sqlMessage.includes('email_sekolah')) duplicateField = 'Email';
+        else if (err.sqlMessage.includes('niy')) duplicateField = 'NIY';
+        else if (err.sqlMessage.includes('nuptk')) duplicateField = 'NUPTK';
+      }
+      return res.status(400).json({
+        message: `${duplicateField} sudah terdaftar. Silakan gunakan data yang berbeda.`
+      });
+    }
+
     res.status(500).json({ message: 'Gagal memperbarui data guru' });
   }
 };
@@ -318,45 +453,83 @@ const editGuru = async (req, res) => {
 const importGuru = async (req, res) => {
   const connection = await db.getConnection();
   try {
-    if (!req.file)
-      return res.status(400).json({ message: 'File Excel diperlukan' });
+    if (!req.file) return res.status(400).json({ message: 'File Excel diperlukan' });
+
     const workbook = XLSX.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
     const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
     if (data.length === 0) throw new Error('File Excel kosong');
-    const requiredFields = ['email_sekolah', 'nama_lengkap'];
+
+    const requiredColumns = ['email_sekolah', 'nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin', 'roles'];
     const firstRow = data[0];
-    for (const field of requiredFields) {
-      if (!(field in firstRow))
-        throw new Error(`Kolom wajib "${field}" tidak ditemukan`);
+    for (const col of requiredColumns) {
+      if (!(col in firstRow)) {
+        throw new Error(`Format tidak valid: Kolom "${col}" tidak ditemukan di template`);
+      }
     }
+
     await connection.beginTransaction();
-    for (const row of data) {
-      if (!row.email_sekolah || !row.nama_lengkap)
-        throw new Error(`Data tidak lengkap`);
-      let tanggal_lahir = row.tanggal_lahir || '';
+
+    const duplicates = [];
+    const validRolesList = ['guru kelas', 'guru bidang studi'];
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNum = i + 2;
+
+      if (!row.email_sekolah || !row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
+        throw new Error(`Baris ${rowNum}: Data tidak lengkap. Field nama, email, tempat lahir, tanggal lahir, dan jenis kelamin wajib diisi`);
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(row.email_sekolah)) {
+        throw new Error(`Baris ${rowNum}: Format email "${row.email_sekolah}" tidak valid`);
+      }
+
+      let tanggal_lahir = row.tanggal_lahir;
       if (typeof tanggal_lahir === 'number') {
         const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
         if (!isNaN(date.getTime())) {
           tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         } else {
-          tanggal_lahir = null;
+          throw new Error(`Baris ${rowNum}: Format tanggal lahir tidak valid`);
         }
       } else if (typeof tanggal_lahir === 'string') {
         tanggal_lahir = tanggal_lahir.trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) tanggal_lahir = null;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+          throw new Error(`Baris ${rowNum}: Format tanggal lahir harus YYYY-MM-DD`);
+        }
       } else {
-        tanggal_lahir = null;
+        throw new Error(`Baris ${rowNum}: Tanggal lahir wajib diisi`);
       }
-      const roles = row.roles
-        ? row.roles
-          .toString()
-          .split(',')
-          .map(r => r.trim())
-        : ['guru kelas'];
-      const validRoles = roles.filter(r =>
-        ['guru kelas', 'guru bidang studi'].includes(r)
-      );
+
+      if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
+        throw new Error(`Baris ${rowNum}: Jenis kelamin harus "Laki-laki" atau "Perempuan"`);
+      }
+
+      const roles = row.roles ? row.roles.toString().split(',').map(r => r.trim().toLowerCase()) : [];
+      const validRoles = roles.filter(r => validRolesList.includes(r));
+      if (validRoles.length === 0) {
+        throw new Error(`Baris ${rowNum}: Role harus berisi "guru kelas" atau "guru bidang studi"`);
+      }
+
+      const [existingEmail] = await connection.execute('SELECT id_user FROM user WHERE email_sekolah = ?', [row.email_sekolah]);
+      const [existingNiy] = row.niy ? await connection.execute('SELECT id_guru FROM guru WHERE niy = ?', [row.niy]) : [[]];
+      const [existingNuptk] = row.nuptk ? await connection.execute('SELECT id_guru FROM guru WHERE nuptk = ?', [row.nuptk]) : [[]];
+
+      if (existingEmail.length > 0 || existingNiy.length > 0 || existingNuptk.length > 0) {
+        duplicates.push({
+          row: rowNum,
+          nama: row.nama_lengkap,
+          email: row.email_sekolah,
+          reason: existingEmail.length > 0 ? 'Email sudah terdaftar' :
+            existingNiy.length > 0 ? 'NIY sudah terdaftar' : 'NUPTK sudah terdaftar'
+        });
+        continue;
+      }
+
+
       const password = row.password || 'sekolah123!';
       const userData = {
         email_sekolah: row.email_sekolah,
@@ -366,24 +539,229 @@ const importGuru = async (req, res) => {
       const guruData = {
         niy: row.niy || null,
         nuptk: row.nuptk || null,
-        tempat_lahir: row.tempat_lahir || null,
+        tempat_lahir: row.tempat_lahir,
         tanggal_lahir,
-        jenis_kelamin: row.jenis_kelamin || 'Laki-laki',
+        jenis_kelamin: row.jenis_kelamin,
         alamat: row.alamat || null,
         no_telepon: row.no_telepon || null,
       };
+
       await guruModel.createGuru(userData, guruData, validRoles, connection);
     }
+
     await connection.commit();
     fs.unlinkSync(req.file.path);
+
+
+    if (duplicates.length > 0) {
+      return res.status(200).json({
+        message: `Import selesai: ${data.length - duplicates.length} data berhasil, ${duplicates.length} data dilewati (duplikat)`,
+        success: data.length - duplicates.length,
+        skipped: duplicates,
+      });
+    }
+
     res.json({ message: 'Import data guru berhasil', total: data.length });
+
   } catch (err) {
     await connection.rollback();
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     console.error('Import guru error:', err);
-    res
-      .status(500)
-      .json({ message: err.message || 'Gagal mengimport data guru' });
+
+    if (err.message && (err.message.includes('Format') || err.message.includes('Baris'))) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+      return res.status(400).json({ message: 'Import gagal: Data duplikat ditemukan (Email/NIY/NUPTK sudah terdaftar)' });
+    }
+
+    res.status(500).json({ message: err.message || 'Gagal mengimport data guru' });
+  } finally {
+    connection.release();
+  }
+};
+
+// ============== PEMBINA EKSTRAKURIKULER ==============
+
+// GET all pembina
+const getPembinaEkskul = async (req, res) => {
+  try {
+    const pembinaList = await pembinaEkskulModel.getAll();
+    res.json({ success: true, data: pembinaList });
+  } catch (err) {
+    console.error('Error get pembina ekskul:', err);
+    res.status(500).json({ message: 'Gagal mengambil data pembina' });
+  }
+};
+
+// GET pembina by ID
+const getPembinaEkskulById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pembina = await pembinaEkskulModel.getById(id);
+    
+    if (!pembina) {
+      return res.status(404).json({ message: 'Pembina tidak ditemukan' });
+    }
+    
+    res.json({ success: true, data: pembina });
+  } catch (err) {
+    console.error('Error get pembina by ID:', err);
+    res.status(500).json({ message: 'Gagal mengambil detail pembina' });
+  }
+};
+
+// POST tambah pembina
+const tambahPembinaEkskul = async (req, res) => {
+  const {
+    nama_lengkap, niy, nuptk, tempat_lahir, tanggal_lahir,
+    jenis_kelamin, alamat, no_telepon, status
+  } = req.body;
+
+  // Validasi field wajib
+  if (!nama_lengkap?.trim()) {
+    return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
+  }
+  if (!tempat_lahir?.trim()) {
+    return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
+  }
+  if (!tanggal_lahir) {
+    return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
+  }
+  if (!jenis_kelamin) {
+    return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
+  }
+
+  try {
+    const id = await pembinaEkskulModel.create({
+      nama_lengkap: nama_lengkap.trim(),
+      niy: niy || null,
+      nuptk: nuptk || null,
+      tempat_lahir: tempat_lahir.trim(),
+      tanggal_lahir,
+      jenis_kelamin,
+      alamat: alamat || null,
+      no_telepon: no_telepon || null,
+      status: status || 'aktif'
+    });
+
+    res.status(201).json({ 
+      message: 'Pembina ekstrakurikuler berhasil ditambahkan', 
+      id 
+    });
+
+  } catch (err) {
+    console.error('Error tambah pembina:', err);
+    res.status(500).json({ message: 'Gagal menambah pembina' });
+  }
+};
+
+// PUT edit pembina
+const editPembinaEkskul = async (req, res) => {
+  const { id } = req.params;
+  const {
+    nama_lengkap, niy, nuptk, tempat_lahir, tanggal_lahir,
+    jenis_kelamin, alamat, no_telepon, status
+  } = req.body;
+
+  // Validasi field wajib
+  if (!nama_lengkap?.trim()) {
+    return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
+  }
+  if (!tempat_lahir?.trim()) {
+    return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
+  }
+  if (!tanggal_lahir) {
+    return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
+  }
+  if (!jenis_kelamin) {
+    return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
+  }
+
+  try {
+    const success = await pembinaEkskulModel.update(id, {
+      nama_lengkap: nama_lengkap.trim(),
+      niy: niy || null,
+      nuptk: nuptk || null,
+      tempat_lahir: tempat_lahir.trim(),
+      tanggal_lahir,
+      jenis_kelamin,
+      alamat: alamat || null,
+      no_telepon: no_telepon || null,
+      status: status || 'aktif'
+    });
+    
+    if (!success) {
+      return res.status(404).json({ message: 'Pembina tidak ditemukan' });
+    }
+    
+    res.json({ message: 'Data pembina berhasil diperbarui' });
+
+  } catch (err) {
+    console.error('Error edit pembina:', err);
+    res.status(500).json({ message: 'Gagal memperbarui data pembina' });
+  }
+};
+
+// POST import pembina (Excel)
+const importPembinaEkskul = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    if (!req.file) return res.status(400).json({ message: 'File Excel diperlukan' });
+
+    const workbook = XLSX.readFile(req.file.path);
+    const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+    
+    if (data.length === 0) throw new Error('File Excel kosong');
+
+    // Validasi kolom wajib di template
+    const requiredCols = ['nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin'];
+    const firstRow = data[0];
+    for (const col of requiredCols) {
+      if (!(col in firstRow)) {
+        throw new Error(`Kolom wajib "${col}" tidak ditemukan di template`);
+      }
+    }
+
+    await connection.beginTransaction();
+    let successCount = 0;
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNum = i + 2;
+
+      // Validasi per baris
+      if (!row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
+        throw new Error(`Baris ${rowNum}: Data tidak lengkap`);
+      }
+      if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
+        throw new Error(`Baris ${rowNum}: Jenis kelamin harus Laki-laki atau Perempuan`);
+      }
+
+      await pembinaEkskulModel.create({
+        nama_lengkap: row.nama_lengkap,
+        niy: row.niy || null,
+        nuptk: row.nuptk || null,
+        tempat_lahir: row.tempat_lahir,
+        tanggal_lahir: row.tanggal_lahir,
+        jenis_kelamin: row.jenis_kelamin,
+        alamat: row.alamat || null,
+        no_telepon: row.no_telepon || null,
+        status: 'aktif'
+      }, connection);
+      successCount++;
+    }
+
+    await connection.commit();
+    fs.unlinkSync(req.file.path);
+    res.json({ message: 'Import berhasil', total: successCount });
+
+  } catch (err) {
+    await connection.rollback();
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    console.error('Import pembina error:', err);
+    res.status(400).json({ message: err.message || 'Gagal mengimport data' });
   } finally {
     connection.release();
   }
@@ -2190,6 +2568,12 @@ module.exports = {
   tambahGuru,
   editGuru,
   importGuru,
+  // Pembina Ekstrakurikuler
+  getPembinaEkskul,
+  getPembinaEkskulById,
+  tambahPembinaEkskul,
+  editPembinaEkskul,
+  importPembinaEkskul,
   // Sekolah
   getSekolah,
   editSekolah,

@@ -116,6 +116,13 @@ router.put('/admin/upload-foto', adminOnly, uploadFoto.single('foto'), adminCont
 router.put('/admin/ganti-password', adminOnly, adminController.gantiPasswordAdmin);
 router.put('/admin/:id', adminOnly, adminController.editAdmin);
 
+// --- Data Pembina Ekstrakurikuler ---
+router.get('/pembina-ekskul', adminOnly, adminController.getPembinaEkskul);
+router.get('/pembina-ekskul/:id', adminOnly, adminController.getPembinaEkskulById);
+router.post('/pembina-ekskul', adminOnly, adminController.tambahPembinaEkskul);
+router.put('/pembina-ekskul/:id', adminOnly, adminController.editPembinaEkskul);
+router.post('/pembina-ekskul/import', adminOnly, uploadExcel.single('file'), adminController.importPembinaEkskul);
+
 // --- Data Sekolah ---
 router.get('/sekolah', adminOnly, adminController.getSekolah);
 router.put('/sekolah', adminOnly, adminController.editSekolah);
