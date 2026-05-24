@@ -6,6 +6,7 @@
  *         serta navigasi ke halaman manajemen terkait.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
+ * UI Redesign: Tema oranye elegan, konsisten dengan Sidebar & Header
  */
 
 "use client";
@@ -27,9 +28,7 @@ import {
     Cell,
 } from 'recharts';
 
-// =============================================
-// INTERFACES
-// =============================================
+// ─── INTERFACES ───────────────────────────────────────────────────────────────
 
 interface DashboardStats {
     guru: number;
@@ -40,15 +39,13 @@ interface DashboardStats {
     mata_pelajaran: number;
 }
 
-// =============================================
-// CUSTOM TOOLTIP - Bar Chart
-// =============================================
+// ─── CUSTOM TOOLTIP — Bar Chart ───────────────────────────────────────────────
 
 const CustomBarTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white border border-orange-100 rounded-xl shadow-lg px-4 py-3">
-                <p className="text-xs font-semibold text-orange-700 mb-1">{label}</p>
+            <div className="bg-white rounded-xl shadow-lg px-4 py-3" style={{ border: '1px solid #fde0c8' }}>
+                <p className="text-xs font-bold mb-1" style={{ color: '#c95b08' }}>{label}</p>
                 <p className="text-lg font-bold text-gray-800">{payload[0].value}</p>
             </div>
         );
@@ -56,15 +53,13 @@ const CustomBarTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-// =============================================
-// CUSTOM TOOLTIP - Donut Chart
-// =============================================
+// ─── CUSTOM TOOLTIP — Donut Chart ─────────────────────────────────────────────
 
 const CustomDonutTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white border border-orange-100 rounded-xl shadow-lg px-4 py-3">
-                <p className="text-xs font-semibold text-orange-700 mb-1">{payload[0].name}</p>
+            <div className="bg-white rounded-xl shadow-lg px-4 py-3" style={{ border: '1px solid #fde0c8' }}>
+                <p className="text-xs font-bold mb-1" style={{ color: '#c95b08' }}>{payload[0].name}</p>
                 <p className="text-lg font-bold text-gray-800">{payload[0].value} guru</p>
             </div>
         );
@@ -72,9 +67,7 @@ const CustomDonutTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-// =============================================
-// CUSTOM LABEL - persentase di dalam slice donut
-// =============================================
+// ─── CUSTOM LABEL — persentase di dalam slice donut ───────────────────────────
 
 const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
     if (percent < 0.05) return null;
@@ -89,33 +82,35 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent
     );
 };
 
-// =============================================
-// MAIN COMPONENT
-// =============================================
+// ─── CARD WRAPPER — dipakai oleh stat cards & chart cards ─────────────────────
+
+const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+    <div
+        className={`bg-white rounded-2xl ${className}`}
+        style={{ border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' }}
+    >
+        {children}
+    </div>
+);
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DashboardClient() {
-    const [user, setUser] = useState<UserData | null>(null);
+    const [user, setUser]       = useState<UserData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
-    const [stats, setStats] = useState<DashboardStats>({
-        guru: 0,
-        siswa: 0,
-        admin: 0,
-        ekstrakurikuler: 0,
-        kelas: 0,
-        mata_pelajaran: 0,
+    const [stats, setStats]     = useState<DashboardStats>({
+        guru: 0, siswa: 0, admin: 0,
+        ekstrakurikuler: 0, kelas: 0, mata_pelajaran: 0,
     });
-    const [guruAktif, setGuruAktif] = useState(0);
+    const [guruAktif, setGuruAktif]       = useState(0);
     const [guruNonaktif, setGuruNonaktif] = useState(0);
     const router = useRouter();
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token    = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
 
-        if (!token) {
-            window.location.href = '/login';
-            return;
-        }
+        if (!token) { window.location.href = '/login'; return; }
 
         if (userData) {
             const parsedUser: UserData = JSON.parse(userData);
@@ -133,19 +128,15 @@ export default function DashboardClient() {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 const resultStats = await resStats.json();
-                if (resStats.ok && resultStats.success) {
-                    setStats(resultStats.data);
-                }
+                if (resStats.ok && resultStats.success) setStats(resultStats.data);
 
                 const resGuru = await fetch('http://localhost:5000/api/admin/guru', {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 const resultGuru = await resGuru.json();
                 if (resGuru.ok && Array.isArray(resultGuru.data)) {
-                    const list = resultGuru.data;
-                    const aktif = list.filter(
-                        (g: any) => (g.status || '').trim().toLowerCase() === 'aktif'
-                    ).length;
+                    const list   = resultGuru.data;
+                    const aktif  = list.filter((g: any) => (g.status || '').trim().toLowerCase() === 'aktif').length;
                     setGuruAktif(aktif);
                     setGuruNonaktif(list.length - aktif);
                 }
@@ -159,16 +150,12 @@ export default function DashboardClient() {
         fetchAll();
     }, []);
 
-    const handleNavigation = (path: string) => {
-        router.push(path);
-    };
-
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center min-h-screen" style={{ background: '#fdf6f0' }}>
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading...</p>
+                    <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin mx-auto" />
+                    <p className="mt-4 text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
                 </div>
             </div>
         );
@@ -176,231 +163,247 @@ export default function DashboardClient() {
 
     if (!user) return null;
 
-    // =============================================
-    // DATA KARTU STATISTIK
-    // =============================================
+    // ── Stat cards config ─────────────────────────────────────────────────────
 
     const statCards = [
-        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-8 h-8" />, path: '/admin/data_guru' },
-        { label: 'Data Siswa', value: stats.siswa, icon: <Users className="w-8 h-8" />, path: '/admin/data_siswa' },
-        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-8 h-8" />, path: '/admin/data_admin' },
-        { label: 'Data Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-8 h-8" />, path: '/admin/ekstrakurikuler' },
-        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-8 h-8" />, path: '/admin/data_kelas' },
-        { label: 'Data Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-8 h-8" />, path: '/admin/data_mata_pelajaran' },
+        { label: 'Data Guru',            value: stats.guru,           icon: <Users className="w-5 h-5" />,      path: '/admin/data_guru' },
+        { label: 'Data Siswa',           value: stats.siswa,          icon: <Users className="w-5 h-5" />,      path: '/admin/data_siswa' },
+        { label: 'Data Admin',           value: stats.admin,          icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
+        { label: 'Data Ekstrakurikuler', value: stats.ekstrakurikuler,icon: <Award className="w-5 h-5" />,      path: '/admin/ekstrakurikuler' },
+        { label: 'Data Kelas',           value: stats.kelas,          icon: <School className="w-5 h-5" />,     path: '/admin/data_kelas' },
+        { label: 'Data Mata Pelajaran',  value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />,       path: '/admin/data_mata_pelajaran' },
     ];
 
-    // =============================================
-    // DATA GRAFIK
-    // =============================================
+    // ── Chart data ────────────────────────────────────────────────────────────
 
     const barData = [
-        { name: 'Guru', jumlah: stats.guru },
+        { name: 'Guru',  jumlah: stats.guru },
         { name: 'Siswa', jumlah: stats.siswa },
     ];
 
     const donutData = [
-        { name: 'Aktif', value: guruAktif },
+        { name: 'Aktif',    value: guruAktif },
         { name: 'Nonaktif', value: guruNonaktif },
-    ].filter((d) => d.value > 0);
+    ].filter(d => d.value > 0);
 
-    const DONUT_COLORS = ['#ea580c', '#fed7aa'];
+    const DONUT_COLORS = ['#e8690a', '#fde0c8'];
 
-    // =============================================
-    // RENDER
-    // =============================================
+    // ── Render ────────────────────────────────────────────────────────────────
 
     return (
-        // ── Latar belakang orange gradient sama seperti data admin ──
-        <div
-            className="flex-1 min-h-screen p-6"
-            style={{ background: 'linear-gradient(160deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%)' }}
-        >
-            {/* Welcome Card */}
+        <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
+
+            {/* ── Welcome card ── */}
             <div
-                className="rounded-2xl shadow-lg p-6 mb-8 text-white relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)' }}
+                className="rounded-2xl p-6 mb-6 text-white relative overflow-hidden"
+                style={{
+                    background: 'linear-gradient(135deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
+                    boxShadow: '0 4px 20px rgba(200,80,10,0.25)',
+                }}
             >
-                <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full opacity-20" style={{ background: 'rgba(255,255,255,0.4)' }} />
-                <div className="absolute -bottom-8 -right-2 w-48 h-48 rounded-full opacity-10" style={{ background: 'rgba(255,255,255,0.4)' }} />
+                {/* Dekorasi lingkaran */}
+                <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                <div className="absolute -bottom-10 right-16 w-56 h-56 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} />
                 <div className="relative z-10">
-                    <h2 className="text-2xl font-bold mb-2">Selamat Datang, {user.name || 'Admin'}! 👋</h2>
-                    <p style={{ color: 'rgba(255,237,213,0.95)' }}>
-                        Anda login sebagai Administrator. Kelola sistem E-Rapor dengan mudah.
+                    <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Panel Administrator</p>
+                    <h2 className="text-2xl font-bold mb-1.5">
+                        Selamat Datang, {user.name || 'Admin'}! 👋
+                    </h2>
+                    <p className="text-white/70 text-sm">
+                        Kelola sistem E-Rapor dengan mudah dari dashboard ini.
                     </p>
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* ── Stat cards ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                 {statCards.map((card) => (
-                    <div
-                        key={card.label}
-                        className="rounded-2xl shadow hover:shadow-lg transition-all duration-300 p-6 cursor-pointer hover:-translate-y-0.5"
-                        style={{
-                            background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
-                            border: '1px solid rgba(251,146,60,0.2)',
-                        }}
-                    >
-                        <div className="flex items-center justify-between mb-4">
-                            <div>
-                                <p className="text-sm font-medium mb-1" style={{ color: '#9a3412' }}>{card.label}</p>
-                                <p className="text-3xl font-bold" style={{ color: '#c2410c' }}>{card.value}</p>
+                    <Card key={card.label}>
+                        <div className="p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <div
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #c95b08, #e8690a)',
+                                        boxShadow: '0 3px 10px rgba(232,105,10,0.3)',
+                                    }}
+                                >
+                                    {card.icon}
+                                </div>
+                                <span
+                                    className="text-3xl font-bold"
+                                    style={{ color: '#c95b08' }}
+                                >
+                                    {card.value}
+                                </span>
                             </div>
-                            <div
-                                className="p-3 rounded-xl flex items-center justify-center"
-                                style={{
-                                    background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
-                                    color: 'white',
-                                    boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
-                                }}
-                            >
-                                {card.icon}
+                            <p className="text-sm font-semibold text-gray-700 mb-3">{card.label}</p>
+                            <div className="pt-3" style={{ borderTop: '1px solid #fde0c8' }}>
+                                <button
+                                    onClick={() => router.push(card.path)}
+                                    className="flex items-center gap-1 text-xs font-semibold transition-colors group"
+                                    style={{ color: '#e8690a' }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = '#c95b08')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = '#e8690a')}
+                                >
+                                    Lihat detail
+                                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                                </button>
                             </div>
                         </div>
-                        <div className="mb-3" style={{ height: '1px', background: 'linear-gradient(90deg, rgba(251,146,60,0.3), transparent)' }} />
-                        <button
-                            onClick={() => handleNavigation(card.path)}
-                            className="flex items-center space-x-1 transition-all duration-200 group"
-                            style={{ color: '#ea580c' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = '#c2410c')}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = '#ea580c')}
-                        >
-                            <span className="text-sm font-semibold">Lihat detail</span>
-                            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
-                        </button>
-                    </div>
+                    </Card>
                 ))}
             </div>
 
-            {/* =============================================
-                GRAFIK
-            ============================================= */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* ── Charts ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
                 {/* Bar Chart — Guru vs Siswa */}
-                <div
-                    className="lg:col-span-2 rounded-2xl shadow p-6"
-                    style={{
-                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
-                        border: '1px solid rgba(251,146,60,0.2)',
-                    }}
-                >
-                    <div className="mb-5">
-                        <h3 className="text-base font-bold text-gray-800">Jumlah Guru & Siswa</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Perbandingan total guru dan siswa terdaftar</p>
-                    </div>
-                    <ResponsiveContainer width="100%" height={280}>
-                        <BarChart
-                            data={barData}
-                            barSize={64}
-                            margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+                <Card className="lg:col-span-2">
+                    <div className="p-5">
+                        {/* Chart header */}
+                        <div
+                            className="flex items-center justify-between pb-4 mb-4"
+                            style={{ borderBottom: '1px solid #fde0c8' }}
                         >
-                            <defs>
-                                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#ea580c" />
-                                    <stop offset="100%" stopColor="#fb923c" />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(251,146,60,0.15)" vertical={false} />
-                            <XAxis
-                                dataKey="name"
-                                tick={{ fontSize: 13, fill: '#9a3412', fontWeight: 700 }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <YAxis
-                                tick={{ fontSize: 11, fill: '#d1d5db' }}
-                                axisLine={false}
-                                tickLine={false}
-                                allowDecimals={false}
-                            />
-                            <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(251,146,60,0.07)' }} />
-                            <Bar dataKey="jumlah" radius={[10, 10, 0, 0]} fill="url(#barGradient)" />
-                        </BarChart>
-                    </ResponsiveContainer>
-
-                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4" style={{ borderTop: '1px solid rgba(251,146,60,0.15)' }}>
-                        <div className="text-center">
-                            <p className="text-xs text-gray-400 mb-1">Total Guru</p>
-                            <p className="text-2xl font-bold" style={{ color: '#ea580c' }}>{stats.guru}</p>
+                            <div>
+                                <p className="text-sm font-bold text-gray-800">Jumlah Guru &amp; Siswa</p>
+                                <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
+                                    Perbandingan total guru dan siswa terdaftar
+                                </p>
+                            </div>
+                            <div
+                                className="px-3 py-1 rounded-lg text-xs font-semibold"
+                                style={{ background: '#fff0e5', color: '#c95b08' }}
+                            >
+                                Perbandingan
+                            </div>
                         </div>
-                        <div className="text-center">
-                            <p className="text-xs text-gray-400 mb-1">Total Siswa</p>
-                            <p className="text-2xl font-bold" style={{ color: '#ea580c' }}>{stats.siswa}</p>
+
+                        <ResponsiveContainer width="100%" height={260}>
+                            <BarChart
+                                data={barData}
+                                barSize={56}
+                                margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+                            >
+                                <defs>
+                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%"   stopColor="#c95b08" />
+                                        <stop offset="100%" stopColor="#f5a623" />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(253,224,200,0.6)" vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tick={{ fontSize: 13, fill: '#7a3a0a', fontWeight: 700 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <YAxis
+                                    tick={{ fontSize: 11, fill: '#d1d5db' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    allowDecimals={false}
+                                />
+                                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(253,224,200,0.3)' }} />
+                                <Bar dataKey="jumlah" radius={[10, 10, 0, 0]} fill="url(#barGradient)" />
+                            </BarChart>
+                        </ResponsiveContainer>
+
+                        <div
+                            className="grid grid-cols-2 gap-4 mt-4 pt-4"
+                            style={{ borderTop: '1px solid #fde0c8' }}
+                        >
+                            <div
+                                className="text-center py-3 rounded-xl"
+                                style={{ background: '#fff0e5' }}
+                            >
+                                <p className="text-xs font-medium mb-1" style={{ color: '#b35a08' }}>Total Guru</p>
+                                <p className="text-2xl font-bold" style={{ color: '#c95b08' }}>{stats.guru}</p>
+                            </div>
+                            <div
+                                className="text-center py-3 rounded-xl"
+                                style={{ background: '#fff0e5' }}
+                            >
+                                <p className="text-xs font-medium mb-1" style={{ color: '#b35a08' }}>Total Siswa</p>
+                                <p className="text-2xl font-bold" style={{ color: '#c95b08' }}>{stats.siswa}</p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </Card>
 
                 {/* Donut Chart — Status Guru */}
-                <div
-                    className="rounded-2xl shadow p-6 flex flex-col"
-                    style={{
-                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
-                        border: '1px solid rgba(251,146,60,0.2)',
-                    }}
-                >
-                    <div className="mb-5">
-                        <h3 className="text-base font-bold text-gray-800">Status Guru</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Guru aktif vs nonaktif</p>
-                    </div>
-
-                    {donutData.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center">
-                            <p className="text-sm text-gray-400">Belum ada data guru</p>
+                <Card>
+                    <div className="p-5 flex flex-col h-full">
+                        {/* Chart header */}
+                        <div
+                            className="pb-4 mb-2"
+                            style={{ borderBottom: '1px solid #fde0c8' }}
+                        >
+                            <p className="text-sm font-bold text-gray-800">Status Guru</p>
+                            <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
+                                Guru aktif vs nonaktif
+                            </p>
                         </div>
-                    ) : (
-                        <>
-                            <ResponsiveContainer width="100%" height={200}>
-                                <PieChart>
-                                    <Pie
-                                        data={donutData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={55}
-                                        outerRadius={85}
-                                        paddingAngle={3}
-                                        dataKey="value"
-                                        labelLine={false}
-                                        label={renderCustomLabel}
-                                    >
-                                        {donutData.map((_, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={DONUT_COLORS[index % DONUT_COLORS.length]}
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip content={<CustomDonutTooltip />} />
-                                </PieChart>
-                            </ResponsiveContainer>
 
-                            <div className="mt-4 space-y-2">
-                                {donutData.map((entry, index) => (
-                                    <div key={entry.name} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div
-                                                className="w-3 h-3 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
-                                            />
-                                            <span className="text-xs text-gray-600 font-medium">{entry.name}</span>
+                        {donutData.length === 0 ? (
+                            <div className="flex-1 flex items-center justify-center py-8">
+                                <p className="text-sm text-gray-400">Belum ada data guru</p>
+                            </div>
+                        ) : (
+                            <>
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <PieChart>
+                                        <Pie
+                                            data={donutData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={55}
+                                            outerRadius={85}
+                                            paddingAngle={3}
+                                            dataKey="value"
+                                            labelLine={false}
+                                            label={renderCustomLabel}
+                                        >
+                                            {donutData.map((_, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                                                />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip content={<CustomDonutTooltip />} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+
+                                <div className="mt-3 space-y-2">
+                                    {donutData.map((entry, index) => (
+                                        <div key={entry.name} className="flex items-center justify-between px-1">
+                                            <div className="flex items-center gap-2">
+                                                <div
+                                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                                    style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
+                                                />
+                                                <span className="text-xs font-medium text-gray-600">{entry.name}</span>
+                                            </div>
+                                            <span className="text-xs font-bold text-gray-800">{entry.value} guru</span>
                                         </div>
-                                        <span className="text-xs font-bold text-gray-800">{entry.value} guru</span>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
 
-                            <div
-                                className="mt-4 pt-3 flex items-center justify-between"
-                                style={{ borderTop: '1px solid rgba(251,146,60,0.2)' }}
-                            >
-                                <span className="text-xs text-gray-500 font-medium">Total Guru</span>
-                                <span className="text-sm font-bold" style={{ color: '#c2410c' }}>
-                                    {donutData.reduce((sum, d) => sum + d.value, 0)} guru
-                                </span>
-                            </div>
-                        </>
-                    )}
-                </div>
+                                <div
+                                    className="mt-4 pt-3 flex items-center justify-between"
+                                    style={{ borderTop: '1px solid #fde0c8' }}
+                                >
+                                    <span className="text-xs font-medium text-gray-500">Total Guru</span>
+                                    <span className="text-sm font-bold" style={{ color: '#c95b08' }}>
+                                        {donutData.reduce((s, d) => s + d.value, 0)} guru
+                                    </span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Card>
 
             </div>
         </div>
