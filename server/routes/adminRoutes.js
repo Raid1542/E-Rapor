@@ -84,7 +84,35 @@ const uploadFoto = multer({
   },
 });
 
-const adminController = require('../controllers/adminController');
+// Multer khusus untuk BACKUP/RESTORE
+const backupStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const backupDir = path.join(__dirname, '..', 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    cb(null, backupDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `restore_${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const uploadBackup = multer({
+  storage: backupStorage,
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    // Terima file .sql DAN .zip untuk restore
+    if (ext !== '.sql' && ext !== '.zip') {
+      return cb(new Error('Hanya file .sql atau .zip yang diizinkan untuk restore'), false);
+    }
+    cb(null, true);
+  },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB (cukup untuk database besar + uploads)
+});
+
+const admin = require('../controllers/admin');
 const router = express.Router();
 
 // Middleware: hanya admin
@@ -95,93 +123,94 @@ const adminOnlyWithTahunAjaran = [
 ];
 
 // --- Data Guru ---
-router.post('/guru/import', adminOnly, uploadExcel.single('file'), adminController.importGuru);
-router.get('/guru', adminOnly, adminController.getGuru);
-router.get('/guru/:id', adminOnly, adminController.getGuruById);
-router.post('/guru', adminOnly, adminController.tambahGuru);
-router.put('/guru/:id', adminOnly, adminController.editGuru);
+router.post('/guru/import', adminOnly, uploadExcel.single('file'), admin.importGuru);
+router.get('/guru', adminOnly, admin.getGuru);
+router.get('/guru/:id', adminOnly, admin.getGuruById);
+router.post('/guru', adminOnly, admin.tambahGuru);
+router.put('/guru/:id', adminOnly, admin.editGuru);
 
 // --- Data Siswa ---
-router.post('/siswa/import', adminOnlyWithTahunAjaran, uploadExcel.single('file'), adminController.importSiswa);
-router.get('/siswa', adminOnly, adminController.getSiswa);
-router.get('/siswa/:id', adminOnly, adminController.getSiswaById);
-router.post('/siswa', adminOnlyWithTahunAjaran, adminController.tambahSiswa);
-router.put('/siswa/:id', adminOnlyWithTahunAjaran, adminController.editSiswa);
+router.post('/siswa/import', adminOnlyWithTahunAjaran, uploadExcel.single('file'), admin.importSiswa);
+router.get('/siswa', adminOnly, admin.getSiswa);
+router.get('/siswa/:id', adminOnly, admin.getSiswaById);
+router.post('/siswa', adminOnlyWithTahunAjaran, admin.tambahSiswa);
+router.put('/siswa/:id', adminOnlyWithTahunAjaran, admin.editSiswa);
 
 // --- Data Admin ---
-router.get('/admin', adminOnly, adminController.getAdmin);
-router.get('/admin/:id', adminOnly, adminController.getAdminById);
-router.post('/admin', adminOnly, adminController.tambahAdmin);
-router.put('/admin/upload-foto', adminOnly, uploadFoto.single('foto'), adminController.uploadFotoProfil);
-router.put('/admin/ganti-password', adminOnly, adminController.gantiPasswordAdmin);
-router.put('/admin/:id', adminOnly, adminController.editAdmin);
+router.get('/admin', adminOnly, admin.getAdmin);
+router.get('/admin/:id', adminOnly, admin.getAdminById);
+router.post('/admin', adminOnly, admin.tambahAdmin);
+router.put('/admin/upload-foto', adminOnly, uploadFoto.single('foto'), admin.uploadFotoProfil);
+router.put('/admin/ganti-password', adminOnly, admin.gantiPasswordAdmin);
+router.put('/admin/:id', adminOnly, admin.editAdmin);
 
 // --- Data Pembina Ekstrakurikuler ---
-router.get('/pembina-ekskul', adminOnly, adminController.getPembinaEkskul);
-router.get('/pembina-ekskul/:id', adminOnly, adminController.getPembinaEkskulById);
-router.post('/pembina-ekskul', adminOnly, adminController.tambahPembinaEkskul);
-router.put('/pembina-ekskul/:id', adminOnly, adminController.editPembinaEkskul);
-router.post('/pembina-ekskul/import', adminOnly, uploadExcel.single('file'), adminController.importPembinaEkskul);
+router.get('/pembina-ekskul', adminOnly, admin.getPembinaEkskul);
+router.get('/pembina-ekskul/:id', adminOnly, admin.getPembinaEkskulById);
+router.post('/pembina-ekskul', adminOnly, admin.tambahPembinaEkskul);
+router.put('/pembina-ekskul/:id', adminOnly, admin.editPembinaEkskul);
+router.post('/pembina-ekskul/import', adminOnly, uploadExcel.single('file'), admin.importPembinaEkskul);
 
 // --- Data Sekolah ---
-router.get('/sekolah', adminOnly, adminController.getSekolah);
-router.put('/sekolah', adminOnly, adminController.editSekolah);
-router.post('/sekolah/logo', adminOnly, uploadLogo.single('logo'), adminController.uploadLogo);
+router.get('/sekolah', adminOnly, admin.getSekolah);
+router.put('/sekolah', adminOnly, admin.editSekolah);
+router.post('/sekolah/logo', adminOnly, uploadLogo.single('logo'), admin.uploadLogo);
 
 // --- Atur Kelas & Guru Kelas ---
-router.get('/kelas', adminOnly, adminController.getKelas);
-router.get('/kelas/:id', adminOnly, adminController.getKelasById);
-router.post('/kelas', adminOnlyWithTahunAjaran, adminController.tambahKelas);
-router.put('/kelas/:id', adminOnlyWithTahunAjaran, adminController.editKelas);
-router.delete('/kelas/:id', adminOnlyWithTahunAjaran, adminController.hapusKelas);
-router.get('/dropdown', adminOnlyWithTahunAjaran, adminController.getKelasForDropdown);
+router.get('/kelas', adminOnly, admin.getKelas);
+router.get('/kelas/:id', adminOnly, admin.getKelasById);
+router.post('/kelas', adminOnlyWithTahunAjaran, admin.tambahKelas);
+router.put('/kelas/:id', adminOnlyWithTahunAjaran, admin.editKelas);
+router.delete('/kelas/:id', adminOnlyWithTahunAjaran, admin.hapusKelas);
+router.get('/dropdown', adminOnlyWithTahunAjaran, admin.getKelasForDropdown);
 
 // -- Guru Kelas --
-router.get('/guru-kelas', adminOnly, adminController.getGuruKelasList);
-router.get('/kelas/:id/wali-kelas', adminOnly, adminController.getWaliKelas);
-router.post('/kelas/:id/guru', adminOnlyWithTahunAjaran, adminController.setWaliKelas);
+router.get('/guru-kelas', adminOnly, admin.getGuruKelasList);
+router.get('/kelas/:id/wali-kelas', adminOnly, admin.getWaliKelas);
+router.post('/kelas/:id/guru', adminOnlyWithTahunAjaran, admin.setWaliKelas);
 
 // --- Tahun Ajaran & Semester ---
-router.get('/tahun-ajaran', adminOnly, adminController.getTahunAjaran);
-router.post('/tahun-ajaran', adminOnly, adminController.tambahTahunAjaran);
-router.put('/tahun-ajaran/:id', adminOnly, adminController.updateTahunAjaran);
+router.get('/tahun-ajaran', adminOnly, admin.getTahunAjaran);
+router.post('/tahun-ajaran', adminOnly, admin.tambahTahunAjaran);
+router.put('/tahun-ajaran/:id_induk', adminOnly, admin.updateTahunAjaran);
+router.put('/tahun-ajaran/:id_induk/semester', adminOnly, admin.gantiSemester);
 
 // --- Mata Pelajaran ---
-router.get('/mata-pelajaran', adminOnly, adminController.getMataPelajaran);
-router.get('/mata-pelajaran/:id', adminOnly, adminController.getMataPelajaranById);
-router.post('/mata-pelajaran', adminOnly, adminController.tambahMataPelajaran);
-router.put('/mata-pelajaran/:id', adminOnly, adminController.editMataPelajaran);
-router.delete('/mata-pelajaran/:id', adminOnly, adminController.hapusMataPelajaran);
+router.get('/mata-pelajaran', adminOnly, admin.getMataPelajaran);
+router.get('/mata-pelajaran/:id', adminOnly, admin.getMataPelajaranById);
+router.post('/mata-pelajaran', adminOnly, admin.tambahMataPelajaran);
+router.put('/mata-pelajaran/:id', adminOnly, admin.editMataPelajaran);
+router.delete('/mata-pelajaran/:id', adminOnly, admin.hapusMataPelajaran);
 
 // --- PEMBELAJARAN ---
-router.get('/pembelajaran', adminOnlyWithTahunAjaran, adminController.getPembelajaran);
-router.get('/pembelajaran/dropdown', adminOnlyWithTahunAjaran, adminController.getDropdownPembelajaran);
-router.post('/pembelajaran', adminOnlyWithTahunAjaran, adminController.tambahPembelajaran);
-router.put('/pembelajaran/:id', adminOnlyWithTahunAjaran, adminController.editPembelajaran);
-router.delete('/pembelajaran/:id', adminOnlyWithTahunAjaran, adminController.hapusPembelajaran);
+router.get('/pembelajaran', adminOnlyWithTahunAjaran, admin.getPembelajaran);
+router.get('/pembelajaran/dropdown', adminOnlyWithTahunAjaran, admin.getDropdownPembelajaran);
+router.post('/pembelajaran', adminOnlyWithTahunAjaran, admin.tambahPembelajaran);
+router.put('/pembelajaran/:id', adminOnlyWithTahunAjaran, admin.editPembelajaran);
+router.delete('/pembelajaran/:id', adminOnlyWithTahunAjaran, admin.hapusPembelajaran);
 
 // --- EKSTRAKURIKULER ---
-router.get('/ekstrakurikuler', adminOnly, adminController.getEkskul);
-router.post('/ekstrakurikuler', adminOnlyWithTahunAjaran, adminController.tambahEkskul);
-router.put('/ekstrakurikuler/:id', adminOnlyWithTahunAjaran, adminController.editEkskul);
-router.delete('/ekstrakurikuler/:id', adminOnlyWithTahunAjaran, adminController.hapusEkskul);
+router.get('/ekstrakurikuler', adminOnly, admin.getEkskul);
+router.post('/ekstrakurikuler', adminOnlyWithTahunAjaran, admin.tambahEkskul);
+router.put('/ekstrakurikuler/:id', adminOnlyWithTahunAjaran, admin.editEkskul);
+router.delete('/ekstrakurikuler/:id', adminOnlyWithTahunAjaran, admin.hapusEkskul);
 
 // Ambil data tambahan (ekskul)
-router.get('/ekstrakurikuler/:id/anggota', adminOnly, adminController.getPesertaByEkskul);
-router.get('/siswa/:id/ekstrakurikuler', adminOnly, adminController.getEkskulBySiswa);
+router.get('/ekstrakurikuler/:id/anggota', adminOnly, admin.getPesertaByEkskul);
+router.get('/siswa/:id/ekstrakurikuler', adminOnly, admin.getEkskulBySiswa);
 
 // Dashboard
-router.get('/dashboard/stats', adminOnlyWithTahunAjaran, adminController.getDashboardStats);
+router.get('/dashboard/stats', adminOnlyWithTahunAjaran, admin.getDashboardStats);
 
 // Rapor
-router.get('/arsip-rapor/tahun-ajaran', adminOnly, adminController.getTahunAjaranAll);
+router.get('/arsip-rapor/tahun-ajaran', adminOnly, admin.getTahunAjaranAll);
 router.get('/arsip-rapor/kelas', adminOnly, (req, res, next) => {
   const { tahun_ajaran_id } = req.query;
   if (!tahun_ajaran_id) {
     return res.status(400).json({ success: false, message: 'tahun_ajaran_id wajib diisi' });
   }
   next();
-}, adminController.getKelasByTahunAjaran);
+}, admin.getKelasByTahunAjaran);
 router.get('/arsip-rapor/daftar-siswa/:tahunAjaranId/:kelasId', adminOnly, (req, res, next) => {
   const { tahunAjaranId, kelasId } = req.params;
   if (!tahunAjaranId || !kelasId) {
@@ -193,8 +222,12 @@ router.get('/arsip-rapor/daftar-siswa/:tahunAjaranId/:kelasId', adminOnly, (req,
     return res.status(400).json({ success: false, message: 'ID tidak valid' });
   }
   next();
-}, adminController.getDaftarSiswaUntukRapor);
-router.post('/atur-status-penilaian', adminOnly, adminController.aturStatusPenilaian);
-router.post('/arsipkan-rapor', adminOnly, adminController.arsipkanRapor);
+}, admin.getDaftarSiswaUntukRapor);
+router.post('/atur-status-penilaian', adminOnly, admin.aturStatusPenilaian);
+router.post('/arsipkan-rapor', adminOnly, admin.arsipkanRapor);
+
+// Backup & Restore Database
+router.get('/backup', adminOnly, admin.downloadBackup);
+router.post('/backup/restore', adminOnly, uploadExcel.single('file'), admin.uploadRestore);
 
 module.exports = router;

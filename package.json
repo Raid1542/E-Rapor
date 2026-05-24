@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "adm-zip": "^0.5.17",
+    "archiver": "^8.0.0",
     "lucide-react": "^0.556.0"
   },
   "devDependencies": {
