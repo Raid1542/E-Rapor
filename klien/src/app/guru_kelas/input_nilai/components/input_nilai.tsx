@@ -1,12 +1,3 @@
-/**
- * Nama File: input_nilai_client.tsx
- * Fungsi: Halaman untuk menginput dan mengelola nilai siswa
- *         oleh guru kelas, termasuk fitur lihat detail dan edit nilai komponen.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
- * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan halaman guru kelas lainnya
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode } from 'react';

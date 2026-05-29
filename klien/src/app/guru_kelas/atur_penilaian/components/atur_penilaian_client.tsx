@@ -1,13 +1,3 @@
-/**
- * Nama File: atur_penilaian_client.tsx
- * Fungsi: Komponen client-side untuk mengatur kategori penilaian akademik dan kokurikuler,
- *         serta bobot komponen penilaian oleh guru kelas.
- *         Mendukung pengaturan berdasarkan mata pelajaran dan status periode aktif (PTS/PAS).
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
- * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan tampilan admin
- */
-
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';

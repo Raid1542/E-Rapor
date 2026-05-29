@@ -1,13 +1,3 @@
-/**
- * Nama File: dashboard_client.tsx
- * Fungsi: Komponen client-side untuk menampilkan ringkasan informasi dashboard guru kelas,
- *         termasuk jumlah siswa, nama kelas, tahun ajaran, semester yang sedang berjalan,
- *         serta progress penilaian siswa.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
- * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan AdminDashboard
- */
-
 'use client';
 
 import { useEffect, useState } from 'react';
