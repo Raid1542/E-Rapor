@@ -1,11 +1,3 @@
-// File: rapor_client.tsx
-// Fungsi: Komponen utama untuk menampilkan daftar siswa dan mengunduh
-//         rapor berdasarkan jenis penilaian (PTS/PAS) sesuai status periode aktif.
-// Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
-// Tanggal: 15 September 2025
-// Diperbarui: 3 Januari 2026 - Perbaikan struktur, error handling, dan coding convention
-// DIPERBAIKI: 3 Januari 2026 - Perbaikan nama file unduhan sesuai backend (rapor_pts.docx / rapor_pas.docx)
-
 'use client';
 
 import React, { useState, useEffect } from 'react';

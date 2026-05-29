@@ -5,7 +5,7 @@
 // Tanggal: 15 September 2025
 
 import { Metadata } from 'next';
-import RaporGuruKelasClient from './components/rapor_client';
+import RaporGuruKelasClient from './components/cetak_rapor_client';
 
 export const metadata: Metadata = {
     title: 'Rapor',

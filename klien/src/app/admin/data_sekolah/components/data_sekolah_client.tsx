@@ -10,76 +10,112 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X } from 'lucide-react';
+
+// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+
+const PAGE_BG     = { background: '#fdf6f0' };
+const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 4px 24px rgba(200,80,10,0.09)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const labelCls = "block text-sm font-semibold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+// ─── NOTIF MODAL (sama persis dengan data_guru_client) ────────────────────────
+
+type ModalType = 'success' | 'error' | 'warning' | 'network';
+interface ModalConfig { type: ModalType; title: string; message: string; }
+
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
+    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+};
+
+const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+    const s = MODAL_STYLES[modal.type];
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ animation: 'ds-fadeIn 0.2s ease' }}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4"
+                style={{ animation: 'ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1)' }}>
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                    <X size={18} />
+                </button>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring}`}
+                    style={{ animation: 'ds-pulse 0.6s ease 0.15s' }}>
+                    {s.icon}
+                </div>
+                <div className="text-center">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+                </div>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
+                    OK, Mengerti
+                </button>
+            </div>
+            <style>{`
+                @keyframes ds-fadeIn  { from { opacity:0 } to { opacity:1 } }
+                @keyframes ds-scaleIn { from { opacity:0; transform:scale(0.93) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
+                @keyframes ds-pulse   { 0%{transform:scale(1)} 50%{transform:scale(1.1)} 100%{transform:scale(1)} }
+            `}</style>
+        </div>
+    );
+};
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataSekolahPage() {
 
-    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const [logoPreview, setLogoPreview]   = useState<string | null>(null);
     const [formData, setFormData] = useState({
-        namaSekolah: '',
-        npsn: '',
-        nss: '',
-        kodePos: '',
-        telepon: '',
-        alamat: '',
-        email: '',
-        website: '',
-        kepalaSekolah: '',
-        niyKepalaSekolah: '',
-        confirmData: false
+        namaSekolah: '', npsn: '', nss: '', kodePos: '', telepon: '',
+        alamat: '', email: '', website: '', kepalaSekolah: '',
+        niyKepalaSekolah: '', confirmData: false
     });
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [uploading, setUploading] = useState(false);
+    const [loading, setLoading]           = useState(true);
+    const [saving, setSaving]             = useState(false);
+    const [uploading, setUploading]       = useState(false);
     const [fileInputKey, setFileInputKey] = useState(0);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [modal, setModal]               = useState<ModalConfig | null>(null);
 
-    useEffect(() => {
-        fetchSekolahData();
-    }, []);
+    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const closeModal = useCallback(() => setModal(null), []);
+
+    useEffect(() => { fetchSekolahData(); }, []);
 
     const fetchSekolahData = async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) {
-                alert('Silakan login terlebih dahulu');
+                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
                 return;
             }
-
             const res = await fetch('http://localhost:5000/api/admin/sekolah', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
             if (res.ok) {
                 const response = await res.json();
                 const s = response.data || response.sekolah || {};
-
                 setFormData({
-                    namaSekolah: s.nama_sekolah || '',
-                    npsn: s.npsn || '',
-                    nss: s.nss || '',
-                    kodePos: s.kode_pos || '',
-                    telepon: s.telepon || '',
-                    alamat: s.alamat || '',
-                    email: s.email || '',
-                    website: s.website || '',
-                    kepalaSekolah: s.kepala_sekolah || '',
-                    niyKepalaSekolah: s.niy_kepala_sekolah || '',
+                    namaSekolah: s.nama_sekolah || '', npsn: s.npsn || '', nss: s.nss || '',
+                    kodePos: s.kode_pos || '', telepon: s.telepon || '', alamat: s.alamat || '',
+                    email: s.email || '', website: s.website || '',
+                    kepalaSekolah: s.kepala_sekolah || '', niyKepalaSekolah: s.niy_kepala_sekolah || '',
                     confirmData: false
                 });
-
-                if (s.logo_path) {
-                    const logoUrl = `http://localhost:5000${s.logo_path}`;
-                    setLogoPreview(logoUrl);
-                } else {
-                    setLogoPreview(null);
-                }
+                setLogoPreview(s.logo_path ? `http://localhost:5000${s.logo_path}` : null);
             } else {
                 const err = await res.json();
-                alert(err.message || 'Gagal memuat data sekolah');
+                showModal({ type: 'error', title: 'Gagal Memuat Data', message: err.message || 'Terjadi kesalahan saat memuat data sekolah.' });
             }
-        } catch (err) {
-            console.error('❌ Error fetch sekolah:', err);
-            alert('Gagal menghubungi server');
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
         } finally {
             setLoading(false);
         }
@@ -87,10 +123,7 @@ export default function DataSekolahPage() {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value, type, checked } = e.target as HTMLInputElement;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
+        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,258 +131,247 @@ export default function DataSekolahPage() {
         if (file) {
             const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
             if (!validTypes.includes(file.type)) {
-                alert('Hanya file .jpg, .jpeg, atau .png yang diizinkan');
+                showModal({ type: 'warning', title: 'Format Tidak Didukung', message: 'Hanya file .jpg, .jpeg, atau .png yang diizinkan.' });
                 return;
             }
-
+            setSelectedFile(file);
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setLogoPreview(reader.result as string);
-            };
+            reader.onloadend = () => setLogoPreview(reader.result as string);
             reader.readAsDataURL(file);
         }
     };
 
     const handleSubmit = async () => {
         if (!formData.confirmData) {
-            alert('Mohon centang konfirmasi data sebelum menyimpan');
+            showModal({ type: 'warning', title: 'Konfirmasi Diperlukan', message: 'Mohon centang konfirmasi data sebelum menyimpan.' });
             return;
         }
-
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+                return;
+            }
+
+            // Simpan data sekolah
             const res = await fetch('http://localhost:5000/api/admin/sekolah', {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
-                    nama_sekolah: formData.namaSekolah,
-                    npsn: formData.npsn,
-                    nss: formData.nss,
-                    alamat: formData.alamat,
-                    kode_pos: formData.kodePos,
-                    telepon: formData.telepon,
-                    email: formData.email,
-                    website: formData.website,
-                    kepala_sekolah: formData.kepalaSekolah,
-                    niy_kepala_sekolah: formData.niyKepalaSekolah
+                    nama_sekolah: formData.namaSekolah, npsn: formData.npsn, nss: formData.nss,
+                    alamat: formData.alamat, kode_pos: formData.kodePos, telepon: formData.telepon,
+                    email: formData.email, website: formData.website,
+                    kepala_sekolah: formData.kepalaSekolah, niy_kepala_sekolah: formData.niyKepalaSekolah
                 })
             });
-
-            if (res.ok) {
-                alert('✅ Data sekolah berhasil disimpan!');
-                window.dispatchEvent(new CustomEvent('schoolUpdated'));
-            } else {
+            if (!res.ok) {
                 const err = await res.json();
-                alert(err.message || 'Gagal menyimpan data sekolah');
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Terjadi kesalahan saat menyimpan data sekolah.' });
+                return;
             }
-        } catch (err) {
-            console.error('Error simpan data:', err);
-            alert('Gagal menghubungi server');
+
+            // Upload logo jika ada file baru
+            if (selectedFile) {
+                setUploading(true);
+                const formDataLogo = new FormData();
+                formDataLogo.append('logo', selectedFile);
+                const resLogo = await fetch('http://localhost:5000/api/admin/sekolah/logo', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formDataLogo
+                });
+                const dataLogo = await resLogo.json();
+                if (resLogo.ok && dataLogo.logoPath) {
+                    setLogoPreview(`http://localhost:5000${dataLogo.logoPath}`);
+                    window.dispatchEvent(new CustomEvent('logoUpdated', { detail: { logoPath: dataLogo.logoPath } }));
+                    setSelectedFile(null);
+                    setFileInputKey(prev => prev + 1);
+                } else {
+                    showModal({ type: 'warning', title: 'Peringatan', message: 'Data berhasil disimpan, tetapi gagal mengupload logo.\n' + (dataLogo.message || '') });
+                    setUploading(false);
+                    setSaving(false);
+                    return;
+                }
+                setUploading(false);
+            }
+
+            window.dispatchEvent(new CustomEvent('schoolUpdated'));
+            setTimeout(fetchSekolahData, 300);
+            showModal({ type: 'success', title: 'Data Berhasil Disimpan!', message: 'Informasi sekolah telah berhasil diperbarui.' });
+
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handleUpdateLogo = async () => {
-        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-        const file = fileInput?.files?.[0];
-
-        if (!file) {
-            alert('Pilih file logo terlebih dahulu');
-            return;
-        }
-
-        setUploading(true);
-        const formDataLogo = new FormData();
-        formDataLogo.append('logo', file);
-
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/admin/sekolah/logo', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formDataLogo
-            });
-
-            const data = await res.json();
-
-            if (res.ok && data.logoPath) {
-                const logoUrl = `http://localhost:5000${data.logoPath}`;
-                setLogoPreview(logoUrl);
-
-                // Notifikasi ke komponen lain (misal sidebar)
-                window.dispatchEvent(new CustomEvent('logoUpdated', { detail: { logoPath: data.logoPath } }));
-
-                alert('✅ Logo berhasil diupdate!');
-
-                // Reset file input
-                setFileInputKey(prev => prev + 1);
-
-                // Opsional: refresh data sekolah setelah 300ms
-                setTimeout(fetchSekolahData, 300);
-            } else {
-                alert(data.message || 'Gagal mengupload logo');
-            }
-        } catch (err) {
-            console.error('❌ Error upload logo:', err);
-            alert('Gagal menghubungi server');
-        } finally {
             setUploading(false);
         }
     };
 
+    // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+            <div className="flex items-center justify-center min-h-screen" style={PAGE_BG}>
                 <div className="text-center">
-                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent mb-3"></div>
-                    <p className="text-gray-700">Memuat data sekolah...</p>
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data sekolah...</p>
                 </div>
             </div>
         );
     }
 
+    const isBusy = saving || uploading;
+
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-6">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Data Sekolah</h1>
+        <div className="flex-1 min-h-screen p-6 flex flex-col items-center" style={PAGE_BG}>
+
+            {/* Notif modal */}
+            {modal && <NotifModal modal={modal} onClose={closeModal} />}
+
+            {/* Page header */}
+            <div className="w-full max-w-3xl mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Data Sekolah</h1>
+                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola informasi dan logo sekolah</p>
+            </div>
+
+            {/* Card */}
+            <div className="w-full max-w-3xl bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+
+                {/* Card header */}
+                <div className="px-6 py-4" style={HEADER_GRAD}>
+                    <h2 className="text-base font-bold text-white">Informasi Sekolah</h2>
+                    <p className="text-xs text-white/70 mt-0.5">Lengkapi semua informasi sekolah dengan benar</p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* === Bagian Kiri: Edit Data Sekolah === */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
-                        <h2 className="text-xl font-semibold text-gray-800 mb-5">Informasi Sekolah</h2>
+                <div className="p-6 sm:p-8">
 
-                        <div className="space-y-5">
-                            {[
-                                { label: 'Nama Sekolah', name: 'namaSekolah', type: 'text' },
-                                { label: 'NPSN', name: 'npsn', type: 'text' },
-                                { label: 'NSS', name: 'nss', type: 'text' },
-                                { label: 'Kode POS', name: 'kodePos', type: 'text' },
-                                { label: 'Telepon', name: 'telepon', type: 'text' },
-                                { label: 'Email', name: 'email', type: 'email' },
-                                { label: 'Website', name: 'website', type: 'text' },
-                                { label: 'Kepala Sekolah', name: 'kepalaSekolah', type: 'text' },
-                                { label: 'NIY Kepala Sekolah', name: 'niyKepalaSekolah', type: 'text' }
-                            ].map((field) => (
-                                <div key={field.name}>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                        {field.label}
-                                    </label>
-                                    <input
-                                        type={field.type}
-                                        name={field.name}
-                                        value={formData[field.name as keyof typeof formData] as string}
-                                        onChange={handleInputChange}
-                                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                        placeholder={`Masukkan ${field.label.toLowerCase()}`}
-                                    />
+                    {/* ── Logo section ── */}
+                    <div className="flex flex-col items-center mb-8">
+
+                        {/* Preview bulat */}
+                        <div
+                            className="w-32 h-32 rounded-full flex items-center justify-center overflow-hidden mb-4"
+                            style={{ border: '3px dashed #fde0c8', background: '#fffaf6' }}
+                        >
+                            {logoPreview ? (
+                                <img src={logoPreview} alt="Preview Logo Sekolah"
+                                    className="w-full h-full object-contain p-2"
+                                    onError={() => setLogoPreview(null)} />
+                            ) : (
+                                <div className="flex flex-col items-center">
+                                    <svg className="w-10 h-10 mb-1" fill="none" stroke="#f5a623" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
+                                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-[10px] font-medium" style={{ color: '#c95b08' }}>Belum ada logo</span>
                                 </div>
-                            ))}
+                            )}
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Alamat</label>
-                                <textarea
-                                    name="alamat"
-                                    value={formData.alamat}
+                        {/* Nama sekolah di bawah logo */}
+                        {formData.namaSekolah && (
+                            <p className="text-sm font-bold text-gray-700 mb-3 text-center">{formData.namaSekolah}</p>
+                        )}
+
+                        {/* Tombol pilih file */}
+                        <label
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer text-xs font-semibold transition-all"
+                            style={{ border: '1.5px dashed #fde0c8', background: '#fffaf6', color: '#e8690a' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#fffaf6')}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            {selectedFile ? selectedFile.name : 'Pilih Logo Baru'}
+                            <input key={fileInputKey} type="file" accept="image/jpeg,image/png,image/jpg"
+                                onChange={handleLogoChange} className="hidden" />
+                        </label>
+                        <p className="text-[10px] mt-1.5" style={{ color: '#c95b08' }}>JPG, JPEG, PNG · maks. 2 MB</p>
+                    </div>
+
+                    {/* ── Divider ── */}
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="flex-1 h-px" style={{ background: '#fde0c8' }} />
+                        <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#c95b08' }}>Informasi Umum</span>
+                        <div className="flex-1 h-px" style={{ background: '#fde0c8' }} />
+                    </div>
+
+                    {/* ── Form fields ── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+                        {/* Nama Sekolah — full width */}
+                        <div className="sm:col-span-2 flex flex-col gap-1.5">
+                            <label className={labelCls} style={labelColor}>Nama Sekolah</label>
+                            <input type="text" name="namaSekolah" value={formData.namaSekolah}
+                                onChange={handleInputChange} placeholder="Masukkan nama sekolah"
+                                className={inputCls} />
+                        </div>
+
+                        {[
+                            { label: 'NPSN',               name: 'npsn',             type: 'text'  },
+                            { label: 'NSS',                name: 'nss',              type: 'text'  },
+                            { label: 'Kode POS',           name: 'kodePos',          type: 'text'  },
+                            { label: 'Telepon',            name: 'telepon',          type: 'text'  },
+                            { label: 'Email',              name: 'email',            type: 'email' },
+                            { label: 'Website',            name: 'website',          type: 'text'  },
+                            { label: 'Kepala Sekolah',     name: 'kepalaSekolah',    type: 'text'  },
+                            { label: 'NIY Kepala Sekolah', name: 'niyKepalaSekolah', type: 'text'  },
+                        ].map((field) => (
+                            <div key={field.name} className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>{field.label}</label>
+                                <input type={field.type} name={field.name}
+                                    value={formData[field.name as keyof typeof formData] as string}
                                     onChange={handleInputChange}
-                                    rows={3}
-                                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                    placeholder="Masukkan alamat lengkap"
-                                />
+                                    placeholder={`Masukkan ${field.label.toLowerCase()}`}
+                                    className={inputCls} />
                             </div>
+                        ))}
 
-                            <div className="flex items-start gap-3 pt-2">
-                                <input
-                                    type="checkbox"
-                                    id="confirmData"
-                                    name="confirmData"
-                                    checked={formData.confirmData}
-                                    onChange={handleInputChange}
-                                    className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                />
-                                <label htmlFor="confirmData" className="text-sm text-gray-700">
-                                    Saya yakin sudah mengisikan data dengan benar
-                                </label>
-                            </div>
-
-                            <div className="pt-3">
-                                <button
-                                    onClick={handleSubmit}
-                                    disabled={saving || !formData.confirmData}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                >
-                                    {saving ? (
-                                        <span className="flex items-center justify-center gap-2">
-                                            <span className="h-4 w-4 border-t-2 border-white rounded-full animate-spin"></span>
-                                            Menyimpan...
-                                        </span>
-                                    ) : (
-                                        'Simpan Perubahan'
-                                    )}
-                                </button>
-                            </div>
+                        {/* Alamat — full width */}
+                        <div className="sm:col-span-2 flex flex-col gap-1.5">
+                            <label className={labelCls} style={labelColor}>Alamat</label>
+                            <textarea name="alamat" value={formData.alamat} onChange={handleInputChange}
+                                rows={3} placeholder="Masukkan alamat lengkap sekolah"
+                                className={inputCls} />
                         </div>
                     </div>
 
-                    {/* === Bagian Kanan: Edit Logo Sekolah === */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6 h-fit">
-                        <h2 className="text-xl font-semibold text-gray-800 mb-5">Logo Sekolah</h2>
+                    {/* ── Konfirmasi + Simpan ── */}
+                    <div className="mt-2 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
+                        <label className="flex items-start gap-2 cursor-pointer mb-5">
+                            <input type="checkbox" id="confirmData" name="confirmData"
+                                checked={formData.confirmData} onChange={handleInputChange}
+                                className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
+                            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
+                                Saya yakin sudah mengisikan data dengan benar
+                            </span>
+                        </label>
 
-                        {/* Preview Logo */}
-                        <div className="flex justify-center mb-6">
-                            <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl w-48 h-48 flex items-center justify-center">
-                                {logoPreview ? (
-                                    <img
-                                        src={logoPreview}
-                                        alt="Preview Logo Sekolah"
-                                        className="w-full h-full object-contain p-2"
-                                        onError={() => setLogoPreview(null)}
-                                    />
+                        <div className="flex justify-end">
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isBusy || !formData.confirmData}
+                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                    boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
+                                }}
+                                onMouseEnter={e => { if (!isBusy && formData.confirmData) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
+                            >
+                                {isBusy ? (
+                                    <>
+                                        <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                        {uploading ? 'Mengupload logo...' : 'Menyimpan...'}
+                                    </>
                                 ) : (
-                                    <div className="text-center text-gray-400">
-                                        <svg className="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                        <p className="text-xs">Belum ada logo</p>
-                                    </div>
+                                    'Simpan Perubahan'
                                 )}
-                            </div>
+                            </button>
                         </div>
-
-                        {/* Upload File */}
-                        <div className="mb-5">
-                            <input
-                                key={fileInputKey}
-                                type="file"
-                                accept="image/jpeg,image/png,image/jpg"
-                                onChange={handleLogoChange}
-                                className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition"
-                            />
-                            <p className="text-xs text-gray-500 mt-1 italic">Format: JPG, JPEG, PNG (maks. 2 MB)</p>
-                        </div>
-
-                        <button
-                            onClick={handleUpdateLogo}
-                            disabled={uploading || !logoPreview}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed"
-                        >
-                            {uploading ? (
-                                <span className="flex items-center justify-center gap-2">
-                                    <span className="h-4 w-4 border-t-2 border-white rounded-full animate-spin"></span>
-                                    Mengupload...
-                                </span>
-                            ) : (
-                                'Update Logo'
-                            )}
-                        </button>
                     </div>
                 </div>
             </div>
