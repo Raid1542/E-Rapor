@@ -11,13 +11,13 @@ export default function BackupRestoreClient() {
   const [activeTab, setActiveTab] = useState<Tab>('backup');
 
   // ── Backup state ──
-  const [backupStatus, setBackupStatus]   = useState<BackupStatus>('idle');
+  const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle');
   const [backupBlobUrl, setBackupBlobUrl] = useState<string>('');
   const [backupFileName, setBackupFileName] = useState<string>('backup_erapor.sql');
-  const [backupError, setBackupError]     = useState<string>('');
+  const [backupError, setBackupError] = useState<string>('');
 
   // ── Restore state ──
-  const [selectedFile, setSelectedFile]   = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [restoreStatus, setRestoreStatus] = useState<RestoreStatus>('idle');
   const [restoreMessage, setRestoreMessage] = useState<string>('');
 
@@ -52,9 +52,16 @@ export default function BackupRestoreClient() {
 
       const blob = await res.blob();
       const contentDisposition = res.headers.get('Content-Disposition');
-      const fileName = contentDisposition
-        ? (contentDisposition.split('filename=')[1]?.replace(/"/g, '') || 'backup_erapor.sql')
-        : 'backup_erapor.sql';
+      let fileName = 'Backup_E-Rapor_' + Date.now() + '.zip';
+
+      if (contentDisposition) {
+        // Coba parse dengan regex
+        const filenameRegex = /filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/i;
+        const matches = contentDisposition.match(filenameRegex);
+        if (matches && matches[1]) {
+          fileName = decodeURIComponent(matches[1].trim());
+        }
+      }
 
       const url = window.URL.createObjectURL(blob);
       setBackupBlobUrl(url);
@@ -69,7 +76,7 @@ export default function BackupRestoreClient() {
   const handleDownloadBackup = () => {
     if (!backupBlobUrl) return;
     const link = document.createElement('a');
-    link.href     = backupBlobUrl;
+    link.href = backupBlobUrl;
     link.download = backupFileName;
     document.body.appendChild(link);
     link.click();
@@ -87,40 +94,90 @@ export default function BackupRestoreClient() {
   };
 
   const handleRestore = async () => {
-    if (!selectedFile) {
+  // Validasi file dipilih
+  if (!selectedFile) {
+    setRestoreStatus('error');
+    setRestoreMessage('⚠️ Pilih file backup terlebih dahulu.');
+    return;
+  }
+
+  // Validasi ekstensi file
+  const allowedExtensions = ['.sql', '.zip'];
+  const fileExt = '.' + selectedFile.name.split('.').pop()?.toLowerCase();
+  
+  if (!allowedExtensions.includes(fileExt)) {
+    setRestoreStatus('error');
+    setRestoreMessage(`❌ Format file tidak didukung.\n\nGunakan file .sql atau .zip (hasil backup dari sistem).`);
+    return;
+  }
+
+  // Validasi ukuran file (max 500MB)
+  const maxSize = 500 * 1024 * 1024; // 500MB
+  if (selectedFile.size > maxSize) {
+    setRestoreStatus('error');
+    setRestoreMessage(`❌ File terlalu besar.\n\nMaksimal: 500MB\nFile Anda: ${(selectedFile.size / 1024 / 1024).toFixed(2)}MB`);
+    return;
+  }
+
+  setRestoreStatus('loading');
+  setRestoreMessage('⏳ Sedang memproses restore...\n\nMohon tunggu, proses ini mungkin memakan waktu beberapa menit.');
+  
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) { 
       setRestoreStatus('error');
-      setRestoreMessage('Pilih file backup terlebih dahulu.');
-      return;
+      setRestoreMessage('❌ Sesi login habis.\n\nSilakan login ulang.'); 
+      return; 
     }
-    setRestoreStatus('loading');
-    setRestoreMessage('');
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) { alert('Silakan login terlebih dahulu'); return; }
 
-      const formData = new FormData();
-      formData.append('backup_file', selectedFile);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
 
-      const res = await fetch('http://localhost:5000/api/admin/restore', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
+    const res = await fetch('http://localhost:5000/api/admin/backup/restore', {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData,
+    });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Gagal melakukan restore data.');
-      }
+    const data = await res.json();
 
-      setRestoreStatus('success');
-      setRestoreMessage('Restore data berhasil dilakukan.');
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (err: any) {
-      setRestoreStatus('error');
-      setRestoreMessage(err.message || 'Terjadi kesalahan saat restore.');
+    if (!res.ok) {
+      const errorMsg = data.detail 
+        ? `❌ ${data.message}\n\n💡 ${data.detail}` 
+        : `❌ ${data.message || 'Gagal restore database'}`;
+      throw new Error(errorMsg);
     }
-  };
+
+    //  Sukses message
+    setRestoreStatus('success');
+    setRestoreMessage(`✅ ${data.message}\n\n⚠️ ${data.warning}`);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    
+  } catch (err: any) {
+    setRestoreStatus('error');
+    
+    // Error messages 
+    let errorMessage = '❌ Terjadi kesalahan: ';
+    
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      errorMessage = '❌ Tidak dapat terhubung ke server.\n\n💡 Pastikan:\n• Server backend berjalan di http://localhost:5000\n• Koneksi internet stabil\n• Tidak ada firewall yang memblokir';
+    } else if (err.message.includes('413')) {
+      errorMessage = '❌ File terlalu besar untuk diupload.\n\nMaksimal: 500MB';
+    } else if (err.message.includes('401') || err.message.includes('403')) {
+      errorMessage = '❌ Sesi login tidak valid.\n\nSilakan login ulang.';
+    } else if (err.message.includes('400')) {
+      errorMessage = err.message; 
+    } else {
+      errorMessage = err.message || '❌ Terjadi kesalahan yang tidak diketahui.\n\nSilakan coba lagi atau hubungi administrator.';
+    }
+    
+    setRestoreMessage(errorMessage);
+    console.error('Restore error:', err);
+  }
+};
 
   // =============================================
   // RENDER
@@ -152,11 +209,10 @@ export default function BackupRestoreClient() {
             {/* Tab: Backup Data */}
             <button
               onClick={() => handleTabChange('backup')}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border border-b-0 transition-colors rounded-t-lg -mb-px ${
-                activeTab === 'backup'
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border border-b-0 transition-colors rounded-t-lg -mb-px ${activeTab === 'backup'
                   ? 'border-orange-200 bg-white font-bold'
                   : 'border-transparent bg-transparent hover:text-orange-700'
-              }`}
+                }`}
               style={activeTab === 'backup' ? { color: '#ea580c' } : { color: '#9a3412' }}
             >
               <Database className="w-4 h-4" />
@@ -166,11 +222,10 @@ export default function BackupRestoreClient() {
             {/* Tab: Restore Data */}
             <button
               onClick={() => handleTabChange('restore')}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border border-b-0 transition-colors rounded-t-lg -mb-px ${
-                activeTab === 'restore'
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border border-b-0 transition-colors rounded-t-lg -mb-px ${activeTab === 'restore'
                   ? 'border-orange-200 bg-white font-bold'
                   : 'border-transparent bg-transparent hover:text-orange-700'
-              }`}
+                }`}
               style={activeTab === 'restore' ? { color: '#ea580c' } : { color: '#9a3412' }}
             >
               <FileUp className="w-4 h-4" />

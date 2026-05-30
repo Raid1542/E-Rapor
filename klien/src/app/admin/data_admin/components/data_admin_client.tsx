@@ -1,11 +1,3 @@
-/**
- * Nama File: data_admin_client.tsx
- * Fungsi: Komponen klien untuk mengelola data admin,
- *         mencakup fitur tambah, edit, detail, pencarian, dan pagination.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- */
-
 "use client";
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
@@ -58,10 +50,10 @@ const GlobalStyles = () => (
 );
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -84,13 +76,13 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG     = { background: '#fdf6f0' };
-const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
     base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
@@ -99,7 +91,7 @@ const btnPrimary = {
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
@@ -128,9 +120,9 @@ export default function DataAdminClient() {
             if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString;
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return '';
-            const year  = date.getFullYear();
+            const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day   = String(date.getDate()).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         } catch { return ''; }
     };
@@ -147,21 +139,21 @@ export default function DataAdminClient() {
         name.split(' ').slice(0, 2).map((word) => word[0]?.toUpperCase() || '').join('');
 
     // ── State ──────────────────────────────────────────────────────────────
-    const [adminList,     setAdminList]     = useState<Admin[]>([]);
-    const [loading,       setLoading]       = useState(true);
-    const [showDetail,    setShowDetail]    = useState(false);
-    const [showTambah,    setShowTambah]    = useState(false);
-    const [showEdit,      setShowEdit]      = useState(false);
-    const [editId,        setEditId]        = useState<number | null>(null);
+    const [adminList, setAdminList] = useState<Admin[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showDetail, setShowDetail] = useState(false);
+    const [showTambah, setShowTambah] = useState(false);
+    const [showEdit, setShowEdit] = useState(false);
+    const [editId, setEditId] = useState<number | null>(null);
     const [selectedAdmin, setSelectedAdmin] = useState<Admin | null>(null);
-    const [searchQuery,   setSearchQuery]   = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
     const [detailClosing, setDetailClosing] = useState(false);
-    const [itemsPerPage,  setItemsPerPage]  = useState(10);
-    const [currentPage,   setCurrentPage]   = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // ── Notif modal ────────────────────────────────────────────────────────
-    const [modal,    setModal]    = useState<ModalConfig | null>(null);
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const [modal, setModal] = useState<ModalConfig | null>(null);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
     // ── Fetch ──────────────────────────────────────────────────────────────
@@ -172,23 +164,23 @@ export default function DataAdminClient() {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
                 return;
             }
-            const res  = await fetch('http://localhost:5000/api/admin/admin', {
+            const res = await fetch('http://localhost:5000/api/admin/admin', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
             if (res.ok) {
                 const normalizedAdmins = (data.data || []).map((admin: any) => ({
-                    id:           admin.id,
-                    nama:         admin.nama,
-                    email:        admin.email,
-                    statusAdmin:  admin.statusAdmin,
-                    niy:          admin.niy,
-                    nuptk:        admin.nuptk,
+                    id: admin.id,
+                    nama: admin.nama,
+                    email: admin.email,
+                    statusAdmin: admin.statusAdmin,
+                    niy: admin.niy,
+                    nuptk: admin.nuptk,
                     tempat_lahir: admin.tempat_lahir || admin.tempatLahir || '',
-                    tanggal_lahir:admin.tanggal_lahir || admin.tanggalLahir || '',
-                    jenis_kelamin:admin.jenis_kelamin || admin.jenisKelamin || '',
-                    alamat:       admin.alamat,
-                    no_telepon:   admin.no_telepon || admin.noTelepon || '',
+                    tanggal_lahir: admin.tanggal_lahir || admin.tanggalLahir || '',
+                    jenis_kelamin: admin.jenis_kelamin || admin.jenisKelamin || '',
+                    alamat: admin.alamat,
+                    no_telepon: admin.no_telepon || admin.noTelepon || '',
                     profileImage: admin.profileImage || null,
                 }));
                 setAdminList(normalizedAdmins);
@@ -210,6 +202,12 @@ export default function DataAdminClient() {
         jenisKelamin: '', alamat: '', no_telepon: '', email: '',
         statusAdmin: 'aktif', confirmData: false,
     });
+
+    const [originalFormData, setOriginalFormData] = useState<FormDataType>({
+        nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '',
+        jenisKelamin: '', alamat: '', no_telepon: '', email: '',
+        statusAdmin: 'aktif', confirmData: false,
+    });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     // ── Handlers ───────────────────────────────────────────────────────────
@@ -217,19 +215,23 @@ export default function DataAdminClient() {
 
     const handleEdit = (admin: Admin): void => {
         setEditId(admin.id);
-        setFormData({
-            nama:         admin.nama || '',
-            niy:          admin.niy || '',
-            nuptk:        admin.nuptk || '',
+
+        const data: FormDataType = {
+            nama: admin.nama || '',
+            niy: admin.niy || '',
+            nuptk: admin.nuptk || '',
             tempat_lahir: admin.tempat_lahir || '',
-            tanggal_lahir:formatDateInput(admin.tanggal_lahir) || '',
+            tanggal_lahir: formatDateInput(admin.tanggal_lahir) || '',
             jenisKelamin: (admin.jenis_kelamin as string) || 'Laki-laki',
-            alamat:       admin.alamat || '',
-            no_telepon:   admin.no_telepon || '',
-            email:        admin.email || '',
-            statusAdmin:  admin.statusAdmin?.toLowerCase() === 'aktif' ? 'aktif' : 'nonaktif',
-            confirmData:  false,
-        });
+            alamat: admin.alamat || '',
+            no_telepon: admin.no_telepon || '',
+            email: admin.email || '',
+            statusAdmin: admin.statusAdmin?.toLowerCase() === 'aktif' ? 'aktif' : 'nonaktif',
+            confirmData: false,
+        };
+
+        setFormData(data);
+        setOriginalFormData(data);
         setShowEdit(true);
     };
 
@@ -240,10 +242,10 @@ export default function DataAdminClient() {
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
-        if (!formData.nama?.trim())         newErrors.nama         = 'Nama wajib diisi';
-        if (!formData.email?.trim())        newErrors.email        = 'Email wajib diisi';
+        if (!formData.nama?.trim()) newErrors.nama = 'Nama wajib diisi';
+        if (!formData.email?.trim()) newErrors.email = 'Email wajib diisi';
         if (!formData.tempat_lahir?.trim()) newErrors.tempat_lahir = 'Tempat lahir wajib diisi';
-        if (!formData.jenisKelamin)         newErrors.jenisKelamin = 'Pilih jenis kelamin';
+        if (!formData.jenisKelamin) newErrors.jenisKelamin = 'Pilih jenis kelamin';
         if (!formData.tanggal_lahir) {
             newErrors.tanggal_lahir = 'Tanggal lahir wajib diisi';
         } else {
@@ -251,7 +253,7 @@ export default function DataAdminClient() {
             if (isNaN(dob.getTime())) {
                 newErrors.tanggal_lahir = 'Tanggal lahir tidak valid';
             } else {
-                const today  = new Date();
+                const today = new Date();
                 const dobMid = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
                 const todMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                 if (dobMid > todMid) {
@@ -291,11 +293,11 @@ export default function DataAdminClient() {
         }
         try {
             const payload = {
-                nama_lengkap: formData.nama,   email_sekolah: formData.email,
-                niy:          formData.niy,    nuptk:         formData.nuptk,
+                nama_lengkap: formData.nama, email_sekolah: formData.email,
+                niy: formData.niy, nuptk: formData.nuptk,
                 tempat_lahir: formData.tempat_lahir, tanggal_lahir: formData.tanggal_lahir,
-                jenis_kelamin:formData.jenisKelamin, alamat:        formData.alamat,
-                no_telepon:   formData.no_telepon,
+                jenis_kelamin: formData.jenisKelamin, alamat: formData.alamat,
+                no_telepon: formData.no_telepon,
             };
             const res = await fetch('http://localhost:5000/api/admin/admin', {
                 method: 'POST',
@@ -317,6 +319,15 @@ export default function DataAdminClient() {
 
     const handleSubmitEdit = async (): Promise<void> => {
         if (!validate()) return;
+        if (!hasChanges()) {
+            showModal({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
+            });
+            return;
+        }
+
         const token = localStorage.getItem('token');
         if (!token) {
             showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
@@ -324,11 +335,11 @@ export default function DataAdminClient() {
         }
         try {
             const payload = {
-                nama_lengkap: formData.nama,   email_sekolah: formData.email,
-                status:       formData.statusAdmin, niy:       formData.niy,
-                nuptk:        formData.nuptk,  tempat_lahir:  formData.tempat_lahir,
-                tanggal_lahir:formData.tanggal_lahir, jenis_kelamin: formData.jenisKelamin,
-                alamat:       formData.alamat, no_telepon:    formData.no_telepon,
+                nama_lengkap: formData.nama, email_sekolah: formData.email,
+                status: formData.statusAdmin, niy: formData.niy,
+                nuptk: formData.nuptk, tempat_lahir: formData.tempat_lahir,
+                tanggal_lahir: formData.tanggal_lahir, jenis_kelamin: formData.jenisKelamin,
+                alamat: formData.alamat, no_telepon: formData.no_telepon,
             };
             const res = await fetch(`http://localhost:5000/api/admin/admin/${editId}`, {
                 method: 'PUT',
@@ -357,25 +368,40 @@ export default function DataAdminClient() {
         setErrors({});
     };
 
+    const hasChanges = (): boolean => {
+        return (
+            formData.nama !== originalFormData.nama ||
+            formData.niy !== originalFormData.niy ||
+            formData.nuptk !== originalFormData.nuptk ||
+            formData.tempat_lahir !== originalFormData.tempat_lahir ||
+            formData.tanggal_lahir !== originalFormData.tanggal_lahir ||
+            formData.jenisKelamin !== originalFormData.jenisKelamin ||
+            formData.alamat !== originalFormData.alamat ||
+            formData.no_telepon !== originalFormData.no_telepon ||
+            formData.email !== originalFormData.email ||
+            formData.statusAdmin !== originalFormData.statusAdmin
+        );
+    };
+
     // ── Filter & pagination ────────────────────────────────────────────────
     const filteredAdmin = adminList.filter((admin) => {
-        const nama   = admin.nama?.toLowerCase() || '';
-        const email  = admin.email?.toLowerCase() || '';
-        const niy    = admin.niy?.toLowerCase() || '';
-        const nuptk  = admin.nuptk?.toLowerCase() || '';
-        const query  = searchQuery.toLowerCase();
+        const nama = admin.nama?.toLowerCase() || '';
+        const email = admin.email?.toLowerCase() || '';
+        const niy = admin.niy?.toLowerCase() || '';
+        const nuptk = admin.nuptk?.toLowerCase() || '';
+        const query = searchQuery.toLowerCase();
         return nama.includes(query) || email.includes(query) || niy.includes(query) || nuptk.includes(query);
     });
 
-    const totalPages  = Math.max(1, Math.ceil(filteredAdmin.length / itemsPerPage));
-    const startIndex  = (currentPage - 1) * itemsPerPage;
-    const endIndex    = startIndex + itemsPerPage;
+    const totalPages = Math.max(1, Math.ceil(filteredAdmin.length / itemsPerPage));
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const currentAdmin = filteredAdmin.slice(startIndex, endIndex);
 
     const renderPagination = () => {
         const pages: ReactNode[] = [];
-        const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive   = "text-white border-orange-500";
+        const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+        const btnActive = "text-white border-orange-500";
         const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
         pages.push(
@@ -585,7 +611,7 @@ export default function DataAdminClient() {
     );
 
     if (showTambah) return renderForm(false);
-    if (showEdit)   return renderForm(true);
+    if (showEdit) return renderForm(true);
 
     // ── Tampilan Utama ───────────────────────────────────────────────────────
     return (
@@ -801,14 +827,14 @@ export default function DataAdminClient() {
                                             </span>
                                         )
                                     },
-                                    { label: 'NIY',           value: selectedAdmin.niy || '-' },
-                                    { label: 'NUPTK',         value: selectedAdmin.nuptk || '-' },
+                                    { label: 'NIY', value: selectedAdmin.niy || '-' },
+                                    { label: 'NUPTK', value: selectedAdmin.nuptk || '-' },
                                     { label: 'Jenis Kelamin', value: formatGender(selectedAdmin.jenis_kelamin || selectedAdmin.lp) },
-                                    { label: 'Tempat Lahir',  value: selectedAdmin.tempat_lahir || '-' },
+                                    { label: 'Tempat Lahir', value: selectedAdmin.tempat_lahir || '-' },
                                     { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedAdmin.tanggal_lahir) },
-                                    { label: 'Telepon',       value: selectedAdmin.no_telepon || '-' },
-                                    { label: 'Alamat',        value: selectedAdmin.alamat || '-' },
-                                    { label: 'Email',         value: selectedAdmin.email || '-' },
+                                    { label: 'Telepon', value: selectedAdmin.no_telepon || '-' },
+                                    { label: 'Alamat', value: selectedAdmin.alamat || '-' },
+                                    { label: 'Email', value: selectedAdmin.email || '-' },
                                 ].map((item, i) => (
                                     <div key={i} className="grid grid-cols-4 gap-2 pb-2.5" style={{ borderBottom: '1px solid #fde0c8' }}>
                                         <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
