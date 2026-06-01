@@ -1,11 +1,3 @@
-/**
- * Nama File: DataTahunAjaranClient.tsx
- * Fungsi: Komponen klien untuk mengelola data tahun ajaran,
- *         mencakup fitur tambah, edit, ganti semester, filter,
- *         pencarian, dan pagination.
- * UI: Tema oranye elegan, konsisten dengan DataGuruClient
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
@@ -162,6 +154,12 @@ export default function DataTahunAjaranClient() {
         pts_ganjil: '', pas_ganjil: '',
         pts_genap: '', pas_genap: '',
     });
+
+    const [originalFormData, setOriginalFormData] = useState<FormDataType>({
+        tahun1: '', tahun2: '',
+        pts_ganjil: '', pas_ganjil: '',
+        pts_genap: '', pas_genap: '',
+    });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     // ── Form Handlers ──────────────────────────────────────────────────────────
@@ -185,6 +183,15 @@ export default function DataTahunAjaranClient() {
     const resetForm = () => {
         setFormData({ tahun1: '', tahun2: '', pts_ganjil: '', pas_ganjil: '', pts_genap: '', pas_genap: '' });
         setErrors({});
+    };
+
+    const hasChanges = () => {
+        return (
+            formData.pts_ganjil !== originalFormData.pts_ganjil ||
+            formData.pas_ganjil !== originalFormData.pas_ganjil ||
+            formData.pts_genap !== originalFormData.pts_genap ||
+            formData.pas_genap !== originalFormData.pas_genap
+        );
     };
 
     // ── Tambah Tahun Ajaran ────────────────────────────────────────────────────
@@ -221,17 +228,30 @@ export default function DataTahunAjaranClient() {
     const openEdit = (item: TahunAjaran) => {
         const [t1, t2] = item.tahun_ajaran.split('/');
         setEditId(item.id_induk);
-        setFormData({
+
+        const data = {
             tahun1: t1 || '', tahun2: t2 || '',
             pts_ganjil: item.pts_ganjil || '', pas_ganjil: item.pas_ganjil || '',
             pts_genap: item.pts_genap || '', pas_genap: item.pas_genap || '',
-        });
+        };
+
+        setFormData(data);
+        setOriginalFormData(data);
         setErrors({});
         setShowEdit(true);
     };
 
     const handleEdit = async () => {
         if (!validate() || !editId) return;
+        if (!hasChanges()) {
+            showModal({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Tidak ada tanggal PTS/PAS yang berubah. Tidak perlu menyimpan.'
+            });
+            return;
+        }
+
         const token = localStorage.getItem('token');
         if (!token) {
             showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
@@ -276,52 +296,51 @@ export default function DataTahunAjaranClient() {
 
     // ── Eksekusi Ganti Semester (dipanggil setelah konfirmasi) ─────────────────
     const executeGantiSemester = async () => {
-    if (!selectedItemForSemester) return;
+        if (!selectedItemForSemester) return;
 
-    const item = selectedItemForSemester;
-    const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
+        const item = selectedItemForSemester;
+        const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-        closeConfirmGantiSemester(); 
-        return;
-    }
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+            closeConfirmGantiSemester();
+            return;
+        }
 
+        closeConfirmGantiSemester();
 
-    closeConfirmGantiSemester();
-
-    try {
-        const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${item.id_induk}/semester`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ semester_baru: semesterBaru }),
-        });
-
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            await fetchTahunAjaran();
-            showModal({
-                type: 'success',
-                title: 'Semester Berhasil Diganti!',
-                message: data.message || `Semester aktif tahun ajaran ${item.tahun_ajaran} berhasil diubah ke ${semesterBaru}.`
+        try {
+            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${item.id_induk}/semester`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ semester_baru: semesterBaru }),
             });
-        } else {
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                await fetchTahunAjaran();
+                showModal({
+                    type: 'success',
+                    title: 'Semester Berhasil Diganti!',
+                    message: data.message || `Semester aktif tahun ajaran ${item.tahun_ajaran} berhasil diubah ke ${semesterBaru}.`
+                });
+            } else {
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Ganti Semester',
+                    message: data.message || 'Terjadi kesalahan saat mengganti semester.'
+                });
+            }
+        } catch (err: any) {
             showModal({
-                type: 'error',
-                title: 'Gagal Ganti Semester',
-                message: data.message || 'Terjadi kesalahan saat mengganti semester.'
+                type: 'network',
+                title: 'Koneksi Gagal',
+                message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.'
             });
         }
-    } catch (err: any) {
-        showModal({
-            type: 'network',
-            title: 'Koneksi Gagal',
-            message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.'
-        });
-    }
-};
+    };
 
     // ── Filter & Pagination ────────────────────────────────────────────────────
     const filteredData = tahunAjaranList.filter((item) => {
@@ -406,9 +425,9 @@ export default function DataTahunAjaranClient() {
                         {errors.tahun && <p className="text-red-500 text-xs mt-1">{errors.tahun}</p>}
                     </div>
 
-                    {/* Semester Ganjil */}
+                    {/* [PERUBAHAN] Semester Ganjil — hapus emoji 📚, warna orange */}
                     <div className="mb-6 p-4 rounded-lg border" style={{ background: '#fff7ed', borderColor: '#fdba74' }}>
-                        <h3 className="text-lg font-bold mb-3" style={{ color: '#c2410c' }}>📚 Semester Ganjil</h3>
+                        <h3 className="text-lg font-bold mb-3" style={{ color: '#c2410c' }}>Semester Ganjil</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex flex-col gap-1.5">
                                 <label className={labelCls} style={labelColor}>Tanggal Pembagian PTS</label>
@@ -421,9 +440,9 @@ export default function DataTahunAjaranClient() {
                         </div>
                     </div>
 
-                    {/* Semester Genap */}
-                    <div className="mb-6 p-4 rounded-lg border" style={{ background: '#f0fdf4', borderColor: '#86efac' }}>
-                        <h3 className="text-lg font-bold mb-3" style={{ color: '#15803d' }}>📗 Semester Genap</h3>
+                    {/* [PERUBAHAN] Semester Genap — hapus emoji 📗, ubah hijau → orange muda */}
+                    <div className="mb-6 p-4 rounded-lg border" style={{ background: '#fff0e5', borderColor: '#f5a623' }}>
+                        <h3 className="text-lg font-bold mb-3" style={{ color: '#9a3a08' }}>Semester Genap</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex flex-col gap-1.5">
                                 <label className={labelCls} style={labelColor}>Tanggal Pembagian PTS</label>
@@ -542,13 +561,20 @@ export default function DataTahunAjaranClient() {
                                                 </span>
                                             ) : <span className="text-gray-400 text-xs">-</span>}
                                         </td>
+
+                                        {/* [PERUBAHAN] Badge AKTIF → hijau terang, NONAKTIF tetap abu */}
                                         <td className="px-5 py-3.5 text-center">
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${item.status === 'AKTIF' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-700 border border-gray-200'
-                                                }`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full inline-block ${item.status === 'AKTIF' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold`}
+                                                style={item.status === 'AKTIF'
+                                                    ? { background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }
+                                                    : { background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }
+                                                }>
+                                                <span className="w-1.5 h-1.5 rounded-full inline-block"
+                                                    style={{ background: item.status === 'AKTIF' ? '#22c55e' : '#9ca3af' }} />
                                                 {item.status}
                                             </span>
                                         </td>
+
                                         <td className="px-5 py-3.5 text-center whitespace-nowrap">
                                             <div className="flex justify-center gap-2">
                                                 <button onClick={() => openEdit(item)}

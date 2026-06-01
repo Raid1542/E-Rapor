@@ -4,9 +4,10 @@
  *         Menyediakan fitur CRUD (Create, Read, Update, Delete), filter berdasarkan
  *         kelas, jenis kelamin, dan status, serta import data siswa via Excel.
  *         Hanya tahun ajaran aktif yang memungkinkan aksi edit, hapus, tambah, dan import.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401022 
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401022
  * Tanggal: 15 September 2025
  * UI Redesign: Tema oranye elegan, konsisten dengan DataGuruPage
+ * Update: Tambah filter kelas di header (di samping tahun ajaran)
  */
 
 'use client';
@@ -86,8 +87,8 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
 const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG    = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG     = { background: '#fdf6f0' };
+const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
@@ -160,35 +161,38 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 
 export default function DataSiswaPage() {
 
-  const [siswaList,              setSiswaList]              = useState<Siswa[]>([]);
-  const [loading,                setLoading]                = useState(true);
-  const [showDetail,             setShowDetail]             = useState(false);
-  const [detailClosing,          setDetailClosing]          = useState(false);
-  const [showTambah,             setShowTambah]             = useState(false);
-  const [showEdit,               setShowEdit]               = useState(false);
-  const [editId,                 setEditId]                 = useState<number | null>(null);
-  const [selectedSiswa,          setSelectedSiswa]          = useState<Siswa | null>(null);
-  const [searchQuery,            setSearchQuery]            = useState('');
-  const [itemsPerPage,           setItemsPerPage]           = useState(10);
-  const [currentPage,            setCurrentPage]            = useState(1);
-  const [showImport,             setShowImport]             = useState(false);
-  const [importFile,             setImportFile]             = useState<File | null>(null);
-  const [importClosing,          setImportClosing]          = useState(false);
-  const [tahunAjaranList,        setTahunAjaranList]        = useState<TahunAjaran[]>([]);
-  const [selectedTahunAjaranId,  setSelectedTahunAjaranId]  = useState<number | null>(null);
+  const [siswaList,                setWiswaList]               = useState<Siswa[]>([]);
+  const [loading,                  setLoading]                 = useState(true);
+  const [showDetail,               setShowDetail]              = useState(false);
+  const [detailClosing,            setDetailClosing]           = useState(false);
+  const [showTambah,               setShowTambah]              = useState(false);
+  const [showEdit,                 setShowEdit]                = useState(false);
+  const [editId,                   setEditId]                  = useState<number | null>(null);
+  const [selectedSiswa,            setSelectedSiswa]           = useState<Siswa | null>(null);
+  const [searchQuery,              setSearchQuery]             = useState('');
+  const [itemsPerPage,             setItemsPerPage]            = useState(10);
+  const [currentPage,              setCurrentPage]             = useState(1);
+  const [showImport,               setShowImport]              = useState(false);
+  const [importFile,               setImportFile]              = useState<File | null>(null);
+  const [importClosing,            setImportClosing]           = useState(false);
+  const [tahunAjaranList,          setTahunAjaranList]         = useState<TahunAjaran[]>([]);
+  const [selectedTahunAjaranId,    setSelectedTahunAjaranId]   = useState<number | null>(null);
   const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState<boolean>(false);
-  const [kelasList,              setKelasList]              = useState<{ id: number; nama: string; fase: string }[]>([]);
-  const [kelasLoading,           setKelasLoading]           = useState(true);
-  const [showFilter,             setShowFilter]             = useState(false);
-  const [filterClosing,          setFilterClosing]          = useState(false);
-  const [filterValues,           setFilterValues]           = useState({ kelas: '', jenisKelamin: '', status: '' });
-  const [openedFilterValues,     setOpenedFilterValues]     = useState({ kelas: '', jenisKelamin: '', status: '' });
+  const [kelasList,                setKelasList]               = useState<{ id: number; nama: string; fase: string }[]>([]);
+  const [kelasLoading,             setKelasLoading]            = useState(true);
+  const [showFilter,               setShowFilter]              = useState(false);
+  const [filterClosing,            setFilterClosing]           = useState(false);
+  const [filterValues,             setFilterValues]            = useState({ kelas: '', jenisKelamin: '', status: '' });
+  const [openedFilterValues,       setOpenedFilterValues]      = useState({ kelas: '', jenisKelamin: '', status: '' });
 
-  const [modal,        setModal]        = useState<ModalConfig | null>(null);
-  const [confirmCfg,   setConfirmCfg]   = useState<{ message: string; onConfirm: () => void } | null>(null);
-  const showModal    = useCallback((cfg: ModalConfig) => setModal(cfg), []);
-  const closeModal   = useCallback(() => setModal(null), []);
-  const showConfirm  = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
+  // ── STATE BARU: filter kelas di header (di samping tahun ajaran) ────────────
+  const [selectedKelasFilter, setSelectedKelasFilter] = useState<string>('');
+
+  const [modal,      setModal]      = useState<ModalConfig | null>(null);
+  const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const showModal   = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const closeModal  = useCallback(() => setModal(null), []);
+  const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
 
   // ── fetch ──────────────────────────────────────────────────────────────────
 
@@ -228,7 +232,7 @@ export default function DataSiswaPage() {
       const res  = await fetch(`http://localhost:5000/api/admin/siswa?tahun_ajaran_id=${tahunAjaranId}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok) {
-        setSiswaList((Array.isArray(data.data) ? data.data : []).map((s: any) => ({
+        setWiswaList((Array.isArray(data.data) ? data.data : []).map((s: any) => ({
           id: s.id, nama: s.nama, kelas: s.kelas, nis: s.nis, nisn: s.nisn,
           tempatLahir: s.tempat_lahir, tanggalLahir: s.tanggal_lahir,
           jenisKelamin: s.jenis_kelamin, alamat: s.alamat, fase: s.fase, statusSiswa: s.status,
@@ -379,24 +383,27 @@ export default function DataSiswaPage() {
 
   // ── filter & pagination ────────────────────────────────────────────────────
 
-  const resetFilter     = () => { setFilterValues({ kelas: '', jenisKelamin: '', status: '' }); setSearchQuery(''); setCurrentPage(1); };
+  const resetFilter      = () => { setFilterValues({ kelas: '', jenisKelamin: '', status: '' }); setSearchQuery(''); setCurrentPage(1); };
   const closeFilterModal = () => { setFilterClosing(true); setTimeout(() => { setFilterValues(openedFilterValues); setShowFilter(false); setFilterClosing(false); }, 200); };
   const applyFilter      = () => { setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
 
+  // filteredSiswa: gabungkan filter header kelas (selectedKelasFilter) + filter modal
   const filteredSiswa = siswaList.filter((siswa) => {
     const query = searchQuery.toLowerCase().trim();
-    const ms  = !query || siswa.nama.toLowerCase().includes(query) || siswa.nis.includes(query) ||
+    const ms       = !query || siswa.nama.toLowerCase().includes(query) || siswa.nis.includes(query) ||
       siswa.nisn.includes(query) || siswa.kelas.toLowerCase().includes(query) ||
       (siswa.alamat && siswa.alamat.toLowerCase().includes(query));
-    const mk  = !filterValues.kelas || siswa.kelas === filterValues.kelas;
-    const mj  = !filterValues.jenisKelamin || siswa.jenisKelamin === filterValues.jenisKelamin;
-    const ms2 = !filterValues.status || siswa.statusSiswa === filterValues.status;
-    return ms && mk && mj && ms2;
+    const mk       = !filterValues.kelas       || siswa.kelas         === filterValues.kelas;
+    const mj       = !filterValues.jenisKelamin|| siswa.jenisKelamin  === filterValues.jenisKelamin;
+    const ms2      = !filterValues.status      || siswa.statusSiswa   === filterValues.status;
+    // Filter kelas dari header dropdown
+    const mkHeader = !selectedKelasFilter      || siswa.kelas         === selectedKelasFilter;
+    return ms && mk && mj && ms2 && mkHeader;
   });
 
-  const totalPages  = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
-  const startIndex  = (currentPage - 1) * itemsPerPage;
-  const endIndex    = startIndex + itemsPerPage;
+  const totalPages   = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
+  const startIndex   = (currentPage - 1) * itemsPerPage;
+  const endIndex     = startIndex + itemsPerPage;
   const currentSiswa = filteredSiswa.slice(startIndex, endIndex);
 
   const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
@@ -441,9 +448,9 @@ export default function DataSiswaPage() {
 
   const getStatusBadge = (status: string) => {
     const s = (status || 'aktif').toLowerCase();
-    if (s === 'aktif')   return { bg: '#eaf7ef', color: '#1a7a3a', border: '#b6e8c8', dot: 'bg-green-500' };
-    if (s === 'lulus')   return { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', dot: 'bg-blue-500' };
-    if (s === 'pindah')  return { bg: '#fffbeb', color: '#92400e', border: '#fde68a', dot: 'bg-yellow-500' };
+    if (s === 'aktif')  return { bg: '#eaf7ef', color: '#1a7a3a', border: '#b6e8c8', dot: 'bg-green-500' };
+    if (s === 'lulus')  return { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', dot: 'bg-blue-500' };
+    if (s === 'pindah') return { bg: '#fffbeb', color: '#92400e', border: '#fde68a', dot: 'bg-yellow-500' };
     return { bg: '#f5f5f5', color: '#888', border: '#ddd', dot: 'bg-gray-400' };
   };
 
@@ -608,19 +615,31 @@ export default function DataSiswaPage() {
       </div>
 
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-        {/* Dropdown Tahun Ajaran */}
+
+        {/* ── DROPDOWN TAHUN AJARAN + KELAS ───────────────────────────────── */}
         <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
           <div className="flex flex-wrap items-center gap-3">
+
+            {/* Tahun Ajaran */}
             <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
             <select
               value={selectedTahunAjaranId ?? ''}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value === '') { setSelectedTahunAjaranId(null); setSelectedTahunAjaranAktif(false); setLoading(false); return; }
+                // Reset filter kelas header saat ganti tahun ajaran
+                setSelectedKelasFilter('');
+                if (value === '') {
+                  setSelectedTahunAjaranId(null);
+                  setSelectedTahunAjaranAktif(false);
+                  setLoading(false);
+                  return;
+                }
                 const id = Number(value);
                 const selectedTa = tahunAjaranList.find(ta => ta.id === id);
-                setSelectedTahunAjaranId(id); setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
-                setLoading(true); fetchSiswa(id);
+                setSelectedTahunAjaranId(id);
+                setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
+                setLoading(true);
+                fetchSiswa(id);
               }}
               className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
@@ -631,6 +650,43 @@ export default function DataSiswaPage() {
                 </option>
               ))}
             </select>
+
+            {/* ── FILTER KELAS (tampil setelah tahun ajaran dipilih) ─────── */}
+            {selectedTahunAjaranId !== null && (
+              <>
+                {/* Divider vertikal */}
+                <div className="h-6 w-px" style={{ background: '#fde0c8' }} />
+
+                <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Kelas</label>
+                <select
+                  value={selectedKelasFilter}
+                  onChange={(e) => {
+                    setSelectedKelasFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[160px]"
+                >
+                  <option value="">Semua Kelas</option>
+                  {kelasList.map(k => (
+                    <option key={k.id} value={k.nama}>{k.nama}</option>
+                  ))}
+                </select>
+
+                {/* Tombol reset filter kelas (tampil kalau ada kelas dipilih) */}
+                {selectedKelasFilter && (
+                  <button
+                    onClick={() => { setSelectedKelasFilter(''); setCurrentPage(1); }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                    style={{ borderColor: '#fde0c8', color: '#c95b08', background: '#fff7ed' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#fff7ed')}
+                    title="Reset filter kelas"
+                  >
+                    <X size={12} /> Reset
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -702,9 +758,19 @@ export default function DataSiswaPage() {
                   )}
                 </div>
               </div>
-              <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
-              </p>
+
+              {/* Info jumlah data + info filter aktif */}
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <p className="text-xs" style={{ color: '#c95b08' }}>
+                  Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
+                </p>
+                {selectedKelasFilter && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                    style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+                    Kelas: {selectedKelasFilter}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Table */}
@@ -726,7 +792,11 @@ export default function DataSiswaPage() {
                       </div>
                     </td></tr>
                   ) : currentSiswa.length === 0 ? (
-                    <tr><td colSpan={7} className="py-12 text-center text-gray-400 text-sm">Tidak ada data siswa</td></tr>
+                    <tr><td colSpan={7} className="py-12 text-center text-gray-400 text-sm">
+                      {selectedKelasFilter
+                        ? `Tidak ada siswa di kelas ${selectedKelasFilter}`
+                        : 'Tidak ada data siswa'}
+                    </td></tr>
                   ) : currentSiswa.map((siswa, index) => {
                     const badge = getStatusBadge(siswa.statusSiswa);
                     return (
@@ -820,14 +890,14 @@ export default function DataSiswaPage() {
                         {(selectedSiswa.statusSiswa || 'AKTIF').toUpperCase()}
                       </span>
                     )},
-                    { label: 'Kelas',        value: selectedSiswa.kelas },
-                    { label: 'NIS',          value: selectedSiswa.nis },
-                    { label: 'NISN',         value: selectedSiswa.nisn },
-                    { label: 'Tempat Lahir', value: selectedSiswa.tempatLahir || '-' },
-                    { label: 'Tanggal Lahir',value: formatTanggalIndonesia(selectedSiswa.tanggalLahir) },
-                    { label: 'Jenis Kelamin',value: selectedSiswa.jenisKelamin },
-                    { label: 'Alamat',       value: selectedSiswa.alamat || '-' },
-                    { label: 'Fase',         value: selectedSiswa.fase },
+                    { label: 'Kelas',         value: selectedSiswa.kelas },
+                    { label: 'NIS',           value: selectedSiswa.nis },
+                    { label: 'NISN',          value: selectedSiswa.nisn },
+                    { label: 'Tempat Lahir',  value: selectedSiswa.tempatLahir || '-' },
+                    { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedSiswa.tanggalLahir) },
+                    { label: 'Jenis Kelamin', value: selectedSiswa.jenisKelamin },
+                    { label: 'Alamat',        value: selectedSiswa.alamat || '-' },
+                    { label: 'Fase',          value: selectedSiswa.fase },
                   ].map((item, i) => (
                     <div key={i} className="grid grid-cols-4 gap-2 pb-2.5" style={{ borderBottom: '1px solid #fde0c8' }}>
                       <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
