@@ -8,6 +8,10 @@
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
  * UI Redesign: Tema oranye elegan dengan gradasi
+ * Update: - Data Pembina Ekstrakurikuler dipindah ke submenu Administrasi
+ *         - Urutan submenu Pengguna: Data Admin -> Data Guru
+ *         - Style active item diubah menjadi solid putih (seperti sidebar guru kelas)
+ *         - Teks item tidak aktif diubah menjadi putih penuh (solid white)
  */
 
 'use client';
@@ -88,18 +92,18 @@ export default function Sidebar({ user }: SidebarProps) {
 
   // ── Submenu data ───────────────────────────────────────────────────────────
   const penggunaSubmenu = [
-    { name: 'Data Guru',                         url: '/admin/data_guru' },
-    { name: 'Data Admin',                        url: '/admin/data_admin' },
-    { name: 'Data Pembina Ekstrakurikuler',      url: '/admin/data_pembina_ekstrakurikuler' },
+    { name: 'Data Admin', url: '/admin/data_admin' },
+    { name: 'Data Guru',  url: '/admin/data_guru'  },
   ];
 
   const administrasiSubmenu = [
-    { name: 'Data Sekolah',        url: '/admin/data_sekolah' },
-    { name: 'Data Kelas',          url: '/admin/data_kelas' },
-    { name: 'Data Siswa',          url: '/admin/data_siswa' },
-    { name: 'Data Mata Pelajaran', url: '/admin/data_mata_pelajaran' },
-    { name: 'Data Pembelajaran',   url: '/admin/data_pembelajaran' },
-    { name: 'Ekstrakurikuler',     url: '/admin/ekstrakurikuler' },
+    { name: 'Data Sekolah',                     url: '/admin/data_sekolah' },
+    { name: 'Data Kelas',                        url: '/admin/data_kelas' },
+    { name: 'Data Siswa',                        url: '/admin/data_siswa' },
+    { name: 'Data Mata Pelajaran',               url: '/admin/data_mata_pelajaran' },
+    { name: 'Data Pembelajaran',                 url: '/admin/data_pembelajaran' },
+    { name: 'Ekstrakurikuler',                   url: '/admin/ekstrakurikuler' },
+    { name: 'Data Pembina Ekstrakurikuler',      url: '/admin/data_pembina_ekstrakurikuler' },
   ];
 
   // ── Active state ───────────────────────────────────────────────────────────
@@ -140,16 +144,18 @@ export default function Sidebar({ user }: SidebarProps) {
 
   // ── Reusable nav item styles ───────────────────────────────────────────────
   const navBase =
-    'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium border-l-[3px]';
+    'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
   const navActive =
-    'bg-white/20 text-white border-l-white backdrop-blur-sm';
+    'bg-white text-orange-600 shadow-sm font-semibold';
+  // [PERUBAHAN] text-white/80 → text-white (solid putih, tanpa opacity)
   const navInactive =
-    'text-white/75 hover:bg-white/10 hover:text-white border-l-transparent';
+    'text-white hover:bg-white/15 hover:text-white';
 
   const subItemBase =
     'w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150';
-  const subItemActive  = 'bg-white/25 text-white';
-  const subItemInactive = 'text-white/70 hover:bg-white/10 hover:text-white';
+  const subItemActive  = 'bg-white text-orange-600 font-semibold shadow-sm';
+  // [PERUBAHAN] text-white/70 → text-white (solid putih, tanpa opacity)
+  const subItemInactive = 'text-white hover:bg-white/10 hover:text-white';
 
   return (
     <div
@@ -168,7 +174,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {isExpanded ? (
           <>
             <div className="flex items-center gap-3 min-w-0">
-              {/* Logo — ukuran diperbesar */}
+              {/* Logo */}
               <div
                 className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden"
                 style={{ background: 'rgba(255,255,255,0.18)' }}
@@ -223,7 +229,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
         {/* ── MASTER DATA label ── */}
         {isExpanded && (
-          <p className="text-[10px] font-bold tracking-widest text-white/40 uppercase px-4 pt-4 pb-2">
+          <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
             Master Data
           </p>
         )}
@@ -272,7 +278,7 @@ export default function Sidebar({ user }: SidebarProps) {
           )}
         </div>
 
-        {/* Administrasi (dropdown) — sekarang termasuk Ekstrakurikuler */}
+        {/* Administrasi (dropdown) */}
         <div className="mb-1">
           <button
             onClick={() => toggleDropdown('administrasi')}
@@ -326,7 +332,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
         {/* ── SAYA label ── */}
         {isExpanded && (
-          <p className="text-[10px] font-bold tracking-widest text-white/40 uppercase px-4 pt-4 pb-2">
+          <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
             Saya
           </p>
         )}
