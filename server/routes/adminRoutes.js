@@ -145,11 +145,11 @@ router.put('/admin/ganti-password', adminOnly, admin.gantiPasswordAdmin);
 router.put('/admin/:id', adminOnly, admin.editAdmin);
 
 // --- Data Pembina Ekstrakurikuler ---
+router.post('/pembina-ekskul/import', adminOnly, uploadExcel.single('file'), admin.importPembinaEkskul);
 router.get('/pembina-ekskul', adminOnly, admin.getPembinaEkskul);
 router.get('/pembina-ekskul/:id', adminOnly, admin.getPembinaEkskulById);
 router.post('/pembina-ekskul', adminOnly, admin.tambahPembinaEkskul);
 router.put('/pembina-ekskul/:id', adminOnly, admin.editPembinaEkskul);
-router.post('/pembina-ekskul/import', adminOnly, uploadExcel.single('file'), admin.importPembinaEkskul);
 
 // --- Data Sekolah ---
 router.get('/sekolah', adminOnly, admin.getSekolah);
@@ -228,6 +228,6 @@ router.post('/arsipkan-rapor', adminOnly, admin.arsipkanRapor);
 
 // Backup & Restore Database
 router.get('/backup', adminOnly, admin.downloadBackup);
-router.post('/backup/restore', adminOnly, uploadExcel.single('file'), admin.uploadRestore);
+router.post('/backup/restore', adminOnly, uploadBackup.single('file'), admin.uploadRestore);
 
 module.exports = router;

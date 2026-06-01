@@ -8,14 +8,14 @@
 
 const db = require('../config/db');
 
+const SCHOOL_ID = 1;
+
 const sekolahModel = {
-  // Mengambil data sekolah (hanya satu entri, id = 1)
   async getSekolah() {
-    const [rows] = await db.execute('SELECT * FROM sekolah WHERE id = 1');
+    const [rows] = await db.execute('SELECT * FROM sekolah WHERE id = ?', [SCHOOL_ID]);
     return rows[0] || null;
   },
 
-  // Memperbarui atau membuat data sekolah jika belum ada
   async updateSekolah(newData) {
     try {
       const existing = await sekolahModel.getSekolah();
@@ -31,40 +31,32 @@ const sekolahModel = {
         website: 'https://sekolah.sch.id',
         kepala_sekolah: 'Kepala Sekolah',
         niy_kepala_sekolah: '0000000000000000',
-        logo_path: '/images/logo-default.png',
+        logo_path: null,  
       };
 
       const current = existing || defaultData;
 
       const merged = {
-        nama_sekolah: newData.nama_sekolah ?? current.nama_sekolah,
-        npsn: newData.npsn ?? current.npsn,
-        nss: newData.nss ?? current.nss,
-        alamat: newData.alamat ?? current.alamat,
-        kode_pos: newData.kode_pos ?? current.kode_pos,
-        telepon: newData.telepon ?? current.telepon,
-        email: newData.email ?? current.email,
-        website: (newData.website ?? current.website).trim(),
-        kepala_sekolah: newData.kepala_sekolah ?? current.kepala_sekolah,
-        niy_kepala_sekolah: newData.niy_kepala_sekolah ?? current.niy_kepala_sekolah,
+        nama_sekolah: (newData.nama_sekolah ?? current.nama_sekolah)?.trim(),
+        npsn: (newData.npsn ?? current.npsn)?.trim(),
+        nss: (newData.nss ?? current.nss)?.trim(),
+        alamat: (newData.alamat ?? current.alamat)?.trim(),
+        kode_pos: (newData.kode_pos ?? current.kode_pos)?.trim(),
+        telepon: (newData.telepon ?? current.telepon)?.trim(),
+        email: (newData.email ?? current.email)?.trim().toLowerCase(),
+        website: (newData.website ?? current.website)?.trim(),
+        kepala_sekolah: (newData.kepala_sekolah ?? current.kepala_sekolah)?.trim(),
+        niy_kepala_sekolah: (newData.niy_kepala_sekolah ?? current.niy_kepala_sekolah)?.trim(),
         logo_path: newData.logo_path ?? current.logo_path,
       };
 
       const [result] = await db.execute(
         `UPDATE sekolah SET 
-          nama_sekolah = ?,
-          npsn = ?,
-          nss = ?,
-          alamat = ?,
-          kode_pos = ?,
-          telepon = ?,
-          email = ?,
-          website = ?,
-          kepala_sekolah = ?,
-          niy_kepala_sekolah = ?,
-          logo_path = ?
-        WHERE id = 1`,
-        Object.values(merged)
+          nama_sekolah = ?, npsn = ?, nss = ?, alamat = ?, kode_pos = ?,
+          telepon = ?, email = ?, website = ?, kepala_sekolah = ?,
+          niy_kepala_sekolah = ?, logo_path = ?
+        WHERE id = ?`,
+        [...Object.values(merged), SCHOOL_ID]
       );
 
       if (result.affectedRows === 0) {
@@ -73,9 +65,21 @@ const sekolahModel = {
             id, nama_sekolah, npsn, nss, alamat, kode_pos, telepon, email, website,
             kepala_sekolah, niy_kepala_sekolah, logo_path
           ) VALUES (
-            1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-          )`,
-          Object.values(merged)
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          )
+          ON DUPLICATE KEY UPDATE
+            nama_sekolah = VALUES(nama_sekolah),
+            npsn = VALUES(npsn),
+            nss = VALUES(nss),
+            alamat = VALUES(alamat),
+            kode_pos = VALUES(kode_pos),
+            telepon = VALUES(telepon),
+            email = VALUES(email),
+            website = VALUES(website),
+            kepala_sekolah = VALUES(kepala_sekolah),
+            niy_kepala_sekolah = VALUES(niy_kepala_sekolah),
+            logo_path = VALUES(logo_path)`,
+          [SCHOOL_ID, ...Object.values(merged)]
         );
       }
     } catch (err) {
