@@ -1,14 +1,9 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Menyediakan navigasi sidebar untuk halaman guru kelas.
- * Menampilkan menu utama seperti Dashboard, Kelola Data (dengan submenu),
- * Cetak Rapor, dan section "Saya" dengan menu Profil.
- * Sidebar juga menampilkan logo dan nama sekolah yang diambil
- * dari API backend. Mendukung mode collapsed/expanded dan mempertahankan
- * state dropdown yang terbuka saat berpindah halaman.
- * Tampilan disesuaikan dengan sidebar admin (tema oranye gradasi).
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
+ * Update: Active item = solid putih + teks oranye (sesuai screenshot)
  */
 
 'use client';
@@ -18,7 +13,6 @@ import {
     Home,
     Users,
     BookOpen,
-    Menu,
     ChevronRight,
     ChevronDown,
     UserCircle,
@@ -46,25 +40,14 @@ export default function Sidebar({ user }: SidebarProps) {
     const [logoUrl, setLogoUrl] = useState<string>('/images/LogoUA.jpg');
     const [schoolName, setSchoolName] = useState<string>('SDIT Ulil Albab');
 
-    // ── Variabel Desain Tailwind (Disamakan dengan Tema Admin) ─────────────────
-    const navBase = "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 mb-1";
-    const navActive = "bg-white text-[#c95b08] shadow-md shadow-black/10 font-semibold";
-    const navInactive = "text-white/80 hover:bg-white/10 hover:text-white";
-
-    const subItemBase = "w-full text-left text-xs py-2 px-4 rounded-lg transition-all duration-200 block truncate";
-    const subItemActive = "bg-white/15 text-white font-semibold";
-    const subItemInactive = "text-white/70 hover:bg-white/10 hover:text-white";
-
     // ── Fetch data sekolah ─────────────────────────────────────────────────
     const fetchSchoolData = async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
-
             const res = await fetch('http://localhost:5000/api/sekolah', {
                 headers: { Authorization: `Bearer ${token}` },
             });
-
             if (res.ok) {
                 const { data } = await res.json();
                 if (data) {
@@ -81,7 +64,6 @@ export default function Sidebar({ user }: SidebarProps) {
         }
     };
 
-    // ── Setup event listener ───────────────────────────────────────────────
     useEffect(() => {
         fetchSchoolData();
 
@@ -95,22 +77,18 @@ export default function Sidebar({ user }: SidebarProps) {
             }
         };
 
-        const handleSchoolUpdate = () => {
-            fetchSchoolData();
-        };
-
         window.addEventListener('logoUpdated', handleLogoUpdate);
-        window.addEventListener('schoolUpdated', handleSchoolUpdate);
+        window.addEventListener('schoolUpdated', fetchSchoolData);
 
         return () => {
             window.removeEventListener('logoUpdated', handleLogoUpdate);
-            window.removeEventListener('schoolUpdated', handleSchoolUpdate);
+            window.removeEventListener('schoolUpdated', fetchSchoolData);
         };
     }, []);
 
     // ── Submenu ────────────────────────────────────────────────────────────
     const kelolaDataSubmenu = [
-        { name: 'Data Siswa',          url: '/guru_kelas/data_siswa' },
+        { name: 'Data Siswa',         url: '/guru_kelas/data_siswa' },
         { name: 'Atur Penilaian',     url: '/guru_kelas/atur_penilaian' },
         { name: 'Input Nilai',        url: '/guru_kelas/input_nilai' },
         { name: 'Rekapan Nilai',      url: '/guru_kelas/rekapan_nilai' },
@@ -143,7 +121,25 @@ export default function Sidebar({ user }: SidebarProps) {
         }));
     };
 
-    const handleNavigation = (url: string) => router.push(url);
+    const handleNavigation = (url: string) => {
+        setOpenDropdowns({
+            kelolaData: kelolaDataSubmenu.some((item) => item.url === url),
+        });
+        router.push(url);
+    };
+
+    // ── Style: active = solid putih + teks oranye ──────────────────────────
+    const navBase =
+        'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
+    const navActive =
+        'bg-white text-orange-600 font-semibold shadow-sm';
+    const navInactive =
+        'text-white/85 hover:bg-white/15 hover:text-white';
+
+    const subItemBase =
+        'w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150';
+    const subItemActive  = 'bg-white/25 text-white font-semibold';
+    const subItemInactive = 'text-white/75 hover:bg-white/10 hover:text-white';
 
     return (
         <div
@@ -192,7 +188,12 @@ export default function Sidebar({ user }: SidebarProps) {
                         className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-colors"
                         style={{ background: 'rgba(255,255,255,0.15)' }}
                     >
-                        <Menu className="w-5 h-5 text-white" />
+                        <img
+                            src={logoUrl}
+                            alt="Logo Sekolah"
+                            className="w-10 h-10 object-contain"
+                            onError={() => setLogoUrl('/images/LogoUA.jpg')}
+                        />
                     </button>
                 )}
             </div>
@@ -205,7 +206,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     onClick={() => handleNavigation('/guru_kelas/dashboard')}
                     className={`${navBase} ${isDashboardActive ? navActive : navInactive}`}
                 >
-                    <Home className="w-5 h-5 flex-shrink-0" />
+                    <Home className={`w-5 h-5 flex-shrink-0 ${isDashboardActive ? 'text-orange-500' : ''}`} />
                     {isExpanded && <span>Dashboard</span>}
                 </button>
 
@@ -224,7 +225,7 @@ export default function Sidebar({ user }: SidebarProps) {
                         className={`${navBase} mb-0 ${isKelolaDataActive ? navActive : navInactive} justify-between`}
                     >
                         <div className="flex items-center gap-3">
-                            <Users className="w-5 h-5 flex-shrink-0" />
+                            <Users className={`w-5 h-5 flex-shrink-0 ${isKelolaDataActive ? 'text-orange-500' : ''}`} />
                             {isExpanded && <span>Kelola Data</span>}
                         </div>
                         {isExpanded && (
@@ -256,7 +257,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     onClick={() => handleNavigation('/guru_kelas/rapor')}
                     className={`${navBase} ${isRaporActive ? navActive : navInactive}`}
                 >
-                    <BookOpen className="w-5 h-5 flex-shrink-0" />
+                    <BookOpen className={`w-5 h-5 flex-shrink-0 ${isRaporActive ? 'text-orange-500' : ''}`} />
                     {isExpanded && <span>Cetak Rapor</span>}
                 </button>
 
@@ -273,7 +274,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     onClick={() => handleNavigation('/guru_kelas/profil')}
                     className={`${navBase} ${isProfilActive ? navActive : navInactive}`}
                 >
-                    <UserCircle className="w-5 h-5 flex-shrink-0" />
+                    <UserCircle className={`w-5 h-5 flex-shrink-0 ${isProfilActive ? 'text-orange-500' : ''}`} />
                     {isExpanded && <span>Profil</span>}
                 </button>
 

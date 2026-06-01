@@ -1,112 +1,146 @@
-/**
- * Nama File: DataTahunAjaranPage.tsx
- * Fungsi: Halaman manajemen data tahun ajaran.
- *         Menampilkan daftar tahun ajaran dalam tabel dengan fitur tambah dan edit.
- *         Tanpa card statistik dan tanpa kolom pencarian.
- * UI: Tema oranye elegan, konsisten dengan Sidebar & Header
- */
-
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Plus, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
+import { Pencil, Plus, X, RotateCw, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 
 interface TahunAjaran {
-  id_tahun_ajaran: number;
-  tahun_ajaran: string;
-  semester: 'Ganjil' | 'Genap';
-  tanggal_pembagian_pts: string | null;
-  tanggal_pembagian_pas: string | null;
-  status: 'aktif' | 'nonaktif';
+    id_tahun_ajaran: number;
+    tahun_ajaran: string;
+    semester: 'Ganjil' | 'Genap';
+    tanggal_pembagian_pts: string | null;
+    tanggal_pembagian_pas: string | null;
+    status: 'aktif' | 'nonaktif';
 }
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 
 interface ModalConfig {
-  type: ModalType;
-  title: string;
-  message: string;
+    type: ModalType;
+    title: string;
+    message: string;
 }
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
-
-const GlobalStyles = () => (
-  <style jsx global>{`
-    @keyframes ta-fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-    @keyframes ta-scaleIn {
-      from { opacity: 0; transform: scale(0.93) translateY(10px); }
-      to   { opacity: 1; transform: scale(1)    translateY(0); }
-    }
-    @keyframes ta-pulseOnce {
-      0%   { transform: scale(1); }
-      50%  { transform: scale(1.1); }
-      100% { transform: scale(1); }
-    }
-    .ta-fadeIn    { animation: ta-fadeIn    0.2s ease; }
-    .ta-scaleIn   { animation: ta-scaleIn   0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .ta-pulseOnce { animation: ta-pulseOnce 0.6s ease 0.15s; }
-  `}</style>
-);
-
-// ─── MODAL STYLES ─────────────────────────────────────────────────────────────
+// ─── POPUP MODAL — same style as UbahPasswordPage ────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, {
-  iconBg: string; ring: string; icon: React.ReactNode; btn: string;
+    iconBg: string;
+    ringColor: string;
+    icon: React.ReactNode;
+    btnClass: string;
+    btnShadow: string;
 }> = {
-  success: {
-    iconBg: 'bg-green-50', ring: 'ring-green-100',
-    icon: <CheckCircle2 size={40} className="text-green-500" />,
-    btn: 'bg-green-500 hover:bg-green-600',
-  },
-  error: {
-    iconBg: 'bg-red-50', ring: 'ring-red-100',
-    icon: <AlertCircle size={40} className="text-red-500" />,
-    btn: 'bg-red-500 hover:bg-red-600',
-  },
-  warning: {
-    iconBg: 'bg-orange-50', ring: 'ring-orange-100',
-    icon: <ShieldAlert size={40} className="text-orange-500" />,
-    btn: 'bg-orange-500 hover:bg-orange-600',
-  },
-  network: {
-    iconBg: 'bg-slate-100', ring: 'ring-slate-200',
-    icon: <WifiOff size={40} className="text-slate-500" />,
-    btn: 'bg-slate-600 hover:bg-slate-700',
-  },
+    success: {
+        iconBg: 'bg-green-50',
+        ringColor: 'ring-green-100',
+        icon: <CheckCircle2 size={44} className="text-green-500" />,
+        btnClass: 'bg-green-500 hover:bg-green-600 active:bg-green-700',
+        btnShadow: 'shadow-green-200',
+    },
+    error: {
+        iconBg: 'bg-red-50',
+        ringColor: 'ring-red-100',
+        icon: <AlertCircle size={44} className="text-red-500" />,
+        btnClass: 'bg-red-500 hover:bg-red-600 active:bg-red-700',
+        btnShadow: 'shadow-red-200',
+    },
+    warning: {
+        iconBg: 'bg-orange-50',
+        ringColor: 'ring-orange-100',
+        icon: <ShieldAlert size={44} className="text-orange-500" />,
+        btnClass: 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700',
+        btnShadow: 'shadow-orange-200',
+    },
+    network: {
+        iconBg: 'bg-slate-100',
+        ringColor: 'ring-slate-200',
+        icon: <WifiOff size={44} className="text-slate-500" />,
+        btnClass: 'bg-slate-600 hover:bg-slate-700 active:bg-slate-800',
+        btnShadow: 'shadow-slate-200',
+    },
 };
-
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-  const s = MODAL_STYLES[modal.type];
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ta-fadeIn">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ta-scaleIn">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-          <X size={18} />
-        </button>
-        <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ta-pulseOnce`}>
-          {s.icon}
+    const s = MODAL_STYLES[modal.type];
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            {/* Card — identical structure to UbahPasswordPage SuccessModal */}
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5 animate-scaleIn">
+                {/* Close button */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                    <X size={18} />
+                </button>
+                {/* Animated icon */}
+                <div className={`w-20 h-20 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ringColor} animate-pulse-once`}>
+                    {s.icon}
+                </div>
+                {/* Text */}
+                <div className="text-center">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">{modal.message}</p>
+                </div>
+                {/* CTA */}
+                <button
+                    onClick={onClose}
+                    className={`w-full ${s.btnClass} text-white font-semibold py-3 rounded-xl transition-all duration-150 shadow-lg ${s.btnShadow}`}
+                >
+                    OK, Mengerti
+                </button>
+            </div>
         </div>
-        <div className="text-center">
-          <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-          <p className="text-sm text-gray-500 leading-relaxed">{modal.message}</p>
-        </div>
-        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-          OK, Mengerti
-        </button>
-      </div>
-    </div>
-  );
+    );
 };
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// ─── GLOBAL ANIMATIONS (same keyframes as UbahPasswordPage) ──────────────────
+
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.92) translateY(8px); }
+            to   { opacity: 1; transform: scale(1)    translateY(0);   }
+        }
+        @keyframes pulse-once {
+            0%   { transform: scale(1);    }
+            50%  { transform: scale(1.08); }
+            100% { transform: scale(1);    }
+        }
+        .animate-fadeIn    { animation: fadeIn     0.2s  ease; }
+        .animate-scaleIn   { animation: scaleIn    0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .animate-pulse-once{ animation: pulse-once 0.6s  ease 0.2s; }
+    `}</style>
+);
+
+// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+
+const btnPrimary = {
+    base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
+    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
+    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+};
+
+const labelCls = "block text-sm font-semibold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+// ─── INTERFACES ───────────────────────────────────────────────────────────────
 
 const formatTanggalIndonesia = (dateStr: string | null | undefined): string => {
     if (!dateStr) return '-';
@@ -115,54 +149,39 @@ const formatTanggalIndonesia = (dateStr: string | null | undefined): string => {
     const [year, month, day] = cleanDate.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     if (isNaN(date.getTime())) return '-';
-    const hari  = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][date.getDay()];
-    const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][date.getMonth()];
+    const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()];
+    const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
     return `${hari}, ${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
-
-// ─── FORM FIELD ───────────────────────────────────────────────────────────────
-
-const Field = ({ label, required, error, children }: {
-  label: string; required?: boolean; error?: string; children: React.ReactNode;
-}) => (
-  <div className="flex flex-col gap-1.5">
-    <label className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
-      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-    {children}
-    {error && <p className="text-red-500 text-xs">{error}</p>}
-  </div>
-);
-
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataTahunAjaranPage() {
 
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
-    const [loading, setLoading]   = useState(true);
+    const [loading, setLoading] = useState(true);
     const [showTambah, setShowTambah] = useState(false);
-    const [showEdit,   setShowEdit]   = useState(false);
-    const [editId,     setEditId]     = useState<number | null>(null);
-    const [currentPage]    = useState(1);
-    const [itemsPerPage]   = useState(10);
-    const [page, setPage]  = useState(1);
+    const [showEdit, setShowEdit] = useState(false);
+    const [editId, setEditId] = useState<number | null>(null);
+    const [currentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
+    const [page, setPage] = useState(1);
 
     // ── popup state ──
     const [modal, setModal] = useState<ModalConfig | null>(null);
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-  const [form, setForm] = useState({
-    tahun1: '2024', tahun2: '2025',
-    semester: 'Ganjil' as 'Ganjil' | 'Genap',
-    tanggal_pembagian_pts: '',
-    tanggal_pembagian_pas: '',
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+    const [formData, setFormData] = useState({
+        tahun1: '',
+        tahun2: '',
+        semester: 'Ganjil' as 'Ganjil' | 'Genap',
+        tanggal_pembagian_pts: '',
+        tanggal_pembagian_pas: '',
+    });
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
+    // ── fetch ──────────────────────────────────────────────────────────────
 
     const fetchTahunAjaran = useCallback(async () => {
         try {
@@ -171,7 +190,7 @@ export default function DataTahunAjaranPage() {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
                 return;
             }
-            const res  = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
@@ -187,91 +206,124 @@ export default function DataTahunAjaranPage() {
         }
     }, [showModal]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchTahunAjaran(); }, [fetchTahunAjaran]);
 
-  // ── Validate ─────────────────────────────────────────────────────────────
+    // ── form handlers ──────────────────────────────────────────────────────
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        setErrors(prev => ({ ...prev, [name]: '' }));
+    };
 
     const validate = (): boolean => {
         const errs: Record<string, string> = {};
         if (!formData.tahun1 || !formData.tahun2) errs.tahun = 'Tahun ajaran wajib diisi';
-        if (!formData.semester)                   errs.semester = 'Semester wajib dipilih';
-        if (!formData.tanggal_pembagian_pas)       errs.tanggal_pas = 'Tanggal pembagian PAS wajib diisi';
+        if (!formData.semester) errs.semester = 'Semester wajib dipilih';
+        if (!formData.tanggal_pembagian_pas) errs.tanggal_pas = 'Tanggal pembagian PAS wajib diisi';
         setErrors(errs);
         return Object.keys(errs).length === 0;
     };
 
-  // ── Tambah ───────────────────────────────────────────────────────────────
+    // ── tambah ─────────────────────────────────────────────────────────────
 
-  const handleTambah = async () => {
-    if (!validate()) return;
-    const token = localStorage.getItem('token');
-    if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
-    try {
-      const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          tahun1: form.tahun1, tahun2: form.tahun2, semester: form.semester,
-          tanggal_pembagian_pts: form.tanggal_pembagian_pts || null,
-          tanggal_pembagian_pas: form.tanggal_pembagian_pas || null,
-        }),
-      });
-      if (res.ok) {
-        setShowTambah(false);
-        resetForm();
-        await fetchData();
-        showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: `Tahun ajaran ${form.tahun1}/${form.tahun2} semester ${form.semester} berhasil ditambahkan.` });
-      } else {
-        const err = await res.json();
-        showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan.' });
-      }
-    } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
-  };
+    const handleSubmitTambah = async () => {
+        if (!validate()) return;
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+            return;
+        }
+        try {
+            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    tahun1: formData.tahun1,
+                    tahun2: formData.tahun2,
+                    semester: formData.semester,
+                    tanggal_pembagian_pts: formData.tanggal_pembagian_pts || null,
+                    tanggal_pembagian_pas: formData.tanggal_pembagian_pas,
+                }),
+            });
+            if (res.ok) {
+                setShowTambah(false);
+                setFormData({ tahun1: '2024', tahun2: '2025', semester: 'Ganjil', tanggal_pembagian_pts: '', tanggal_pembagian_pas: '' });
+                await fetchTahunAjaran();
+                showModal({
+                    type: 'success',
+                    title: 'Tahun Ajaran Ditambahkan!',
+                    message: `Tahun ajaran ${formData.tahun1}/${formData.tahun2} semester ${formData.semester} berhasil ditambahkan.`,
+                });
+            } else {
+                const err = await res.json();
+                showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan tahun ajaran.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+        }
+    };
 
-  // ── Edit ─────────────────────────────────────────────────────────────────
+    // ── edit ───────────────────────────────────────────────────────────────
 
-  const openEdit = (item: TahunAjaran) => {
-    const [t1, t2] = item.tahun_ajaran.split('/');
-    setEditId(item.id_tahun_ajaran);
-    setForm({ tahun1: t1 || '2024', tahun2: t2 || '2025', semester: item.semester, tanggal_pembagian_pts: item.tanggal_pembagian_pts || '', tanggal_pembagian_pas: item.tanggal_pembagian_pas || '' });
-    setErrors({});
-    setShowEdit(true);
-  };
+    const handleEdit = (item: TahunAjaran) => {
+        const [thn1, thn2] = item.tahun_ajaran.split('/');
+        setEditId(item.id_tahun_ajaran);
+        setFormData({
+            tahun1: thn1 || '2024',
+            tahun2: thn2 || '2025',
+            semester: item.semester,
+            tanggal_pembagian_pts: item.tanggal_pembagian_pts || '',
+            tanggal_pembagian_pas: item.tanggal_pembagian_pas || '',
+        });
+        setShowEdit(true);
+    };
 
-  const handleEdit = async () => {
-    if (!validate()) return;
-    const token = localStorage.getItem('token');
-    if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
-    try {
-      const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${editId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          tahun1: form.tahun1, tahun2: form.tahun2, semester: form.semester,
-          tanggal_pembagian_pts: form.tanggal_pembagian_pts || null,
-          tanggal_pembagian_pas: form.tanggal_pembagian_pas || null,
-        }),
-      });
-      if (res.ok) {
-        setShowEdit(false);
-        setEditId(null);
-        await fetchData();
-        showModal({ type: 'success', title: 'Data Diperbarui!', message: `Tahun ajaran ${form.tahun1}/${form.tahun2} semester ${form.semester} berhasil diperbarui.` });
-      } else {
-        const err = await res.json();
-        showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan.' });
-      }
-    } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
-  };
+    const handleSubmitEdit = async () => {
+        if (!validate()) return;
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+            return;
+        }
+        try {
+            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    tahun1: formData.tahun1,
+                    tahun2: formData.tahun2,
+                    semester: formData.semester,
+                    tanggal_pembagian_pts: formData.tanggal_pembagian_pts || null,
+                    tanggal_pembagian_pas: formData.tanggal_pembagian_pas,
+                }),
+            });
+            if (res.ok) {
+                setShowEdit(false);
+                setEditId(null);
+                await fetchTahunAjaran();
+                showModal({
+                    type: 'success',
+                    title: 'Data Diperbarui!',
+                    message: `Tahun ajaran ${formData.tahun1}/${formData.tahun2} semester ${formData.semester} berhasil diperbarui.`,
+                });
+            } else {
+                const err = await res.json();
+                showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan saat memperbarui data.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+        }
+    };
 
-  // ── Reset / helpers ───────────────────────────────────────────────────────
+    // ── reset ──────────────────────────────────────────────────────────────
 
     const handleReset = () => {
         if (showEdit && editId) {
             const item = tahunAjaranList.find(t => t.id_tahun_ajaran === editId);
             if (item) {
                 const [thn1, thn2] = item.tahun_ajaran.split('/');
-                setFormData({ tahun1: thn1||'2024', tahun2: thn2||'2025', semester: item.semester, tanggal_pembagian_pts: item.tanggal_pembagian_pts||'', tanggal_pembagian_pas: item.tanggal_pembagian_pas||'' });
+                setFormData({ tahun1: thn1 || '2024', tahun2: thn2 || '2025', semester: item.semester, tanggal_pembagian_pts: item.tanggal_pembagian_pts || '', tanggal_pembagian_pas: item.tanggal_pembagian_pas || '' });
             }
         } else {
             setFormData({ tahun1: '2024', tahun2: '2025', semester: 'Ganjil', tanggal_pembagian_pts: '', tanggal_pembagian_pas: '' });
@@ -281,14 +333,14 @@ export default function DataTahunAjaranPage() {
 
     // ── pagination ─────────────────────────────────────────────────────────
 
-    const sortedData  = [...tahunAjaranList].sort((a, b) => {
+    const sortedData = [...tahunAjaranList].sort((a, b) => {
         if (a.status === b.status) return b.id_tahun_ajaran - a.id_tahun_ajaran;
         return a.status === 'aktif' ? -1 : 1;
     });
-    const startIndex  = (page - 1) * itemsPerPage;
-    const endIndex    = startIndex + itemsPerPage;
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const currentData = sortedData.slice(startIndex, endIndex);
-    const totalPages  = Math.ceil(sortedData.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedData.length / itemsPerPage);
 
     const renderPagination = () => {
         const pages: React.ReactNode[] = [];
@@ -325,9 +377,51 @@ export default function DataTahunAjaranPage() {
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Tahun Ajaran <span className="text-red-500">*</span></label>
                                 <div className="flex items-center gap-2">
-                                    <input type="text" name="tahun1" value={formData.tahun1} onChange={handleInputChange} className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="2024" />
+                                    <input
+                                        type="text"
+                                        name="tahun1"
+                                        value={formData.tahun1}
+                                        onChange={handleInputChange}
+                                        onKeyDown={(e) => {
+                                            if (!/^[0-9\b]+$/.test(e.key) &&
+                                                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                                                e.preventDefault();
+                                            }
+                                        }}
+                                        onPaste={(e) => {
+                                            const pasteData = e.clipboardData.getData('text');
+                                            if (!/^\d+$/.test(pasteData)) {
+                                                e.preventDefault();
+                                                setErrors(prev => ({ ...prev, tahun1: 'Tahun harus berupa angka' }));
+                                            }
+                                        }}
+                                        className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="2024"
+                                        inputMode="numeric"
+                                    />
                                     <span className="text-xl font-bold">/</span>
-                                    <input type="text" name="tahun2" value={formData.tahun2} onChange={handleInputChange} className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="2025" />
+                                    <input
+                                        type="text"
+                                        name="tahun2"
+                                        value={formData.tahun2}
+                                        onChange={handleInputChange}
+                                        onKeyDown={(e) => {
+                                            if (!/^[0-9\b]+$/.test(e.key) &&
+                                                !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                                                e.preventDefault();
+                                            }
+                                        }}
+                                        onPaste={(e) => {
+                                            const pasteData = e.clipboardData.getData('text');
+                                            if (!/^\d+$/.test(pasteData)) {
+                                                e.preventDefault();
+                                                setErrors(prev => ({ ...prev, tahun2: 'Tahun harus berupa angka' }));
+                                            }
+                                        }}
+                                        className="w-24 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="2025"
+                                        inputMode="numeric"
+                                    />
                                 </div>
                                 {errors.tahun && <p className="text-red-500 text-xs mt-1">{errors.tahun}</p>}
                             </div>
@@ -365,51 +459,33 @@ export default function DataTahunAjaranPage() {
     );
 
     if (showTambah) return renderForm(false);
-    if (showEdit)   return renderForm(true);
+    if (showEdit) return renderForm(true);
 
-  // ── Table view ────────────────────────────────────────────────────────────
+    // ── table view ─────────────────────────────────────────────────────────
 
-  return (
-    <div className="flex-1 p-6 min-h-screen" style={{ background: '#fdf6f0' }}>
-      <GlobalStyles />
-      {modal && <NotifModal modal={modal} onClose={closeModal} />}
+    return (
+        <>
+            {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            <GlobalStyles />
 
-      {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Data Tahun Ajaran</h1>
-        <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
-          Kelola tahun ajaran dan semester aktif
-        </p>
-      </div>
-
-      {/* Table card */}
-      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' }}>
-
-        {/* Card sub-header */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-          <div>
-            <p className="text-sm font-bold text-gray-800">Daftar Tahun Ajaran</p>
-            <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
-              Menampilkan {sorted.length === 0 ? 0 : startIdx + 1}–{Math.min(startIdx + PER_PAGE, sorted.length)} dari {sorted.length} data
-            </p>
-          </div>
-          <button
-            onClick={() => { resetForm(); setShowTambah(true); }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-            style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
-          >
-            <Plus size={16} />
-            Tambah Tahun Ajaran
-          </button>
-        </div>
+            <div className="flex-1 p-6 bg-gray-50 min-h-screen">
+                <div className="max-w-7xl mx-auto">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-6">Data Tahun Ajaran</h1>
+                    <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                            <div className="text-sm text-gray-600">
+                                Menampilkan {startIndex + 1}–{Math.min(endIndex, sortedData.length)} dari {sortedData.length} data
+                            </div>
+                            <button onClick={() => setShowTambah(true)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                                <Plus size={20} /> Tambah Tahun Ajaran
+                            </button>
+                        </div>
 
                         <div className="overflow-x-auto rounded-lg border border-gray-100 shadow-sm">
                             <table className="w-full min-w-[600px] table-auto text-sm">
                                 <thead>
                                     <tr>
-                                        {['No.','Tahun Ajaran','Semester','Pembagian Rapor PTS','Pembagian Rapor PAS','Status','Aksi'].map(h => (
+                                        {['No.', 'Tahun Ajaran', 'Semester', 'Pembagian Rapor PTS', 'Pembagian Rapor PAS', 'Status', 'Aksi'].map(h => (
                                             <th key={h} className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">{h}</th>
                                         ))}
                                     </tr>
@@ -448,8 +524,17 @@ export default function DataTahunAjaranPage() {
                             </table>
                         </div>
 
-        <Pagination />
-      </div>
-    </div>
-  );
+                        {totalPages > 1 && (
+                            <div className="flex flex-wrap justify-between items-center gap-3 mt-4">
+                                <div className="text-sm text-gray-600">
+                                    Menampilkan {startIndex + 1}–{Math.min(endIndex, sortedData.length)} dari {sortedData.length} data
+                                </div>
+                                <div className="flex gap-1">{renderPagination()}</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </>
+    );
 }

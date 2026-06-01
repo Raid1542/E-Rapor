@@ -24,10 +24,10 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-  success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-  error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -50,13 +50,13 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG     = { background: '#fdf6f0' };
-const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
   base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
@@ -65,7 +65,7 @@ const btnPrimary = {
   leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
@@ -81,7 +81,6 @@ interface PembinaEkskul {
   alamat?: string;
   no_telepon?: string;
   statusPembina?: string;
-  profileImage?: string;
 }
 
 interface FormDataType {
@@ -101,7 +100,7 @@ const formatTanggalIndonesia = (dateStr?: string | null): string => {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '-';
-  const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][date.getMonth()];
+  const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
   return `${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
 
@@ -129,23 +128,23 @@ export default function DataPembinaEkskulClient() {
     return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
   };
 
-  const [pembinaList,   setPembinaList]   = useState<PembinaEkskul[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [showDetail,    setShowDetail]    = useState(false);
-  const [showTambah,    setShowTambah]    = useState(false);
-  const [showEdit,      setShowEdit]      = useState(false);
-  const [editId,        setEditId]        = useState<number | null>(null);
+  const [pembinaList, setPembinaList] = useState<PembinaEkskul[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showDetail, setShowDetail] = useState(false);
+  const [showTambah, setShowTambah] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [selectedPembina, setSelectedPembina] = useState<PembinaEkskul | null>(null);
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [itemsPerPage,  setItemsPerPage]  = useState(10);
-  const [currentPage,   setCurrentPage]   = useState(1);
-  const [showImport,    setShowImport]    = useState(false);
-  const [importFile,    setImportFile]    = useState<File | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [importClosing, setImportClosing] = useState(false);
 
-  const [modal,     setModal]     = useState<ModalConfig | null>(null);
-  const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
 
   // ── fetch ──────────────────────────────────────────────────────────────────
@@ -154,7 +153,7 @@ export default function DataPembinaEkskulClient() {
     try {
       const token = localStorage.getItem('token');
       if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' }); return; }
-      const res  = await fetch('http://localhost:5000/api/admin/pembina-ekskul', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('http://localhost:5000/api/admin/pembina-ekskul', { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok) {
         setPembinaList(Array.isArray(data.data) ? data.data.map((p: any) => {
@@ -165,7 +164,7 @@ export default function DataPembinaEkskulClient() {
             niy: p.niy, nuptk: p.nuptk, tempat_lahir: p.tempat_lahir || '',
             tanggal_lahir: p.tanggal_lahir || '', jenisKelamin: p.jenis_kelamin || '',
             alamat: p.alamat || '', no_telepon: p.no_telepon || '',
-            statusPembina: s, profileImage: p.profileImage || null,
+            statusPembina: s,
           };
         }) : []);
       } else {
@@ -212,6 +211,7 @@ export default function DataPembinaEkskulClient() {
   const validate = (isEdit: boolean): boolean => {
     const ne: Record<string, string> = {};
     if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
+    if (!formData.tempatLahir?.trim()) ne.tempatLahir = 'Tempat lahir wajib diisi';
     if (!formData.jenisKelamin) ne.jenisKelamin = 'Pilih jenis kelamin';
     if (!formData.tanggalLahir) {
       ne.tanggalLahir = 'Tanggal lahir wajib diisi';
@@ -316,7 +316,17 @@ export default function DataPembinaEkskulClient() {
       const result = await res.json();
       if (res.ok) {
         setShowImport(false); setImportFile(null); await fetchPembina();
-        showModal({ type: 'success', title: 'Import Berhasil!', message: result.message || `Berhasil mengimport ${result.total} data pembina.` });
+
+        if (result.skipped && result.skipped.length > 0) {
+          showModal({
+            type: 'warning',
+            title: 'Import Selesai dengan Peringatan',
+            message: `${result.total - result.skipped.length} data berhasil diimport.\n\n${result.skipped.length} data dilewati (duplikat):\n` +
+              result.skipped.map((d: any) => `• Baris ${d.row} (${d.nama}) - ${d.reason}`).join('\n')
+          });
+        } else {
+          showModal({ type: 'success', title: 'Import Berhasil!', message: result.message || `Berhasil mengimport ${result.total} data pembina.` });
+        }
       } else {
         showModal({ type: 'error', title: 'Import Gagal', message: result.message || 'Terjadi kesalahan saat mengimpor data.' });
       }
@@ -331,9 +341,9 @@ export default function DataPembinaEkskulClient() {
       p.nuptk?.includes(q) || p.tempat_lahir?.toLowerCase().includes(q) || p.no_telepon?.includes(q);
   });
 
-  const totalPages   = Math.max(1, Math.ceil(filteredPembina.length / itemsPerPage));
-  const startIndex   = (currentPage - 1) * itemsPerPage;
-  const endIndex     = startIndex + itemsPerPage;
+  const totalPages = Math.max(1, Math.ceil(filteredPembina.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
   const currentPembina = filteredPembina.slice(startIndex, endIndex);
 
   const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
@@ -341,8 +351,8 @@ export default function DataPembinaEkskulClient() {
 
   const renderPagination = () => {
     const pages: ReactNode[] = [];
-    const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-    const btnActive   = "text-white border-orange-500";
+    const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+    const btnActive = "text-white border-orange-500";
     const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
     pages.push(<button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>);
     const range: number[] = [];
@@ -402,8 +412,9 @@ export default function DataPembinaEkskulClient() {
           </div>
           {/* Tempat Lahir */}
           <div className="flex flex-col gap-1.5">
-            <label className={labelCls} style={labelColor}>Tempat Lahir</label>
-            <input type="text" name="tempatLahir" value={formData.tempatLahir} onChange={handleInputChange} placeholder="Misal: Jakarta" className={inputCls} />
+            <label className={labelCls} style={labelColor}>Tempat Lahir <span className="text-red-500">*</span></label>
+            <input type="text" name="tempatLahir" value={formData.tempatLahir} onChange={handleInputChange} placeholder="Misal: Jakarta" className={errors.tempatLahir ? inputErrCls : inputCls} />
+            {errors.tempatLahir && <p className="text-red-500 text-xs">{errors.tempatLahir}</p>}
           </div>
           {/* Tanggal Lahir */}
           <div className="flex flex-col gap-1.5">
@@ -470,7 +481,7 @@ export default function DataPembinaEkskulClient() {
   );
 
   if (showTambah) return renderForm(false);
-  if (showEdit)   return renderForm(true);
+  if (showEdit) return renderForm(true);
 
   // ── HALAMAN UTAMA ──────────────────────────────────────────────────────────
 
@@ -548,7 +559,7 @@ export default function DataPembinaEkskulClient() {
               ) : currentPembina.length === 0 ? (
                 <tr><td colSpan={7} className="py-12 text-center text-gray-400 text-sm">Tidak ada data pembina ekstrakurikuler</td></tr>
               ) : currentPembina.map((pembina, index) => (
-                <tr key={pembina.id} className="transition-colors"
+                <tr key={`${pembina.id}-${index}`} className="transition-colors"
                   style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                   onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
@@ -615,39 +626,30 @@ export default function DataPembinaEkskulClient() {
             </div>
             <div className="p-6">
               <div className="flex flex-col items-center mb-6">
-                <div className="w-24 h-24 rounded-full overflow-hidden mb-3 flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)' }}>
-                  {selectedPembina.profileImage ? (
-                    <img src={`http://localhost:5000${selectedPembina.profileImage.startsWith('/') ? selectedPembina.profileImage : '/' + selectedPembina.profileImage}`}
-                      alt="Foto Profil" className="w-full h-full object-cover"
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <span className="text-2xl font-bold" style={{ color: '#c95b08' }}>
-                      {selectedPembina.nama.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('') || '??'}
-                    </span>
-                  )}
-                </div>
                 <h3 className="text-lg font-bold text-gray-800">{selectedPembina.nama}</h3>
               </div>
               <div className="space-y-2.5">
                 {[
-                  { label: 'Status', value: (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                      style={selectedPembina.statusPembina === 'aktif'
-                        ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
-                        : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
-                      <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedPembina.statusPembina === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      {selectedPembina.statusPembina?.toUpperCase() || 'AKTIF'}
-                    </span>
-                  )},
-                  { label: 'NIY',          value: selectedPembina.niy || '-' },
-                  { label: 'NUPTK',        value: selectedPembina.nuptk || '-' },
-                  { label: 'Jenis Kelamin',value: formatGender(selectedPembina.jenisKelamin) },
+                  {
+                    label: 'Status', value: (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                        style={selectedPembina.statusPembina === 'aktif'
+                          ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
+                          : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
+                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedPembina.statusPembina === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {selectedPembina.statusPembina?.toUpperCase() || 'AKTIF'}
+                      </span>
+                    )
+                  },
+                  { label: 'NIY', value: selectedPembina.niy || '-' },
+                  { label: 'NUPTK', value: selectedPembina.nuptk || '-' },
+                  { label: 'Jenis Kelamin', value: formatGender(selectedPembina.jenisKelamin) },
                   { label: 'Tempat Lahir', value: selectedPembina.tempat_lahir || '-' },
-                  { label: 'Tanggal Lahir',value: formatTanggalIndonesia(selectedPembina.tanggal_lahir) },
-                  { label: 'Telepon',      value: selectedPembina.no_telepon || '-' },
-                  { label: 'Alamat',       value: selectedPembina.alamat || '-' },
+                  { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedPembina.tanggal_lahir) },
+                  { label: 'Telepon', value: selectedPembina.no_telepon || '-' },
+                  { label: 'Alamat', value: selectedPembina.alamat || '-' },
                 ].map((item, i) => (
-                  <div key={i} className="grid grid-cols-4 gap-2 pb-2.5" style={{ borderBottom: '1px solid #fde0c8' }}>
+                  <div key={item.label} className="grid grid-cols-4 gap-2 pb-2.5" style={{ borderBottom: '1px solid #fde0c8' }}>
                     <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
                     <span className="text-xs text-gray-400">:</span>
                     <span className="text-xs text-gray-700 col-span-2 break-words">{item.value}</span>
