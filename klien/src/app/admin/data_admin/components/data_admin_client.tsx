@@ -1,3 +1,11 @@
+/**
+ * Nama File: data_admin_client.tsx
+ * Fungsi: Komponen klien untuk mengelola data admin,
+ *         mencakup fitur tambah, edit, detail, pencarian, dan pagination.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
+ * Tanggal: 15 September 2025
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';

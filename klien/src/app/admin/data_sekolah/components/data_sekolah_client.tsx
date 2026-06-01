@@ -1,3 +1,13 @@
+/**
+ * Nama File: data_sekolah_client.tsx
+ * Fungsi: Komponen client-side untuk mengelola data profil sekolah oleh admin.
+ *         Memungkinkan pengeditan informasi dasar sekolah (nama, NPSN, alamat, dsb.)
+ *         dan pengunggahan logo sekolah. Data disimpan ke backend melalui API PUT,
+ *         sedangkan logo diupload via FormData ke endpoint khusus.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
+ * Tanggal: 15 September 2025
+ */
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

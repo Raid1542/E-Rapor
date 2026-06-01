@@ -1,335 +1,369 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Download, Upload, Database, FileText, FileUp, Loader2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X } from 'lucide-react';
+import { Download, Upload, Database, FileText, FileUp, Loader2 } from 'lucide-react';
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
-
-type Tab          = 'backup' | 'restore';
+type Tab = 'backup' | 'restore';
 type BackupStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RestoreStatus = 'idle' | 'loading' | 'success' | 'error';
-type ModalType    = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
-
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
-
-const GlobalStyles = () => (
-    <style jsx global>{`
-    @keyframes br-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes br-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes br-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .br-fadeIn  { animation: br-fadeIn  0.2s ease; }
-    .br-scaleIn { animation: br-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .br-pulse   { animation: br-pulse   0.6s ease 0.15s; }
-  `}</style>
-);
-
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
-
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
-};
-
-const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-    const s = MODAL_STYLES[modal.type];
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 br-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 br-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} br-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-                </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
-            </div>
-        </div>
-    );
-};
-
-// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
-
-const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 br-fadeIn">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 br-scaleIn">
-            <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 br-pulse">
-                <ShieldAlert size={40} className="text-orange-500" />
-            </div>
-            <div className="text-center">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi</h3>
-                <p className="text-sm text-gray-500 leading-relaxed mt-2 whitespace-pre-line">{message}</p>
-            </div>
-            <div className="flex gap-3 w-full">
-                <button onClick={onCancel}
-                    className="flex-1 py-3 rounded-xl border font-semibold text-sm transition-colors"
-                    style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>
-                    Batal
-                </button>
-                <button onClick={onConfirm}
-                    className="flex-1 py-3 rounded-xl text-white font-semibold text-sm"
-                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}>
-                    Ya, Lanjutkan
-                </button>
-            </div>
-        </div>
-    </div>
-);
-
-// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
-
-const PAGE_BG     = { background: '#fdf6f0' };
-const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-
-const btnPrimary = {
-    base:  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
-    hover: (e: React.MouseEvent<HTMLButtonElement>) => { if (!e.currentTarget.disabled) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
-};
-
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function BackupRestoreClient() {
     const [activeTab, setActiveTab] = useState<Tab>('backup');
 
     // ── Backup state ──
-    const [backupStatus,   setBackupStatus]   = useState<BackupStatus>('idle');
-    const [backupBlobUrl,  setBackupBlobUrl]   = useState<string>('');
-    const [backupFileName, setBackupFileName]  = useState<string>('backup_erapor.sql');
+    const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle');
+    const [backupBlobUrl, setBackupBlobUrl] = useState<string>('');
+    const [backupFileName, setBackupFileName] = useState<string>('backup_erapor.sql');
+    const [backupError, setBackupError] = useState<string>('');
 
     // ── Restore state ──
-    const [selectedFile,   setSelectedFile]   = useState<File | null>(null);
-    const [restoreStatus,  setRestoreStatus]  = useState<RestoreStatus>('idle');
-
-    // ── Modal state ──
-    const [modal,      setModal]      = useState<ModalConfig | null>(null);
-    const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
-    const showModal   = (cfg: ModalConfig) => setModal(cfg);
-    const closeModal  = () => setModal(null);
-    const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [restoreStatus, setRestoreStatus] = useState<RestoreStatus>('idle');
+    const [restoreMessage, setRestoreMessage] = useState<string>('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // ── BACKUP ─────────────────────────────────────────────────────────────────
+    // ── Switch Tab ──
+    const handleTabChange = (tab: Tab) => {
+        setActiveTab(tab);
+    };
+
+    // ──────────────────────────────────────
+    // BACKUP
+    // ──────────────────────────────────────
     const handleBackup = async () => {
         setBackupStatus('loading');
-        if (backupBlobUrl) { window.URL.revokeObjectURL(backupBlobUrl); setBackupBlobUrl(''); }
+        setBackupError('');
+        if (backupBlobUrl) {
+            window.URL.revokeObjectURL(backupBlobUrl);
+            setBackupBlobUrl('');
+        }
+
         try {
             const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); setBackupStatus('idle'); return; }
+            if (!token) { alert('Silakan login terlebih dahulu'); return; }
 
             const res = await fetch('http://localhost:5000/api/admin/backup', {
                 method: 'GET',
                 headers: { Authorization: `Bearer ${token}` },
             });
+
             if (!res.ok) throw new Error('Gagal melakukan backup data.');
 
-            const blob               = await res.blob();
+            const blob = await res.blob();
             const contentDisposition = res.headers.get('Content-Disposition');
-            const fileName           = contentDisposition
-                ? (contentDisposition.split('filename=')[1]?.replace(/"/g, '') || 'backup_erapor.sql')
-                : 'backup_erapor.sql';
+            let fileName = 'Backup_E-Rapor_' + Date.now() + '.zip';
 
-            setBackupBlobUrl(window.URL.createObjectURL(blob));
+            if (contentDisposition) {
+                // Coba parse dengan regex
+                const filenameRegex = /filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/i;
+                const matches = contentDisposition.match(filenameRegex);
+                if (matches && matches[1]) {
+                    fileName = decodeURIComponent(matches[1].trim());
+                }
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            setBackupBlobUrl(url);
             setBackupFileName(fileName);
             setBackupStatus('ready');
         } catch (err: any) {
-            showModal({ type: 'error', title: 'Backup Gagal', message: err.message || 'Terjadi kesalahan saat backup.' });
+            setBackupError(err.message || 'Terjadi kesalahan saat backup.');
             setBackupStatus('error');
         }
     };
 
     const handleDownloadBackup = () => {
         if (!backupBlobUrl) return;
-        const link    = document.createElement('a');
-        link.href     = backupBlobUrl;
+        const link = document.createElement('a');
+        link.href = backupBlobUrl;
         link.download = backupFileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
-    // ── RESTORE ────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────
+    // RESTORE
+    // ──────────────────────────────────────
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSelectedFile(e.target.files?.[0] || null);
+        const file = e.target.files?.[0] || null;
+        setSelectedFile(file);
         setRestoreStatus('idle');
+        setRestoreMessage('');
     };
 
     const handleRestore = async () => {
-        if (!selectedFile) { showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file backup terlebih dahulu.' }); return; }
+        // Validasi file dipilih
+        if (!selectedFile) {
+            setRestoreStatus('error');
+            setRestoreMessage('⚠️ Pilih file backup terlebih dahulu.');
+            return;
+        }
+
+        // Validasi ekstensi file
+        const allowedExtensions = ['.sql', '.zip'];
+        const fileExt = '.' + selectedFile.name.split('.').pop()?.toLowerCase();
+
+        if (!allowedExtensions.includes(fileExt)) {
+            setRestoreStatus('error');
+            setRestoreMessage(`❌ Format file tidak didukung.\n\nGunakan file .sql atau .zip (hasil backup dari sistem).`);
+            return;
+        }
+
+        // Validasi ukuran file (max 500MB)
+        const maxSize = 500 * 1024 * 1024; // 500MB
+        if (selectedFile.size > maxSize) {
+            setRestoreStatus('error');
+            setRestoreMessage(`❌ File terlalu besar.\n\nMaksimal: 500MB\nFile Anda: ${(selectedFile.size / 1024 / 1024).toFixed(2)}MB`);
+            return;
+        }
+
         setRestoreStatus('loading');
+        setRestoreMessage('⏳ Sedang memproses restore...\n\nMohon tunggu, proses ini mungkin memakan waktu beberapa menit.');
+
         try {
             const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); setRestoreStatus('idle'); return; }
-
-            const formData = new FormData();
-            formData.append('backup_file', selectedFile);
-
-            const res = await fetch('http://localhost:5000/api/admin/restore', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-                body: formData,
-            });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.message || 'Gagal melakukan restore data.');
+            if (!token) {
+                setRestoreStatus('error');
+                setRestoreMessage('❌ Sesi login habis.\n\nSilakan login ulang.');
+                return;
             }
 
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            const res = await fetch('http://localhost:5000/api/admin/backup/restore', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData,
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                const errorMsg = data.detail
+                    ? `❌ ${data.message}\n\n💡 ${data.detail}`
+                    : `❌ ${data.message || 'Gagal restore database'}`;
+                throw new Error(errorMsg);
+            }
+
+            //  Sukses message
             setRestoreStatus('success');
-            showModal({ type: 'success', title: 'Restore Berhasil!', message: 'Data berhasil direstore dari file backup.' });
+            setRestoreMessage(`✅ ${data.message}\n\n⚠️ ${data.warning}`);
             setSelectedFile(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
+
         } catch (err: any) {
             setRestoreStatus('error');
-            showModal({ type: 'error', title: 'Restore Gagal', message: err.message || 'Terjadi kesalahan saat restore.' });
+
+            // Error messages 
+            let errorMessage = '❌ Terjadi kesalahan: ';
+
+            if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+                errorMessage = '❌ Tidak dapat terhubung ke server.\n\n💡 Pastikan:\n• Server backend berjalan di http://localhost:5000\n• Koneksi internet stabil\n• Tidak ada firewall yang memblokir';
+            } else if (err.message.includes('413')) {
+                errorMessage = '❌ File terlalu besar untuk diupload.\n\nMaksimal: 500MB';
+            } else if (err.message.includes('401') || err.message.includes('403')) {
+                errorMessage = '❌ Sesi login tidak valid.\n\nSilakan login ulang.';
+            } else if (err.message.includes('400')) {
+                errorMessage = err.message;
+            } else {
+                errorMessage = err.message || '❌ Terjadi kesalahan yang tidak diketahui.\n\nSilakan coba lagi atau hubungi administrator.';
+            }
+
+            setRestoreMessage(errorMessage);
+            console.error('Restore error:', err);
         }
     };
 
-    // ── RENDER ─────────────────────────────────────────────────────────────────
+    // =============================================
+    // RENDER
+    // =============================================
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
-            <GlobalStyles />
-            {modal      && <NotifModal modal={modal} onClose={closeModal} />}
-            {confirmCfg && (
-                <ConfirmModal
-                    message={confirmCfg.message}
-                    onConfirm={() => { confirmCfg.onConfirm(); setConfirmCfg(null); }}
-                    onCancel={() => setConfirmCfg(null)}
-                />
-            )}
+        <div className="flex-1 p-6 bg-gray-50 min-h-screen">
+            <div className="max-w-7xl mx-auto">
 
-            {/* Page Title */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Backup &amp; Restore</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola backup dan restore data aplikasi e-Rapor</p>
-            </div>
+                {/* ── Page Title ── */}
+                <h1 className="text-3xl font-bold text-gray-800 mb-6">Backup &amp; Restore</h1>
 
-            {/* ── CARD UTAMA ──────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                <div
+                    className="rounded-2xl shadow-sm p-6 mb-6"
+                    style={{
+                        background: 'linear-gradient(160deg, #ffffff 0%, #fff7ed 60%, #ffedd5 100%)',
+                        border: '1px solid rgba(251,146,60,0.2)',
+                    }}
+                >
 
-                {/* Card Header */}
-                <div className="px-6 py-4" style={HEADER_GRAD}>
-                    <h2 className="text-base font-bold text-white">Manajemen Data</h2>
-                </div>
+                    {/* ── Orange gradient bar — sesuai warna dashboard ── */}
+                    <div
+                        className="-mx-6 -mt-6 mb-0 h-4 rounded-t-2xl"
+                        style={{ background: 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%)' }}
+                    />
 
-                {/* ── TAB NAVIGATION ──────────────────────────────────────── */}
-                <div className="px-6 pt-4" style={{ borderBottom: '1px solid #fde0c8' }}>
-                    <div className="flex gap-1">
-                        {([
-                            { key: 'backup',  label: 'Backup Data',  Icon: Database },
-                            { key: 'restore', label: 'Restore Data', Icon: FileUp   },
-                        ] as { key: Tab; label: string; Icon: any }[]).map(({ key, label, Icon }) => (
-                            <button
-                                key={key}
-                                onClick={() => setActiveTab(key)}
-                                className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-t-xl transition-all"
-                                style={activeTab === key
-                                    ? { background: '#fff7ed', color: '#c95b08', borderTop: '2px solid #e8690a', borderLeft: '1px solid #fde0c8', borderRight: '1px solid #fde0c8' }
-                                    : { color: '#9a7a6a', background: 'transparent' }}
-                            >
-                                <Icon size={15} />
-                                {label}
-                            </button>
-                        ))}
+                    {/* ── Tab Header ── */}
+                    <div className="flex border-b border-orange-200 mt-4 gap-0">
+
+                        {/* Tab: Backup Data */}
+                        <button
+                            onClick={() => handleTabChange('backup')}
+                            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border border-b-0 transition-colors rounded-t-lg -mb-px ${activeTab === 'backup'
+                                ? 'border-orange-200 bg-white font-bold'
+                                : 'border-transparent bg-transparent hover:text-orange-700'
+                                }`}
+                            style={activeTab === 'backup' ? { color: '#ea580c' } : { color: '#9a3412' }}
+                        >
+                            <Database className="w-4 h-4" />
+                            Backup Data
+                        </button>
+
+                        {/* Tab: Restore Data */}
+                        <button
+                            onClick={() => handleTabChange('restore')}
+                            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border border-b-0 transition-colors rounded-t-lg -mb-px ${activeTab === 'restore'
+                                ? 'border-orange-200 bg-white font-bold'
+                                : 'border-transparent bg-transparent hover:text-orange-700'
+                                }`}
+                            style={activeTab === 'restore' ? { color: '#ea580c' } : { color: '#9a3412' }}
+                        >
+                            <FileUp className="w-4 h-4" />
+                            Restore Data
+                        </button>
+
                     </div>
-                </div>
 
-                {/* ── TAB CONTENT ─────────────────────────────────────────── */}
-                <div className="p-6">
-
-                    {/* ════════════ TAB: BACKUP ════════════ */}
+                    {/* ──────────────────────────────────────
+              TAB: BACKUP DATA
+          ────────────────────────────────────── */}
                     {activeTab === 'backup' && (
-                        <div>
-                            <h2 className="text-base font-bold text-gray-900 mb-1">Backup Data Aplikasi e-Rapor</h2>
-                            <div className="mb-5" style={{ borderBottom: '1px solid #fde0c8' }} />
+                        <div className="pt-6">
 
-                            {/* Info teks */}
-                            <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                <p className="text-sm mb-2" style={{ color: '#7a3a0a' }}>
-                                    Untuk keamanan, silahkan lakukan proses backup data secara rutin dan simpan hasil backup Anda pada tempat yang aman.
-                                </p>
-                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                                    Klik tombol <strong>Backup Data</strong> di bawah, tunggu hingga proses selesai, lalu unduh hasilnya.
-                                </p>
-                            </div>
+                            <h2 className="text-base font-bold text-gray-900 mb-3">
+                                Backup Data Aplikasi e-Rapor.
+                            </h2>
+                            <hr className="mb-5 border-orange-100" />
 
-                            {/* Hasil backup siap diunduh */}
+                            <p className="text-sm text-gray-700 mb-3">
+                                Untuk keamanan, silahkan lakukan proses backup data secara rutin dan simpan hasil backup anda pada tempat yang aman
+                            </p>
+                            <p className="text-sm text-gray-700 mb-5">
+                                Untuk melakukan backup data, silahkan klik tombol Backup Data dibawah ini, tunggu hingga proses selesai
+                            </p>
+
+                            {/* ── Kotak hijau muncul setelah backup berhasil ── */}
                             {backupStatus === 'ready' && (
-                                <div className="mb-5 p-4 rounded-xl" style={{ background: '#dcfce7', border: '1px solid #86efac' }}>
-                                    <p className="text-sm font-semibold mb-3" style={{ color: '#15803d' }}>
-                                        ✓ Backup berhasil dibuat! Klik tombol di bawah untuk mengunduh.
+                                <div className="border border-green-200 bg-green-50 rounded-xl p-5 mb-5">
+                                    <p className="text-sm text-green-700 mb-4">
+                                        Data Aplikasi e-Rapor berhasil dibackup, silahkan download hasil backup berikut ini
                                     </p>
                                     <button
                                         onClick={handleDownloadBackup}
-                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all"
-                                        style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.25)' }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
-                                        <FileText size={15} /> Unduh Hasil Backup
+                                        className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors"
+                                        style={{ background: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)' }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg, #c2410c 0%, #ea580c 100%)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)')}
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        Download Hasil backup
                                     </button>
                                 </div>
                             )}
 
-                            <div className="mb-5" style={{ borderBottom: '1px solid #fde0c8' }} />
+                            {/* ── Error ── */}
+                            {backupStatus === 'error' && (
+                                <div className="border border-red-200 bg-red-50 rounded-xl p-4 mb-5">
+                                    <p className="text-sm text-red-700">{backupError}</p>
+                                </div>
+                            )}
 
+                            <hr className="mb-5 border-orange-100" />
+
+                            {/* ── Button Backup Data ── */}
                             <div className="flex justify-end">
                                 <button
                                     onClick={handleBackup}
                                     disabled={backupStatus === 'loading'}
-                                    className={btnPrimary.base}
-                                    style={btnPrimary.style}
-                                    onMouseEnter={btnPrimary.hover}
-                                    onMouseLeave={btnPrimary.leave}>
-                                    {backupStatus === 'loading'
-                                        ? <><Loader2 size={15} className="animate-spin" /> Memproses...</>
-                                        : <><Download size={15} /> Backup Data</>}
+                                    className="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                        boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (backupStatus !== 'loading') {
+                                            e.currentTarget.style.background = 'linear-gradient(135deg, #c2410c 0%, #ea580c 60%, #f97316 100%)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)';
+                                    }}
+                                >
+                                    {backupStatus === 'loading' ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Download className="w-4 h-4" />
+                                    )}
+                                    {backupStatus === 'loading' ? 'Memproses...' : 'Backup Data'}
                                 </button>
                             </div>
+
                         </div>
                     )}
 
-                    {/* ════════════ TAB: RESTORE ════════════ */}
+                    {/* ──────────────────────────────────────
+              TAB: RESTORE DATA
+          ────────────────────────────────────── */}
                     {activeTab === 'restore' && (
-                        <div>
-                            <h2 className="text-base font-bold text-gray-900 mb-1">Restore Hasil Backup Aplikasi e-Rapor</h2>
-                            <div className="mb-5" style={{ borderBottom: '1px solid #fde0c8' }} />
+                        <div className="pt-6">
 
-                            {/* Info teks */}
-                            <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                                    Pilih file hasil backup (<strong>.sql</strong>, <strong>.zip</strong>, atau <strong>.gz</strong>) yang akan direstore,
-                                    kemudian klik tombol <strong>Upload dan Restore</strong>.
-                                </p>
-                            </div>
+                            <h2 className="text-base font-bold text-gray-900 mb-3">
+                                Restore Hasil Backup Aplikasi e-Rapor.
+                            </h2>
+                            <hr className="mb-5 border-orange-100" />
 
-                            <div className="mb-5" style={{ borderBottom: '1px solid #fde0c8' }} />
+                            <p className="text-sm text-gray-700 mb-8">
+                                Untuk melakukan Upload dan restore data dari hasil backup Aplikasi e-Rapor, Silahkan Choose File hasil backup yang yang akan direstore,
+                                kemudian klik tombol &quot;Upload dan Restore Data e-Rapor&quot;.
+                            </p>
 
-                            {/* File Picker */}
+                            <hr className="mb-5 border-orange-100" />
+
+                            {/* ── Status sukses / error ── */}
+                            {restoreStatus === 'success' && (
+                                <div className="border border-green-200 bg-green-50 rounded-xl p-4 mb-5">
+                                    <p className="text-sm text-green-700">{restoreMessage}</p>
+                                </div>
+                            )}
+                            {restoreStatus === 'error' && (
+                                <div className="border border-red-200 bg-red-50 rounded-xl p-4 mb-5">
+                                    <p className="text-sm text-red-700">{restoreMessage}</p>
+                                </div>
+                            )}
+
+                            {/* ── File Picker ── */}
                             <div className="mb-6">
-                                <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
-                                    Pilih File Backup
-                                </label>
+                                <p className="text-sm font-bold text-gray-800 mb-3">
+                                    Pilih File Backup yang akan direstore
+                                </p>
 
-                                <label
-                                    htmlFor="restore-file-input"
-                                    className="flex items-stretch rounded-xl overflow-hidden cursor-pointer"
-                                    style={{ border: '1px solid #fde0c8' }}>
-                                    {/* Tombol "Pilih File" */}
-                                    <span
-                                        className="flex items-center px-4 py-2.5 text-sm font-bold text-white whitespace-nowrap"
-                                        style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}>
-                                        <Upload size={14} className="mr-2" /> Pilih File
-                                    </span>
-                                    {/* Nama file */}
-                                    <span className="flex items-center px-4 py-2.5 text-sm flex-1"
-                                        style={{ background: '#fffaf6', color: selectedFile ? '#374151' : '#9ca3af' }}>
-                                        {selectedFile ? selectedFile.name : 'Belum ada file dipilih'}
+                                <div
+                                    className="flex items-stretch rounded-xl overflow-hidden w-full"
+                                    style={{ border: '1px solid rgba(251,146,60,0.4)' }}
+                                >
+                                    <label
+                                        htmlFor="restore-file-input"
+                                        className="flex items-center px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors whitespace-nowrap"
+                                        style={{
+                                            background: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)',
+                                            color: 'white',
+                                            borderRight: '1px solid rgba(251,146,60,0.3)',
+                                        }}
+                                    >
+                                        Choose File
+                                    </label>
+                                    <span className="flex items-center px-4 py-2.5 text-sm text-gray-500 flex-1 bg-white">
+                                        {selectedFile ? selectedFile.name : 'No file chosen'}
                                     </span>
                                     <input
                                         id="restore-file-input"
@@ -339,33 +373,45 @@ export default function BackupRestoreClient() {
                                         className="hidden"
                                         onChange={handleFileChange}
                                     />
-                                </label>
+                                </div>
 
                                 {selectedFile && (
-                                    <p className="text-xs mt-1.5 font-medium" style={{ color: '#c95b08' }}>
+                                    <p className="text-xs mt-1.5" style={{ color: '#9a3412' }}>
                                         Ukuran: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                                     </p>
                                 )}
                             </div>
 
-                            <div className="mb-5" style={{ borderBottom: '1px solid #fde0c8' }} />
+                            <hr className="mb-5 border-orange-100" />
 
+                            {/* ── Button Restore ── */}
                             <div className="flex justify-end">
                                 <button
-                                    onClick={() => showConfirm(
-                                        '⚠️ PERHATIAN!\n\nProses restore akan menimpa seluruh data yang ada saat ini.\n\nPastikan file backup yang dipilih sudah benar sebelum melanjutkan.',
-                                        handleRestore
-                                    )}
+                                    onClick={handleRestore}
                                     disabled={restoreStatus === 'loading' || !selectedFile}
-                                    className={btnPrimary.base}
-                                    style={btnPrimary.style}
-                                    onMouseEnter={btnPrimary.hover}
-                                    onMouseLeave={btnPrimary.leave}>
-                                    {restoreStatus === 'loading'
-                                        ? <><Loader2 size={15} className="animate-spin" /> Memproses...</>
-                                        : <><Upload size={15} /> Upload dan Restore Data e-Rapor</>}
+                                    className="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)',
+                                        boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (restoreStatus !== 'loading' && selectedFile) {
+                                            e.currentTarget.style.background = 'linear-gradient(135deg, #c2410c 0%, #ea580c 60%, #f97316 100%)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'linear-gradient(135deg, #ea580c 0%, #f97316 60%, #fb923c 100%)';
+                                    }}
+                                >
+                                    {restoreStatus === 'loading' ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Upload className="w-4 h-4" />
+                                    )}
+                                    {restoreStatus === 'loading' ? 'Memproses...' : 'Upload dan Restore Data e-Rapor'}
                                 </button>
                             </div>
+
                         </div>
                     )}
 
