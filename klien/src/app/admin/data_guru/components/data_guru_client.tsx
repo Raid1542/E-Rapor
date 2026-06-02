@@ -34,10 +34,10 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-  success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-  error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -65,7 +65,7 @@ const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 out
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
 // Card & page background
-const PAGE_BG   = { background: '#fdf6f0' };
+const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 
 // Modal header gradient (form cards, modal headers)
@@ -104,7 +104,7 @@ const formatTanggalIndonesia = (dateStr?: string | null): string => {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '-';
-  const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][date.getMonth()];
+  const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
   return `${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
 
@@ -121,27 +121,27 @@ export default function DataGuruClient() {
     return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
   };
 
-  const [guruList,         setGuruList]         = useState<Guru[]>([]);
-  const [loading,          setLoading]          = useState(true);
-  const [showDetail,       setShowDetail]       = useState(false);
-  const [showTambah,       setShowTambah]       = useState(false);
-  const [showEdit,         setShowEdit]         = useState(false);
-  const [editId,           setEditId]           = useState<number | null>(null);
-  const [selectedGuru,     setSelectedGuru]     = useState<Guru | null>(null);
-  const [searchQuery,      setSearchQuery]      = useState('');
-  const [itemsPerPage,     setItemsPerPage]     = useState(10);
-  const [currentPage,      setCurrentPage]      = useState(1);
-  const [showImport,       setShowImport]       = useState(false);
-  const [importFile,       setImportFile]       = useState<File | null>(null);
-  const [detailClosing,    setDetailClosing]    = useState(false);
-  const [importClosing,    setImportClosing]    = useState(false);
-  const [filterClosing,    setFilterClosing]    = useState(false);
-  const [showFilter,       setShowFilter]       = useState(false);
-  const [filterValues,     setFilterValues]     = useState({ role: '', jenisKelamin: '', status: '' });
+  const [guruList, setGuruList] = useState<Guru[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showDetail, setShowDetail] = useState(false);
+  const [showTambah, setShowTambah] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [selectedGuru, setSelectedGuru] = useState<Guru | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [detailClosing, setDetailClosing] = useState(false);
+  const [importClosing, setImportClosing] = useState(false);
+  const [filterClosing, setFilterClosing] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterValues, setFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
   const [tempFilterValues, setTempFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
 
-  const [modal,     setModal]     = useState<ModalConfig | null>(null);
-  const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
 
   // ── fetch ──────────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ export default function DataGuruClient() {
     try {
       const token = localStorage.getItem('token');
       if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' }); return; }
-      const res  = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok) {
         const validRoles = ['guru kelas', 'guru bidang studi'];
@@ -205,10 +205,10 @@ export default function DataGuruClient() {
 
   const validate = (isEdit: boolean): boolean => {
     const ne: Record<string, string> = {};
-    if (!formData.nama?.trim())        ne.nama        = 'Nama wajib diisi';
-    if (!formData.email?.trim())       ne.email       = 'Email sekolah wajib diisi';
+    if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
+    if (!formData.email?.trim()) ne.email = 'Email sekolah wajib diisi';
     if (!formData.tempatLahir?.trim()) ne.tempatLahir = 'Tempat lahir wajib diisi';
-    if (!formData.jenisKelamin)        ne.jenisKelamin= 'Pilih jenis kelamin';
+    if (!formData.jenisKelamin) ne.jenisKelamin = 'Pilih jenis kelamin';
     if (!formData.roles || formData.roles.length === 0) ne.roles = 'Pilih minimal satu role';
     if (!formData.tanggalLahir) {
       ne.tanggalLahir = 'Tanggal lahir wajib diisi';
@@ -329,23 +329,23 @@ export default function DataGuruClient() {
 
   const filteredGuru = guruList.filter((guru) => {
     const query = searchQuery.toLowerCase().trim();
-    const ms  = !query || guru.nama?.toLowerCase().includes(query) || guru.email?.toLowerCase().includes(query) ||
+    const ms = !query || guru.nama?.toLowerCase().includes(query) || guru.email?.toLowerCase().includes(query) ||
       guru.niy?.includes(query) || guru.nuptk?.includes(query) ||
       guru.tempat_lahir?.toLowerCase().includes(query) || guru.no_telepon?.includes(query);
-    const mr  = !filterValues.role || (guru.roles && guru.roles.includes(filterValues.role));
-    const mj  = !filterValues.jenisKelamin || guru.jenisKelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
+    const mr = !filterValues.role || (guru.roles && guru.roles.includes(filterValues.role));
+    const mj = !filterValues.jenisKelamin || guru.jenisKelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
     const ms2 = !filterValues.status || guru.statusGuru?.toLowerCase() === filterValues.status.toLowerCase();
     return ms && mr && mj && ms2;
   });
   const totalPages = Math.max(1, Math.ceil(filteredGuru.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex   = startIndex + itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
   const currentGuru = filteredGuru.slice(startIndex, endIndex);
 
   const renderPagination = () => {
     const pages: ReactNode[] = [];
-    const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-    const btnActive   = "text-white border-orange-500";
+    const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+    const btnActive = "text-white border-orange-500";
     const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
     pages.push(
@@ -379,9 +379,9 @@ export default function DataGuruClient() {
     return pages;
   };
 
-  const resetFilter      = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
-  const openFilterModal  = () => { setTempFilterValues(filterValues); setShowFilter(true); };
-  const applyFilter      = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
+  const resetFilter = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
+  const openFilterModal = () => { setTempFilterValues(filterValues); setShowFilter(true); };
+  const applyFilter = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
   const closeFilterModal = () => { setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
 
   // ── Modal close helpers ────────────────────────────────────────────────────
@@ -568,7 +568,7 @@ export default function DataGuruClient() {
   );
 
   if (showTambah) return renderForm(false);
-  if (showEdit)   return renderForm(true);
+  if (showEdit) return renderForm(true);
 
   // ── HALAMAN UTAMA ──────────────────────────────────────────────────────────
 
@@ -783,29 +783,33 @@ export default function DataGuruClient() {
               {/* Info rows */}
               <div className="space-y-2.5">
                 {[
-                  { label: 'Status', value: (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                      style={selectedGuru.statusGuru === 'aktif'
-                        ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
-                        : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
-                      <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedGuru.statusGuru === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      {selectedGuru.statusGuru?.toUpperCase() || 'AKTIF'}
-                    </span>
-                  )},
-                  { label: 'NIY',           value: selectedGuru.niy || '-' },
-                  { label: 'NUPTK',         value: selectedGuru.nuptk || '-' },
+                  {
+                    label: 'Status', value: (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                        style={selectedGuru.statusGuru === 'aktif'
+                          ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
+                          : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
+                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedGuru.statusGuru === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {selectedGuru.statusGuru?.toUpperCase() || 'AKTIF'}
+                      </span>
+                    )
+                  },
+                  { label: 'NIY', value: selectedGuru.niy || '-' },
+                  { label: 'NUPTK', value: selectedGuru.nuptk || '-' },
                   { label: 'Jenis Kelamin', value: formatGender(selectedGuru.jenisKelamin) },
-                  { label: 'Tempat Lahir',  value: selectedGuru.tempat_lahir || '-' },
+                  { label: 'Tempat Lahir', value: selectedGuru.tempat_lahir || '-' },
                   { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedGuru.tanggal_lahir) },
-                  { label: 'Telepon',       value: selectedGuru.no_telepon || '-' },
-                  { label: 'Alamat',        value: selectedGuru.alamat || '-' },
-                  { label: 'Email',         value: selectedGuru.email || '-' },
-                  { label: 'Hak Akses',     value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ') : '-' },
+                  { label: 'Telepon', value: selectedGuru.no_telepon || '-' },
+                  { label: 'Alamat', value: selectedGuru.alamat || '-' },
+                  { label: 'Email', value: selectedGuru.email || '-' },
+                  { label: 'Hak Akses', value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ') : '-' },
                 ].map((item, i) => (
-                  <div key={i} className="grid grid-cols-4 gap-2 pb-2.5" style={{ borderBottom: '1px solid #fde0c8' }}>
-                    <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                    <span className="text-xs text-gray-400">:</span>
-                    <span className="text-xs text-gray-700 col-span-2 break-words">{item.value}</span>
+                  <div key={i} className="grid grid-cols-12 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
+                    <span className="text-xs font-semibold col-span-3" style={{ color: '#7a3a0a' }}>{item.label}</span>
+                    <span className="text-xs text-gray-400 col-span-1">:</span>
+                    <div className="col-span-8 flex items-center">
+                      <span className="text-xs text-gray-700 break-words">{item.value}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -900,9 +904,9 @@ export default function DataGuruClient() {
 
             <div className="p-6 space-y-4">
               {[
-                { label: 'Role',           name: 'role',          options: [{ v: '', l: 'Semua Role' }, { v: 'guru kelas', l: 'Guru Kelas' }, { v: 'guru bidang studi', l: 'Guru Bidang Studi' }] },
-                { label: 'Jenis Kelamin',  name: 'jenisKelamin',  options: [{ v: '', l: 'Semua Jenis Kelamin' }, { v: 'Laki-laki', l: 'Laki-laki' }, { v: 'Perempuan', l: 'Perempuan' }] },
-                { label: 'Status',         name: 'status',        options: [{ v: '', l: 'Semua Status' }, { v: 'aktif', l: 'Aktif' }, { v: 'nonaktif', l: 'Nonaktif' }] },
+                { label: 'Role', name: 'role', options: [{ v: '', l: 'Semua Role' }, { v: 'guru kelas', l: 'Guru Kelas' }, { v: 'guru bidang studi', l: 'Guru Bidang Studi' }] },
+                { label: 'Jenis Kelamin', name: 'jenisKelamin', options: [{ v: '', l: 'Semua Jenis Kelamin' }, { v: 'Laki-laki', l: 'Laki-laki' }, { v: 'Perempuan', l: 'Perempuan' }] },
+                { label: 'Status', name: 'status', options: [{ v: '', l: 'Semua Status' }, { v: 'aktif', l: 'Aktif' }, { v: 'nonaktif', l: 'Nonaktif' }] },
               ].map(f => (
                 <div key={f.name} className="flex flex-col gap-1.5">
                   <label className={labelCls} style={labelColor}>{f.label}</label>

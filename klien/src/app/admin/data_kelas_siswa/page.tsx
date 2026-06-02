@@ -8,12 +8,12 @@
  */
 
 import { Metadata } from 'next';
-import DataKelasClient from './components/data_kelas_client';
+import DataKelasClient from './components/data_kelas_siswa_client';
 
 export const metadata: Metadata = {
-    title: 'Data Kelas',
+    title: 'Data Kelas & Siswa',
 };
 
-export default function ArsipRapor() {
+export default function kelasSiswa() {
     return <DataKelasClient/>;
 }

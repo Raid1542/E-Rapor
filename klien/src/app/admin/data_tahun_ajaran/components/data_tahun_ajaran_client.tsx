@@ -130,6 +130,9 @@ export default function DataTahunAjaranClient() {
     const [selectedItemForSemester, setSelectedItemForSemester] = useState<TahunAjaran | null>(null);
     const [confirmClosing, setConfirmClosing] = useState(false);
 
+    const [showConfirmTambah, setShowConfirmTambah] = useState(false);
+    const [confirmTambahClosing, setConfirmTambahClosing] = useState(false);
+
     // ── Fetch Data ─────────────────────────────────────────────────────────────
     const fetchTahunAjaran = useCallback(async () => {
         try {
@@ -202,9 +205,23 @@ export default function DataTahunAjaranClient() {
         );
     };
 
-    // ── Tambah Tahun Ajaran ────────────────────────────────────────────────────
-    const handleTambah = async () => {
+    // Buka Modal Konfirmasi Tambah
+    const openConfirmTambah = () => {
         if (!validate()) return;
+        setShowConfirmTambah(true);
+    };
+
+    // Tutup Modal Konfirmasi
+    const closeConfirmTambah = () => {
+        setConfirmTambahClosing(true);
+        setTimeout(() => {
+            setShowConfirmTambah(false);
+            setConfirmTambahClosing(false);
+        }, 200);
+    };
+
+    // Tambah Tahun Ajaran 
+    const handleTambah = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
             showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
@@ -221,8 +238,14 @@ export default function DataTahunAjaranClient() {
                 }),
             });
             if (res.ok) {
-                setShowTambah(false); resetForm(); await fetchTahunAjaran();
-                showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: `Tahun ajaran ${formData.tahun1}/${formData.tahun2} berhasil ditambahkan.` });
+                setShowTambah(false);
+                resetForm();
+                await fetchTahunAjaran();
+                showModal({
+                    type: 'success',
+                    title: 'Berhasil Ditambahkan!',
+                    message: `Tahun ajaran ${formData.tahun1}/${formData.tahun2} berhasil ditambahkan dan diaktifkan.\n\nTahun ajaran sebelumnya otomatis dinonaktifkan.`
+                });
             } else {
                 const err = await res.json();
                 showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan.' });
@@ -316,7 +339,6 @@ export default function DataTahunAjaranClient() {
             return;
         }
 
-
         closeConfirmGantiSemester();
 
         try {
@@ -336,17 +358,31 @@ export default function DataTahunAjaranClient() {
                     message: data.message || `Semester aktif tahun ajaran ${item.tahun_ajaran} berhasil diubah ke ${semesterBaru}.`
                 });
             } else {
+                if (data.warning === true) {
+                    // Tampilkan modal konfirmasi khusus
+                    showModal({
+                        type: 'warning',
+                        title: 'Konfirmasi Ganti Semester',
+                        message: `${data.message}\n\n${data.detail}\n\nApakah Anda yakin ingin melanjutkan ganti semester ke ${semesterBaru}?`,
+                    });
+                    return;
+                }
+
+                // Error biasa
                 showModal({
                     type: 'error',
                     title: 'Gagal Ganti Semester',
-                    message: data.message || 'Terjadi kesalahan saat mengganti semester.'
+                    message: data.message || 'Terjadi kesalahan saat mengganti semester.\n\n' +
+                        (data.detail ? `Detail: ${data.detail}` : '') +
+                        (data.error ? `\nError: ${data.error}` : '')
                 });
             }
         } catch (err: any) {
             showModal({
                 type: 'network',
                 title: 'Koneksi Gagal',
-                message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.'
+                message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.\n\n' +
+                    (err.message || '')
             });
         }
     };
@@ -468,20 +504,89 @@ export default function DataTahunAjaranClient() {
                     <div className="flex justify-end gap-3 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                         <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}>Batal</BtnSecondary>
                         <BtnSecondary onClick={resetForm}>Reset</BtnSecondary>
-                        <button onClick={isEdit ? handleEdit : handleTambah} className={btnPrimary.base} style={btnPrimary.style}
-                            onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
+                        <button
+                            onClick={isEdit ? handleEdit : openConfirmTambah}
+                            className={btnPrimary.base}
+                            style={btnPrimary.style}
+                            onMouseEnter={btnPrimary.hover}
+                            onMouseLeave={btnPrimary.leave}
+                        >
                             {isEdit ? 'Simpan Perubahan' : 'Simpan'}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {!isEdit && showConfirmTambah && (
+                <div
+                    className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${confirmTambahClosing ? 'opacity-0' : 'opacity-100'}`}
+                    onClick={e => { if (e.target === e.currentTarget) closeConfirmTambah(); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+                    <div
+                        className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-200 ${confirmTambahClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                        style={CARD_STYLE}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                            <h2 className="text-base font-bold text-white">Konfirmasi Tambah Tahun Ajaran</h2>
+                            <button onClick={closeConfirmTambah} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                <X size={16} className="text-white" />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                <p className="text-sm font-bold text-blue-800 mb-2">INFO PENTING!</p>
+                                <p className="text-sm text-blue-900">
+                                    Anda akan menambahkan tahun ajaran <strong className="text-lg">{formData.tahun1}/{formData.tahun2}</strong>.
+                                </p>
+                            </div>
+
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                                <h3 className="font-bold text-orange-800 mb-3 text-sm">DENGAN MENYIMPAN, MAKA:</h3>
+                                <ul className="space-y-2 text-sm text-orange-900">
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">✓</span>
+                                        <span>Tahun ajaran <strong>{formData.tahun1}/{formData.tahun2}</strong> akan otomatis <strong className="text-green-700">AKTIF</strong></span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">✓</span>
+                                        <span>Tahun ajaran yang sebelumnya aktif akan otomatis <strong className="text-gray-700">NONAKTIF</strong></span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">✓</span>
+                                        <span>Semester default: <strong>Ganjil</strong> (bisa diubah nanti)</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button onClick={closeConfirmTambah} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                    style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                    Batal, Cek Dulu
+                                </button>
+                                <button
+                                    onClick={() => { closeConfirmTambah(); handleTambah(); }}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
+                                    Ya, Tambah & Aktifkan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
 
-    // ── MAIN TABLE PAGE ────────────────────────────────────────────────────────
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -654,7 +759,7 @@ export default function DataTahunAjaranClient() {
 
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
                                 <p className="text-xs text-blue-900">
-                                    💡 <strong>Yang TETAP SAMA:</strong> Data guru, siswa, kelas, wali kelas, dan guru bidang studi TIDAK berubah.<br /><br />
+                                    <strong>Yang TETAP SAMA:</strong> Data guru, siswa, kelas, wali kelas, dan guru bidang studi TIDAK berubah.<br /><br />
                                     <strong>Yang BERUBAH:</strong> Input nilai & absensi dimulai dari awal untuk semester baru.
                                 </p>
                             </div>

@@ -1,12 +1,11 @@
 const kelasModel = require('../../models/kelasModel');
 const db = require('../../config/db');
 
-
 const getKelas = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ message: 'Tahun ajaran wajib dipilih' });
+            return res.status(400).json({ success: false, message: 'Tahun ajaran wajib dipilih' });
         }
         const [rows] = await db.execute(
             `
@@ -37,28 +36,57 @@ const getKelas = async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get kelas:', err);
-        res.status(500).json({ message: 'Gagal mengambil data kelas' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil data kelas' });
     }
 };
 
 const getKelasById = async (req, res) => {
     try {
         const { id } = req.params;
-        const kelas = await kelasModel.getById(id);
-        if (!kelas)
-            return res.status(404).json({ message: 'Kelas tidak ditemukan' });
+
+        // ✅ AMBIL tahun_ajaran_id dari tabel kelas, bukan dari middleware
+        const [kelasRow] = await db.execute(
+            `SELECT tahun_ajaran_id FROM kelas WHERE id_kelas = ?`,
+            [id]
+        );
+
+        if (kelasRow.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Kelas tidak ditemukan'
+            });
+        }
+
+        const tahunAjaranId = kelasRow[0].tahun_ajaran_id;
+
+        const kelas = await kelasModel.getByIdWithDetails(id, tahunAjaranId);
+
+        if (!kelas) {
+            return res.status(404).json({
+                success: false,
+                message: 'Kelas tidak ditemukan'
+            });
+        }
+
+        kelas.is_aktif = (kelas.status_tahun_ajaran === 'aktif');
+        delete kelas.status_tahun_ajaran;
+
         res.json({ success: true, data: kelas });
+
     } catch (err) {
         console.error('Error get kelas by ID:', err);
-        res.status(500).json({ message: 'Gagal mengambil detail kelas' });
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil detail kelas'
+        });
     }
 };
 
 const getKelasForDropdown = async (req, res) => {
     try {
-        const taId = req.idTahunAjaranInduk; // ← Dari middleware cekTahunAjaranAktif
+        const taId = req.idTahunAjaranInduk;
         if (!taId) {
-            return res.status(400).json({ message: 'Tidak ada tahun ajaran aktif' });
+            return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
         }
 
         const [rows] = await db.execute(
@@ -76,73 +104,143 @@ const getKelasForDropdown = async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get kelas for dropdown:', err);
-        res.status(500).json({ message: 'Gagal mengambil daftar kelas' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas' });
     }
 };
 
 const tambahKelas = async (req, res) => {
     const { nama_kelas, fase } = req.body;
-    const tahun_ajaran_id = req.idTahunAjaranInduk; // ← Dari middleware
+    const tahun_ajaran_id = req.idTahunAjaranInduk;
 
     if (!nama_kelas || !fase || !tahun_ajaran_id) {
-        return res.status(400).json({ message: 'Data tidak lengkap' });
+        return res.status(400).json({ success: false, message: 'Data tidak lengkap' });
     }
 
-    // Cek duplikat HANYA di tahun ajaran aktif
-    const existing = await kelasModel.getByTahunAjaran(tahun_ajaran_id);
-    const isDuplicate = existing.some(k => k.nama_kelas === nama_kelas);
-    if (isDuplicate) {
-        return res
-            .status(400)
-            .json({ message: `Kelas "${nama_kelas}" sudah ada di tahun ajaran ini` });
-    }
+    try {
+        const existing = await kelasModel.getByTahunAjaran(tahun_ajaran_id);
+        const isDuplicate = existing.some(k =>
+            k.nama_kelas.toLowerCase().trim() === nama_kelas.toLowerCase().trim()
+        );
 
-    const id = await kelasModel.create({ nama_kelas, fase, tahun_ajaran_id });
-    res.status(201).json({ message: 'Kelas berhasil ditambahkan', id });
+        if (isDuplicate) {
+            return res.status(400).json({
+                success: false,
+                message: `Kelas "${nama_kelas}" sudah ada di tahun ajaran ini`
+            });
+        }
+
+        const id = await kelasModel.create({ nama_kelas, fase, tahun_ajaran_id });
+
+        res.status(201).json({
+            success: true,
+            message: 'Kelas berhasil ditambahkan',
+            id
+        });
+
+    } catch (err) {
+        console.error('Error tambah kelas:', err);
+
+        if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+            return res.status(400).json({
+                success: false,
+                message: `Kelas "${nama_kelas}" sudah ada di tahun ajaran ini`
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            message: 'Gagal menambah kelas'
+        });
+    }
 };
 
 const editKelas = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nama_kelas, fase } = req.body;
-        const tahun_ajaran_id = req.idTahunAjaranInduk; // ← Ambil dari middleware
+        const { nama_kelas, fase, user_id } = req.body;
+        const tahun_ajaran_id = req.idTahunAjaranInduk;
 
         if (!nama_kelas || !fase || !tahun_ajaran_id) {
-            return res
-                .status(400)
-                .json({ message: 'Nama kelas, fase, dan tahun ajaran wajib diisi' });
+            return res.status(400).json({ success: false, message: 'Nama kelas, fase, dan tahun ajaran wajib diisi' });
         }
 
         const existingKelas = await kelasModel.getById(id);
         if (!existingKelas)
-            return res.status(404).json({ message: 'Kelas tidak ditemukan' });
+            return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan' });
 
-        // Cek duplikat HANYA di tahun ajaran aktif, kecuali diri sendiri
-        const allKelas = await kelasModel.getByTahunAjaran(tahun_ajaran_id);
-        const isDuplicate = allKelas.some(
-            k => k.nama_kelas === nama_kelas && k.id_kelas !== Number(id)
-        );
-        if (isDuplicate) {
-            return res
-                .status(400)
-                .json({
-                    message: `Nama kelas "${nama_kelas}" sudah digunakan di tahun ajaran ini`,
-                });
+        const existingUserId = existingKelas.wali_kelas_id || null;
+        const newUserId = user_id ? Number(user_id) : null;
+
+        const hasChanges =
+            existingKelas.nama_kelas.toLowerCase().trim() !== nama_kelas.toLowerCase().trim() ||
+            existingKelas.fase.toLowerCase().trim() !== fase.toLowerCase().trim() ||
+            existingUserId !== newUserId;
+
+        if (!hasChanges) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada perubahan data. Tidak perlu menyimpan.'
+            });
         }
 
-        // Update dengan tahun_ajaran_id (meski tidak berubah, tetap kirim)
+        const allKelas = await kelasModel.getByTahunAjaran(tahun_ajaran_id);
+        const isDuplicate = allKelas.some(
+            k => k.nama_kelas.toLowerCase().trim() === nama_kelas.toLowerCase().trim() && k.id_kelas !== Number(id)
+        );
+        if (isDuplicate) {
+            return res.status(400).json({
+                success: false,
+                message: `Nama kelas "${nama_kelas}" sudah digunakan di tahun ajaran ini`
+            });
+        }
+
         const success = await kelasModel.update(id, {
             nama_kelas,
             fase,
             tahun_ajaran_id,
         });
-        if (!success)
-            return res.status(404).json({ message: 'Gagal memperbarui kelas' });
 
-        res.json({ message: 'Data kelas berhasil diperbarui' });
+        if (!success)
+            return res.status(404).json({ success: false, message: 'Gagal memperbarui kelas' });
+
+        if (existingUserId !== newUserId) {
+            if (newUserId && newUserId > 0) {
+                const [cekWaliLain] = await db.execute(
+                    `SELECT k.nama_kelas 
+                FROM guru_kelas gk
+                JOIN kelas k ON gk.kelas_id = k.id_kelas
+                WHERE gk.user_id = ? 
+                AND gk.tahun_ajaran_id = ?
+                AND gk.kelas_id != ?`,
+                    [newUserId, tahun_ajaran_id, id]
+                );
+
+                if (cekWaliLain.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Guru ini sudah menjadi wali kelas di "${cekWaliLain[0].nama_kelas}" pada tahun ajaran yang sama. Satu guru hanya boleh menjadi wali kelas di satu kelas per tahun ajaran.`
+                    });
+                }
+            }
+
+            await db.execute(
+                'DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?',
+                [id, tahun_ajaran_id]
+            );
+
+            if (newUserId && newUserId > 0) {
+                await db.execute(
+                    'INSERT INTO guru_kelas (user_id, kelas_id, tahun_ajaran_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+                    [newUserId, id, tahun_ajaran_id]
+                );
+            }
+        }
+
+        res.json({ success: true, message: 'Data kelas berhasil diperbarui' });
+
     } catch (err) {
         console.error('Error edit kelas:', err);
-        res.status(500).json({ message: 'Gagal memperbarui data kelas' });
+        res.status(500).json({ success: false, message: 'Gagal memperbarui data kelas' });
     }
 };
 
@@ -152,57 +250,60 @@ const hapusKelas = async (req, res) => {
         const taId = req.idTahunAjaranInduk;
 
         if (!taId) {
-            return res.status(400).json({ message: 'Tidak ada tahun ajaran aktif' });
+            return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
         }
 
-        // Cek apakah kelas benar-benar milik tahun ajaran aktif
         const [kelasRows] = await db.execute(
             'SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?',
             [id, taId]
         );
         if (kelasRows.length === 0) {
-            return res
-                .status(404)
-                .json({
-                    message: 'Kelas tidak ditemukan atau bukan milik tahun ajaran aktif',
-                });
+            return res.status(404).json({
+                success: false,
+                message: 'Kelas tidak ditemukan atau bukan milik tahun ajaran aktif'
+            });
         }
 
-        // Cek apakah masih digunakan
         const [cekDep] = await db.execute(
             `
             SELECT 
                 (SELECT COUNT(*) FROM siswa_kelas WHERE kelas_id = ?) AS siswa_count,
-                (SELECT COUNT(*) FROM guru_kelas WHERE kelas_id = ?) AS guru_count,
                 (SELECT COUNT(*) FROM absensi WHERE kelas_id = ?) AS absensi_count,
-                (SELECT COUNT(*) FROM nilai WHERE kelas_id = ?) AS nilai_count
-        `,
+                (SELECT COUNT(*) FROM nilai_rapor WHERE kelas_id = ?) AS nilai_rapor_count,
+                (SELECT COUNT(*) FROM pembelajaran WHERE kelas_id = ?) AS pembelajaran_count
+            `,
             [id, id, id, id]
         );
 
         const dep = cekDep[0];
         const total =
-            dep.siswa_count + dep.guru_count + dep.absensi_count + dep.nilai_count;
+            dep.siswa_count +
+            dep.absensi_count +
+            dep.nilai_rapor_count +
+            dep.pembelajaran_count;
 
         if (total > 0) {
             return res.status(400).json({
-                message:
-                    'Kelas tidak bisa dihapus karena masih digunakan di data siswa, guru, atau nilai.',
+                success: false,
+                message: 'Kelas tidak bisa dihapus karena masih ada data siswa, absensi, nilai, atau pembelajaran.'
             });
         }
 
-        // Hapus kelas
-        const [result] = await db.execute('DELETE FROM kelas WHERE id_kelas = ?', [
-            id,
-        ]);
+        await db.execute(
+            'DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?',
+            [id, taId]
+        );
+
+        const [result] = await db.execute('DELETE FROM kelas WHERE id_kelas = ?', [id]);
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Gagal menghapus kelas' });
+            return res.status(404).json({ success: false, message: 'Gagal menghapus kelas' });
         }
 
-        res.json({ message: 'Kelas berhasil dihapus' });
+        res.json({ success: true, message: 'Kelas berhasil dihapus' });
+
     } catch (err) {
         console.error('Error hapus kelas:', err);
-        res.status(500).json({ message: 'Gagal menghapus kelas' });
+        res.status(500).json({ success: false, message: 'Gagal menghapus kelas' });
     }
 };
 

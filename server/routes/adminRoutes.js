@@ -135,6 +135,7 @@ router.get('/siswa', adminOnly, admin.getSiswa);
 router.get('/siswa/:id', adminOnly, admin.getSiswaById);
 router.post('/siswa', adminOnlyWithTahunAjaran, admin.tambahSiswa);
 router.put('/siswa/:id', adminOnlyWithTahunAjaran, admin.editSiswa);
+router.get('/kelas/:id/siswa', adminOnly, admin.getSiswaByKelas);
 
 // --- Data Admin ---
 router.get('/admin', adminOnly, admin.getAdmin);
@@ -158,11 +159,11 @@ router.post('/sekolah/logo', adminOnly, uploadLogo.single('logo'), admin.uploadL
 
 // --- Atur Kelas & Guru Kelas ---
 router.get('/kelas', adminOnly, admin.getKelas);
+router.get('/kelas/dropdown', adminOnlyWithTahunAjaran, admin.getKelasForDropdown);
 router.get('/kelas/:id', adminOnly, admin.getKelasById);
 router.post('/kelas', adminOnlyWithTahunAjaran, admin.tambahKelas);
 router.put('/kelas/:id', adminOnlyWithTahunAjaran, admin.editKelas);
 router.delete('/kelas/:id', adminOnlyWithTahunAjaran, admin.hapusKelas);
-router.get('/dropdown', adminOnlyWithTahunAjaran, admin.getKelasForDropdown);
 
 // -- Guru Kelas --
 router.get('/guru-kelas', adminOnly, admin.getGuruKelasList);

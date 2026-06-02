@@ -1,5 +1,5 @@
 /**
- * Nama File: data_kelas_client.tsx
+ * Nama File: data_kelas_siswa_client.tsx
  * Fungsi: Komponen klien untuk mengelola data kelas,
  *         mencakup fitur tambah (dengan pilihan wali kelas langsung),
  *         edit, hapus, pemilihan tahun ajaran, dan penetapan wali kelas.
@@ -11,8 +11,9 @@
 
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
-import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users } from 'lucide-react';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -35,10 +36,10 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-  success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-  error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -85,13 +86,13 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG     = { background: '#fdf6f0' };
-const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
   base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
@@ -100,7 +101,7 @@ const btnPrimary = {
   leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
@@ -147,27 +148,27 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataKelasClient() {
-  const [kelasList,                  setKelasList]                  = useState<Kelas[]>([]);
-  const [loading,                    setLoading]                    = useState(true);
-  const [showTambah,                 setShowTambah]                 = useState(false);
-  const [showEdit,                   setShowEdit]                   = useState(false);
-  const [editId,                     setEditId]                     = useState<number | null>(null);
-  const [searchQuery,                setSearchQuery]                = useState('');
-  const [itemsPerPage,               setItemsPerPage]               = useState(10);
-  const [currentPage,                setCurrentPage]                = useState(1);
-  const [tahunAjaranList,            setTahunAjaranList]            = useState<TahunAjaran[]>([]);
-  const [selectedTahunAjaranId,      setSelectedTahunAjaranId]      = useState<number | null>(null);
-  const [selectedTahunAjaranAktif,   setSelectedTahunAjaranAktif]   = useState<boolean>(false);
-  const [guruList,                   setGuruList]                   = useState<GuruOption[]>([]);
-  const [loadingGuru,                setLoadingGuru]                = useState(false);
+  const [kelasList, setKelasList] = useState<Kelas[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showTambah, setShowTambah] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
+  const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
+  const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState<boolean>(false);
+  const [guruList, setGuruList] = useState<GuruOption[]>([]);
+  const [loadingGuru, setLoadingGuru] = useState(false);
 
   const [formData, setFormData] = useState<FormDataType>({ nama_kelas: '', fase: '', user_id: '', confirmData: false });
-  const [errors,   setErrors]   = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [modal,      setModal]      = useState<ModalConfig | null>(null);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
-  const showModal   = useCallback((cfg: ModalConfig) => setModal(cfg), []);
-  const closeModal  = useCallback(() => setModal(null), []);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const closeModal = useCallback(() => setModal(null), []);
   const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
 
   // ── fetch ──────────────────────────────────────────────────────────────────
@@ -176,12 +177,14 @@ export default function DataKelasClient() {
     try {
       const token = localStorage.getItem('token');
       if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-      const res  = await fetch('http://localhost:5000/api/admin/tahun-ajaran', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok && data.success) {
         setTahunAjaranList(data.data.map((ta: any) => ({
-          id: ta.id_tahun_ajaran, tahun_ajaran: ta.tahun_ajaran,
-          semester: (ta.semester || 'ganjil').toLowerCase(), is_aktif: ta.status === 'aktif',
+          id: ta.id_induk,
+          tahun_ajaran: ta.tahun_ajaran,
+          semester: ta.semester_aktif?.toLowerCase() || 'ganjil',
+          is_aktif: ta.status === 'AKTIF',
         })));
       }
     } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
@@ -192,20 +195,37 @@ export default function DataKelasClient() {
     const token = localStorage.getItem('token');
     if (!token) { setLoadingGuru(false); return; }
     try {
-      const res  = await fetch('http://localhost:5000/api/admin/guru-kelas', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('http://localhost:5000/api/admin/guru-kelas', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = await res.json();
       if (res.ok && data.success) {
-        setGuruList(data.data.filter((g: any) => g.user_id != null).map((g: any) => ({ id: g.user_id, nama: g.nama })));
-      } else { setGuruList([]); }
-    } catch { setGuruList([]); }
-    finally { setLoadingGuru(false); }
+        const filteredGurus = data.data
+          .filter((g: any) => g.user_id != null)
+          .filter((g: any) => {
+            if (editId && g.kelas_id === editId) return true;
+            if (g.kelas_id && g.kelas_id !== editId) return false;
+            return true;
+          })
+          .map((g: any) => ({ id: g.user_id, nama: g.nama }));
+
+        setGuruList(filteredGurus);
+      } else {
+        setGuruList([]);
+      }
+    } catch {
+      setGuruList([]);
+    }
+    finally {
+      setLoadingGuru(false);
+    }
   };
 
   const fetchKelas = async (tahunAjaranId: number) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-      const res  = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${tahunAjaranId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${tahunAjaranId}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok && data.success) {
         setKelasList(data.data.map((k: any) => ({ ...k, wali_kelas_id: k.wali_kelas === '-' ? null : k.wali_kelas_id })));
@@ -216,7 +236,26 @@ export default function DataKelasClient() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchTahunAjaran(); fetchGuruList(); }, []);
+  useEffect(() => {
+    fetchTahunAjaran();
+    fetchGuruList();
+  }, []);
+
+  useEffect(() => {
+    if (tahunAjaranList.length > 0 && selectedTahunAjaranId === null) {
+      const savedId = localStorage.getItem('selectedTahunAjaranId');
+      if (savedId) {
+        const id = Number(savedId);
+        const ta = tahunAjaranList.find(t => t.id === id);
+        if (ta) {
+          setSelectedTahunAjaranId(id);
+          setSelectedTahunAjaranAktif(ta.is_aktif);
+          setLoading(true);
+          fetchKelas(id);
+        }
+      }
+    }
+  }, [tahunAjaranList]);
 
   // ── form handlers ──────────────────────────────────────────────────────────
 
@@ -228,8 +267,8 @@ export default function DataKelasClient() {
   const validate = (): boolean => {
     const ne: Record<string, string> = {};
     if (!formData.nama_kelas?.trim()) ne.nama_kelas = 'Nama kelas wajib diisi';
-    if (!formData.fase?.trim())       ne.fase       = 'Fase wajib diisi';
-    if (!formData.confirmData)        ne.confirmData = 'Harap konfirmasi data';
+    if (!formData.fase?.trim()) ne.fase = 'Fase wajib diisi';
+    if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data';
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah sebelum melanjutkan.' });
@@ -269,7 +308,7 @@ export default function DataKelasClient() {
       // Langkah 2: Jika wali kelas dipilih, langsung assign ke kelas yang baru dibuat
       if (formData.user_id && formData.user_id !== '') {
         const newKelasId = newKelasData.data?.id ?? newKelasData.id ?? null;
-        const userIdNum  = Number(formData.user_id);
+        const userIdNum = Number(formData.user_id);
 
         if (newKelasId && !isNaN(userIdNum) && userIdNum > 0) {
           const resWali = await fetch(`http://localhost:5000/api/admin/kelas/${newKelasId}/guru`, {
@@ -335,36 +374,55 @@ export default function DataKelasClient() {
   const handleSubmitEdit = async () => {
     if (!validate()) return;
     const token = localStorage.getItem('token');
-    if (!token || !editId || !selectedTahunAjaranId) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' }); return; }
+    if (!token || !editId || !selectedTahunAjaranId) {
+      showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' });
+      return;
+    }
+
+    const originalData = kelasList.find(k => k.id === editId);
+    if (originalData) {
+      const hasChanges =
+        originalData.nama_kelas.toLowerCase().trim() !== formData.nama_kelas.toLowerCase().trim() ||
+        originalData.fase.toLowerCase().trim() !== formData.fase.toLowerCase().trim() ||
+        String(originalData.wali_kelas_id || '') !== String(formData.user_id || ''); // ✅ Cek perubahan wali kelas
+
+      if (!hasChanges) {
+        showModal({
+          type: 'warning',
+          title: 'Tidak Ada Perubahan',
+          message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
+        });
+        return;
+      }
+    }
+
     try {
       const resKelas = await fetch(`http://localhost:5000/api/admin/kelas/${editId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ nama_kelas: formData.nama_kelas.trim(), fase: formData.fase.trim() }),
+        body: JSON.stringify({
+          nama_kelas: formData.nama_kelas.trim(),
+          fase: formData.fase.trim(),
+          user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null  // ✅ Kirim user_id (bisa null)
+        }),
       });
+
       if (!resKelas.ok) {
         const err = await resKelas.json();
         throw new Error(err.message || 'Gagal update kelas');
       }
 
-      if (formData.user_id && formData.user_id !== '') {
-        const userIdNum = Number(formData.user_id);
-        if (isNaN(userIdNum) || userIdNum <= 0) { showModal({ type: 'warning', title: 'ID Tidak Valid', message: 'ID guru tidak valid.' }); return; }
-        const resWali = await fetch(`http://localhost:5000/api/admin/kelas/${editId}/guru`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ user_id: userIdNum }),
-        });
-        if (!resWali.ok) {
-          const err = await resWali.json();
-          showModal({ type: 'warning', title: 'Perhatian', message: 'Kelas berhasil diupdate, tapi gagal menetapkan wali kelas: ' + (err.message || '') });
-          setShowEdit(false); setEditId(null); handleReset(); if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
-          return;
-        }
-      }
+      setShowEdit(false);
+      setEditId(null);
+      handleReset();
+      if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
 
-      setShowEdit(false); setEditId(null); handleReset(); if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
-      showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data kelas ${formData.nama_kelas} berhasil diperbarui.` });
+      showModal({
+        type: 'success',
+        title: 'Data Diperbarui!',
+        message: `Data kelas ${formData.nama_kelas} berhasil diperbarui.`
+      });
+
     } catch (err: any) {
       showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan.' });
     }
@@ -381,15 +439,15 @@ export default function DataKelasClient() {
       kelas.fase.toLowerCase().includes(query);
   });
 
-  const totalPages   = Math.max(1, Math.ceil(filteredKelas.length / itemsPerPage));
-  const startIndex   = (currentPage - 1) * itemsPerPage;
-  const endIndex     = startIndex + itemsPerPage;
+  const totalPages = Math.max(1, Math.ceil(filteredKelas.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
   const currentKelas = filteredKelas.slice(startIndex, endIndex);
 
   const renderPagination = () => {
     const pages: ReactNode[] = [];
-    const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-    const btnActive   = "text-white border-orange-500";
+    const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+    const btnActive = "text-white border-orange-500";
     const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
     pages.push(
@@ -553,7 +611,7 @@ export default function DataKelasClient() {
   );
 
   if (showTambah) return renderForm(false);
-  if (showEdit)   return renderForm(true);
+  if (showEdit) return renderForm(true);
 
   // ── HALAMAN UTAMA ──────────────────────────────────────────────────────────
 
@@ -589,12 +647,14 @@ export default function DataKelasClient() {
                   setSelectedTahunAjaranAktif(false);
                   setLoading(false);
                   setKelasList([]);
+                  localStorage.removeItem('selectedTahunAjaranId');
                   return;
                 }
                 const id = Number(value);
                 const selectedTa = tahunAjaranList.find(ta => ta.id === id);
                 setSelectedTahunAjaranId(id);
                 setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
+                localStorage.setItem('selectedTahunAjaranId', id.toString());
                 setLoading(true);
                 fetchKelas(id);
               }}
@@ -603,7 +663,7 @@ export default function DataKelasClient() {
               <option value="">-- Pilih Tahun Ajaran --</option>
               {tahunAjaranList.map(ta => (
                 <option key={ta.id} value={ta.id}>
-                  {ta.tahun_ajaran} {ta.semester === 'ganjil' ? 'Ganjil' : 'Genap'} {ta.is_aktif ? '(Aktif)' : ''}
+                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
                 </option>
               ))}
             </select>
@@ -612,8 +672,7 @@ export default function DataKelasClient() {
 
         {selectedTahunAjaranId === null ? (
           <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
-            <p className="text-base font-semibold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
-            <p className="text-sm text-gray-400 mt-1">Data kelas akan ditampilkan sesuai tahun ajaran yang dipilih</p>
+            <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
           </div>
         ) : (
           <>
@@ -641,10 +700,10 @@ export default function DataKelasClient() {
                       onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                       className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
                     >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
+                      <option key="10" value={10}>10</option>
+                      <option key="25" value={25}>25</option>
+                      <option key="50" value={50}>50</option>
+                      <option key="100" value={100}>100</option>
                     </select>
                     <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                   </div>
@@ -724,7 +783,7 @@ export default function DataKelasClient() {
                           className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
                           style={{ background: '#fff0e5', color: '#b35a08', border: '1px solid #fde0c8' }}
                         >
-                          Fase {kelas.fase}
+                          {kelas.fase}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-center">
@@ -736,30 +795,42 @@ export default function DataKelasClient() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                        {selectedTahunAjaranAktif ? (
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => handleEdit(kelas)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                              style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                              onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
-                            >
-                              <Pencil size={13} /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleHapus(kelas.id, kelas.nama_kelas)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                              style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                              onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
-                            >
-                              <Trash2 size={13} /> Hapus
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
+                        <div className="flex justify-center gap-2">
+                          {/* LIHAT SISWA: SELALU MUNCUL (walau tahun ajaran tidak aktif) */}
+                          <Link
+                            href={`/admin/data_kelas_siswa/${kelas.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                            style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#bae6fd')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}
+                          >
+                            <Users size={13} /> Lihat Siswa
+                          </Link>
+
+                          {/* EDIT & HAPUS: HANYA MUNCUL JIKA TAHUN AJARAN AKTIF */}
+                          {selectedTahunAjaranAktif && (
+                            <>
+                              <button
+                                onClick={() => handleEdit(kelas)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                              >
+                                <Pencil size={13} /> Edit
+                              </button>
+                              <button
+                                onClick={() => handleHapus(kelas.id, kelas.nama_kelas)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                              >
+                                <Trash2 size={13} /> Hapus
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
