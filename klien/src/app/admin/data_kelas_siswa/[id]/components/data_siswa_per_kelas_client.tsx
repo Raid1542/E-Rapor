@@ -259,7 +259,7 @@ export default function SiswaPerKelasPage() {
     const handleReset = () => {
         setFormData({
             nama: '',
-            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '',           nis: '',
+            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '', nis: '',
             nisn: '',
             tempatLahir: '',
             tanggalLahir: '',
@@ -317,7 +317,7 @@ export default function SiswaPerKelasPage() {
     const openFormTambah = () => {
         setFormData(prev => ({
             ...prev,
-            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '', 
+            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '',
         }));
         setShowTambah(true);
     };
@@ -347,7 +347,7 @@ export default function SiswaPerKelasPage() {
                     tanggal_lahir: formData.tanggalLahir,
                     jenis_kelamin: formData.jenisKelamin,
                     alamat: formData.alamat,
-                    kelas_id: Number(formData.kelas), 
+                    kelas_id: Number(formData.kelas),
                     tahun_ajaran_id: kelasInfo.tahun_ajaran_id,
                 }),
             });
@@ -411,7 +411,7 @@ export default function SiswaPerKelasPage() {
                     tanggal_lahir: formData.tanggalLahir,
                     jenis_kelamin: formData.jenisKelamin,
                     alamat: formData.alamat,
-                    kelas_id: Number(formData.kelas), 
+                    kelas_id: Number(formData.kelas),
                     status: formData.statusSiswa,
                     tahun_ajaran_id: kelasInfo.tahun_ajaran_id,
                 }),
@@ -619,7 +619,7 @@ export default function SiswaPerKelasPage() {
                                 <Lock size={10} /> Otomatis
                             </span>
                         </label>
-                        <div 
+                        <div
                             className="w-full border rounded-xl px-4 py-2.5 text-sm rounded-xl bg-gray-100 text-gray-700 font-semibold cursor-not-allowed flex items-center justify-between"
                             style={{ borderColor: '#fde0c8' }}
                         >
@@ -957,10 +957,10 @@ export default function SiswaPerKelasPage() {
                                     { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedSiswa.tanggal_lahir) },
                                     { label: 'Alamat', value: selectedSiswa.alamat || '-' },
                                 ].map((item, i) => (
-                                    <div key={i} className="grid grid-cols-12 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
-                                        <span className="text-xs font-semibold col-span-3" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                                        <span className="text-xs text-gray-400 col-span-1">:</span>
-                                        <div className="col-span-8 flex items-center">
+                                    <div key={i} className="grid grid-cols-4 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
+                                        <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
+                                        <span className="text-xs text-gray-700 col-span-1">:</span>
+                                        <div className="col-span-2 flex items-center">
                                             <span className="text-xs text-gray-700 break-words">{item.value}</span>
                                         </div>
                                     </div>

@@ -804,10 +804,10 @@ export default function DataGuruClient() {
                   { label: 'Email', value: selectedGuru.email || '-' },
                   { label: 'Hak Akses', value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ') : '-' },
                 ].map((item, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
-                    <span className="text-xs font-semibold col-span-3" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                    <span className="text-xs text-gray-400 col-span-1">:</span>
-                    <div className="col-span-8 flex items-center">
+                  <div key={i} className="grid grid-cols-4 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
+                    <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
+                    <span className="text-xs text-gray-700 col-span-1">:</span>
+                    <div className="col-span-2 flex items-center">
                       <span className="text-xs text-gray-700 break-words">{item.value}</span>
                     </div>
                   </div>
