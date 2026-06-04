@@ -277,74 +277,44 @@ export default function DataKelasClient() {
     return true;
   };
 
-  // ── TAMBAH: kini mendukung pilihan wali kelas langsung ────────────────────
+ 
 
   const handleSubmitTambah = async () => {
     if (!validate()) return;
     const token = localStorage.getItem('token');
     if (!token) {
-      showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
-      return;
+        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+        return;
     }
     try {
-      // Langkah 1: Buat kelas baru
-      const res = await fetch('http://localhost:5000/api/admin/kelas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          nama_kelas: formData.nama_kelas.trim(),
-          fase: formData.fase.trim(),
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan kelas.' });
-        return;
-      }
-
-      const newKelasData = await res.json();
-
-      // Langkah 2: Jika wali kelas dipilih, langsung assign ke kelas yang baru dibuat
-      if (formData.user_id && formData.user_id !== '') {
-        const newKelasId = newKelasData.data?.id ?? newKelasData.id ?? null;
-        const userIdNum = Number(formData.user_id);
-
-        if (newKelasId && !isNaN(userIdNum) && userIdNum > 0) {
-          const resWali = await fetch(`http://localhost:5000/api/admin/kelas/${newKelasId}/guru`, {
+        const res = await fetch('http://localhost:5000/api/admin/kelas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ user_id: userIdNum }),
-          });
+            body: JSON.stringify({
+                nama_kelas: formData.nama_kelas.trim(),
+                fase: formData.fase.trim(),
+                user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null, // ✅ KIRIM user_id
+            }),
+        });
 
-          if (!resWali.ok) {
-            // Kelas sudah tersimpan, namun penetapan wali kelas gagal — beri peringatan
-            setShowTambah(false);
-            handleReset();
-            if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
-            showModal({
-              type: 'warning',
-              title: 'Kelas Ditambahkan',
-              message: `Kelas ${formData.nama_kelas} berhasil ditambahkan, namun wali kelas gagal ditetapkan. Silakan atur melalui menu Edit.`,
-            });
+        if (!res.ok) {
+            const err = await res.json();
+            showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan kelas.' });
             return;
-          }
         }
-      }
 
-      // Semua berhasil
-      setShowTambah(false);
-      handleReset();
-      if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
-      showModal({
-        type: 'success',
-        title: 'Kelas Ditambahkan!',
-        message: `Kelas ${formData.nama_kelas} berhasil ditambahkan.`,
-      });
+        setShowTambah(false);
+        handleReset();
+        if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
+        showModal({
+            type: 'success',
+            title: 'Kelas Ditambahkan!',
+            message: `Kelas ${formData.nama_kelas} berhasil ditambahkan.`,
+        });
     } catch {
-      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
     }
-  };
+};
 
   const handleEdit = (kelas: Kelas) => {
     setEditId(kelas.id);
@@ -742,7 +712,7 @@ export default function DataKelasClient() {
               <table className="w-full min-w-[640px] text-sm border-collapse">
                 <thead>
                   <tr style={TH_GRAD}>
-                    {['No.', 'Nama Kelas', 'Wali Kelas', 'Fase', 'Jumlah Siswa', 'Aksi'].map(h => (
+                    {['No.', 'Nama Kelas', 'Guru Kelas', 'Fase', 'Jumlah Siswa', 'Aksi'].map(h => (
                       <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>

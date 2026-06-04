@@ -179,13 +179,14 @@ router.put('/tahun-ajaran/:id_induk/semester', adminOnly, admin.gantiSemester);
 // --- Mata Pelajaran ---
 router.get('/mata-pelajaran', adminOnly, admin.getMataPelajaran);
 router.get('/mata-pelajaran/:id', adminOnly, admin.getMataPelajaranById);
-router.post('/mata-pelajaran', adminOnly, admin.tambahMataPelajaran);
-router.put('/mata-pelajaran/:id', adminOnly, admin.editMataPelajaran);
-router.delete('/mata-pelajaran/:id', adminOnly, admin.hapusMataPelajaran);
+router.post('/mata-pelajaran', adminOnlyWithTahunAjaran, admin.tambahMataPelajaran);
+router.put('/mata-pelajaran/:id', adminOnlyWithTahunAjaran, admin.editMataPelajaran);
+router.delete('/mata-pelajaran/:id', adminOnlyWithTahunAjaran, admin.hapusMataPelajaran);
 
 // --- PEMBELAJARAN ---
-router.get('/pembelajaran', adminOnlyWithTahunAjaran, admin.getPembelajaran);
+router.get('/pembelajaran', adminOnly, admin.getPembelajaran);
 router.get('/pembelajaran/dropdown', adminOnlyWithTahunAjaran, admin.getDropdownPembelajaran);
+router.get('/pembelajaran/kelas/:kelasId', adminOnly, admin.getPembelajaranByKelas);
 router.post('/pembelajaran', adminOnlyWithTahunAjaran, admin.tambahPembelajaran);
 router.put('/pembelajaran/:id', adminOnlyWithTahunAjaran, admin.editPembelajaran);
 router.delete('/pembelajaran/:id', adminOnlyWithTahunAjaran, admin.hapusPembelajaran);

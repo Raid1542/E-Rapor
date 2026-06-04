@@ -3,12 +3,38 @@ const db = require('../../config/db');
 const XLSX = require('xlsx');
 const fs = require('fs');
 
+const getIdTahunAjaranAktif = async (idInduk) => {
+    const [rows] = await db.execute(
+        `SELECT id_tahun_ajaran 
+            FROM tahun_ajaran 
+            WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
+            LIMIT 1`,
+        [idInduk]
+    );
+    return rows.length > 0 ? rows[0].id_tahun_ajaran : null;
+};
+
 const getSiswa = async (req, res) => {
     try {
-        const { tahun_ajaran_id } = req.query;
+        let { tahun_ajaran_id } = req.query;
+        
         if (!tahun_ajaran_id) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran wajib dipilih' });
         }
+
+        const [cekInduk] = await db.execute(
+            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran_induk WHERE id_tahun_ajaran_induk = ?`,
+            [tahun_ajaran_id]
+        );
+
+        // Jika ini id_induk, convert ke id_tahun_ajaran aktif
+        if (cekInduk.length > 0) {
+            tahun_ajaran_id = await getIdTahunAjaranAktif(tahun_ajaran_id);
+            if (!tahun_ajaran_id) {
+                return res.json({ success: true, data: [] });
+            }
+        }
+
         const siswaList = await siswaModel.getSiswaByTahunAjaran(tahun_ajaran_id);
         res.json({ success: true, data: siswaList });
     } catch (err) {
@@ -20,13 +46,18 @@ const getSiswa = async (req, res) => {
 const getSiswaById = async (req, res) => {
     try {
         const { id } = req.params;
-        const taId = req.idTahunAjaranInduk;
+        const idInduk = req.idTahunAjaranInduk;
 
-        if (!taId) {
+        if (!idInduk) {
             return res.status(400).json({ success: false, message: 'ID Tahun Ajaran tidak ditemukan' });
         }
 
-        const siswa = await siswaModel.getSiswaById(id, taId);
+        const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
+        if (!tahunAjaranId) {
+            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        }
+
+        const siswa = await siswaModel.getSiswaById(id, tahunAjaranId);
         if (!siswa) return res.status(404).json({ success: false, message: 'Siswa tidak ditemukan' });
 
         res.json({ success: true, data: siswa });
@@ -97,14 +128,18 @@ const tambahSiswa = async (req, res) => {
             jenis_kelamin,
             alamat,
             kelas_id,
-            tahun_ajaran_id,
         } = req.body;
 
-        // Validasi tahun ajaran
-        if (tahun_ajaran_id != req.idTahunAjaranInduk) {
-            return res.status(403).json({
-                success: false,
-                message: 'Operasi hanya diperbolehkan di tahun ajaran aktif.',
+        const idInduk = req.idTahunAjaranInduk;
+        if (!idInduk) {
+            return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
+        }
+
+        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
+        if (!tahun_ajaran_id) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tidak ada semester aktif di tahun ajaran ini' 
             });
         }
 
@@ -113,6 +148,16 @@ const tambahSiswa = async (req, res) => {
             return res.status(400).json({ success: false, message: 'kelas_id tidak valid' });
         }
 
+        const [kelasCheck] = await db.execute(
+            `SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?`,
+            [parsedKelasId, tahun_ajaran_id]
+        );
+        if (kelasCheck.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Kelas tidak valid atau bukan milik tahun ajaran aktif'
+            });
+        }
         
         const [cekDuplikat] = await db.execute(`
             SELECT s.id_siswa 
@@ -161,7 +206,7 @@ const tambahSiswa = async (req, res) => {
         
         res.status(500).json({ 
             success: false,
-            message: 'Gagal menambah data siswa' 
+            message: err.message || 'Gagal menambah data siswa' 
         });
     }
 };
@@ -181,9 +226,17 @@ const editSiswa = async (req, res) => {
             status,
         } = req.body;
         
-        const tahunAjaranId = req.idTahunAjaranInduk;
-        if (!tahunAjaranId) {
+        const idInduk = req.idTahunAjaranInduk;
+        if (!idInduk) {
             return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
+        }
+
+        const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
+        if (!tahunAjaranId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tidak ada semester aktif' 
+            });
         }
 
         const existingSiswa = await siswaModel.getSiswaById(id, tahunAjaranId);
@@ -248,7 +301,7 @@ const editSiswa = async (req, res) => {
         
         res.status(500).json({ 
             success: false,
-            message: 'Gagal memperbarui data siswa' 
+            message: err.message || 'Gagal memperbarui data siswa' 
         });
     }
 };
@@ -265,9 +318,14 @@ const importSiswa = async (req, res) => {
         
         if (data.length === 0) throw new Error('File Excel kosong');
         
-        const tahunAjaranId = req.idTahunAjaranInduk;
-        if (!tahunAjaranId) {
+        const idInduk = req.idTahunAjaranInduk;
+        if (!idInduk) {
             throw new Error('Tidak ada tahun ajaran aktif');
+        }
+
+        const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
+        if (!tahunAjaranId) {
+            throw new Error('Tidak ada semester aktif di tahun ajaran ini');
         }
         
         await connection.beginTransaction();
@@ -318,14 +376,14 @@ const importSiswa = async (req, res) => {
             }
             
             const [kelasRows] = await connection.execute(
-                'SELECT id_kelas FROM kelas WHERE nama_kelas = ?',
-                [String(row.kelas_id).trim()]
+                'SELECT id_kelas FROM kelas WHERE nama_kelas = ? AND tahun_ajaran_id = ?',
+                [String(row.kelas_id).trim(), tahunAjaranId]
             );
             if (kelasRows.length === 0) {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
-                    reason: `Kelas "${row.kelas_id}" tidak ditemukan`
+                    reason: `Kelas "${row.kelas_id}" tidak ditemukan di tahun ajaran aktif`
                 });
                 continue; 
             }

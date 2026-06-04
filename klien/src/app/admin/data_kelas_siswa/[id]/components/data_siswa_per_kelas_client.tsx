@@ -2,13 +2,14 @@
  * Halaman Siswa Per Kelas
  * Path: /admin/data-kelas/[id]/siswa
  * Fungsi: Menampilkan daftar siswa dalam kelas tertentu dengan CRUD lengkap
+ * Update: Field Kelas otomatis terisi & read-only (tidak bisa diubah)
  */
 
 'use client';
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { X, Plus, Upload, Search, ArrowLeft, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Pencil, Eye } from 'lucide-react';
+import { X, Plus, Upload, Search, ArrowLeft, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Pencil, Eye, Lock } from 'lucide-react';
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 type ModalType = 'success' | 'error' | 'warning' | 'network';
@@ -172,12 +173,10 @@ export default function SiswaPerKelasPage() {
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Modal states
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-    // Form states
     const [showTambah, setShowTambah] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
@@ -189,12 +188,10 @@ export default function SiswaPerKelasPage() {
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Detail modal states
     const [showDetail, setShowDetail] = useState(false);
     const [detailClosing, setDetailClosing] = useState(false);
     const [selectedSiswa, setSelectedSiswa] = useState<Siswa | null>(null);
 
-    // Import states
     const [showImport, setShowImport] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importClosing, setImportClosing] = useState(false);
@@ -255,13 +252,21 @@ export default function SiswaPerKelasPage() {
     // ── FORM HANDLERS ─────────────────────────────────────────────────────────
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
+        if (name === 'kelas') return;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleReset = () => {
         setFormData({
-            nama: '', kelas: '', nis: '', nisn: '', tempatLahir: '', tanggalLahir: '',
-            jenisKelamin: '', alamat: '', statusSiswa: 'aktif', confirmData: false,
+            nama: '',
+            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '',           nis: '',
+            nisn: '',
+            tempatLahir: '',
+            tanggalLahir: '',
+            jenisKelamin: '',
+            alamat: '',
+            statusSiswa: 'aktif',
+            confirmData: false,
         });
         setErrors({});
     };
@@ -269,7 +274,6 @@ export default function SiswaPerKelasPage() {
     const validate = (): boolean => {
         const ne: Record<string, string> = {};
         if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
-        if (!formData.kelas) ne.kelas = 'Pilih kelas';
         if (!formData.nis) ne.nis = 'NIS wajib diisi';
         if (!formData.nisn) ne.nisn = 'NISN wajib diisi';
         if (!formData.jenisKelamin) ne.jenisKelamin = 'Pilih jenis kelamin';
@@ -295,10 +299,9 @@ export default function SiswaPerKelasPage() {
 
     const handleEdit = (siswa: Siswa) => {
         setEditId(siswa.id);
-        const kelasItem = kelasList.find(k => k.nama === siswa.kelas);
         setFormData({
             nama: siswa.nama || '',
-            kelas: kelasItem ? String(kelasItem.id) : '',
+            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '',
             nis: siswa.nis || '',
             nisn: siswa.nisn || '',
             tempatLahir: siswa.tempat_lahir || '',
@@ -309,6 +312,14 @@ export default function SiswaPerKelasPage() {
             confirmData: false,
         });
         setShowEdit(true);
+    };
+
+    const openFormTambah = () => {
+        setFormData(prev => ({
+            ...prev,
+            kelas: kelasInfo ? String(kelasInfo.id_kelas) : '', 
+        }));
+        setShowTambah(true);
     };
 
     const handleSubmitTambah = async () => {
@@ -336,7 +347,7 @@ export default function SiswaPerKelasPage() {
                     tanggal_lahir: formData.tanggalLahir,
                     jenis_kelamin: formData.jenisKelamin,
                     alamat: formData.alamat,
-                    kelas_id: Number(formData.kelas),
+                    kelas_id: Number(formData.kelas), 
                     tahun_ajaran_id: kelasInfo.tahun_ajaran_id,
                 }),
             });
@@ -366,10 +377,8 @@ export default function SiswaPerKelasPage() {
 
         const originalData = siswaList.find(s => s.id === editId);
         if (originalData) {
-            const kelasItem = kelasList.find(k => k.nama === originalData.kelas);
             const hasChanged =
                 formData.nama !== (originalData.nama || '') ||
-                formData.kelas !== String(kelasItem?.id || '') ||
                 formData.nis !== (originalData.nis || '') ||
                 formData.nisn !== (originalData.nisn || '') ||
                 formData.tempatLahir !== (originalData.tempat_lahir || '') ||
@@ -402,7 +411,7 @@ export default function SiswaPerKelasPage() {
                     tanggal_lahir: formData.tanggalLahir,
                     jenis_kelamin: formData.jenisKelamin,
                     alamat: formData.alamat,
-                    kelas_id: Number(formData.kelas),
+                    kelas_id: Number(formData.kelas), 
                     status: formData.statusSiswa,
                     tahun_ajaran_id: kelasInfo.tahun_ajaran_id,
                 }),
@@ -604,15 +613,24 @@ export default function SiswaPerKelasPage() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                        <label className={labelCls} style={labelColor}>Kelas <span className="text-red-500">*</span></label>
-                        <select name="kelas" value={formData.kelas} onChange={handleInputChange}
-                            className={errors.kelas ? inputErrCls : inputCls}>
-                            <option value="">-- Pilih --</option>
-                            {kelasList.map(k => (
-                                <option key={k.id} value={k.id}>{k.nama}</option>
-                            ))}
-                        </select>
-                        {errors.kelas && <p className="text-red-500 text-xs">{errors.kelas}</p>}
+                        <label className={labelCls} style={labelColor}>
+                            Kelas
+                            <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-gray-500">
+                                <Lock size={10} /> Otomatis
+                            </span>
+                        </label>
+                        <div 
+                            className="w-full border rounded-xl px-4 py-2.5 text-sm rounded-xl bg-gray-100 text-gray-700 font-semibold cursor-not-allowed flex items-center justify-between"
+                            style={{ borderColor: '#fde0c8' }}
+                        >
+                            <span>{kelasInfo?.nama_kelas || '-'}</span>
+                            <Lock size={14} className="text-gray-400" />
+                        </div>
+                        {/* Hidden input untuk kirim kelas_id ke backend */}
+                        <input type="hidden" name="kelas" value={kelasInfo ? String(kelasInfo.id_kelas) : ''} />
+                        <p className="text-xs text-gray-400 mt-1">
+                            ℹ️ Siswa akan otomatis ditambahkan ke kelas <strong>{kelasInfo?.nama_kelas}</strong>
+                        </p>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
@@ -738,7 +756,7 @@ export default function SiswaPerKelasPage() {
                 <div className="flex items-center gap-3 text-sm">
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
                         style={{ background: '#fff0e5', border: '1px solid #fde0c8' }}>
-                        <span className="font-semibold" style={{ color: '#c95b08' }}>Wali Kelas:</span>
+                        <span className="font-semibold" style={{ color: '#c95b08' }}>Guru Kelas:</span>
                         <span className="font-semibold" style={{ color: '#7a3a0a' }}>{kelasInfo?.wali_kelas || '-'}</span>
                     </div>
                     <div className="w-1 h-1 rounded-full" style={{ background: '#c95b08', opacity: 0.4 }} />
@@ -757,7 +775,7 @@ export default function SiswaPerKelasPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         {kelasInfo?.is_aktif && (
                             <button className={btnPrimary.base} style={btnPrimary.style}
-                                onClick={() => setShowTambah(true)}
+                                onClick={openFormTambah}
                                 onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
                                 <Plus size={16} /> Tambah Siswa
                             </button>
@@ -913,12 +931,10 @@ export default function SiswaPerKelasPage() {
                         </div>
 
                         <div className="p-6">
-                            {/* Avatar */}
                             <div className="flex flex-col items-center mb-8">
                                 <h3 className="text-lg font-bold text-gray-800">{selectedSiswa.nama}</h3>
                             </div>
 
-                            {/* Info rows */}
                             <div className="space-y-2.5">
                                 {[
                                     {
@@ -951,7 +967,6 @@ export default function SiswaPerKelasPage() {
                                 ))}
                             </div>
 
-                            {/* Footer buttons */}
                             <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                                 <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
                                 {kelasInfo?.is_aktif && (

@@ -68,11 +68,11 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-  success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-  error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
-  confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+  confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -111,13 +111,13 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG    = { background: '#fdf6f0' };
+const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
   base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
@@ -126,7 +126,7 @@ const btnPrimary = {
   leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
@@ -141,16 +141,16 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataMataPelajaranPage() {
-  const [mapelList,                setMapelList]                = useState<MataPelajaran[]>([]);
-  const [loading,                  setLoading]                  = useState(true);
-  const [showTambah,               setShowTambah]               = useState(false);
-  const [showEdit,                 setShowEdit]                 = useState(false);
-  const [editId,                   setEditId]                   = useState<number | null>(null);
-  const [searchQuery,              setSearchQuery]              = useState('');
-  const [itemsPerPage,             setItemsPerPage]             = useState(10);
-  const [currentPage,              setCurrentPage]              = useState(1);
-  const [tahunAjaranList,          setTahunAjaranList]          = useState<TahunAjaran[]>([]);
-  const [selectedTahunAjaranId,    setSelectedTahunAjaranId]    = useState<number | null>(null);
+  const [mapelList, setMapelList] = useState<MataPelajaran[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showTambah, setShowTambah] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
+  const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
   const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState<boolean>(false);
 
   const [formData, setFormData] = useState<FormDataType>({
@@ -158,8 +158,8 @@ export default function DataMataPelajaranPage() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [modal,    setModal]    = useState<ModalConfig | null>(null);
-  const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
 
   const initialFormDataRef = useRef<FormDataType | null>(null);
@@ -170,27 +170,26 @@ export default function DataMataPelajaranPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
+        showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
         return;
       }
-      const res  = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+      const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        const options = data.data.map((ta: any) => ({
-          id:          ta.id_tahun_ajaran,
+        // ✅ SAMA PERSIS DENGAN DATA KELAS
+        setTahunAjaranList(data.data.map((ta: any) => ({
+          id: ta.id_induk,  // ← GUNAKAN id_induk
           tahun_ajaran: ta.tahun_ajaran,
-          semester:    (ta.semester || 'ganjil').toLowerCase(),
-          is_aktif:    ta.status === 'aktif'
-        }));
-        setTahunAjaranList(options);
+          semester: ta.semester_aktif?.toLowerCase() || 'ganjil',
+          is_aktif: ta.status === 'AKTIF',  // ← CEK 'AKTIF' (uppercase)
+        })));
       }
     } catch {
-      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
     }
   };
-
   // ── Fetch Mata Pelajaran ──────────────────────────────────────────────────
 
   const fetchMataPelajaran = async (tahunAjaranId: number) => {
@@ -200,21 +199,21 @@ export default function DataMataPelajaranPage() {
         showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
         return;
       }
-      const res  = await fetch(`http://localhost:5000/api/admin/mata-pelajaran?tahun_ajaran_id=${tahunAjaranId}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran?tahun_ajaran_id=${tahunAjaranId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       if (res.ok) {
         const mapped = (Array.isArray(data.data) ? data.data : []).map((mp: any) => ({
-          id:             mp.id_mata_pelajaran,
-          kode_mapel:     mp.kode_mapel,
-          nama_mapel:     mp.nama_mapel,
-          jenis:          mp.jenis,
-          kurikulum:      mp.kurikulum,
+          id: mp.id_mata_pelajaran,
+          kode_mapel: mp.kode_mapel,
+          nama_mapel: mp.nama_mapel,
+          jenis: mp.jenis,
+          kurikulum: mp.kurikulum,
           tahun_ajaran_id: mp.tahun_ajaran_id,
-          tahun_ajaran:   mp.tahun_ajaran,
-          semester:       mp.semester,
-          urutan_rapor:   mp.urutan_rapor
+          tahun_ajaran: mp.tahun_ajaran,
+          semester: mp.semester,
+          urutan_rapor: mp.urutan_rapor
         }));
         setMapelList(mapped);
       } else {
@@ -229,35 +228,86 @@ export default function DataMataPelajaranPage() {
 
   useEffect(() => { fetchTahunAjaran(); }, []);
 
+  // ── Load saved tahun ajaran from localStorage ──────────────────────────────
+  useEffect(() => {
+    if (tahunAjaranList.length > 0 && selectedTahunAjaranId === null) {
+      const savedId = localStorage.getItem('selectedTahunAjaranId');
+      if (savedId) {
+        const id = Number(savedId);
+        const ta = tahunAjaranList.find(t => t.id === id);
+        if (ta) {
+          setSelectedTahunAjaranId(id);
+          setSelectedTahunAjaranAktif(ta.is_aktif);
+          setLoading(true);
+          fetchMataPelajaran(id);
+        }
+      }
+    }
+  }, [tahunAjaranList]);
+
   // ── Form Handlers ─────────────────────────────────────────────────────────
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+
     if (name === 'jenis') {
       setFormData(prev => ({ ...prev, [name]: value.toLowerCase() }));
-    } else if (type === 'checkbox') {
+    }
+    else if (name === 'kode_mapel') {
+      setFormData(prev => ({ ...prev, [name]: value.toUpperCase() }));
+    }
+    else if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
-    } else {
+    }
+    else {
       setFormData(prev => ({ ...prev, [name]: value }));
+    }
+
+    if (errors[name as keyof typeof errors]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
   const validate = (): boolean => {
     const ne: Record<string, string> = {};
-    const kodeMapel = formData.kode_mapel?.trim() || '';
+    const kodeMapel = formData.kode_mapel?.trim().toUpperCase() || '';
     const namaMapel = formData.nama_mapel?.trim() || '';
-    const kurikulum = formData.kurikulum?.trim()  || '';
-    const jenis     = formData.jenis?.toLowerCase().trim() || '';
+    const kurikulum = formData.kurikulum?.trim() || '';
+    const jenis = formData.jenis?.toLowerCase().trim() || '';
 
+    // ═══ Validasi field wajib ═══
     if (!kodeMapel) ne.kode_mapel = 'Kode mapel wajib diisi';
     if (!namaMapel) ne.nama_mapel = 'Nama mapel wajib diisi';
-    if (!kurikulum) ne.kurikulum  = 'Kurikulum wajib diisi';
+    if (!kurikulum) ne.kurikulum = 'Kurikulum wajib diisi';
+
+    // ═══ Validasi jenis ═══
     if (!jenis) {
       ne.jenis = 'Jenis mapel wajib dipilih';
     } else if (!['wajib', 'pilihan'].includes(jenis)) {
       ne.jenis = `Jenis tidak valid: "${jenis}". Harus "wajib" atau "pilihan"`;
     }
+
+    // ═══ Validasi format kode mapel (2-20 karakter) ═══
+    if (kodeMapel && !/^[A-Z0-9-]{2,20}$/.test(kodeMapel)) {
+      ne.kode_mapel = 'Kode mapel harus 2-20 karakter, hanya huruf kapital, angka, dan strip (-). Contoh: MAT, BINDO';
+    }
+
+    // ═══ Validasi panjang nama mapel (min 3) ═══
+    if (namaMapel && namaMapel.length < 3) {
+      ne.nama_mapel = 'Nama mata pelajaran minimal 3 karakter';
+    }
+
+    // ═══ Validasi urutan rapor (1-100) ═══
+    if (formData.urutan_rapor && formData.urutan_rapor.trim() !== '') {
+      const urutan = Number(formData.urutan_rapor.trim());
+      if (isNaN(urutan) || !Number.isInteger(urutan)) {
+        ne.urutan_rapor = 'Urutan rapor harus bilangan bulat';
+      } else if (urutan < 1 || urutan > 100) {
+        ne.urutan_rapor = 'Urutan rapor harus antara 1 sampai 100';
+      }
+    }
+
     if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data terlebih dahulu';
 
     setErrors(ne);
@@ -271,31 +321,50 @@ export default function DataMataPelajaranPage() {
   const handleSubmitTambah = async () => {
     if (!validate()) return;
     const token = localStorage.getItem('token');
-    if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
-    if (!selectedTahunAjaranId) { showModal({ type: 'warning', title: 'Tahun Ajaran Belum Dipilih', message: 'Pilih tahun ajaran aktif terlebih dahulu.' }); return; }
+    if (!token) {
+      showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+      return;
+    }
+    if (!selectedTahunAjaranId) {
+      showModal({ type: 'warning', title: 'Tahun Ajaran Belum Dipilih', message: 'Pilih tahun ajaran aktif terlebih dahulu.' });
+      return;
+    }
 
     try {
       const payload = {
-        kode_mapel:      formData.kode_mapel.trim().toUpperCase(),
-        nama_mapel:      formData.nama_mapel.trim(),
-        jenis:           formData.jenis.trim(),
-        kurikulum:       formData.kurikulum.trim(),
-        tahun_ajaran_id: selectedTahunAjaranId
+        kode_mapel: formData.kode_mapel.trim().toUpperCase(),
+        nama_mapel: formData.nama_mapel.trim(),
+        jenis: formData.jenis.trim(),
+        kurikulum: formData.kurikulum.trim()
       };
+
       const res = await fetch('http://localhost:5000/api/admin/mata-pelajaran', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
+
       if (res.ok) {
         setShowTambah(false);
         handleReset();
         await fetchMataPelajaran(selectedTahunAjaranId);
-        showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: `Mata pelajaran ${formData.nama_mapel} berhasil ditambahkan.` });
+        showModal({
+          type: 'success',
+          title: 'Berhasil Ditambahkan!',
+          message: `Mata pelajaran ${formData.nama_mapel} berhasil ditambahkan.`
+        });
       } else {
         const err = await res.json();
-        const isDuplicate = err.message && (err.message.includes('sudah terdaftar') || err.message.includes('sudah ada'));
-        showModal({ type: 'error', title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan mata pelajaran.' });
+        const isDuplicate = err.message && (
+          err.message.includes('sudah terdaftar') ||
+          err.message.includes('sudah ada') ||
+          err.message.includes('sudah digunakan')
+        );
+        showModal({
+          type: 'error',
+          title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Menambahkan',
+          message: err.message || 'Terjadi kesalahan saat menambahkan mata pelajaran.'
+        });
       }
     } catch {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
@@ -304,10 +373,10 @@ export default function DataMataPelajaranPage() {
 
   const handleEdit = (mapel: MataPelajaran) => {
     const initialData: FormDataType = {
-      kode_mapel:  mapel.kode_mapel,
-      nama_mapel:  mapel.nama_mapel,
-      jenis:       mapel.jenis.toLowerCase(),
-      kurikulum:   mapel.kurikulum,
+      kode_mapel: mapel.kode_mapel.toUpperCase(),
+      nama_mapel: mapel.nama_mapel,
+      jenis: mapel.jenis.toLowerCase(),
+      kurikulum: mapel.kurikulum,
       urutan_rapor: mapel.urutan_rapor !== null ? String(mapel.urutan_rapor) : '',
       confirmData: false
     };
@@ -320,10 +389,10 @@ export default function DataMataPelajaranPage() {
   const handleSubmitEdit = async () => {
     const initial = initialFormDataRef.current;
     const hasChanges =
-      formData.kode_mapel  !== initial?.kode_mapel  ||
-      formData.nama_mapel  !== initial?.nama_mapel  ||
-      formData.jenis       !== initial?.jenis       ||
-      formData.kurikulum   !== initial?.kurikulum   ||
+      formData.kode_mapel !== initial?.kode_mapel ||
+      formData.nama_mapel !== initial?.nama_mapel ||
+      formData.jenis !== initial?.jenis ||
+      formData.kurikulum !== initial?.kurikulum ||
       formData.urutan_rapor !== initial?.urutan_rapor;
 
     if (!hasChanges) {
@@ -339,10 +408,10 @@ export default function DataMataPelajaranPage() {
     try {
       const urutan_rapor = formData.urutan_rapor.trim() ? Number(formData.urutan_rapor.trim()) : null;
       const payload = {
-        kode_mapel:  formData.kode_mapel.trim().toUpperCase(),
-        nama_mapel:  formData.nama_mapel.trim(),
-        jenis:       formData.jenis.trim(),
-        kurikulum:   formData.kurikulum.trim(),
+        kode_mapel: formData.kode_mapel.trim().toUpperCase(),
+        nama_mapel: formData.nama_mapel.trim(),
+        jenis: formData.jenis.trim(),
+        kurikulum: formData.kurikulum.trim(),
         urutan_rapor
       };
       const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran/${editId}`, {
@@ -404,19 +473,19 @@ export default function DataMataPelajaranPage() {
     return !query ||
       mp.kode_mapel.toLowerCase().includes(query) ||
       mp.nama_mapel.toLowerCase().includes(query) ||
-      mp.jenis.toLowerCase().includes(query)      ||
+      mp.jenis.toLowerCase().includes(query) ||
       mp.kurikulum.toLowerCase().includes(query);
   });
 
-  const totalPages  = Math.max(1, Math.ceil(filteredMapel.length / itemsPerPage));
-  const startIndex  = (currentPage - 1) * itemsPerPage;
-  const endIndex    = startIndex + itemsPerPage;
+  const totalPages = Math.max(1, Math.ceil(filteredMapel.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
   const currentMapel = filteredMapel.slice(startIndex, endIndex);
 
   const renderPagination = () => {
     const pages: ReactNode[] = [];
-    const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-    const btnActive   = "text-white border-orange-500";
+    const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+    const btnActive = "text-white border-orange-500";
     const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
     pages.push(
@@ -485,10 +554,17 @@ export default function DataMataPelajaranPage() {
 
           {/* Kode Mapel */}
           <div className="flex flex-col gap-1.5">
-            <label className={labelCls} style={labelColor}>Kode Mapel <span className="text-red-500">*</span></label>
+            <label className={labelCls} style={labelColor}>
+              Kode Mapel <span className="text-red-500">*</span>
+              <span className="ml-2 text-xs font-normal text-gray-400">(2-20 karakter, A-Z, 0-9, -)</span>
+            </label>
             <input
-              type="text" name="kode_mapel" value={formData.kode_mapel}
-              onChange={handleInputChange} placeholder="Contoh: MAT, BINDO"
+              type="text"
+              name="kode_mapel"
+              value={formData.kode_mapel}
+              onChange={handleInputChange}
+              placeholder="Contoh: MAT, BINDO, MTK-WAJIB"
+              maxLength={20}
               className={errors.kode_mapel ? inputErrCls : inputCls}
             />
             {errors.kode_mapel && <p className="text-red-500 text-xs">{errors.kode_mapel}</p>}
@@ -535,14 +611,20 @@ export default function DataMataPelajaranPage() {
             <div className="md:col-span-2 flex flex-col gap-1.5">
               <label className={labelCls} style={labelColor}>
                 Urutan di Rapor
-                <span className="ml-2 text-xs font-normal text-gray-400">(kosongkan = tampil di akhir)</span>
+                <span className="ml-2 text-xs font-normal text-gray-400">(kosongkan = tampil di akhir, max 100)</span>
               </label>
               <input
-                type="number" name="urutan_rapor" value={formData.urutan_rapor}
-                onChange={handleInputChange} placeholder="Contoh: 1, 2, 3..."
-                min="1" className={inputCls}
+                type="number"
+                name="urutan_rapor"
+                value={formData.urutan_rapor}
+                onChange={handleInputChange}
+                placeholder="Contoh: 1, 2, 3..."
+                min="1"
+                max="100"
+                className={errors.urutan_rapor ? inputErrCls : inputCls}
                 style={{ maxWidth: '200px' }}
               />
+              {errors.urutan_rapor && <p className="text-red-500 text-xs">{errors.urutan_rapor}</p>}
             </div>
           )}
         </div>
@@ -580,7 +662,7 @@ export default function DataMataPelajaranPage() {
   );
 
   if (showTambah) return renderForm(false);
-  if (showEdit)   return renderForm(true);
+  if (showEdit) return renderForm(true);
 
   // ── HALAMAN UTAMA ─────────────────────────────────────────────────────────
 
@@ -598,12 +680,10 @@ export default function DataMataPelajaranPage() {
       {/* Table card */}
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-        {/* Toolbar */}
+        {/* ═══ DROPDOWN TAHUN AJARAN (SAMA PERSIS DATA KELAS) ═══ */}
         <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-
-          {/* Dropdown Tahun Ajaran */}
-          <div className="mb-4">
-            <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
             <select
               value={selectedTahunAjaranId ?? ''}
               onChange={(e) => {
@@ -613,98 +693,98 @@ export default function DataMataPelajaranPage() {
                   setSelectedTahunAjaranAktif(false);
                   setLoading(false);
                   setMapelList([]);
+                  localStorage.removeItem('selectedTahunAjaranId');
                   return;
                 }
                 const id = Number(value);
                 const selectedTa = tahunAjaranList.find(ta => ta.id === id);
                 setSelectedTahunAjaranId(id);
                 setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
+                localStorage.setItem('selectedTahunAjaranId', id.toString());
                 setLoading(true);
                 fetchMataPelajaran(id);
               }}
-              className="border rounded-xl px-3 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 w-full md:w-72"
+              className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
               <option value="">-- Pilih Tahun Ajaran --</option>
-              {tahunAjaranList.map(ta => {
-                const semesterDisplay = ta.semester === 'ganjil' ? 'Ganjil' : 'Genap';
-                return (
-                  <option key={ta.id} value={ta.id}>
-                    {ta.tahun_ajaran} {semesterDisplay} {ta.is_aktif ? '(Aktif)' : ''}
-                  </option>
-                );
-              })}
+              {tahunAjaranList.map(ta => (
+                <option key={ta.id} value={ta.id}>
+                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+                </option>
+              ))}
             </select>
           </div>
-
-          {selectedTahunAjaranId !== null && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {/* Kiri: Tambah + items per page */}
-              <div className="flex flex-wrap items-center gap-2">
-                {selectedTahunAjaranAktif && (
-                  <button
-                    onClick={() => setShowTambah(true)}
-                    className={btnPrimary.base}
-                    style={btnPrimary.style}
-                    onMouseEnter={btnPrimary.hover}
-                    onMouseLeave={btnPrimary.leave}
-                  >
-                    <Plus size={16} /> Tambah Mapel
-                  </button>
-                )}
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                    className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                </div>
-              </div>
-
-              {/* Kanan: Search */}
-              <div className="relative min-w-[200px] sm:min-w-[220px]">
-                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                  <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                </div>
-                <input
-                  type="text" placeholder="Cari mata pelajaran..."
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                />
-                {searchQuery && (
-                  <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                    className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {selectedTahunAjaranId !== null && (
-            <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-              Menampilkan {filteredMapel.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredMapel.length)} dari {filteredMapel.length} data
-            </p>
-          )}
         </div>
 
-        {/* Pilih Tahun Ajaran dulu */}
+        {/* ═══ JIKA BELUM PILIH TAHUN AJARAN ═══ */}
         {selectedTahunAjaranId === null ? (
-          <div className="m-6 text-center py-10 rounded-2xl" style={{ background: '#fff7f0', border: '2px dashed #fde0c8' }}>
-            <div className="text-4xl mb-3">📚</div>
-            <p className="font-semibold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
-            <p className="text-sm text-gray-400 mt-1">Data mata pelajaran akan muncul setelah tahun ajaran dipilih.</p>
+          <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+            <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
           </div>
         ) : (
           <>
-            {/* Table */}
+            {/* ═══ TOOLBAR (SAMA PERSIS DATA KELAS) ═══ */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  {selectedTahunAjaranAktif && (
+                    <button
+                      onClick={() => setShowTambah(true)}
+                      className={btnPrimary.base}
+                      style={btnPrimary.style}
+                      onMouseEnter={btnPrimary.hover}
+                      onMouseLeave={btnPrimary.leave}
+                    >
+                      <Plus size={16} /> Tambah Mapel
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                      className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
+                  </div>
+
+                  <div className="relative min-w-[200px] sm:min-w-[220px]">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                      <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Cari mata pelajaran..."
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                      className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                        className="absolute inset-y-0 right-2 flex items-center"
+                        style={{ color: '#c95b08' }}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
+                Menampilkan {filteredMapel.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredMapel.length)} dari {filteredMapel.length} data
+              </p>
+            </div>
+
+            {/* ═══ TABLE ═══ */}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm border-collapse">
                 <thead>
@@ -761,7 +841,7 @@ export default function DataMataPelajaranPage() {
                               {mp.urutan_rapor}
                             </span>
                           ) : (
-                            <span className="text-gray-300">—</span>
+                            <span className="text-gray-400 font-bold">—</span>
                           )}
                         </td>
                         <td className="px-5 py-3.5 text-center whitespace-nowrap">
@@ -797,7 +877,7 @@ export default function DataMataPelajaranPage() {
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* ═══ PAGINATION ═══ */}
             {filteredMapel.length > 0 && (
               <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
                 <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
