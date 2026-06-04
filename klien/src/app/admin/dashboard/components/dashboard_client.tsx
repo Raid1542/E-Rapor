@@ -311,11 +311,10 @@ export default function DashboardClient() {
                                 </div>
                             </div>
 
-                            {/* ✅ TOMBOL - Conditional Rendering */}
                             {tahunAjaranAktif ? (
                                 /* Tombol UBAH */
                                 <button
-                                    onClick={() => router.push('/admin/tahun-ajaran')}
+                                    onClick={() => router.push('/admin/data_tahun_ajaran')}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg"
                                     style={{
                                         background: 'rgba(255,255,255,0.95)',
@@ -337,7 +336,7 @@ export default function DashboardClient() {
                             ) : (
                                 /* Tombol TAMBAH */
                                 <button
-                                    onClick={() => router.push('/admin/tahun-ajaran')}
+                                    onClick={() => router.push('/admin/data_tahun_ajaran')}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg"
                                     style={{
                                         background: 'linear-gradient(135deg, #9a3a08, #c95b08)',
