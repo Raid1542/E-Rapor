@@ -841,7 +841,7 @@ export default function DataMataPelajaranPage() {
                               {mp.urutan_rapor}
                             </span>
                           ) : (
-                            <span className="text-gray-400 font-bold">—</span>
+                            <span className="text-gray-700">—</span>
                           )}
                         </td>
                         <td className="px-5 py-3.5 text-center whitespace-nowrap">

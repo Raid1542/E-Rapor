@@ -651,7 +651,7 @@ export default function DataPembinaEkskulClient() {
                 ].map((item, i) => (
                   <div key={item.label} className="grid grid-cols-4 gap-2 pb-2.5" style={{ borderBottom: '1px solid #fde0c8' }}>
                     <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                    <span className="text-xs text-gray-400">:</span>
+                    <span className="text-xs text-gray-700">:</span>
                     <span className="text-xs text-gray-700 col-span-2 break-words">{item.value}</span>
                   </div>
                 ))}
