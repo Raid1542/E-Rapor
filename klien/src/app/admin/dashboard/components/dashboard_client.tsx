@@ -12,7 +12,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { ChevronRight, Users, UserCircle, Award, School, Book } from 'lucide-react';
+import { ChevronRight, Users, UserCircle, Award, School, Book, CheckCircle2, AlertCircle, Plus, Pencil } from 'lucide-react';
 import { UserData } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
@@ -96,18 +96,25 @@ const Card = ({ children, className = '' }: { children: React.ReactNode; classNa
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DashboardClient() {
-    const [user, setUser]       = useState<UserData | null>(null);
+    const [user, setUser] = useState<UserData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
-    const [stats, setStats]     = useState<DashboardStats>({
+    const [stats, setStats] = useState<DashboardStats>({
         guru: 0, siswa: 0, admin: 0,
         ekstrakurikuler: 0, kelas: 0, mata_pelajaran: 0,
     });
-    const [guruAktif, setGuruAktif]       = useState(0);
+    const [guruAktif, setGuruAktif] = useState(0);
     const [guruNonaktif, setGuruNonaktif] = useState(0);
+
+    const [tahunAjaranAktif, setTahunAjaranAktif] = useState<{
+        tahun_ajaran: string;
+        semester: string;
+    } | null>(null);
+    const [taLoading, setTaLoading] = useState(true);
+
     const router = useRouter();
 
     useEffect(() => {
-        const token    = localStorage.getItem('token');
+        const token = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
 
         if (!token) { window.location.href = '/login'; return; }
@@ -135,8 +142,8 @@ export default function DashboardClient() {
                 });
                 const resultGuru = await resGuru.json();
                 if (resGuru.ok && Array.isArray(resultGuru.data)) {
-                    const list   = resultGuru.data;
-                    const aktif  = list.filter((g: any) => (g.status || '').trim().toLowerCase() === 'aktif').length;
+                    const list = resultGuru.data;
+                    const aktif = list.filter((g: any) => (g.status || '').trim().toLowerCase() === 'aktif').length;
                     setGuruAktif(aktif);
                     setGuruNonaktif(list.length - aktif);
                 }
@@ -148,6 +155,39 @@ export default function DashboardClient() {
         };
 
         fetchAll();
+
+        const fetchTahunAjaranAktif = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    const aktif = data.data.find((ta: any) =>
+                        ta.status?.toLowerCase() === 'aktif'
+                    );
+
+                    if (aktif) {
+                        setTahunAjaranAktif({
+                            tahun_ajaran: aktif.tahun_ajaran || '-',
+                            semester: aktif.semester_aktif || 'ganjil'
+                        });
+                    } else {
+                        setTahunAjaranAktif(null);
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetch TA aktif:', err);
+            } finally {
+                setTaLoading(false);
+            }
+        };
+
+        fetchTahunAjaranAktif();
     }, []);
 
     if (loading) {
@@ -166,23 +206,23 @@ export default function DashboardClient() {
     // ── Stat cards config ─────────────────────────────────────────────────────
 
     const statCards = [
-        { label: 'Data Guru',            value: stats.guru,           icon: <Users className="w-5 h-5" />,      path: '/admin/data_guru' },
-        { label: 'Data Siswa',           value: stats.siswa,          icon: <Users className="w-5 h-5" />,      path: '/admin/data_siswa' },
-        { label: 'Data Admin',           value: stats.admin,          icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
-        { label: 'Data Ekstrakurikuler', value: stats.ekstrakurikuler,icon: <Award className="w-5 h-5" />,      path: '/admin/ekstrakurikuler' },
-        { label: 'Data Kelas',           value: stats.kelas,          icon: <School className="w-5 h-5" />,     path: '/admin/data_kelas' },
-        { label: 'Data Mata Pelajaran',  value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />,       path: '/admin/data_mata_pelajaran' },
+        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru' },
+        { label: 'Data Siswa', value: stats.siswa, icon: <Users className="w-5 h-5" />, path: '/admin/data_siswa' },
+        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
+        { label: 'Data Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler' },
+        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas' },
+        { label: 'Data Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran' },
     ];
 
     // ── Chart data ────────────────────────────────────────────────────────────
 
     const barData = [
-        { name: 'Guru',  jumlah: stats.guru },
+        { name: 'Guru', jumlah: stats.guru },
         { name: 'Siswa', jumlah: stats.siswa },
     ];
 
     const donutData = [
-        { name: 'Aktif',    value: guruAktif },
+        { name: 'Aktif', value: guruAktif },
         { name: 'Nonaktif', value: guruNonaktif },
     ].filter(d => d.value > 0);
 
@@ -214,6 +254,113 @@ export default function DashboardClient() {
                     </p>
                 </div>
             </div>
+
+            {/* ── CARD: TAHUN AJARAN AKTIF ───────────────────────────────────────── */}
+            {!taLoading && (
+                <div className="mb-6">
+                    <div
+                        className="rounded-2xl p-6 relative overflow-hidden"
+                        style={{
+                            background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 50%, #f5870a 100%)',
+                            boxShadow: '0 4px 20px rgba(200,80,10,0.25)',
+                        }}
+                    >
+                        {/* Dekorasi lingkaran */}
+                        <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full"
+                            style={{ background: 'rgba(255,255,255,0.08)' }} />
+                        <div className="absolute -bottom-8 right-20 w-40 h-40 rounded-full"
+                            style={{ background: 'rgba(255,255,255,0.05)' }} />
+
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-4">
+                                {/* Icon dengan background */}
+                                <div
+                                    className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg"
+                                    style={{
+                                        background: 'rgba(255,255,255,0.2)',
+                                        backdropFilter: 'blur(10px)',
+                                        border: '1px solid rgba(255,255,255,0.3)',
+                                    }}
+                                >
+                                    {tahunAjaranAktif ? (
+                                        <CheckCircle2 className="w-7 h-7 text-white" />
+                                    ) : (
+                                        <AlertCircle className="w-7 h-7 text-white" />
+                                    )}
+                                </div>
+
+                                {/* Info */}
+                                <div>
+                                    <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">
+                                        {tahunAjaranAktif ? 'Tahun Ajaran Aktif' : 'Tahun Ajaran Aktif'}
+                                    </p>
+                                    {tahunAjaranAktif ? (
+                                        <div>
+                                            <p className="text-2xl font-bold text-white mb-0.5">
+                                                {tahunAjaranAktif.tahun_ajaran}
+                                            </p>
+                                            <p className="text-sm text-white/90 font-medium">
+                                                Semester {tahunAjaranAktif.semester === 'ganjil' ? 'Ganjil' : 'Genap'}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-lg font-bold text-white">
+                                            Belum Ada Tahun Ajaran Aktif
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* ✅ TOMBOL - Conditional Rendering */}
+                            {tahunAjaranAktif ? (
+                                /* Tombol UBAH */
+                                <button
+                                    onClick={() => router.push('/admin/tahun-ajaran')}
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg"
+                                    style={{
+                                        background: 'rgba(255,255,255,0.95)',
+                                        color: '#c95b08',
+                                        border: '1px solid rgba(255,255,255,0.5)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = '#ffffff';
+                                        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.95)';
+                                        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                                    }}
+                                >
+                                    <Pencil className="w-4 h-4" />
+                                    Ubah
+                                </button>
+                            ) : (
+                                /* Tombol TAMBAH */
+                                <button
+                                    onClick={() => router.push('/admin/tahun-ajaran')}
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #9a3a08, #c95b08)',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, #7a2a05, #a84a08)';
+                                        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, #9a3a08, #c95b08)';
+                                        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                                    }}
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Tambah
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* ── Stat cards ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -288,7 +435,7 @@ export default function DashboardClient() {
                             >
                                 <defs>
                                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%"   stopColor="#c95b08" />
+                                        <stop offset="0%" stopColor="#c95b08" />
                                         <stop offset="100%" stopColor="#f5a623" />
                                     </linearGradient>
                                 </defs>
