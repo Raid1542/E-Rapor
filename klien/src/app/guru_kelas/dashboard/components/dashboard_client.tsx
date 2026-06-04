@@ -38,7 +38,7 @@ interface NilaiProgress {
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
     <div
         className={`bg-white rounded-2xl ${className}`}
-        style={{ border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' }}
+        style={{ border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' }}
     >
         {children}
     </div>
@@ -196,7 +196,7 @@ export default function GuruKelasDashboard() {
     // ── Render ────────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
+        <div className="flex-1 min-h-screen p-6" style={{ background: '#ffffff' }}>
 
             {/* ── Welcome card ── */}
             <div
