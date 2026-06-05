@@ -893,7 +893,7 @@ export default function DataPembelajaranPage() {
                                 <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Mata Pelajaran</th>
                                 <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Guru Pengampu</th>
                                 {selectedTahunAjaranAktif && (
-                                  <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-32">Aksi</th>
+                                  <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-40">Aksi</th>
                                 )}
                               </tr>
                             </thead>
@@ -909,6 +909,7 @@ export default function DataPembelajaranPage() {
                                   {selectedTahunAjaranAktif && (
                                     <td className="px-5 py-3 text-center">
                                       <div className="flex justify-center gap-1">
+                                        {/* ✅ Tombol Edit dengan Text */}
                                         <button
                                           onClick={() => openFormEdit(mp)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -918,7 +919,9 @@ export default function DataPembelajaranPage() {
                                           title="Edit"
                                         >
                                           <Pencil size={12} />
+                                          <span>Edit</span>
                                         </button>
+                                        {/* ✅ Tombol Hapus dengan Text */}
                                         <button
                                           onClick={() => handleDelete(mp.id, mp.nama_mapel, mp.nama_guru)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -928,6 +931,7 @@ export default function DataPembelajaranPage() {
                                           title="Hapus"
                                         >
                                           <Trash2 size={12} />
+                                          <span>Hapus</span>
                                         </button>
                                       </div>
                                     </td>

@@ -149,14 +149,16 @@ const getDropdownPembelajaran = async (req, res) => {
 
         const guru = await pembelajaranModel.getGuruAktif();
         const kelas = await pembelajaranModel.getKelasByTahunAjaran(taId);
+        
         const mata_pelajaran = await pembelajaranModel.getMapelByTahunAjaran(taId);
+        const mapel_pilihan = mata_pelajaran.filter(mp => mp.jenis === 'pilihan');
 
         res.json({
             success: true,
             data: {
                 guru,
                 kelas,
-                mata_pelajaran
+                mata_pelajaran: mapel_pilihan 
             }
         });
     } catch (err) {
@@ -265,13 +267,6 @@ const tambahPembelajaran = async (req, res) => {
                 return res.status(400).json({ 
                     success: false, 
                     message: `"${namaMapel}" adalah mata pelajaran WAJIB. Hanya wali kelas (${namaWali}) yang boleh mengajarkannya di kelas ini.` 
-                });
-            }
-        } else {
-            if (isWaliKelas) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: `"${namaMapel}" adalah mata pelajaran PILIHAN. Wali kelas tidak boleh mengajarkannya, harus guru bidang studi.` 
                 });
             }
         }
@@ -446,13 +441,6 @@ const editPembelajaran = async (req, res) => {
                 return res.status(400).json({ 
                     success: false, 
                     message: `"${namaMapel}" adalah mata pelajaran WAJIB. Hanya wali kelas (${namaWali}) yang boleh mengajarkannya.` 
-                });
-            }
-        } else {
-            if (isWaliKelas) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: `"${namaMapel}" adalah mata pelajaran PILIHAN. Wali kelas tidak boleh mengajarkannya.` 
                 });
             }
         }
