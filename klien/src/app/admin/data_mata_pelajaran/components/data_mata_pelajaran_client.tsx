@@ -707,31 +707,13 @@ export default function DataMataPelajaranPage() {
               className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
               <option value="">-- Pilih Tahun Ajaran --</option>
-              {tahunAjaranList.length === 0 ? (
-                <option disabled value="no-data">
-                  Belum ada tahun ajaran
+              {tahunAjaranList.map(ta => (
+                <option key={ta.id} value={ta.id}>
+                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
                 </option>
-              ) : (
-                tahunAjaranList.map(ta => (
-                  <option key={ta.id} value={ta.id}>
-                    {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
-                  </option>
-                ))
-              )}
+              ))}
             </select>
           </div>
-
-          {/* PESAN JIKA BELUM ADA TAHUN AJARAN */}
-          {tahunAjaranList.length === 0 && (
-            <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ background: '#fffaf6', borderColor: '#fde0c8' }}>
-              <p className="text-sm" style={{ color: '#c95b08' }}>
-                <strong>⚠️ Belum Ada Tahun Ajaran</strong>
-              </p>
-              <p className="text-xs text-gray-600 mt-1">
-                Silakan tambah tahun ajaran terlebih dahulu untuk mulai mengelola data.
-              </p>
-            </div>
-          )}
         </div>
 
         {/* ═══ JIKA BELUM PILIH TAHUN AJARAN ═══ */}

@@ -193,6 +193,7 @@ router.delete('/pembelajaran/:id', adminOnlyWithTahunAjaran, admin.hapusPembelaj
 
 // --- EKSTRAKURIKULER ---
 router.get('/ekstrakurikuler', adminOnly, admin.getEkskul);
+router.get('/ekstrakurikuler/pembina-dropdown', adminOnly, admin.getPembinaDropdown); 
 router.post('/ekstrakurikuler', adminOnlyWithTahunAjaran, admin.tambahEkskul);
 router.put('/ekstrakurikuler/:id', adminOnlyWithTahunAjaran, admin.editEkskul);
 router.delete('/ekstrakurikuler/:id', adminOnlyWithTahunAjaran, admin.hapusEkskul);
