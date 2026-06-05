@@ -772,7 +772,7 @@ export default function DataPembelajaranPage() {
 
                     {/* ═══ MAPEL WAJIB ═══ */}
                     <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #fde0c8' }}>
-                      <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)' }}>
+                      <div className="px-5 py-3" style={TH_GRAD}>
                         <div className="flex items-center gap-2">
                           <BookOpen size={16} className="text-white" />
                           <h4 className="text-sm font-bold text-white">Mata Pelajaran Wajib</h4>
@@ -834,7 +834,7 @@ export default function DataPembelajaranPage() {
 
                     {/* ═══ MAPEL PILIHAN ═══ */}
                     <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #fde0c8' }}>
-                      <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)' }}>
+                      <div className="px-5 py-3" style={TH_GRAD}>
                         <div className="flex items-center gap-2">
                           <BookOpen size={16} className="text-white" />
                           <h4 className="text-sm font-bold text-white">Mata Pelajaran Pilihan</h4>
@@ -871,7 +871,7 @@ export default function DataPembelajaranPage() {
                                   {selectedTahunAjaranAktif && (
                                     <td className="px-5 py-3 text-center">
                                       <div className="flex justify-center gap-1">
-                                        {/* ✅ Tombol Edit dengan Text */}
+                                        {/* Tombol Edit dengan Text */}
                                         <button
                                           onClick={() => openFormEdit(mp)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -883,7 +883,7 @@ export default function DataPembelajaranPage() {
                                           <Pencil size={12} />
                                           <span>Edit</span>
                                         </button>
-                                        {/* ✅ Tombol Hapus dengan Text */}
+                                        {/* Tombol Hapus dengan Text */}
                                         <button
                                           onClick={() => handleDelete(mp.id, mp.nama_mapel, mp.nama_guru)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -910,14 +910,10 @@ export default function DataPembelajaranPage() {
                         <div className="px-5 py-4 bg-orange-50/30 border-t" style={{ borderColor: '#fde0c8' }}>
                           <button
                             onClick={openFormTambah}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all"
-                            style={{
-                              background: 'linear-gradient(135deg,#c95b08,#e8690a)',
-                              color: 'white',
-                              boxShadow: '0 2px 8px rgba(200,80,10,0.3)'
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                            onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                            className={btnPrimary.base}
+                            style={btnPrimary.style}
+                            onMouseEnter={btnPrimary.hover}
+                            onMouseLeave={btnPrimary.leave}
                           >
                             <Plus size={16} /> Tambah Mapel Pilihan
                           </button>
