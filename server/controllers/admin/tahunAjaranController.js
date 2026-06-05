@@ -10,9 +10,6 @@
 const tahunAjaranModel = require('../../models/tahunAjaranModel');
 const db = require('../../config/db');
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ HELPER: Sanitasi tanggal (konversi '' → null, validasi format)
-// ═══════════════════════════════════════════════════════════════
 const sanitizeDate = (value) => {
     if (value === undefined || value === null || value === '') return null;
     
@@ -39,9 +36,6 @@ const sanitizeDate = (value) => {
     return null;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ HELPER: Format tanggal untuk perbandingan (YYYY-MM-DD → string konsisten)
-// ═══════════════════════════════════════════════════════════════
 const formatDateForCompare = (dateValue) => {
     if (!dateValue) return '';
     
@@ -60,9 +54,6 @@ const formatDateForCompare = (dateValue) => {
     return `${year}-${month}-${day}`;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// GET /api/admin/tahun-ajaran
-// ═══════════════════════════════════════════════════════════════
 const getTahunAjaran = async (req, res) => {
     try {
         const data = await tahunAjaranModel.getAllTahunAjaran();
@@ -104,10 +95,6 @@ const getTahunAjaran = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// POST /api/admin/tahun-ajaran
-// ✅ DIPERBAIKI: Validasi duplikasi + format tahun
-// ═══════════════════════════════════════════════════════════════
 const tambahTahunAjaran = async (req, res) => {
     try {
         const { tahun1, tahun2, pts_ganjil, pas_ganjil, pts_genap, pas_genap } = req.body;
@@ -220,10 +207,6 @@ const tambahTahunAjaran = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// PUT /api/admin/tahun-ajaran/:id_induk
-// ✅ DIPERBAIKI: Cek hasChanges sebelum update
-// ═══════════════════════════════════════════════════════════════
 const updateTahunAjaran = async (req, res) => {
     try {
         const { id_induk } = req.params;
@@ -439,14 +422,14 @@ const gantiSemester = async (req, res) => {
             
         } catch (err) {
             await connection.rollback();
-            console.error('❌ Error transaction:', err);
+            console.error('Error transaction:', err);
             throw err;
         } finally {
             connection.release();
         }
 
     } catch (err) {
-        console.error('❌ Error ganti semester:', err);
+        console.error('Error ganti semester:', err);
         res.status(500).json({
             success: false,
             message: `Gagal mengganti semester: ${err.message}`,

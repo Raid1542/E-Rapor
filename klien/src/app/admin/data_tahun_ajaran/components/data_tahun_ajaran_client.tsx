@@ -684,21 +684,32 @@ export default function DataTahunAjaranClient() {
                                         </td>
                                         <td className="px-5 py-3.5 text-center whitespace-nowrap">
                                             <div className="flex justify-center gap-2">
-                                                <button onClick={() => openEdit(item)}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                    style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                                    onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}>
-                                                    <Pencil size={13} /> Edit
-                                                </button>
+                                                {item.status === 'AKTIF' && (
+                                                    <button onClick={() => openEdit(item)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                                        style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                                        onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                    >
+                                                        <Pencil size={13} /> Edit
+                                                    </button>
+                                                )}
+
+                                                {/* Tombol Ganti Semester hanya untuk TA AKTIF */}
                                                 {item.status === 'AKTIF' && (
                                                     <button onClick={() => openConfirmGantiSemester(item)}
                                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                                         style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1' }}
                                                         onMouseEnter={e => (e.currentTarget.style.background = '#bae6fd')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}>
+                                                        onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}
+                                                    >
                                                         <RotateCw size={13} /> Ganti {item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
                                                     </button>
+                                                )}
+
+                                                {/* Indikator Read-Only untuk TA Non-Aktif */}
+                                                {item.status !== 'AKTIF' && (
+                                                    <span className="text-xs text-gray-700">-</span>
                                                 )}
                                             </div>
                                         </td>
