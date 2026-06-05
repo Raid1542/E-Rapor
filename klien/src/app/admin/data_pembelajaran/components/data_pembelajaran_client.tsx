@@ -813,7 +813,6 @@ export default function DataPembelajaranPage() {
                           <BookOpen size={16} className="text-white" />
                           <h4 className="text-sm font-bold text-white">Mata Pelajaran Wajib</h4>
                         </div>
-                        <span className="text-xs text-white/90">Diajar oleh Guru Kelas</span>
                       </div>
 
                       {filterMapel(dataPerKelas.mapel_wajib).length === 0 ? (
@@ -876,7 +875,6 @@ export default function DataPembelajaranPage() {
                           <BookOpen size={16} className="text-white" />
                           <h4 className="text-sm font-bold text-white">Mata Pelajaran Pilihan</h4>
                         </div>
-                        <span className="text-xs text-white/90">Diajar oleh Guru Bidang Studi</span>
                       </div>
 
                       {filterMapel(dataPerKelas.mapel_pilihan).length === 0 ? (
