@@ -278,7 +278,7 @@ const importGuru = async (req, res) => {
             }
 
 
-            const password = row.password || 'sekolah123!';
+            const password = row.password || 'sekolah123';
             const userData = {
                 email_sekolah: row.email_sekolah,
                 password,
