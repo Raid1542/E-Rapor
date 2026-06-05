@@ -462,17 +462,27 @@ export default function SiswaPerKelasPage() {
 
             if (res.ok) {
                 if (result.skipped && result.skipped.length > 0) {
+                    const skippedMessages = result.skipped.map((d: any) =>
+                        `• Baris ${d.row} (${d.nama})\n  Alasan: ${d.reason}`
+                    ).join('\n\n');
+
                     showModal({
                         type: 'warning',
                         title: 'Import Selesai dengan Peringatan',
-                        message: `${result.total} data berhasil diimport.\n\n${result.skipped.length} data dilewati (duplikat):\n` +
-                            result.skipped.map((d: any) => `• Baris ${d.row} (${d.nama}) - ${d.reason}`).join('\n')
+                        message: `${result.total} data berhasil diimport.\n\n${result.skipped.length} data dilewati:\n\n${skippedMessages}`
                     });
                 } else {
                     showModal({ type: 'success', title: 'Import Berhasil!', message: result.message || `Berhasil mengimport ${result.total} data siswa.` });
                 }
             } else {
-                showModal({ type: 'error', title: 'Import Gagal', message: result.message || 'Terjadi kesalahan saat mengimpor data siswa.' });
+                let userMessage = result.message || 'Terjadi kesalahan saat mengimpor data siswa.';
+
+                // Deteksi error duplikasi
+                if (userMessage.includes('NIS') || userMessage.includes('NISN') || userMessage.includes('duplikat')) {
+                    userMessage = '⚠️ Data Duplikat Ditemukan\n\n' + userMessage + '\n\nPastikan NIS dan NISN unik untuk tahun ajaran ini, atau gunakan tahun ajaran yang berbeda.';
+                }
+
+                showModal({ type: 'error', title: 'Import Gagal', message: userMessage });
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });

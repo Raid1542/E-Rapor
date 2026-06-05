@@ -341,7 +341,7 @@ const importSiswa = async (req, res) => {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
-                    reason: 'Kolom wajib (nis, nisn, nama_lengkap, kelas_id) tidak lengkap'
+                    reason: 'Kolom wajib (NIS, NISN, nama lengkap, kelas) tidak lengkap'
                 });
                 continue; 
             }
@@ -357,11 +357,12 @@ const importSiswa = async (req, res) => {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
-                    reason: `NIS "${row.nis}" atau NISN "${row.nisn}" sudah terdaftar`
+                    reason: `Siswa dengan NIS "${row.nis}" atau NISN "${row.nisn}" sudah ada di tahun ajaran ini`
                 });
                 continue; 
             }
             
+            // Parse tanggal lahir
             let tanggal_lahir = row.tanggal_lahir || null;
             if (typeof tanggal_lahir === 'number') {
                 const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
@@ -375,6 +376,7 @@ const importSiswa = async (req, res) => {
                 if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) tanggal_lahir = null;
             }
             
+            // Cek kelas
             const [kelasRows] = await connection.execute(
                 'SELECT id_kelas FROM kelas WHERE nama_kelas = ? AND tahun_ajaran_id = ?',
                 [String(row.kelas_id).trim(), tahunAjaranId]
@@ -388,6 +390,7 @@ const importSiswa = async (req, res) => {
                 continue; 
             }
             const kelasId = kelasRows[0].id_kelas;
+            
             try {
                 await siswaModel.createSiswa(
                     {
@@ -406,11 +409,19 @@ const importSiswa = async (req, res) => {
                 );
                 processedCount++;
             } catch (insertErr) {
-                skipped.push({
-                    row: rowNumber,
-                    nama: row.nama_lengkap || '-',
-                    reason: insertErr.message || 'Gagal menyimpan data'
-                });
+                if (insertErr.code === 'ER_DUP_ENTRY' || insertErr.errno === 1062) {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: row.nama_lengkap || '-',
+                        reason: `Siswa dengan NIS "${row.nis}" atau NISN "${row.nisn}" sudah terdaftar di tahun ajaran ini`
+                    });
+                } else {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: row.nama_lengkap || '-',
+                        reason: 'Gagal menyimpan data siswa'
+                    });
+                }
             }
         }
         
@@ -430,6 +441,13 @@ const importSiswa = async (req, res) => {
         await connection.rollback();
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('Import siswa error:', err);
+        
+        if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Import gagal: Ada NIS atau NISN yang sudah terdaftar di tahun ajaran ini. Pastikan data unik untuk tahun ajaran yang dipilih.'
+            });
+        }
         
         res.status(500).json({ 
             success: false,

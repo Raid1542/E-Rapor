@@ -10,6 +10,17 @@
 const mapelModel = require('../../models/mapelModel');
 const db = require('../../config/db');
 
+const getIdTahunAjaranAktif = async (idInduk) => {
+    const [rows] = await db.execute(
+        `SELECT id_tahun_ajaran 
+            FROM tahun_ajaran 
+            WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
+            LIMIT 1`,
+        [idInduk]
+    );
+    return rows.length > 0 ? rows[0].id_tahun_ajaran : null;
+};
+
 const getMataPelajaran = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
@@ -61,7 +72,16 @@ const tambahMataPelajaran = async (req, res) => {
     try {
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor } = req.body;
         
-        const tahun_ajaran_id = req.idTahunAjaranInduk;
+        const idInduk = req.idTahunAjaranInduk;
+
+        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
+        
+        if (!tahun_ajaran_id) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tidak ada semester aktif di tahun ajaran ini. Pastikan ada semester (Ganjil/Genap) yang statusnya AKTIF.' 
+            });
+        }
 
         if (!kode_mapel || !nama_mapel || !jenis || !kurikulum) {
             return res.status(400).json({ 
@@ -208,7 +228,16 @@ const editMataPelajaran = async (req, res) => {
 
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor } = req.body;
         
-        const tahunAjaranAktif = req.idTahunAjaranInduk;
+        const idInduk = req.idTahunAjaranInduk;
+
+        const tahunAjaranAktif = await getIdTahunAjaranAktif(idInduk);
+        
+        if (!tahunAjaranAktif) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif di tahun ajaran ini.'
+            });
+        }
 
         const existingRows = await mapelModel.getById(idNum);
         if (existingRows.length === 0) {
@@ -367,7 +396,16 @@ const hapusMataPelajaran = async (req, res) => {
             });
         }
 
-        const tahunAjaranAktif = req.idTahunAjaranInduk;
+        const idInduk = req.idTahunAjaranInduk;
+
+        const tahunAjaranAktif = await getIdTahunAjaranAktif(idInduk);
+
+        if (!tahunAjaranAktif) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif di tahun ajaran ini.'
+            });
+        }
 
         if (!tahunAjaranAktif) {
             return res.status(400).json({
