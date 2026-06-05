@@ -26,11 +26,24 @@ const getKelas = async (req, res) => {
             [tahun_ajaran_id]
         );
 
-        // Jika ini id_induk, convert ke id_tahun_ajaran aktif
         if (cekInduk.length > 0) {
-            tahun_ajaran_id = await getIdTahunAjaranAktif(tahun_ajaran_id);
-            if (!tahun_ajaran_id) {
-                return res.json({ success: true, data: [] }); // Kosong jika tidak ada semester aktif
+            const activeSemester = await getIdTahunAjaranAktif(tahun_ajaran_id);
+            if (!activeSemester) {
+                const [firstSemester] = await db.execute(
+                    `SELECT id_tahun_ajaran FROM tahun_ajaran 
+                        WHERE id_tahun_ajaran_induk = ? 
+                        ORDER BY semester ASC 
+                        LIMIT 1`,
+                    [tahun_ajaran_id]
+                );
+                
+                if (firstSemester.length === 0) {
+                    return res.json({ success: true, data: [] });
+                }
+                
+                tahun_ajaran_id = firstSemester[0].id_tahun_ajaran;
+            } else {
+                tahun_ajaran_id = activeSemester;
             }
         }
 
