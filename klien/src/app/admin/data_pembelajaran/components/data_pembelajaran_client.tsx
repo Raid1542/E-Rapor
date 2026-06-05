@@ -359,6 +359,13 @@ export default function DataPembelajaranPage() {
 
   const openFormTambah = () => {
     resetForm();
+
+    if (dataPerKelas?.wali_kelas?.id) {
+      setFormData(prev => ({
+        ...prev,
+        user_id: String(dataPerKelas.wali_kelas.id)
+      }));
+    }
     setShowForm(true);
   };
 
@@ -374,66 +381,66 @@ export default function DataPembelajaranPage() {
     setShowForm(true);
   };
 
-const handleSubmitForm = async () => {
-  if (!validateForm()) return;
-  if (!selectedKelasId) return;
+  const handleSubmitForm = async () => {
+    if (!validateForm()) return;
+    if (!selectedKelasId) return;
 
-  if (editId !== null && !hasDataChanged()) {
-    showModal({
-      type: 'warning',
-      title: 'Tidak Ada Perubahan',
-      message: 'Tidak ada data yang diubah.'
-    });
-    return;
-  }
-
-  const token = getToken();
-  if (!token) {
-    showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-    return;
-  }
-
-  const isEdit = editId !== null;
-  const url = isEdit 
-    ? `http://localhost:5000/api/admin/pembelajaran/${editId}`
-    : 'http://localhost:5000/api/admin/pembelajaran';
-  
-  const method = isEdit ? 'PUT' : 'POST';
-  const body = {
-    user_id: Number(formData.user_id),
-    mapel_id: Number(formData.mapel_id),
-    kelas_id: selectedKelasId,
-  };
-
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(body),
-    });
-
-    const result = await res.json();
-
-    if (res.ok && result.success) {
-      setShowForm(false);
-      resetForm();
-      await fetchDataPerKelas(selectedKelasId);
+    if (editId !== null && !hasDataChanged()) {
       showModal({
-        type: 'success',
-        title: isEdit ? 'Berhasil Diperbarui!' : 'Berhasil Ditambahkan!',
-        message: result.message || (isEdit ? 'Data pembelajaran berhasil diperbarui.' : 'Pembelajaran berhasil ditambahkan.')
+        type: 'warning',
+        title: 'Tidak Ada Perubahan',
+        message: 'Tidak ada data yang diubah.'
       });
-    } else {
-      showModal({
-        type: 'error',
-        title: isEdit ? 'Gagal Memperbarui' : 'Gagal Menambahkan',
-        message: result.message || 'Terjadi kesalahan.'
-      });
+      return;
     }
-  } catch {
-    showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-  }
-};
+
+    const token = getToken();
+    if (!token) {
+      showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+      return;
+    }
+
+    const isEdit = editId !== null;
+    const url = isEdit
+      ? `http://localhost:5000/api/admin/pembelajaran/${editId}`
+      : 'http://localhost:5000/api/admin/pembelajaran';
+
+    const method = isEdit ? 'PUT' : 'POST';
+    const body = {
+      user_id: Number(formData.user_id),
+      mapel_id: Number(formData.mapel_id),
+      kelas_id: selectedKelasId,
+    };
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setShowForm(false);
+        resetForm();
+        await fetchDataPerKelas(selectedKelasId);
+        showModal({
+          type: 'success',
+          title: isEdit ? 'Berhasil Diperbarui!' : 'Berhasil Ditambahkan!',
+          message: result.message || (isEdit ? 'Data pembelajaran berhasil diperbarui.' : 'Pembelajaran berhasil ditambahkan.')
+        });
+      } else {
+        showModal({
+          type: 'error',
+          title: isEdit ? 'Gagal Memperbarui' : 'Gagal Menambahkan',
+          message: result.message || 'Terjadi kesalahan.'
+        });
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+    }
+  };
 
   const handleDelete = (id: number, namaMapel: string, namaGuru: string) => {
     showConfirm(
@@ -629,7 +636,7 @@ const handleSubmitForm = async () => {
               value={selectedTahunAjaranId ?? ''}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value === '') {
+                if (value === '' || value === 'no-data') {
                   setSelectedTahunAjaranId(null);
                   setSelectedTahunAjaranAktif(false);
                   setSelectedKelasId(null);
@@ -654,13 +661,31 @@ const handleSubmitForm = async () => {
               className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
               <option value="">-- Pilih Tahun Ajaran --</option>
-              {tahunAjaranList.map(ta => (
-                <option key={ta.id} value={ta.id}>
-                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+              {tahunAjaranList.length === 0 ? (
+                <option disabled value="no-data">
+                  Belum ada tahun ajaran
                 </option>
-              ))}
+              ) : (
+                tahunAjaranList.map(ta => (
+                  <option key={ta.id} value={ta.id}>
+                    {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+                  </option>
+                ))
+              )}
             </select>
           </div>
+
+          {/* PESAN JIKA BELUM ADA TAHUN AJARAN */}
+          {tahunAjaranList.length === 0 && (
+            <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ background: '#fffaf6', borderColor: '#fde0c8' }}>
+              <p className="text-sm" style={{ color: '#c95b08' }}>
+                <strong>⚠️ Belum Ada Tahun Ajaran</strong>
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                Silakan tambah tahun ajaran terlebih dahulu untuk mulai mengelola data.
+              </p>
+            </div>
+          )}
         </div>
 
         {selectedTahunAjaranId === null ? (
@@ -677,7 +702,7 @@ const handleSubmitForm = async () => {
                   value={selectedKelasId ?? ''}
                   onChange={(e) => {
                     const value = e.target.value;
-                    if (value === '') {
+                    if (value === '' || value === 'no-data') {
                       setSelectedKelasId(null);
                       setDataPerKelas(null);
                       localStorage.removeItem('pembelajaran_selectedKelas');
@@ -691,14 +716,31 @@ const handleSubmitForm = async () => {
                     if (selectedTahunAjaranAktif) fetchDropdowns();
                   }}
                   className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
-                  disabled={kelasList.length === 0}
                 >
                   <option value="">-- Pilih Kelas --</option>
-                  {kelasList.map(k => (
-                    <option key={k.id} value={k.id}>{k.nama}</option>
-                  ))}
+                  {kelasList.length === 0 ? (
+                    <option disabled value="no-data">
+                      Belum ada kelas di tahun ajaran ini
+                    </option>
+                  ) : (
+                    kelasList.map(k => (
+                      <option key={k.id} value={k.id}>{k.nama}</option>
+                    ))
+                  )}
                 </select>
               </div>
+
+              {/* PESAN JIKA BELUM ADA KELAS */}
+              {selectedTahunAjaranId !== null && kelasList.length === 0 && (
+                <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ background: '#fffaf6', borderColor: '#fde0c8' }}>
+                  <p className="text-sm" style={{ color: '#c95b08' }}>
+                    <strong>⚠️ Belum Ada Kelas</strong>
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Silakan tambah kelas terlebih dahulu di menu Data Kelas.
+                  </p>
+                </div>
+              )}
             </div>
 
             {selectedKelasId === null ? (
@@ -707,21 +749,11 @@ const handleSubmitForm = async () => {
               </div>
             ) : (
               <>
-                {/* Toolbar */}
+                {/* Toolbar - HANYA SEARCH */}
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      {selectedTahunAjaranAktif && (
-                        <button
-                          onClick={openFormTambah}
-                          className={btnPrimary.base}
-                          style={btnPrimary.style}
-                          onMouseEnter={btnPrimary.hover}
-                          onMouseLeave={btnPrimary.leave}
-                        >
-                          <Plus size={16} /> Tambah Pembelajaran
-                        </button>
-                      )}
+                      {/* Tombol dipindah ke bawah */}
                     </div>
                     <div className="relative min-w-[200px] sm:min-w-[220px]">
                       <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -768,7 +800,7 @@ const handleSubmitForm = async () => {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-gray-400">guru Kelas</p>
+                          <p className="text-xs text-gray-400">Guru Kelas</p>
                           <p className="font-semibold text-gray-800">{dataPerKelas.wali_kelas?.nama || '—'}</p>
                         </div>
                       </div>
@@ -776,10 +808,12 @@ const handleSubmitForm = async () => {
 
                     {/* ═══ MAPEL WAJIB ═══ */}
                     <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #fde0c8' }}>
-                      <div className="px-5 py-3 flex items-center gap-2" style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)' }}>
-                        <BookOpen size={16} className="text-white" />
-                        <h4 className="text-sm font-bold text-white">Mata Pelajaran Wajib</h4>
-                        <span className="ml-auto text-xs text-white/80">Diajar oleh Guru Kelas</span>
+                      <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)' }}>
+                        <div className="flex items-center gap-2">
+                          <BookOpen size={16} className="text-white" />
+                          <h4 className="text-sm font-bold text-white">Mata Pelajaran Wajib</h4>
+                        </div>
+                        <span className="text-xs text-white/90">Diajar oleh Guru Kelas</span>
                       </div>
 
                       {filterMapel(dataPerKelas.mapel_wajib).length === 0 ? (
@@ -787,17 +821,16 @@ const handleSubmitForm = async () => {
                           {searchQuery ? 'Tidak ada mapel wajib yang cocok' : 'Belum ada mapel wajib yang ditugaskan'}
                         </div>
                       ) : (
-
                         <div className="overflow-x-auto">
                           <table className="w-full min-w-[600px] text-sm border-collapse bg-white">
                             <thead>
                               <tr style={{ background: '#fffaf6', borderBottom: '1px solid #fde0c8' }}>
-                                <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-16">No</th>
-                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Kode</th>
+                                <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-12">No</th>
+                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 w-24">Kode</th>
                                 <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Mata Pelajaran</th>
                                 <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Guru Pengampu</th>
                                 {selectedTahunAjaranAktif && (
-                                  <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-40">Aksi</th>
+                                  <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-32">Aksi</th>
                                 )}
                               </tr>
                             </thead>
@@ -812,8 +845,8 @@ const handleSubmitForm = async () => {
                                   <td className="px-5 py-3 text-gray-700">{mp.nama_guru}</td>
                                   {selectedTahunAjaranAktif && (
                                     <td className="px-5 py-3 text-center">
-                                      <div className="flex justify-center gap-2">
-                                        {/* Tombol Hapus */}
+                                      <div className="flex justify-center gap-1">
+                                        {/* Tombol Hapus dengan Text */}
                                         <button
                                           onClick={() => handleDelete(mp.id, mp.nama_mapel, mp.nama_guru)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -822,7 +855,8 @@ const handleSubmitForm = async () => {
                                           onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
                                           title="Hapus"
                                         >
-                                          <Trash2 size={12} /> Hapus
+                                          <Trash2 size={12} />
+                                          <span>Hapus</span>
                                         </button>
                                       </div>
                                     </td>
@@ -836,11 +870,13 @@ const handleSubmitForm = async () => {
                     </div>
 
                     {/* ═══ MAPEL PILIHAN ═══ */}
-                    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #b6e8c8' }}>
-                      <div className="px-5 py-3 flex items-center gap-2" style={{ background: 'linear-gradient(135deg,#1a7a3a,#2a9a4a)' }}>
-                        <BookOpen size={16} className="text-white" />
-                        <h4 className="text-sm font-bold text-white">Mata Pelajaran Pilihan</h4>
-                        <span className="ml-auto text-xs text-white/80">Diajar oleh Guru Bidang Studi</span>
+                    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #fde0c8' }}>
+                      <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)' }}>
+                        <div className="flex items-center gap-2">
+                          <BookOpen size={16} className="text-white" />
+                          <h4 className="text-sm font-bold text-white">Mata Pelajaran Pilihan</h4>
+                        </div>
+                        <span className="text-xs text-white/90">Diajar oleh Guru Bidang Studi</span>
                       </div>
 
                       {filterMapel(dataPerKelas.mapel_pilihan).length === 0 ? (
@@ -851,29 +887,28 @@ const handleSubmitForm = async () => {
                         <div className="overflow-x-auto">
                           <table className="w-full min-w-[600px] text-sm border-collapse bg-white">
                             <thead>
-                              <tr style={{ background: '#f0faf3', borderBottom: '1px solid #b6e8c8' }}>
-                                <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-16">No</th>
-                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Kode</th>
+                              <tr style={{ background: '#fffaf6', borderBottom: '1px solid #fde0c8' }}>
+                                <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-12">No</th>
+                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 w-24">Kode</th>
                                 <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Mata Pelajaran</th>
                                 <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Guru Pengampu</th>
                                 {selectedTahunAjaranAktif && (
-                                  <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-40">Aksi</th>
+                                  <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-32">Aksi</th>
                                 )}
                               </tr>
                             </thead>
                             <tbody>
                               {filterMapel(dataPerKelas.mapel_pilihan).map((mp, idx) => (
-                                <tr key={mp.id} className="transition-colors" style={{ borderBottom: '1px solid #b6e8c8' }}
-                                  onMouseEnter={e => (e.currentTarget.style.background = '#f0faf3')}
+                                <tr key={mp.id} className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                                   onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                   <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
-                                  <td className="px-5 py-3 font-bold" style={{ color: '#1a7a3a' }}>{mp.kode_mapel}</td>
+                                  <td className="px-5 py-3 font-bold" style={{ color: '#c95b08' }}>{mp.kode_mapel}</td>
                                   <td className="px-5 py-3 font-semibold text-gray-800">{mp.nama_mapel}</td>
                                   <td className="px-5 py-3 text-gray-700">{mp.nama_guru}</td>
                                   {selectedTahunAjaranAktif && (
                                     <td className="px-5 py-3 text-center">
-                                      <div className="flex justify-center gap-2">
-                                        {/* Tombol Edit */}
+                                      <div className="flex justify-center gap-1">
                                         <button
                                           onClick={() => openFormEdit(mp)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -882,9 +917,8 @@ const handleSubmitForm = async () => {
                                           onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
                                           title="Edit"
                                         >
-                                          <Pencil size={12} /> Edit
+                                          <Pencil size={12} />
                                         </button>
-                                        {/* Tombol Hapus */}
                                         <button
                                           onClick={() => handleDelete(mp.id, mp.nama_mapel, mp.nama_guru)}
                                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
@@ -893,7 +927,7 @@ const handleSubmitForm = async () => {
                                           onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
                                           title="Hapus"
                                         >
-                                          <Trash2 size={12} /> Hapus
+                                          <Trash2 size={12} />
                                         </button>
                                       </div>
                                     </td>
@@ -902,6 +936,25 @@ const handleSubmitForm = async () => {
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+
+                      {/* TOMBOL TAMBAH MAPEL PILIHAN */}
+                      {selectedTahunAjaranAktif && (
+                        <div className="px-5 py-4 bg-orange-50/30 border-t" style={{ borderColor: '#fde0c8' }}>
+                          <button
+                            onClick={openFormTambah}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                            style={{
+                              background: 'linear-gradient(135deg,#c95b08,#e8690a)',
+                              color: 'white',
+                              boxShadow: '0 2px 8px rgba(200,80,10,0.3)'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                            onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+                          >
+                            <Plus size={16} /> Tambah Mapel Pilihan
+                          </button>
                         </div>
                       )}
                     </div>

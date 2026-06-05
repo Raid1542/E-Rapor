@@ -69,6 +69,34 @@ const getPembelajaranByKelas = async (req, res) => {
 
         const separated = await pembelajaranModel.getByKelasIdSeparated(Number(kelasId));
 
+        const [allMapelWajib] = await db.execute(`
+            SELECT 
+                mp.id_mata_pelajaran,
+                mp.kode_mapel,
+                mp.nama_mapel,
+                mp.jenis
+            FROM mata_pelajaran mp
+            WHERE mp.tahun_ajaran_id = ? 
+                AND mp.jenis = 'wajib'
+                AND NOT EXISTS (
+                    SELECT 1 FROM pembelajaran p 
+                    WHERE p.mapel_id = mp.id_mata_pelajaran 
+                        AND p.kelas_id = ?
+                )
+        `, [kelasInfo.tahun_ajaran_id, Number(kelasId)]);
+
+        // Gabungkan dengan data yang sudah ada
+        const mapelWajibWithUnassigned = [
+            ...separated.mapel_wajib,
+            ...allMapelWajib.map(mp => ({
+                ...mp,
+                id: null, // Belum ada di pembelajaran
+                user_id: waliKelas?.id_user || null,
+                nama_guru: waliKelas?.nama_lengkap || 'Belum ditugaskan',
+                is_unassigned: true // Flag untuk frontend
+            }))
+        ];
+
         res.json({
             success: true,
             data: {
@@ -84,7 +112,7 @@ const getPembelajaranByKelas = async (req, res) => {
                     id: waliKelas.id_user,
                     nama: waliKelas.nama_lengkap
                 } : null,
-                mapel_wajib: separated.mapel_wajib,
+                mapel_wajib: mapelWajibWithUnassigned,
                 mapel_pilihan: separated.mapel_pilihan
             }
         });

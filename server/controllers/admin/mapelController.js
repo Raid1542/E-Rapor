@@ -24,13 +24,24 @@ const getIdTahunAjaranAktif = async (idInduk) => {
 const getMataPelajaran = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
+        
         if (!tahun_ajaran_id || isNaN(Number(tahun_ajaran_id))) {
             return res.status(400).json({ 
                 success: false, 
                 message: 'tahun_ajaran_id wajib diisi dan harus angka' 
             });
         }
-        const rows = await mapelModel.getAllByTahunAjaran(Number(tahun_ajaran_id));
+
+        const taId = await getIdTahunAjaranAktif(Number(tahun_ajaran_id));
+        
+        if (!taId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tidak ada semester aktif di tahun ajaran ini.' 
+            });
+        }
+
+        const rows = await mapelModel.getAllByTahunAjaran(taId);
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get mata pelajaran:', err);

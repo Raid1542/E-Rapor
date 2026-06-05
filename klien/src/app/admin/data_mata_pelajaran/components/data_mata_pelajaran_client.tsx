@@ -680,7 +680,7 @@ export default function DataMataPelajaranPage() {
       {/* Table card */}
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-        {/* ═══ DROPDOWN TAHUN AJARAN (SAMA PERSIS DATA KELAS) ═══ */}
+        {/* ═══ DROPDOWN TAHUN AJARAN ═══ */}
         <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
@@ -688,7 +688,7 @@ export default function DataMataPelajaranPage() {
               value={selectedTahunAjaranId ?? ''}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value === '') {
+                if (value === '' || value === 'no-data') {
                   setSelectedTahunAjaranId(null);
                   setSelectedTahunAjaranAktif(false);
                   setLoading(false);
@@ -707,13 +707,31 @@ export default function DataMataPelajaranPage() {
               className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
               <option value="">-- Pilih Tahun Ajaran --</option>
-              {tahunAjaranList.map(ta => (
-                <option key={ta.id} value={ta.id}>
-                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+              {tahunAjaranList.length === 0 ? (
+                <option disabled value="no-data">
+                  Belum ada tahun ajaran
                 </option>
-              ))}
+              ) : (
+                tahunAjaranList.map(ta => (
+                  <option key={ta.id} value={ta.id}>
+                    {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+                  </option>
+                ))
+              )}
             </select>
           </div>
+
+          {/* PESAN JIKA BELUM ADA TAHUN AJARAN */}
+          {tahunAjaranList.length === 0 && (
+            <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ background: '#fffaf6', borderColor: '#fde0c8' }}>
+              <p className="text-sm" style={{ color: '#c95b08' }}>
+                <strong>⚠️ Belum Ada Tahun Ajaran</strong>
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                Silakan tambah tahun ajaran terlebih dahulu untuk mulai mengelola data.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ═══ JIKA BELUM PILIH TAHUN AJARAN ═══ */}

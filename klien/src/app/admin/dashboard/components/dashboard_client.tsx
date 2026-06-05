@@ -235,21 +235,20 @@ export default function DashboardClient() {
 
             {/* ── Welcome card ── */}
             <div
-                className="rounded-2xl p-6 mb-6 text-white relative overflow-hidden"
+                className="rounded-2xl p-6 mb-6 text-white"
                 style={{
-                    background: 'linear-gradient(135deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
-                    boxShadow: '0 4px 20px rgba(200,80,10,0.25)',
+                    background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
+                    boxShadow: '0 4px 15px rgba(200,80,10,0.2)',
                 }}
             >
-                {/* Dekorasi lingkaran */}
-                <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }} />
-                <div className="absolute -bottom-10 right-16 w-56 h-56 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} />
-                <div className="relative z-10">
-                    <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Panel Administrator</p>
-                    <h2 className="text-2xl font-bold mb-1.5">
-                        Selamat Datang, {user.name || 'Admin'}! 👋
+                <div>
+                    <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-2">
+                        Panel Administrator
+                    </p>
+                    <h2 className="text-2xl font-bold text-white mb-2">
+                        Selamat Datang, {user.nama || user.name || user.nama_lengkap || 'Admin'}! 👋
                     </h2>
-                    <p className="text-white/70 text-sm">
+                    <p className="text-white/80 text-sm">
                         Kelola sistem E-Rapor dengan mudah dari dashboard ini.
                     </p>
                 </div>

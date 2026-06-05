@@ -277,44 +277,44 @@ export default function DataKelasClient() {
     return true;
   };
 
- 
+
 
   const handleSubmitTambah = async () => {
     if (!validate()) return;
     const token = localStorage.getItem('token');
     if (!token) {
-        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
-        return;
+      showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+      return;
     }
     try {
-        const res = await fetch('http://localhost:5000/api/admin/kelas', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-                nama_kelas: formData.nama_kelas.trim(),
-                fase: formData.fase.trim(),
-                user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null, // ✅ KIRIM user_id
-            }),
-        });
+      const res = await fetch('http://localhost:5000/api/admin/kelas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nama_kelas: formData.nama_kelas.trim(),
+          fase: formData.fase.trim(),
+          user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null, // ✅ KIRIM user_id
+        }),
+      });
 
-        if (!res.ok) {
-            const err = await res.json();
-            showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan kelas.' });
-            return;
-        }
+      if (!res.ok) {
+        const err = await res.json();
+        showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan saat menambahkan kelas.' });
+        return;
+      }
 
-        setShowTambah(false);
-        handleReset();
-        if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
-        showModal({
-            type: 'success',
-            title: 'Kelas Ditambahkan!',
-            message: `Kelas ${formData.nama_kelas} berhasil ditambahkan.`,
-        });
+      setShowTambah(false);
+      handleReset();
+      if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
+      showModal({
+        type: 'success',
+        title: 'Kelas Ditambahkan!',
+        message: `Kelas ${formData.nama_kelas} berhasil ditambahkan.`,
+      });
     } catch {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
     }
-};
+  };
 
   const handleEdit = (kelas: Kelas) => {
     setEditId(kelas.id);
@@ -631,13 +631,31 @@ export default function DataKelasClient() {
               className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
               <option value="">-- Pilih Tahun Ajaran --</option>
-              {tahunAjaranList.map(ta => (
-                <option key={ta.id} value={ta.id}>
-                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+              {tahunAjaranList.length === 0 ? (
+                <option disabled value="no-data">
+                  Belum ada tahun ajaran
                 </option>
-              ))}
+              ) : (
+                tahunAjaranList.map(ta => (
+                  <option key={ta.id} value={ta.id}>
+                    {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+                  </option>
+                ))
+              )}
             </select>
           </div>
+
+          {/* PESAN JIKA BELUM ADA TAHUN AJARAN */}
+          {tahunAjaranList.length === 0 && (
+            <div className="mt-3 p-3 rounded-lg border border-dashed" style={{ background: '#fffaf6', borderColor: '#fde0c8' }}>
+              <p className="text-sm" style={{ color: '#c95b08' }}>
+                <strong>⚠️ Belum Ada Tahun Ajaran</strong>
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                Silakan tambah tahun ajaran terlebih dahulu untuk mulai mengelola data.
+              </p>
+            </div>
+          )}
         </div>
 
         {selectedTahunAjaranId === null ? (
