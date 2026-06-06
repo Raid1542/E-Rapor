@@ -7,7 +7,7 @@
 
 'use client';
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
-import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, Eye } from 'lucide-react';
+import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users } from 'lucide-react';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +111,34 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
   );
 };
 
+// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
+
+const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ek-fadeIn">
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ek-scaleIn">
+      <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ek-pulse">
+        <Trash2 size={36} className="text-red-500" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Hapus</h3>
+        <p className="text-sm text-gray-500 leading-relaxed mt-2 whitespace-pre-line">{message}</p>
+      </div>
+      <div className="flex gap-3 w-full">
+        <button onClick={onCancel}
+          className="flex-1 py-3 rounded-xl border font-semibold text-sm transition-colors"
+          style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>
+          Batal
+        </button>
+        <button onClick={onConfirm}
+          className="flex-1 py-3 rounded-xl text-white font-semibold text-sm bg-red-500 hover:bg-red-600 transition-colors">
+          Ya, Hapus
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // ─── MODAL LIHAT PESERTA ─────────────────────────────────────────────────────
 
 const ModalLihatPeserta = ({
@@ -146,7 +174,6 @@ const ModalLihatPeserta = ({
         <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
           Total: <span style={{ color: '#c95b08' }}>{peserta.length}</span> siswa
         </span>
-        <span className="text-xs text-gray-400 italic">Read-only</span>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -270,6 +297,7 @@ export default function DataEkstrakurikulerPage() {
   const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
   const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
+  const [editData, setEditData] = useState<Ekstrakurikuler | null>(null);
 
   // ── Fetches ────────────────────────────────────────────────────────────────
 
@@ -336,23 +364,61 @@ export default function DataEkstrakurikulerPage() {
   };
 
   const fetchPesertaByEkskul = async (ekskulId: number) => {
-    if (!selectedTahunAjaranId) return;
+    if (!selectedTahunAjaranId) {
+      showModal({ type: 'warning', title: 'Error', message: 'Tahun ajaran belum dipilih.' });
+      return;
+    }
+
     setLoadingPeserta(true);
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+        return;
+      }
+
       const res = await fetch(
         `http://localhost:5000/api/admin/ekstrakurikuler/${ekskulId}/anggota?tahun_ajaran_id=${selectedTahunAjaranId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setPesertaList(data.data || []);
-      } else {
-        showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Terjadi kesalahan.' });
+
+      // ← PERBAIKAN: Handle response dengan lebih robust
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Response tidak valid');
       }
-    } catch {
-      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+
+      if (!res.ok) {
+        throw new Error(data.message || `HTTP ${res.status}`);
+      }
+
+      if (!data.success) {
+        throw new Error(data.message || 'Operasi gagal');
+      }
+
+      // Handle berbagai format response
+      let peserta: PesertaEkskul[] = [];
+      if (data.data) {
+        if (Array.isArray(data.data)) {
+          peserta = data.data;
+        } else if (data.data.peserta && Array.isArray(data.data.peserta)) {
+          peserta = data.data.peserta;
+        } else if (Array.isArray(data.data.data)) {
+          peserta = data.data.data;
+        }
+      }
+
+      setPesertaList(peserta);
+    } catch (err: any) {
+      console.error('Error fetch peserta:', err);
+      showModal({
+        type: 'error',
+        title: 'Gagal Memuat Peserta',
+        message: err.message || 'Tidak dapat memuat data peserta.'
+      });
+      setPesertaList([]);
     } finally {
       setLoadingPeserta(false);
     }
@@ -436,6 +502,7 @@ export default function DataEkstrakurikulerPage() {
 
   const handleEdit = (ekskul: Ekstrakurikuler) => {
     setEditId(ekskul.id_ekskul);
+    setEditData(ekskul);
     setFormData({
       nama_ekskul: ekskul.nama_ekskul,
       pembina_id: ekskul.pembina_id ? String(ekskul.pembina_id) : '',
@@ -446,11 +513,34 @@ export default function DataEkstrakurikulerPage() {
 
   const handleSubmitEdit = async () => {
     if (!validate() || !editId) return;
+
+    // ← PERBAIKAN: Cari data asli dari ekskulList, bukan dari editData state
+    const originalEkskul = ekskulList.find(e => e.id_ekskul === editId);
+    if (!originalEkskul) {
+      showModal({ type: 'error', title: 'Error', message: 'Data tidak ditemukan.' });
+      return;
+    }
+
+    // Cek apakah ada perubahan
+    const hasChanges =
+      originalEkskul.nama_ekskul.trim().toLowerCase() !== formData.nama_ekskul.trim().toLowerCase() ||
+      String(originalEkskul.pembina_id || '') !== String(formData.pembina_id ? Number(formData.pembina_id) : '');
+
+    if (!hasChanges) {
+      showModal({
+        type: 'warning',
+        title: 'Tidak Ada Perubahan',
+        message: 'Tidak ada data yang diubah.'
+      });
+      return;
+    }
+
     const token = localStorage.getItem('token');
     if (!token || !selectedTahunAjaranId) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi tidak valid.' });
       return;
     }
+
     try {
       const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${editId}`, {
         method: 'PUT',
@@ -465,6 +555,7 @@ export default function DataEkstrakurikulerPage() {
       if (res.ok && (result.success || res.status === 200)) {
         setShowEdit(false);
         setEditId(null);
+        setEditData(null);
         handleReset();
         fetchEkskul(selectedTahunAjaranId);
         showModal({ type: 'success', title: 'Data Diperbarui!', message: result.message || 'Data berhasil diperbarui.' });
@@ -481,28 +572,64 @@ export default function DataEkstrakurikulerPage() {
       `Yakin ingin menghapus ekstrakurikuler "${namaEkskul}"?\n\nTindakan ini tidak dapat dibatalkan jika masih memiliki peserta.`,
       async () => {
         const token = localStorage.getItem('token');
-        if (!token || !selectedTahunAjaranId) return;
+        if (!token) {
+          showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+          return;
+        }
+
+        if (!selectedTahunAjaranId) {
+          showModal({ type: 'warning', title: 'Error', message: 'Tahun ajaran belum dipilih.' });
+          return;
+        }
+
         try {
           const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${id}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` },
           });
-          const result = await res.json();
-          if (res.ok && (result.success || res.status === 200)) {
-            fetchEkskul(selectedTahunAjaranId);
-            showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Data berhasil dihapus.' });
-          } else {
-            showModal({ type: 'error', title: 'Gagal Menghapus', message: result.message || 'Terjadi kesalahan.' });
+
+          let result;
+          try {
+            result = await res.json();
+          } catch {
+            throw new Error('Response tidak valid');
           }
-        } catch {
-          showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+
+          if (!res.ok) {
+            throw new Error(result.message || `HTTP ${res.status}`);
+          }
+
+          if (!result.success && res.status !== 200) {
+            throw new Error(result.message || 'Operasi gagal');
+          }
+
+          fetchEkskul(selectedTahunAjaranId);
+          showModal({
+            type: 'success',
+            title: 'Berhasil Dihapus!',
+            message: result.message || `Ekstrakurikuler "${namaEkskul}" berhasil dihapus.`
+          });
+        } catch (err: any) {
+          console.error('Error delete:', err);
+          showModal({
+            type: 'error',
+            title: 'Gagal Menghapus',
+            message: err.message || 'Tidak dapat menghapus data.'
+          });
         }
       }
     );
   };
 
   const handleLihatPeserta = (ekskul: Ekstrakurikuler) => {
-    setSelectedEkskul(ekskul);
+    setSelectedEkskul({
+      id_ekskul: ekskul.id_ekskul,
+      nama_ekskul: ekskul.nama_ekskul,
+      pembina_id: ekskul.pembina_id,
+      nama_pembina: ekskul.nama_pembina,
+      jumlah_siswa: ekskul.jumlah_siswa,
+      tahun_ajaran_id: ekskul.tahun_ajaran_id,
+    });
     setPesertaList([]);
     setShowLihatPeserta(true);
     fetchPesertaByEkskul(ekskul.id_ekskul);
@@ -511,6 +638,7 @@ export default function DataEkstrakurikulerPage() {
   const handleReset = () => {
     setFormData({ nama_ekskul: '', pembina_id: '', confirmData: false });
     setErrors({});
+    setEditData(null); // ← Reset editData
   };
 
   // ── Filtering & Pagination ────────────────────────────────────────────────
@@ -605,7 +733,6 @@ export default function DataEkstrakurikulerPage() {
           <div className="flex flex-col gap-1.5">
             <label className={labelCls} style={labelColor}>
               Pembina Ekstrakurikuler
-              <span className="text-gray-400 font-normal text-xs ml-1">(opsional)</span>
             </label>
             <select
               name="pembina_id"
@@ -618,7 +745,6 @@ export default function DataEkstrakurikulerPage() {
                 <option key={p.id} value={p.id}>{p.nama}</option>
               ))}
             </select>
-            <p className="text-xs text-gray-400">Pilih pembina yang terdaftar di menu Pembina Ekstrakurikuler</p>
           </div>
 
           <div className="pt-1">
@@ -843,7 +969,7 @@ export default function DataEkstrakurikulerPage() {
                               onMouseEnter={e => (e.currentTarget.style.background = '#bae6fd')}
                               onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}
                             >
-                              <Eye size={13} /> Lihat
+                              <Users size={13} /> Lihat Siswa
                             </button>
                             {selectedTahunAjaranAktif && (
                               <>

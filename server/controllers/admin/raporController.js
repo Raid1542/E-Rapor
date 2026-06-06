@@ -6,7 +6,7 @@ const getTahunAjaranAll = async (req, res) => {
         const rows = await tahunAjaranModel.getAllTahunAjaran();
         res.json({ success: true, data: rows });
     } catch (err) {
-        console.error('❌ Error get semua tahun ajaran:', err);
+        console.error('Error get semua tahun ajaran:', err);
         res
             .status(500)
             .json({ success: false, message: 'Gagal memuat tahun ajaran' });
@@ -105,56 +105,109 @@ const aturStatusPenilaian = async (req, res) => {
     try {
         const { jenis, status, tahun_ajaran_id } = req.body;
 
-        // Validasi input
+        // Validasi input dasar
         if (!['PTS', 'PAS'].includes(jenis)) {
-            return res
-                .status(400)
-                .json({ success: false, message: 'Jenis harus PTS atau PAS' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Jenis harus PTS atau PAS' 
+            });
         }
         if (!['aktif', 'nonaktif', 'selesai'].includes(status)) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    message: 'Status harus aktif, nonaktif, atau selesai',
-                });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Status harus aktif, nonaktif, atau selesai' 
+            });
         }
         if (!tahun_ajaran_id || tahun_ajaran_id <= 0) {
-            return res
-                .status(400)
-                .json({ success: false, message: 'Tahun ajaran ID wajib diisi' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tahun ajaran ID wajib diisi' 
+            });
         }
 
-        // Tentukan nama kolom berdasarkan jenis
-        let statusField;
-        if (jenis === 'PTS') {
-            statusField = 'status_pts';
-        } else if (jenis === 'PAS') {
-            statusField = 'status_pas';
-        } else {
-            return res
-                .status(400)
-                .json({ success: false, message: 'Jenis penilaian tidak valid' });
+        // === VALIDASI BISNIS: PTS & PAS TIDAK BOLEH AKTIF BERSAMAAN ===
+        
+        // 1. Ambil status PTS dan PAS saat ini
+        const [statusRows] = await db.execute(
+            `SELECT status_pts, status_pas FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            [tahun_ajaran_id]
+        );
+
+        if (statusRows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Tahun ajaran tidak ditemukan' 
+            });
         }
 
-        // JANGAN PAKAI ?? — gunakan string literal yang sudah divalidasi
-        const query = `
-            UPDATE tahun_ajaran
-            SET ${statusField} = ?
-            WHERE id_tahun_ajaran = ?
-        `;
+        const { status_pts, status_pas } = statusRows[0];
+
+        // 2. Validasi: tidak boleh buka PAS jika PTS masih aktif
+        if (jenis === 'PAS' && status === 'aktif') {
+            if (status_pts === 'aktif') {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Tidak bisa membuka PAS karena PTS masih aktif. Selesaikan PTS terlebih dahulu.' 
+                });
+            }
+            if (status_pts === 'nonaktif') {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Tidak bisa membuka PAS karena PTS belum diselesaikan. Arsipkan PTS terlebih dahulu.' 
+                });
+            }
+        }
+
+        // 3. Validasi: tidak boleh buka PTS jika PAS masih aktif
+        if (jenis === 'PTS' && status === 'aktif') {
+            if (status_pas === 'aktif') {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Tidak bisa membuka PTS karena PAS masih aktif. Selesaikan PAS terlebih dahulu.' 
+                });
+            }
+        }
+
+        // 4. Validasi: tidak bisa buka PTS/PAS jika yang lain sudah selesai (kecuali urutan benar)
+        if (jenis === 'PTS' && status === 'aktif' && status_pas === 'selesai') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tidak bisa membuka PTS karena PAS sudah selesai diarsipkan.' 
+            });
+        }
+
+        // 5. Validasi: tidak bisa buka PAS jika PTS belum selesai
+        if (jenis === 'PAS' && status === 'aktif' && status_pts !== 'selesai') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Harus menyelesaikan PTS terlebih dahulu sebelum membuka PAS.' 
+            });
+        }
+
+        // === UPDATE STATUS ===
+        const statusField = jenis === 'PTS' ? 'status_pts' : 'status_pas';
+        const query = `UPDATE tahun_ajaran SET ${statusField} = ? WHERE id_tahun_ajaran = ?`;
 
         await db.execute(query, [status, tahun_ajaran_id]);
+
+        // Log untuk tracking
+        console.log(`Status ${jenis} diubah menjadi "${status}" untuk TA ID: ${tahun_ajaran_id}`);
 
         res.json({
             success: true,
             message: `Status ${jenis} berhasil diubah menjadi "${status}"`,
+            data: {
+                jenis,
+                status,
+                status_pts: jenis === 'PTS' ? status : status_pts,
+                status_pas: jenis === 'PAS' ? status : status_pas
+            }
         });
     } catch (error) {
-        console.error('❌ Error atur status penilaian:', error);
+        console.error('Error atur status penilaian:', error);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengubah status penilaian',
+            message: 'Gagal mengubah status penilaian'
         });
     }
 };
