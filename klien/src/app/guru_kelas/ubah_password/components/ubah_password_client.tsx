@@ -40,8 +40,8 @@ const GlobalStyles = () => (
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG     = { background: '#fdf6f0' };
-const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG     = { background: '#fffff' };
+const CARD_STYLE = { border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
 const inputBase = [
@@ -252,7 +252,7 @@ const UbahPasswordClient = () => {
         }
     };
 
-    // ── Rules checklist ────────────────────────────────────────────────────────
+    // ── Rules checklist — DISAMAKAN dengan admin (CheckCircle2 + warna hijau/abu) ──
 
     const rules = [
         { label: 'Minimal 8 karakter',        ok: form.newPassword.length >= 8 },
@@ -269,16 +269,21 @@ const UbahPasswordClient = () => {
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
-            {/* ── Banner tips keamanan ──────────────────────────────────────── */}
-            <div className="mb-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 in-slideUp"
-                style={{ background: 'linear-gradient(135deg,#fff7f0,#fff0e5)', border: '1px solid #fde0c8' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 2px 8px rgba(232,105,10,0.25)' }}>
-                    <ShieldCheck size={18} className="text-white" />
+            {/* ── [BARU] Subtitle di atas — sama seperti admin ─────────────── */}
+            <p className="text-sm mb-5 w-full max-w-2xl in-slideUp" style={{ color: '#c95b08' }}>
+                Perbarui kata sandi akun Anda secara berkala untuk keamanan
+            </p>
+
+            {/* ── [DIUBAH] Banner tips keamanan — style sama persis dengan admin ── */}
+            <div className="mb-6 w-full max-w-2xl rounded-xl flex items-start gap-3 px-4 py-3.5 in-slideUp"
+                style={{ background: '#fff', border: '1px solid #fde0c8' }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: '#fff3e8' }}>
+                    <ShieldCheck size={18} style={{ color: '#e8690a' }} />
                 </div>
                 <div>
-                    <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Tips Keamanan Kata Sandi</p>
-                    <p className="text-xs mt-1 leading-relaxed" style={{ color: '#a0522d' }}>
+                    <p className="text-sm font-bold" style={{ color: '#5a2d0c' }}>Tips Keamanan Kata Sandi</p>
+                    <p className="text-xs mt-0.5 leading-relaxed" style={{ color: '#a05a2c' }}>
                         Gunakan kombinasi huruf besar, kecil, angka, dan karakter khusus. Jangan gunakan informasi pribadi seperti nama atau tanggal lahir. Ganti secara berkala setiap 3 bulan.
                     </p>
                 </div>
@@ -341,7 +346,7 @@ const UbahPasswordClient = () => {
                     {/* Divider */}
                     <div className="border-t" style={{ borderColor: '#fde0c8' }} />
 
-                    {/* Kata sandi baru + strength bar (gaya guru kelas) */}
+                    {/* Kata sandi baru + strength bar — DISAMAKAN dengan admin (4 segmen) */}
                     <PasswordInput
                         label="Kata Sandi Baru"
                         name="newPassword"
@@ -355,7 +360,12 @@ const UbahPasswordClient = () => {
                         hint={
                             form.newPassword ? (
                                 <div className="mt-1">
-                                    <div className="flex gap-1 mb-1">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-xs text-gray-500">Kekuatan kata sandi</span>
+                                        <span className={`text-xs font-bold ${strength.color}`}>{strength.label}</span>
+                                    </div>
+                                    {/* 4-segmen bar — sama persis dengan admin */}
+                                    <div className="flex gap-1">
                                         {[1, 2, 3, 4].map(i => (
                                             <div
                                                 key={i}
@@ -365,9 +375,6 @@ const UbahPasswordClient = () => {
                                             />
                                         ))}
                                     </div>
-                                    <p className={`text-xs font-semibold ${strength.color}`}>
-                                        Kekuatan: {strength.label}
-                                    </p>
                                 </div>
                             ) : null
                         }
@@ -386,19 +393,17 @@ const UbahPasswordClient = () => {
                         error={errors.confirmPassword}
                     />
 
-                    {/* Checklist rules (dipertahankan dari tampilan guru kelas) */}
+                    {/* [DIUBAH] Checklist rules — DISAMAKAN dengan admin (CheckCircle2, warna hijau/abu) */}
                     {(form.newPassword || form.confirmPassword) && (
-                        <div className="rounded-xl p-4 space-y-2"
-                            style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                        <div className="rounded-xl px-5 py-4 space-y-2"
+                            style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
                             {rules.map((r, i) => (
                                 <div key={i} className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-                                        style={{ background: r.ok ? '#eaf7ef' : '#f3f4f6' }}>
-                                        {r.ok
-                                            ? <CheckCircle2 size={12} style={{ color: '#16a34a' }} />
-                                            : <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />}
-                                    </div>
-                                    <span className="text-xs" style={{ color: r.ok ? '#16a34a' : '#9ca3af' }}>
+                                    <CheckCircle2
+                                        size={16}
+                                        className={`flex-shrink-0 transition-colors duration-200 ${r.ok ? 'text-green-500' : 'text-gray-300'}`}
+                                    />
+                                    <span className={`text-sm transition-colors duration-200 ${r.ok ? 'text-green-600' : 'text-gray-400'}`}>
                                         {r.label}
                                     </span>
                                 </div>
@@ -436,7 +441,7 @@ const UbahPasswordClient = () => {
                 </form>
             </div>
 
-            {/* ── Catatan peringatan (dipertahankan) ──────────────────────── */}
+            {/* ── Catatan peringatan ──────────────────────────────────────── */}
             <div className="mt-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 in-slideUp"
                 style={{ background: '#fef2f2', border: '1px solid #fca5a5', animationDelay: '0.1s' }}>
                 <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />

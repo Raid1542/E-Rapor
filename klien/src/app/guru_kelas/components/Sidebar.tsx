@@ -3,7 +3,7 @@
  * Fungsi: Menyediakan navigasi sidebar untuk halaman guru kelas.
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * Update: Active item = solid putih + teks oranye (sesuai screenshot)
+ * Update: Hapus bagian footer (nama user) di bawah sidebar
  */
 
 'use client';
@@ -40,7 +40,6 @@ export default function Sidebar({ user }: SidebarProps) {
     const [logoUrl, setLogoUrl] = useState<string>('/images/LogoUA.jpg');
     const [schoolName, setSchoolName] = useState<string>('SDIT Ulil Albab');
 
-    // ── Fetch data sekolah ─────────────────────────────────────────────────
     const fetchSchoolData = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -51,12 +50,8 @@ export default function Sidebar({ user }: SidebarProps) {
             if (res.ok) {
                 const { data } = await res.json();
                 if (data) {
-                    if (data.logo_path) {
-                        setLogoUrl(`http://localhost:5000${data.logo_path}?t=${Date.now()}`);
-                    }
-                    if (data.nama_sekolah) {
-                        setSchoolName(data.nama_sekolah);
-                    }
+                    if (data.logo_path) setLogoUrl(`http://localhost:5000${data.logo_path}?t=${Date.now()}`);
+                    if (data.nama_sekolah) setSchoolName(data.nama_sekolah);
                 }
             }
         } catch (err) {
@@ -66,27 +61,20 @@ export default function Sidebar({ user }: SidebarProps) {
 
     useEffect(() => {
         fetchSchoolData();
-
         const handleLogoUpdate = (e: Event) => {
             const customEvent = e as CustomEvent;
             const logoPath = customEvent.detail?.logoPath;
-            if (logoPath) {
-                setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
-            } else {
-                fetchSchoolData();
-            }
+            if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
+            else fetchSchoolData();
         };
-
         window.addEventListener('logoUpdated', handleLogoUpdate);
         window.addEventListener('schoolUpdated', fetchSchoolData);
-
         return () => {
             window.removeEventListener('logoUpdated', handleLogoUpdate);
             window.removeEventListener('schoolUpdated', fetchSchoolData);
         };
     }, []);
 
-    // ── Submenu ────────────────────────────────────────────────────────────
     const kelolaDataSubmenu = [
         { name: 'Data Siswa',         url: '/guru_kelas/data_siswa' },
         { name: 'Atur Penilaian',     url: '/guru_kelas/atur_penilaian' },
@@ -98,7 +86,6 @@ export default function Sidebar({ user }: SidebarProps) {
         { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_wali_kelas' },
     ];
 
-    // ── Active state ───────────────────────────────────────────────────────
     const isDashboardActive  = pathname === '/guru_kelas/dashboard';
     const isKelolaDataActive = kelolaDataSubmenu.some((item) => item.url === pathname);
     const isRaporActive      = pathname === '/guru_kelas/rapor';
@@ -108,7 +95,6 @@ export default function Sidebar({ user }: SidebarProps) {
         if (isKelolaDataActive) setOpenDropdowns((prev) => ({ ...prev, kelolaData: true }));
     }, [isKelolaDataActive]);
 
-    // ── Handlers ───────────────────────────────────────────────────────────
     const toggleSidebar = () => {
         setIsExpanded(!isExpanded);
         if (isExpanded) setOpenDropdowns({ kelolaData: false });
@@ -128,18 +114,14 @@ export default function Sidebar({ user }: SidebarProps) {
         router.push(url);
     };
 
-    // ── Style: active = solid putih + teks oranye ──────────────────────────
     const navBase =
         'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
-    const navActive =
-        'bg-white text-orange-600 font-semibold shadow-sm';
-    const navInactive =
-        'text-white/85 hover:bg-white/15 hover:text-white';
+    const navActive   = 'bg-white text-orange-600 font-semibold shadow-sm';
+    const navInactive = 'text-white hover:bg-white/15 hover:text-white';
 
-    const subItemBase =
-        'w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150';
-    const subItemActive  = 'bg-white/25 text-white font-semibold';
-    const subItemInactive = 'text-white/75 hover:bg-white/10 hover:text-white';
+    const subItemBase     = 'w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150';
+    const subItemActive   = 'bg-white text-orange-600 font-semibold shadow-sm';
+    const subItemInactive = 'text-white hover:bg-white/10 hover:text-white';
 
     return (
         <div
@@ -201,31 +183,29 @@ export default function Sidebar({ user }: SidebarProps) {
             {/* ── Navigation ──────────────────────────────────────────────── */}
             <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-none">
 
-                {/* Dashboard */}
                 <button
                     onClick={() => handleNavigation('/guru_kelas/dashboard')}
                     className={`${navBase} ${isDashboardActive ? navActive : navInactive}`}
                 >
-                    <Home className={`w-5 h-5 flex-shrink-0 ${isDashboardActive ? 'text-orange-500' : ''}`} />
+                    <Home className="w-5 h-5 flex-shrink-0" />
                     {isExpanded && <span>Dashboard</span>}
                 </button>
 
-                {/* ── MENU UTAMA label ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/40 uppercase px-4 pt-4 pb-2">
+                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Menu Utama
                     </p>
                 )}
                 {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
 
-                {/* Kelola Data (dropdown) */}
+                {/* Kelola Data */}
                 <div className="mb-1">
                     <button
                         onClick={() => toggleDropdown('kelolaData')}
                         className={`${navBase} mb-0 ${isKelolaDataActive ? navActive : navInactive} justify-between`}
                     >
                         <div className="flex items-center gap-3">
-                            <Users className={`w-5 h-5 flex-shrink-0 ${isKelolaDataActive ? 'text-orange-500' : ''}`} />
+                            <Users className="w-5 h-5 flex-shrink-0" />
                             {isExpanded && <span>Kelola Data</span>}
                         </div>
                         {isExpanded && (
@@ -252,61 +232,33 @@ export default function Sidebar({ user }: SidebarProps) {
                     )}
                 </div>
 
-                {/* Cetak Rapor */}
                 <button
                     onClick={() => handleNavigation('/guru_kelas/rapor')}
                     className={`${navBase} ${isRaporActive ? navActive : navInactive}`}
                 >
-                    <BookOpen className={`w-5 h-5 flex-shrink-0 ${isRaporActive ? 'text-orange-500' : ''}`} />
+                    <BookOpen className="w-5 h-5 flex-shrink-0" />
                     {isExpanded && <span>Cetak Rapor</span>}
                 </button>
 
-                {/* ── SAYA label ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/40 uppercase px-4 pt-4 pb-2">
+                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Saya
                     </p>
                 )}
                 {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
 
-                {/* Profil */}
                 <button
                     onClick={() => handleNavigation('/guru_kelas/profil')}
                     className={`${navBase} ${isProfilActive ? navActive : navInactive}`}
                 >
-                    <UserCircle className={`w-5 h-5 flex-shrink-0 ${isProfilActive ? 'text-orange-500' : ''}`} />
+                    <UserCircle className="w-5 h-5 flex-shrink-0" />
                     {isExpanded && <span>Profil</span>}
                 </button>
 
             </div>
 
-            {/* ── Footer ──────────────────────────────────────────────────── */}
-            <div
-                className="px-4 py-3"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}
-            >
-                {isExpanded ? (
-                    <div className="flex items-center gap-3">
-                        <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
-                            style={{ background: 'rgba(255,255,255,0.2)' }}
-                        >
-                            {user.nama_lengkap?.charAt(0)?.toUpperCase() ?? 'G'}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold text-white leading-tight truncate">{user.nama_lengkap}</p>
-                            <p className="text-[10px] text-white/55 leading-tight capitalize">{user.role}</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center mx-auto text-xs font-bold text-white"
-                        style={{ background: 'rgba(255,255,255,0.2)' }}
-                    >
-                        {user.nama_lengkap?.charAt(0)?.toUpperCase() ?? 'G'}
-                    </div>
-                )}
-            </div>
+            {/* ── Footer sidebar dihapus (kosong) ── */}
+
         </div>
     );
 }

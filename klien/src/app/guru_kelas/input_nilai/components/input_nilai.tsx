@@ -78,8 +78,8 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG    = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG    = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
@@ -426,9 +426,16 @@ const DataInputNilaiPage = () => {
                 {/* Toolbar */}
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
 
-                    {/* Dropdown Mapel */}
-                    <div className="mb-4">
-                        <label className={labelCls} style={labelColor}>Pilih Mata Pelajaran</label>
+                    {/* ── [DIUBAH] Dropdown Mapel — layout horizontal rata seperti gambar ── */}
+                    <div className="flex items-center gap-3 mb-4">
+                        {/* Label rata kiri, lebar tetap agar dropdown sejajar */}
+                        <label
+                            className="text-sm font-bold whitespace-nowrap flex-shrink-0"
+                            style={{ color: '#7a3a0a', width: '120px' }}
+                        >
+                            Jenis Penilaian
+                        </label>
+
                         {loadingMapel ? (
                             <div className="flex items-center gap-2" style={{ color: '#c95b08' }}>
                                 <div className="w-4 h-4 rounded-full border-2 border-orange-200 border-t-orange-500 animate-spin" />
@@ -442,9 +449,9 @@ const DataInputNilaiPage = () => {
                                     setSelectedMapelId(val ? Number(val) : null);
                                     setSearchQuery('');
                                 }}
-                                className="border rounded-xl px-3 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 w-full md:w-80"
+                                className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[280px]"
                             >
-                                <option value="">-- Pilih Mata Pelajaran --</option>
+                                <option value="">-- Pilih Jenis Penilaian --</option>
                                 {mapelList.filter(m => m.mata_pelajaran_id != null).map(mapel => (
                                     <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
                                         {mapel.nama_mapel} ({mapel.jenis})
@@ -453,6 +460,7 @@ const DataInputNilaiPage = () => {
                             </select>
                         )}
                     </div>
+                    {/* ── END DIUBAH ── */}
 
                     {/* Info kelas + search — tampil hanya jika mapel sudah dipilih */}
                     {selectedMapelId && currentMapel && (
@@ -511,7 +519,6 @@ const DataInputNilaiPage = () => {
                 {!selectedMapelId ? (
                     <div className="m-6 text-center py-10 rounded-2xl"
                         style={{ background: '#fff7f0', border: '2px dashed #fde0c8' }}>
-                        <div className="text-4xl mb-3">📋</div>
                         <p className="font-semibold" style={{ color: '#c95b08' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
                         <p className="text-sm text-gray-400 mt-1">Data nilai siswa akan muncul setelah mata pelajaran dipilih.</p>
                     </div>
