@@ -14,6 +14,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Camera, Lock, Upload, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -57,10 +59,10 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-  success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-  error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -89,47 +91,48 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG     = { background: '#fdf6f0' };
-const CARD_STYLE  = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const readonlyCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 outline-none bg-gray-50 border-gray-200 cursor-not-allowed";
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 const ProfilePage = () => {
   const router = useRouter();
+  const { showSessionExpired, handleLogout } = useSession();
 
   const [formData, setFormData] = useState({
     nama: '', nuptk: '', niy: '', jenisKelamin: 'Laki-laki',
     telepon: '', email: '', alamat: ''
   });
 
-  const [profileImage,      setProfileImage]      = useState<string | null>(null);
-  const [previewImage,      setPreviewImage]       = useState<string | null>(null);
-  const [selectedFileName,  setSelectedFileName]   = useState<string>('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading,  setIsUploading]  = useState(false);
-  const [isConfirmed,  setIsConfirmed]  = useState(false);
-  const [isSaving,     setIsSaving]     = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Simpan data awal untuk mendeteksi perubahan
   const initialFormDataRef = useRef<typeof formData | null>(null);
 
-  const [modal,    setModal]    = useState<ModalConfig | null>(null);
-  const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
 
   // ── Fetch profil ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const token       = localStorage.getItem('token');
-      const storedUser  = localStorage.getItem('currentUser');
+      const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('currentUser');
 
       if (!token || !storedUser) {
         window.location.href = '/login';
@@ -146,7 +149,7 @@ const ProfilePage = () => {
           });
           if (res.ok) {
             const apiResponse = await res.json();
-            const freshData   = apiResponse.data;
+            const freshData = apiResponse.data;
             const updatedUser = { ...userData, profileImage: freshData.profileImage || null };
             localStorage.setItem('currentUser', JSON.stringify(updatedUser));
 
@@ -161,13 +164,13 @@ const ProfilePage = () => {
         }
 
         const loadedData = {
-          nama:         userData.nama_lengkap  || '',
-          nuptk:        userData.nuptk         || '',
-          niy:          userData.niy           || '',
+          nama: userData.nama_lengkap || '',
+          nuptk: userData.nuptk || '',
+          niy: userData.niy || '',
           jenisKelamin: userData.jenis_kelamin || 'Laki-laki',
-          telepon:      userData.no_telepon    || '',
-          email:        userData.email_sekolah || '',
-          alamat:       userData.alamat        || ''
+          telepon: userData.no_telepon || '',
+          email: userData.email_sekolah || '',
+          alamat: userData.alamat || ''
         };
         setFormData(loadedData);
         // Simpan snapshot data awal untuk deteksi perubahan
@@ -194,12 +197,12 @@ const ProfilePage = () => {
     // Cek apakah ada perubahan dibanding data awal
     const initial = initialFormDataRef.current;
     const hasChanges = !initial ||
-      formData.nama         !== initial.nama         ||
-      formData.nuptk        !== initial.nuptk        ||
-      formData.niy          !== initial.niy          ||
+      formData.nama !== initial.nama ||
+      formData.nuptk !== initial.nuptk ||
+      formData.niy !== initial.niy ||
       formData.jenisKelamin !== initial.jenisKelamin ||
-      formData.telepon      !== initial.telepon      ||
-      formData.alamat       !== initial.alamat;
+      formData.telepon !== initial.telepon ||
+      formData.alamat !== initial.alamat;
 
     if (!hasChanges) {
       showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah. Silakan ubah data terlebih dahulu sebelum menyimpan.' });
@@ -211,7 +214,7 @@ const ProfilePage = () => {
       return;
     }
 
-    const token      = localStorage.getItem('token');
+    const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('currentUser');
     if (!token || !storedUser) {
       showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi login tidak valid. Silakan login ulang.' });
@@ -230,27 +233,27 @@ const ProfilePage = () => {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          nama_lengkap:  formData.nama,
+          nama_lengkap: formData.nama,
           email_sekolah: formData.email,
-          niy:           formData.niy,
-          nuptk:         formData.nuptk,
+          niy: formData.niy,
+          nuptk: formData.nuptk,
           jenis_kelamin: formData.jenisKelamin,
-          no_telepon:    formData.telepon,
-          alamat:        formData.alamat,
-          status:        'aktif'
+          no_telepon: formData.telepon,
+          alamat: formData.alamat,
+          status: 'aktif'
         })
       });
 
       if (response.ok) {
         const updatedUser: UserProfile = {
           ...userData,
-          nama_lengkap:  formData.nama,
+          nama_lengkap: formData.nama,
           email_sekolah: formData.email,
-          niy:           formData.niy,
-          nuptk:         formData.nuptk,
+          niy: formData.niy,
+          nuptk: formData.nuptk,
           jenis_kelamin: formData.jenisKelamin,
-          no_telepon:    formData.telepon,
-          alamat:        formData.alamat
+          no_telepon: formData.telepon,
+          alamat: formData.alamat
         };
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
         setIsConfirmed(false);
@@ -343,6 +346,9 @@ const ProfilePage = () => {
     <div className="p-6 min-h-screen" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
 
       {/* Page header */}
       <div className="mb-6">

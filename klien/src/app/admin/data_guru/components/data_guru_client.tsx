@@ -12,6 +12,8 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import { Eye, Pencil, Upload, X, Plus, Search, Filter, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ const formatTanggalIndonesia = (dateStr?: string | null): string => {
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataGuruClient() {
+  const { showSessionExpired, handleLogout } = useSession();
   const formatGender = (g?: string | null) => {
     if (!g) return '-';
     const s = String(g).trim().toLowerCase();
@@ -407,6 +410,11 @@ export default function DataGuruClient() {
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
+
+
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Guru</h1>
@@ -576,6 +584,10 @@ export default function DataGuruClient() {
     <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
 
       {/* Page header */}
       <div className="mb-6">

@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { Download, Upload, Database, FileText, FileUp, Loader2 } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 type Tab = 'backup' | 'restore';
 type BackupStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -9,6 +11,7 @@ type RestoreStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export default function BackupRestoreClient() {
     const [activeTab, setActiveTab] = useState<Tab>('backup');
+    const { showSessionExpired, handleLogout } = useSession();
 
     // ── Backup state ──
     const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle');
@@ -185,6 +188,9 @@ export default function BackupRestoreClient() {
     return (
         <div className="flex-1 p-6 bg-gray-50 min-h-screen">
             <div className="max-w-7xl mx-auto">
+                {showSessionExpired && (
+                    <SessionExpiredModal onConfirm={handleLogout} />
+                )}
 
                 {/* ── Page Title ── */}
                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Backup &amp; Restore</h1>

@@ -12,6 +12,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
@@ -70,6 +72,9 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataSekolahPage() {
+    const { showSessionExpired, handleLogout } = useSession();
+
+
 
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const [formData, setFormData] = useState({
@@ -268,6 +273,10 @@ export default function DataSekolahPage() {
 
             {/* Notif modal */}
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
 
             {/* Page header */}
             <div className="w-full max-w-3xl mb-6">

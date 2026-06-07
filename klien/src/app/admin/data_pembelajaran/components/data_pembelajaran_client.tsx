@@ -7,6 +7,8 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, BookOpen, Users } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type ModalType = 'success' | 'error' | 'warning' | 'network';
@@ -169,6 +171,7 @@ interface FormData {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function DataPembelajaranPage() {
+  const { showSessionExpired, handleLogout } = useSession();
   const [dataPerKelas, setDataPerKelas] = useState<DataPerKelas | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -484,6 +487,10 @@ export default function DataPembelajaranPage() {
       <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
         <GlobalStyles />
         {modal && <NotifModal modal={modal} onClose={closeModal} />}
+        {showSessionExpired && (
+          <SessionExpiredModal onConfirm={handleLogout} />
+        )}
+
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Data Pembelajaran</h1>
@@ -610,6 +617,11 @@ export default function DataPembelajaranPage() {
     <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
+
+
       {confirmCfg && (
         <ConfirmModal
           message={confirmCfg.message}

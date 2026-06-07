@@ -10,6 +10,8 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import { Eye, Pencil, X, Plus, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 interface Admin {
     id: number;
@@ -112,6 +114,8 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 );
 
 export default function DataAdminClient() {
+    const { showSessionExpired, handleLogout } = useSession();
+
     const formatGender = (g?: string | null) => {
         if (!g) return '-';
         const s = String(g).trim().toLowerCase();
@@ -458,6 +462,10 @@ export default function DataAdminClient() {
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
             {/* Page header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Data Admin</h1>
@@ -627,6 +635,10 @@ export default function DataAdminClient() {
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
             {/* Page header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Data Admin</h1>
@@ -782,95 +794,95 @@ export default function DataAdminClient() {
             </div>
 
             {/* Modal Detail */}
-{showDetail && selectedAdmin && (
-    <div
-        className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
-        onClick={(e) => { if (e.target === e.currentTarget) closeDetail(); }}
-    >
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-        <div
-            className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-            style={CARD_STYLE}
-        >
-            {/* Header */}
-            <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                <h2 className="text-base font-bold text-white">Detail Admin</h2>
-                <button onClick={closeDetail}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ background: 'rgba(255,255,255,0.2)' }}>
-                    <X size={16} className="text-white" />
-                </button>
-            </div>
+            {showDetail && selectedAdmin && (
+                <div
+                    className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
+                    onClick={(e) => { if (e.target === e.currentTarget) closeDetail(); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div
+                        className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                        style={CARD_STYLE}
+                    >
+                        {/* Header */}
+                        <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                            <h2 className="text-base font-bold text-white">Detail Admin</h2>
+                            <button onClick={closeDetail}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                <X size={16} className="text-white" />
+                            </button>
+                        </div>
 
-            <div className="p-6">
-                {/* Avatar & Nama */}
-                <div className="flex flex-col items-center mb-6">
-                    <div className="w-24 h-24 rounded-full overflow-hidden mb-3 flex items-center justify-center"
-                        style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)' }}>
-                        {selectedAdmin.profileImage ? (
-                            <img src={`http://localhost:5000${selectedAdmin.profileImage}`} alt="Foto Profil"
-                                className="w-full h-full object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                        ) : (
-                            <span className="text-2xl font-bold" style={{ color: '#c95b08' }}>
-                                {getInitials(selectedAdmin.nama || '??')}
-                            </span>
-                        )}
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-800 text-center break-words">{selectedAdmin.nama}</h3>
-                </div>
+                        <div className="p-6">
+                            {/* Avatar & Nama */}
+                            <div className="flex flex-col items-center mb-6">
+                                <div className="w-24 h-24 rounded-full overflow-hidden mb-3 flex items-center justify-center"
+                                    style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)' }}>
+                                    {selectedAdmin.profileImage ? (
+                                        <img src={`http://localhost:5000${selectedAdmin.profileImage}`} alt="Foto Profil"
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                    ) : (
+                                        <span className="text-2xl font-bold" style={{ color: '#c95b08' }}>
+                                            {getInitials(selectedAdmin.nama || '??')}
+                                        </span>
+                                    )}
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-800 text-center break-words">{selectedAdmin.nama}</h3>
+                            </div>
 
-                {/* Info rows - DIPERBAIKI */}
-                <div className="space-y-2.5">
-                    {[
-                        {
-                            label: 'Status', value: (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                                    style={selectedAdmin.statusAdmin === 'AKTIF' || selectedAdmin.statusAdmin === 'aktif'
-                                        ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
-                                        : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
-                                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedAdmin.statusAdmin === 'AKTIF' || selectedAdmin.statusAdmin === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                                    {selectedAdmin.statusAdmin?.toUpperCase() || 'AKTIF'}
-                                </span>
-                            )
-                        },
-                        { label: 'NIY', value: selectedAdmin.niy || '-' },
-                        { label: 'NUPTK', value: selectedAdmin.nuptk || '-' },
-                        { label: 'Jenis Kelamin', value: formatGender(selectedAdmin.jenis_kelamin || selectedAdmin.lp) },
-                        { label: 'Tempat Lahir', value: selectedAdmin.tempat_lahir || '-' },
-                        { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedAdmin.tanggal_lahir) },
-                        { label: 'Telepon', value: selectedAdmin.no_telepon || '-' },
-                        { label: 'Alamat', value: selectedAdmin.alamat || '-' },
-                        { label: 'Email', value: selectedAdmin.email || '-' },
-                    ].map((item, i) => (
-                        <div key={i} className="grid grid-cols-4 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
-                            <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                            <span className="text-xs text-gray-700 col-span-1">:</span>
-                            <div className="col-span-2 flex items-center">
-                                <span className="text-xs text-gray-700 break-words">{item.value}</span>
+                            {/* Info rows - DIPERBAIKI */}
+                            <div className="space-y-2.5">
+                                {[
+                                    {
+                                        label: 'Status', value: (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                                style={selectedAdmin.statusAdmin === 'AKTIF' || selectedAdmin.statusAdmin === 'aktif'
+                                                    ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
+                                                    : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
+                                                <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedAdmin.statusAdmin === 'AKTIF' || selectedAdmin.statusAdmin === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                                {selectedAdmin.statusAdmin?.toUpperCase() || 'AKTIF'}
+                                            </span>
+                                        )
+                                    },
+                                    { label: 'NIY', value: selectedAdmin.niy || '-' },
+                                    { label: 'NUPTK', value: selectedAdmin.nuptk || '-' },
+                                    { label: 'Jenis Kelamin', value: formatGender(selectedAdmin.jenis_kelamin || selectedAdmin.lp) },
+                                    { label: 'Tempat Lahir', value: selectedAdmin.tempat_lahir || '-' },
+                                    { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedAdmin.tanggal_lahir) },
+                                    { label: 'Telepon', value: selectedAdmin.no_telepon || '-' },
+                                    { label: 'Alamat', value: selectedAdmin.alamat || '-' },
+                                    { label: 'Email', value: selectedAdmin.email || '-' },
+                                ].map((item, i) => (
+                                    <div key={i} className="grid grid-cols-4 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
+                                        <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
+                                        <span className="text-xs text-gray-700 col-span-1">:</span>
+                                        <div className="col-span-2 flex items-center">
+                                            <span className="text-xs text-gray-700 break-words">{item.value}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Footer buttons */}
+                            <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                                <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
+                                <button
+                                    onClick={() => { handleEdit(selectedAdmin); closeDetail(); }}
+                                    className={btnPrimary.base}
+                                    style={btnPrimary.style}
+                                    onMouseEnter={btnPrimary.hover}
+                                    onMouseLeave={btnPrimary.leave}
+                                >
+                                    <Pencil size={14} /> Edit
+                                </button>
                             </div>
                         </div>
-                    ))}
+                    </div>
                 </div>
-
-                {/* Footer buttons */}
-                <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                    <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
-                    <button
-                        onClick={() => { handleEdit(selectedAdmin); closeDetail(); }}
-                        className={btnPrimary.base}
-                        style={btnPrimary.style}
-                        onMouseEnter={btnPrimary.hover}
-                        onMouseLeave={btnPrimary.leave}
-                    >
-                        <Pencil size={14} /> Edit
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-)}
+            )}
         </div>
     );
 }

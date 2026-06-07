@@ -2,6 +2,8 @@
 
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
 import { Eye, Pencil, Upload, X, Plus, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +120,7 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataPembinaEkskulClient() {
+  const { showSessionExpired, handleLogout } = useSession();
   const formatGender = (g?: string | null) => {
     if (!g) return '-';
     const s = String(g).trim().toLowerCase();
@@ -378,6 +381,9 @@ export default function DataPembinaEkskulClient() {
     <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Pembina Ekstrakurikuler</h1>
@@ -489,6 +495,9 @@ export default function DataPembinaEkskulClient() {
     <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Pembina Ekstrakurikuler</h1>

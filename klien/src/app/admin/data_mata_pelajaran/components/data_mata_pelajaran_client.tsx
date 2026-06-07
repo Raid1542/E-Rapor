@@ -12,6 +12,8 @@
 'use client';
 import { useState, useEffect, useRef, useCallback, ChangeEvent, ReactNode } from 'react';
 import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -141,6 +143,7 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataMataPelajaranPage() {
+  const { showSessionExpired, handleLogout } = useSession();
   const [mapelList, setMapelList] = useState<MataPelajaran[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTambah, setShowTambah] = useState(false);
@@ -525,6 +528,9 @@ export default function DataMataPelajaranPage() {
     <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
 
       {/* Page header */}
       <div className="mb-6">
@@ -670,6 +676,9 @@ export default function DataMataPelajaranPage() {
     <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
 
       {/* Page header */}
       <div className="mb-6">

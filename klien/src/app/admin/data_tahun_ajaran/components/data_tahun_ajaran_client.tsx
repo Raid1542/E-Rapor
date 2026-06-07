@@ -10,6 +10,8 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import { Pencil, Plus, X, RotateCw, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -113,6 +115,7 @@ const formatTanggalIndonesia = (dateStr?: string | null): string => {
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataTahunAjaranClient() {
+    const { showSessionExpired, handleLogout } = useSession();
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
     const [loading, setLoading] = useState(true);
     const [showTambah, setShowTambah] = useState(false);
@@ -441,6 +444,9 @@ export default function DataTahunAjaranClient() {
         <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
 
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Data Tahun Ajaran</h1>
@@ -591,6 +597,9 @@ export default function DataTahunAjaranClient() {
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
 
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Data Tahun Ajaran</h1>

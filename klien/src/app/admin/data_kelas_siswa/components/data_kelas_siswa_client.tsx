@@ -14,6 +14,8 @@
 import Link from 'next/link';
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
 import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +150,7 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataKelasClient() {
+  const { showSessionExpired, handleLogout } = useSession();
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTambah, setShowTambah] = useState(false);
@@ -458,6 +461,10 @@ export default function DataKelasClient() {
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Kelas</h1>
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data kelas dan wali kelas</p>
@@ -589,6 +596,10 @@ export default function DataKelasClient() {
     <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && (
+        <SessionExpiredModal onConfirm={handleLogout} />
+      )}
+
       {confirmCfg && (
         <ConfirmModal
           message={confirmCfg.message}

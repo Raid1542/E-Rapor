@@ -10,6 +10,8 @@ import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react'
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { X, Plus, Upload, Search, ArrowLeft, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Pencil, Eye, Lock } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 type ModalType = 'success' | 'error' | 'warning' | 'network';
@@ -164,6 +166,7 @@ const formatDateInput = (dateString?: string) => {
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function SiswaPerKelasPage() {
     const { id } = useParams();
+    const { showSessionExpired, handleLogout } = useSession();
 
     const [kelasInfo, setKelasInfo] = useState<KelasInfo | null>(null);
     const [siswaList, setSiswaList] = useState<Siswa[]>([]);
@@ -590,6 +593,10 @@ export default function SiswaPerKelasPage() {
         <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
 
             <div className="mb-6">
                 <Link
@@ -739,6 +746,10 @@ export default function SiswaPerKelasPage() {
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
 
             {/* Page header */}
             <div className="mb-8">
