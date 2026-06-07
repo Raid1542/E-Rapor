@@ -2,7 +2,7 @@
  * Nama File: dashboard_client.tsx
  * Fungsi: Komponen klien untuk menampilkan dashboard admin,
  *         mencakup statistik data guru, siswa, admin, ekstrakurikuler, kelas, dan mata pelajaran,
- *         Bar Chart perbandingan Guru vs Siswa, Donut Chart status guru aktif/nonaktif,
+ *         Donut Chart status guru aktif/nonaktif,
  *         serta navigasi ke halaman manajemen terkait.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
@@ -12,20 +12,19 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { ChevronRight, Users, UserCircle, Award, School, Book, CheckCircle2, AlertCircle, Plus, Pencil } from 'lucide-react';
+import {
+    ChevronRight, Users, UserCircle, Award, School, Book,
+    CheckCircle2, AlertCircle, Plus, Pencil, UserCheck, UserX,
+    GraduationCap, ClipboardList, Settings
+} from 'lucide-react';
 import { UserData } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
     PieChart,
     Pie,
     Cell,
+    Tooltip,
+    ResponsiveContainer,
 } from 'recharts';
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
@@ -38,20 +37,6 @@ interface DashboardStats {
     kelas: number;
     mata_pelajaran: number;
 }
-
-// ─── CUSTOM TOOLTIP — Bar Chart ───────────────────────────────────────────────
-
-const CustomBarTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-white rounded-xl shadow-lg px-4 py-3" style={{ border: '1px solid #fde0c8' }}>
-                <p className="text-xs font-bold mb-1" style={{ color: '#c95b08' }}>{label}</p>
-                <p className="text-lg font-bold text-gray-800">{payload[0].value}</p>
-            </div>
-        );
-    }
-    return null;
-};
 
 // ─── CUSTOM TOOLTIP — Donut Chart ─────────────────────────────────────────────
 
@@ -82,7 +67,7 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent
     );
 };
 
-// ─── CARD WRAPPER — dipakai oleh stat cards & chart cards ─────────────────────
+// ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
     <div
@@ -206,20 +191,15 @@ export default function DashboardClient() {
     // ── Stat cards config ─────────────────────────────────────────────────────
 
     const statCards = [
-        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru' },
-        { label: 'Data Siswa', value: stats.siswa, icon: <Users className="w-5 h-5" />, path: '/admin/data_siswa' },
-        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
-        { label: 'Data Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler' },
-        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas' },
-        { label: 'Data Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran' },
+        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru', subtitle: `${guruAktif} aktif` },
+        { label: 'Data Siswa', value: stats.siswa, icon: <GraduationCap className="w-5 h-5" />, path: '/admin/data_siswa', subtitle: 'Tahun ajaran aktif' },
+        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin', subtitle: 'Pengelola sistem' },
+        { label: 'Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler', subtitle: 'Kegiatan siswa' },
+        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas', subtitle: 'Ruang belajar' },
+        { label: 'Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran', subtitle: 'Kurikulum aktif' },
     ];
 
-    // ── Chart data ────────────────────────────────────────────────────────────
-
-    const barData = [
-        { name: 'Guru', jumlah: stats.guru },
-        { name: 'Siswa', jumlah: stats.siswa },
-    ];
+    // ── Donut Chart data ──────────────────────────────────────────────────────
 
     const donutData = [
         { name: 'Aktif', value: guruAktif },
@@ -227,6 +207,15 @@ export default function DashboardClient() {
     ].filter(d => d.value > 0);
 
     const DONUT_COLORS = ['#e8690a', '#fde0c8'];
+
+    // ── Quick Actions ─────────────────────────────────────────────────────────
+
+    const quickActions = [
+        { label: 'Tambah Siswa', icon: <Plus size={18} />, path: '/admin/data_siswa', color: '#e8690a' },
+        { label: 'Atur Kelas', icon: <Settings size={18} />, path: '/admin/data_kelas', color: '#c95b08' },
+        { label: 'Kelola Ekskul', icon: <ClipboardList size={18} />, path: '/admin/ekstrakurikuler', color: '#f5870a' },
+        { label: 'Arsip Rapor', icon: <GraduationCap size={18} />, path: '/admin/arsip_rapor', color: '#b35a08' },
+    ];
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -254,7 +243,7 @@ export default function DashboardClient() {
                 </div>
             </div>
 
-            {/* ── CARD: TAHUN AJARAN AKTIF ───────────────────────────────────────── */}
+            {/* ── CARD: TAHUN AJARAN AKTIF ───────────────────────────────────── */}
             {!taLoading && (
                 <div className="mb-6">
                     <div
@@ -264,7 +253,6 @@ export default function DashboardClient() {
                             boxShadow: '0 4px 20px rgba(200,80,10,0.25)',
                         }}
                     >
-                        {/* Dekorasi lingkaran */}
                         <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full"
                             style={{ background: 'rgba(255,255,255,0.08)' }} />
                         <div className="absolute -bottom-8 right-20 w-40 h-40 rounded-full"
@@ -272,7 +260,6 @@ export default function DashboardClient() {
 
                         <div className="flex items-center justify-between relative z-10">
                             <div className="flex items-center gap-4">
-                                {/* Icon dengan background */}
                                 <div
                                     className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg"
                                     style={{
@@ -288,10 +275,9 @@ export default function DashboardClient() {
                                     )}
                                 </div>
 
-                                {/* Info */}
                                 <div>
                                     <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">
-                                        {tahunAjaranAktif ? 'Tahun Ajaran Aktif' : 'Tahun Ajaran Aktif'}
+                                        Tahun Ajaran Aktif
                                     </p>
                                     {tahunAjaranAktif ? (
                                         <div>
@@ -310,9 +296,7 @@ export default function DashboardClient() {
                                 </div>
                             </div>
 
-                            {/* TOMBOL - Conditional Rendering */}
                             {tahunAjaranAktif ? (
-                                /* Tombol UBAH */
                                 <button
                                     onClick={() => router.push('/admin/data_tahun_ajaran')}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg"
@@ -334,7 +318,6 @@ export default function DashboardClient() {
                                     Ubah
                                 </button>
                             ) : (
-                                /* Tombol TAMBAH */
                                 <button
                                     onClick={() => router.push('/admin/data_tahun_ajaran')}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-lg"
@@ -360,15 +343,17 @@ export default function DashboardClient() {
                 </div>
             )}
 
-
             {/* ── Stat cards ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                 {statCards.map((card) => (
-                    <Card key={card.label}>
-                        <div className="p-5">
+                    <Card key={card.label} className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group">
+                        <div
+                            className="p-5 h-full"
+                            onClick={() => router.push(card.path)}
+                        >
                             <div className="flex items-center justify-between mb-4">
                                 <div
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0"
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0 transition-transform group-hover:scale-110"
                                     style={{
                                         background: 'linear-gradient(135deg, #c95b08, #e8690a)',
                                         boxShadow: '0 3px 10px rgba(232,105,10,0.3)',
@@ -377,135 +362,67 @@ export default function DashboardClient() {
                                     {card.icon}
                                 </div>
                                 <span
-                                    className="text-3xl font-bold"
+                                    className="text-3xl font-bold transition-transform group-hover:scale-110"
                                     style={{ color: '#c95b08' }}
                                 >
                                     {card.value}
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-gray-700 mb-3">{card.label}</p>
+                            <p className="text-sm font-semibold text-gray-700 mb-1">{card.label}</p>
+                            <p className="text-xs text-gray-500 mb-3">{card.subtitle}</p>
                             <div className="pt-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <button
-                                    onClick={() => router.push(card.path)}
-                                    className="flex items-center gap-1 text-xs font-semibold transition-colors group"
+                                <div
+                                    className="flex items-center gap-1 text-xs font-semibold transition-colors"
                                     style={{ color: '#e8690a' }}
-                                    onMouseEnter={e => (e.currentTarget.style.color = '#c95b08')}
-                                    onMouseLeave={e => (e.currentTarget.style.color = '#e8690a')}
                                 >
                                     Lihat detail
-                                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                                </button>
+                                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                                </div>
                             </div>
                         </div>
                     </Card>
                 ))}
             </div>
 
-            {/* ── Charts ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* ── Donut Chart + Quick Actions ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
-                {/* Bar Chart — Guru vs Siswa */}
+                {/* Donut Chart — Status Guru (2/3 width) */}
                 <Card className="lg:col-span-2">
                     <div className="p-5">
-                        {/* Chart header */}
                         <div
                             className="flex items-center justify-between pb-4 mb-4"
                             style={{ borderBottom: '1px solid #fde0c8' }}
                         >
                             <div>
-                                <p className="text-sm font-bold text-gray-800">Jumlah Guru &amp; Siswa</p>
+                                <p className="text-sm font-bold text-gray-800">Status Guru</p>
                                 <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
-                                    Perbandingan total guru dan siswa terdaftar
+                                    Distribusi guru aktif dan nonaktif
                                 </p>
                             </div>
                             <div
                                 className="px-3 py-1 rounded-lg text-xs font-semibold"
                                 style={{ background: '#fff0e5', color: '#c95b08' }}
                             >
-                                Perbandingan
+                                Total: {stats.guru} guru
                             </div>
                         </div>
 
-                        <ResponsiveContainer width="100%" height={260}>
-                            <BarChart
-                                data={barData}
-                                barSize={56}
-                                margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
-                            >
-                                <defs>
-                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#c95b08" />
-                                        <stop offset="100%" stopColor="#f5a623" />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(253,224,200,0.6)" vertical={false} />
-                                <XAxis
-                                    dataKey="name"
-                                    tick={{ fontSize: 13, fill: '#7a3a0a', fontWeight: 700 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 11, fill: '#d1d5db' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    allowDecimals={false}
-                                />
-                                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(253,224,200,0.3)' }} />
-                                <Bar dataKey="jumlah" radius={[10, 10, 0, 0]} fill="url(#barGradient)" />
-                            </BarChart>
-                        </ResponsiveContainer>
-
-                        <div
-                            className="grid grid-cols-2 gap-4 mt-4 pt-4"
-                            style={{ borderTop: '1px solid #fde0c8' }}
-                        >
-                            <div
-                                className="text-center py-3 rounded-xl"
-                                style={{ background: '#fff0e5' }}
-                            >
-                                <p className="text-xs font-medium mb-1" style={{ color: '#b35a08' }}>Total Guru</p>
-                                <p className="text-2xl font-bold" style={{ color: '#c95b08' }}>{stats.guru}</p>
-                            </div>
-                            <div
-                                className="text-center py-3 rounded-xl"
-                                style={{ background: '#fff0e5' }}
-                            >
-                                <p className="text-xs font-medium mb-1" style={{ color: '#b35a08' }}>Total Siswa</p>
-                                <p className="text-2xl font-bold" style={{ color: '#c95b08' }}>{stats.siswa}</p>
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-
-                {/* Donut Chart — Status Guru */}
-                <Card>
-                    <div className="p-5 flex flex-col h-full">
-                        {/* Chart header */}
-                        <div
-                            className="pb-4 mb-2"
-                            style={{ borderBottom: '1px solid #fde0c8' }}
-                        >
-                            <p className="text-sm font-bold text-gray-800">Status Guru</p>
-                            <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
-                                Guru aktif vs nonaktif
-                            </p>
-                        </div>
-
-                        {donutData.length === 0 ? (
-                            <div className="flex-1 flex items-center justify-center py-8">
-                                <p className="text-sm text-gray-400">Belum ada data guru</p>
-                            </div>
-                        ) : (
-                            <>
-                                <ResponsiveContainer width="100%" height={200}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                            {/* Donut Chart */}
+                            {donutData.length === 0 ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <p className="text-sm text-gray-400">Belum ada data guru</p>
+                                </div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={220}>
                                     <PieChart>
                                         <Pie
                                             data={donutData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={55}
-                                            outerRadius={85}
+                                            innerRadius={60}
+                                            outerRadius={90}
                                             paddingAngle={3}
                                             dataKey="value"
                                             labelLine={false}
@@ -521,37 +438,166 @@ export default function DashboardClient() {
                                         <Tooltip content={<CustomDonutTooltip />} />
                                     </PieChart>
                                 </ResponsiveContainer>
+                            )}
 
-                                <div className="mt-3 space-y-2">
-                                    {donutData.map((entry, index) => (
-                                        <div key={entry.name} className="flex items-center justify-between px-1">
-                                            <div className="flex items-center gap-2">
-                                                <div
-                                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                                    style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
-                                                />
-                                                <span className="text-xs font-medium text-gray-600">{entry.name}</span>
-                                            </div>
-                                            <span className="text-xs font-bold text-gray-800">{entry.value} guru</span>
-                                        </div>
-                                    ))}
-                                </div>
-
+                            {/* Info List */}
+                            <div className="space-y-3">
+                                {/* Guru Aktif */}
                                 <div
-                                    className="mt-4 pt-3 flex items-center justify-between"
-                                    style={{ borderTop: '1px solid #fde0c8' }}
+                                    className="flex items-center justify-between p-4 rounded-xl transition-all hover:shadow-md"
+                                    style={{ background: '#dcfce7', border: '1px solid #86efac' }}
                                 >
-                                    <span className="text-xs font-medium text-gray-500">Total Guru</span>
-                                    <span className="text-sm font-bold" style={{ color: '#c95b08' }}>
-                                        {donutData.reduce((s, d) => s + d.value, 0)} guru
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                            style={{ background: '#16a34a' }}
+                                        >
+                                            <UserCheck size={20} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800">Guru Aktif</p>
+                                            <p className="text-xs text-gray-600">Dapat login & mengajar</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold" style={{ color: '#15803d' }}>{guruAktif}</p>
                                 </div>
-                            </>
-                        )}
+
+                                {/* Guru Nonaktif */}
+                                <div
+                                    className="flex items-center justify-between p-4 rounded-xl transition-all hover:shadow-md"
+                                    style={{ background: '#fef9c3', border: '1px solid #fde68a' }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                                            style={{ background: '#eab308' }}
+                                        >
+                                            <UserX size={20} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800">Guru Nonaktif</p>
+                                            <p className="text-xs text-gray-600">Tidak dapat login</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold" style={{ color: '#92400e' }}>{guruNonaktif}</p>
+                                </div>
+
+                                {/* Persentase Aktif */}
+                                {stats.guru > 0 && (
+                                    <div
+                                        className="p-4 rounded-xl text-center"
+                                        style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}
+                                    >
+                                        <p className="text-xs text-gray-500 mb-1">Tingkat Keaktifan</p>
+                                        <p className="text-2xl font-bold" style={{ color: '#c95b08' }}>
+                                            {Math.round((guruAktif / stats.guru) * 100)}%
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </Card>
 
+                {/* Quick Actions (1/3 width) */}
+                <Card>
+                    <div className="p-5 flex flex-col h-full">
+                        <div
+                            className="pb-4 mb-4"
+                            style={{ borderBottom: '1px solid #fde0c8' }}
+                        >
+                            <p className="text-sm font-bold text-gray-800">Aksi Cepat</p>
+                            <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
+                                Akses fitur yang sering digunakan
+                            </p>
+                        </div>
+
+                        <div className="flex-1 space-y-2">
+                            {quickActions.map((action, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => router.push(action.path)}
+                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:shadow-md group"
+                                    style={{
+                                        background: '#fffaf6',
+                                        border: '1px solid #fde0c8',
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.background = '#fff0e5';
+                                        e.currentTarget.style.transform = 'translateX(4px)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.background = '#fffaf6';
+                                        e.currentTarget.style.transform = 'translateX(0)';
+                                    }}
+                                >
+                                    <div
+                                        className="w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0"
+                                        style={{ background: action.color }}
+                                    >
+                                        {action.icon}
+                                    </div>
+                                    <span className="text-sm font-semibold text-gray-700 flex-1 text-left">
+                                        {action.label}
+                                    </span>
+                                    <ChevronRight
+                                        size={16}
+                                        className="text-gray-400 group-hover:text-orange-500 group-hover:translate-x-1 transition-all"
+                                    />
+                                </button>
+                            ))}
+                        </div>
+
+                        <div
+                            className="mt-4 pt-3 text-center"
+                            style={{ borderTop: '1px solid #fde0c8' }}
+                        >
+                            <p className="text-xs text-gray-500">
+                                💡 Klik untuk akses cepat
+                            </p>
+                        </div>
+                    </div>
+                </Card>
             </div>
+
+            {/* ── Info Summary ── */}
+            <Card>
+                <div className="p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                        <CheckCircle2 size={18} style={{ color: '#e8690a' }} />
+                        <p className="text-sm font-bold text-gray-800">Ringkasan Tahun Ajaran</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
+                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
+                                {stats.kelas}
+                            </p>
+                            <p className="text-xs font-medium text-gray-600">Total Kelas</p>
+                        </div>
+                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
+                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
+                                {stats.mata_pelajaran}
+                            </p>
+                            <p className="text-xs font-medium text-gray-600">Mata Pelajaran</p>
+                        </div>
+                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
+                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
+                                {stats.ekstrakurikuler}
+                            </p>
+                            <p className="text-xs font-medium text-gray-600">Ekstrakurikuler</p>
+                        </div>
+                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
+                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
+                                {stats.siswa > 0 && stats.kelas > 0
+                                    ? Math.round(stats.siswa / stats.kelas)
+                                    : 0}
+                            </p>
+                            <p className="text-xs font-medium text-gray-600">Rata-rata/Kelas</p>
+                        </div>
+                    </div>
+                </div>
+            </Card>
         </div>
     );
 }

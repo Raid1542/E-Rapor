@@ -222,7 +222,7 @@ const UbahPasswordClient = () => {
 
         setSaving(true);
         try {
-            const res = await fetch(`${API_URL}/api/guru-kelas/ganti-password`, {
+            const res = await fetch(`${API_URL}/api/admin/admin/ganti-password`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ oldPassword: form.oldPassword, newPassword: form.newPassword }),

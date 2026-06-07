@@ -138,11 +138,11 @@ router.put('/siswa/:id', adminOnlyWithTahunAjaran, admin.editSiswa);
 router.get('/kelas/:id/siswa', adminOnly, admin.getSiswaByKelas);
 
 // --- Data Admin ---
+router.put('/admin/upload-foto', adminOnly, uploadFoto.single('foto'), admin.uploadFotoProfil);
+router.put('/admin/ganti-password', adminOnly, admin.gantiPasswordAdmin);
 router.get('/admin', adminOnly, admin.getAdmin);
 router.get('/admin/:id', adminOnly, admin.getAdminById);
 router.post('/admin', adminOnly, admin.tambahAdmin);
-router.put('/admin/upload-foto', adminOnly, uploadFoto.single('foto'), admin.uploadFotoProfil);
-router.put('/admin/ganti-password', adminOnly, admin.gantiPasswordAdmin);
 router.put('/admin/:id', adminOnly, admin.editAdmin);
 
 // --- Data Pembina Ekstrakurikuler ---
