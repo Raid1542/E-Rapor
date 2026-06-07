@@ -12,6 +12,9 @@ import {
     CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X, Search, Calendar
 } from 'lucide-react';
 
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
@@ -168,6 +171,7 @@ export default function ArsipRaporPage() {
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
+    const { showSessionExpired, handleLogout } = useSession();
 
     // ── Fetch Tahun Ajaran (PAKAI ENDPOINT SAMA DENGAN MAPEL) ──────────────────
 
@@ -177,7 +181,7 @@ export default function ArsipRaporPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            // ✅ PAKAI ENDPOINT YANG SAMA DENGAN DATA MAPEL (sudah jalan)
+            // PAKAI ENDPOINT YANG SAMA DENGAN DATA MAPEL (sudah jalan)
             const res = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -434,6 +438,11 @@ export default function ArsipRaporPage() {
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
 
             {/* ── Page Header ──────────────────────────────────────────────────── */}
             <div className="mb-6">

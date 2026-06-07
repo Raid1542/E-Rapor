@@ -1,12 +1,8 @@
 /**
  * Nama File: dashboard_client.tsx
- * Fungsi: Komponen klien untuk menampilkan dashboard admin,
- *         mencakup statistik data guru, siswa, admin, ekstrakurikuler, kelas, dan mata pelajaran,
- *         Donut Chart status guru aktif/nonaktif,
- *         serta navigasi ke halaman manajemen terkait.
+ * Fungsi: Komponen klien untuk menampilkan dashboard admin
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan Sidebar & Header
  */
 
 "use client";
@@ -14,18 +10,13 @@
 import { useEffect, useState } from 'react';
 import {
     ChevronRight, Users, UserCircle, Award, School, Book,
-    CheckCircle2, AlertCircle, Plus, Pencil, UserCheck, UserX,
-    GraduationCap, ClipboardList, Settings
+    CheckCircle2, AlertCircle, Plus, Pencil,
+    GraduationCap
 } from 'lucide-react';
 import { UserData } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import {
-    PieChart,
-    Pie,
-    Cell,
-    Tooltip,
-    ResponsiveContainer,
-} from 'recharts';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 
@@ -37,35 +28,6 @@ interface DashboardStats {
     kelas: number;
     mata_pelajaran: number;
 }
-
-// ─── CUSTOM TOOLTIP — Donut Chart ─────────────────────────────────────────────
-
-const CustomDonutTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-white rounded-xl shadow-lg px-4 py-3" style={{ border: '1px solid #fde0c8' }}>
-                <p className="text-xs font-bold mb-1" style={{ color: '#c95b08' }}>{payload[0].name}</p>
-                <p className="text-lg font-bold text-gray-800">{payload[0].value} guru</p>
-            </div>
-        );
-    }
-    return null;
-};
-
-// ─── CUSTOM LABEL — persentase di dalam slice donut ───────────────────────────
-
-const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-    if (percent < 0.05) return null;
-    const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    return (
-        <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={700}>
-            {`${(percent * 100).toFixed(0)}%`}
-        </text>
-    );
-};
 
 // ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
 
@@ -87,8 +49,6 @@ export default function DashboardClient() {
         guru: 0, siswa: 0, admin: 0,
         ekstrakurikuler: 0, kelas: 0, mata_pelajaran: 0,
     });
-    const [guruAktif, setGuruAktif] = useState(0);
-    const [guruNonaktif, setGuruNonaktif] = useState(0);
 
     const [tahunAjaranAktif, setTahunAjaranAktif] = useState<{
         tahun_ajaran: string;
@@ -97,6 +57,8 @@ export default function DashboardClient() {
     const [taLoading, setTaLoading] = useState(true);
 
     const router = useRouter();
+
+    const { showSessionExpired, handleLogout } = useSession();
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -121,17 +83,6 @@ export default function DashboardClient() {
                 });
                 const resultStats = await resStats.json();
                 if (resStats.ok && resultStats.success) setStats(resultStats.data);
-
-                const resGuru = await fetch('http://localhost:5000/api/admin/guru', {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const resultGuru = await resGuru.json();
-                if (resGuru.ok && Array.isArray(resultGuru.data)) {
-                    const list = resultGuru.data;
-                    const aktif = list.filter((g: any) => (g.status || '').trim().toLowerCase() === 'aktif').length;
-                    setGuruAktif(aktif);
-                    setGuruNonaktif(list.length - aktif);
-                }
             } catch (err) {
                 console.error('Gagal memuat data dashboard:', err);
             } finally {
@@ -191,36 +142,22 @@ export default function DashboardClient() {
     // ── Stat cards config ─────────────────────────────────────────────────────
 
     const statCards = [
-        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru', subtitle: `${guruAktif} aktif` },
-        { label: 'Data Siswa', value: stats.siswa, icon: <GraduationCap className="w-5 h-5" />, path: '/admin/data_siswa', subtitle: 'Tahun ajaran aktif' },
-        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin', subtitle: 'Pengelola sistem' },
-        { label: 'Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler', subtitle: 'Kegiatan siswa' },
-        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas', subtitle: 'Ruang belajar' },
-        { label: 'Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran', subtitle: 'Kurikulum aktif' },
+        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru' },
+        { label: 'Data Siswa', value: stats.siswa, icon: <GraduationCap className="w-5 h-5" />, path: '/admin/data_siswa' },
+        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
+        { label: 'Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler' },
+        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas' },
+        { label: 'Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran' },
     ];
 
-    // ── Donut Chart data ──────────────────────────────────────────────────────
-
-    const donutData = [
-        { name: 'Aktif', value: guruAktif },
-        { name: 'Nonaktif', value: guruNonaktif },
-    ].filter(d => d.value > 0);
-
-    const DONUT_COLORS = ['#e8690a', '#fde0c8'];
-
-    // ── Quick Actions ─────────────────────────────────────────────────────────
-
-    const quickActions = [
-        { label: 'Tambah Siswa', icon: <Plus size={18} />, path: '/admin/data_siswa', color: '#e8690a' },
-        { label: 'Atur Kelas', icon: <Settings size={18} />, path: '/admin/data_kelas', color: '#c95b08' },
-        { label: 'Kelola Ekskul', icon: <ClipboardList size={18} />, path: '/admin/ekstrakurikuler', color: '#f5870a' },
-        { label: 'Arsip Rapor', icon: <GraduationCap size={18} />, path: '/admin/arsip_rapor', color: '#b35a08' },
-    ];
-
-    // ── Render ────────────────────────────────────────────────────────────────
+    // ── Render ───────────────────────────────────────────────────────────────
 
     return (
         <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
+
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
 
             {/* ── Welcome card ── */}
             <div
@@ -344,7 +281,7 @@ export default function DashboardClient() {
             )}
 
             {/* ── Stat cards ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {statCards.map((card) => (
                     <Card key={card.label} className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group">
                         <div
@@ -368,8 +305,7 @@ export default function DashboardClient() {
                                     {card.value}
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-gray-700 mb-1">{card.label}</p>
-                            <p className="text-xs text-gray-500 mb-3">{card.subtitle}</p>
+                            <p className="text-sm font-semibold text-gray-700 mb-3">{card.label}</p>
                             <div className="pt-3" style={{ borderTop: '1px solid #fde0c8' }}>
                                 <div
                                     className="flex items-center gap-1 text-xs font-semibold transition-colors"
@@ -383,221 +319,6 @@ export default function DashboardClient() {
                     </Card>
                 ))}
             </div>
-
-            {/* ── Donut Chart + Quick Actions ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-
-                {/* Donut Chart — Status Guru (2/3 width) */}
-                <Card className="lg:col-span-2">
-                    <div className="p-5">
-                        <div
-                            className="flex items-center justify-between pb-4 mb-4"
-                            style={{ borderBottom: '1px solid #fde0c8' }}
-                        >
-                            <div>
-                                <p className="text-sm font-bold text-gray-800">Status Guru</p>
-                                <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
-                                    Distribusi guru aktif dan nonaktif
-                                </p>
-                            </div>
-                            <div
-                                className="px-3 py-1 rounded-lg text-xs font-semibold"
-                                style={{ background: '#fff0e5', color: '#c95b08' }}
-                            >
-                                Total: {stats.guru} guru
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                            {/* Donut Chart */}
-                            {donutData.length === 0 ? (
-                                <div className="flex items-center justify-center py-12">
-                                    <p className="text-sm text-gray-400">Belum ada data guru</p>
-                                </div>
-                            ) : (
-                                <ResponsiveContainer width="100%" height={220}>
-                                    <PieChart>
-                                        <Pie
-                                            data={donutData}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={90}
-                                            paddingAngle={3}
-                                            dataKey="value"
-                                            labelLine={false}
-                                            label={renderCustomLabel}
-                                        >
-                                            {donutData.map((_, index) => (
-                                                <Cell
-                                                    key={`cell-${index}`}
-                                                    fill={DONUT_COLORS[index % DONUT_COLORS.length]}
-                                                />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip content={<CustomDonutTooltip />} />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            )}
-
-                            {/* Info List */}
-                            <div className="space-y-3">
-                                {/* Guru Aktif */}
-                                <div
-                                    className="flex items-center justify-between p-4 rounded-xl transition-all hover:shadow-md"
-                                    style={{ background: '#dcfce7', border: '1px solid #86efac' }}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                                            style={{ background: '#16a34a' }}
-                                        >
-                                            <UserCheck size={20} className="text-white" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-800">Guru Aktif</p>
-                                            <p className="text-xs text-gray-600">Dapat login & mengajar</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-2xl font-bold" style={{ color: '#15803d' }}>{guruAktif}</p>
-                                </div>
-
-                                {/* Guru Nonaktif */}
-                                <div
-                                    className="flex items-center justify-between p-4 rounded-xl transition-all hover:shadow-md"
-                                    style={{ background: '#fef9c3', border: '1px solid #fde68a' }}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                                            style={{ background: '#eab308' }}
-                                        >
-                                            <UserX size={20} className="text-white" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-800">Guru Nonaktif</p>
-                                            <p className="text-xs text-gray-600">Tidak dapat login</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-2xl font-bold" style={{ color: '#92400e' }}>{guruNonaktif}</p>
-                                </div>
-
-                                {/* Persentase Aktif */}
-                                {stats.guru > 0 && (
-                                    <div
-                                        className="p-4 rounded-xl text-center"
-                                        style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}
-                                    >
-                                        <p className="text-xs text-gray-500 mb-1">Tingkat Keaktifan</p>
-                                        <p className="text-2xl font-bold" style={{ color: '#c95b08' }}>
-                                            {Math.round((guruAktif / stats.guru) * 100)}%
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-
-                {/* Quick Actions (1/3 width) */}
-                <Card>
-                    <div className="p-5 flex flex-col h-full">
-                        <div
-                            className="pb-4 mb-4"
-                            style={{ borderBottom: '1px solid #fde0c8' }}
-                        >
-                            <p className="text-sm font-bold text-gray-800">Aksi Cepat</p>
-                            <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
-                                Akses fitur yang sering digunakan
-                            </p>
-                        </div>
-
-                        <div className="flex-1 space-y-2">
-                            {quickActions.map((action, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => router.push(action.path)}
-                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:shadow-md group"
-                                    style={{
-                                        background: '#fffaf6',
-                                        border: '1px solid #fde0c8',
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.background = '#fff0e5';
-                                        e.currentTarget.style.transform = 'translateX(4px)';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.background = '#fffaf6';
-                                        e.currentTarget.style.transform = 'translateX(0)';
-                                    }}
-                                >
-                                    <div
-                                        className="w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0"
-                                        style={{ background: action.color }}
-                                    >
-                                        {action.icon}
-                                    </div>
-                                    <span className="text-sm font-semibold text-gray-700 flex-1 text-left">
-                                        {action.label}
-                                    </span>
-                                    <ChevronRight
-                                        size={16}
-                                        className="text-gray-400 group-hover:text-orange-500 group-hover:translate-x-1 transition-all"
-                                    />
-                                </button>
-                            ))}
-                        </div>
-
-                        <div
-                            className="mt-4 pt-3 text-center"
-                            style={{ borderTop: '1px solid #fde0c8' }}
-                        >
-                            <p className="text-xs text-gray-500">
-                                💡 Klik untuk akses cepat
-                            </p>
-                        </div>
-                    </div>
-                </Card>
-            </div>
-
-            {/* ── Info Summary ── */}
-            <Card>
-                <div className="p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <CheckCircle2 size={18} style={{ color: '#e8690a' }} />
-                        <p className="text-sm font-bold text-gray-800">Ringkasan Tahun Ajaran</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
-                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
-                                {stats.kelas}
-                            </p>
-                            <p className="text-xs font-medium text-gray-600">Total Kelas</p>
-                        </div>
-                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
-                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
-                                {stats.mata_pelajaran}
-                            </p>
-                            <p className="text-xs font-medium text-gray-600">Mata Pelajaran</p>
-                        </div>
-                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
-                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
-                                {stats.ekstrakurikuler}
-                            </p>
-                            <p className="text-xs font-medium text-gray-600">Ekstrakurikuler</p>
-                        </div>
-                        <div className="text-center p-4 rounded-xl transition-all hover:shadow-md" style={{ background: '#fffaf6' }}>
-                            <p className="text-3xl font-bold mb-1" style={{ color: '#c95b08' }}>
-                                {stats.siswa > 0 && stats.kelas > 0
-                                    ? Math.round(stats.siswa / stats.kelas)
-                                    : 0}
-                            </p>
-                            <p className="text-xs font-medium text-gray-600">Rata-rata/Kelas</p>
-                        </div>
-                    </div>
-                </div>
-            </Card>
         </div>
     );
 }
