@@ -811,7 +811,7 @@ export default function DataPembelajaranPage() {
                             </thead>
                             <tbody>
                               {filterMapel(dataPerKelas.mapel_wajib).map((mp, idx) => (
-                                <tr key={mp.id} className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
+                                <tr key={`wajib-${idx}-${mp.id ?? 'unassigned'}`} className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
                                   onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                                   onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                   <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
@@ -873,7 +873,7 @@ export default function DataPembelajaranPage() {
                             </thead>
                             <tbody>
                               {filterMapel(dataPerKelas.mapel_pilihan).map((mp, idx) => (
-                                <tr key={mp.id} className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
+                                <tr key={`pilihan-${idx}-${mp.id ?? 'unassigned'}`}  className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
                                   onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                                   onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                   <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
