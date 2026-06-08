@@ -181,21 +181,24 @@ export default function ArsipRaporPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            // PAKAI ENDPOINT YANG SAMA DENGAN DATA MAPEL (sudah jalan)
             const res = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
 
             if (res.ok && data.success) {
-                setTahunAjaranList(data.data.map((ta: any) => ({
-                    id: ta.id_induk,
-                    tahun_ajaran: ta.tahun_ajaran,
-                    semester: ta.semester_aktif?.toLowerCase() || 'ganjil',
-                    is_aktif: ta.status === 'AKTIF',
-                    status_pts: ta.status_pts_ganjil || ta.status_pts_genap || 'nonaktif',
-                    status_pas: ta.status_pas_ganjil || ta.status_pas_genap || 'nonaktif',
-                })));
+                setTahunAjaranList(data.data.map((ta: any) => {
+                    const semester = ta.semester_aktif?.toLowerCase() || 'ganjil';
+
+                    return {
+                        id: ta.id_induk,
+                        tahun_ajaran: ta.tahun_ajaran,
+                        semester: semester,
+                        is_aktif: ta.status === 'AKTIF',
+                        status_pts: semester === 'ganjil' ? ta.status_pts_ganjil : ta.status_pts_genap,
+                        status_pas: semester === 'ganjil' ? ta.status_pas_ganjil : ta.status_pas_genap,
+                    };
+                }));
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
@@ -719,11 +722,6 @@ export default function ArsipRaporPage() {
                             !selectedJenis ? 'Pilih Jenis Penilaian' :
                                 'Pilih Kelas'}
                     </h3>
-                    <p className="text-sm text-gray-400">
-                        {!selectedTA ? 'Silakan pilih tahun ajaran untuk melanjutkan.' :
-                            !selectedJenis ? 'Silakan pilih jenis penilaian (PTS/PAS).' :
-                                'Silakan pilih kelas untuk menampilkan daftar siswa.'}
-                    </p>
                 </div>
             ) : loadingSiswa ? (
                 <div className="bg-white rounded-2xl py-12 text-center" style={CARD_STYLE}>

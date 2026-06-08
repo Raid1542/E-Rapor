@@ -257,6 +257,16 @@ const tambahPembelajaran = async (req, res) => {
             });
         }
 
+        const isMapelDuplicate = await pembelajaranModel.isMapelDuplicateInKelas(
+            kelasIdNum, mapelIdNum, taId
+        );
+        if (isMapelDuplicate) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Mata pelajaran "${namaMapel}" sudah ditugaskan di kelas ini. Satu mata pelajaran hanya boleh memiliki satu penugasan per kelas.` 
+            });
+        }
+
         // Validasi mapel wajib vs pilihan
         const waliKelas = await pembelajaranModel.getWaliKelas(kelasIdNum, taId);
         const isWaliKelas = waliKelas && waliKelas.id_user === userIdNum;
@@ -428,6 +438,16 @@ const editPembelajaran = async (req, res) => {
             return res.status(400).json({ 
                 success: false, 
                 message: `Kombinasi guru, kelas, dan mata pelajaran "${namaMapel}" ini sudah ada.` 
+            });
+        }
+
+        const isMapelDuplicate = await pembelajaranModel.isMapelDuplicateInKelas(
+            kelasIdNum, mapelIdNum, taId, idNum
+        );
+        if (isMapelDuplicate) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Mata pelajaran "${namaMapel}" sudah ditugaskan di kelas ini.` 
             });
         }
 

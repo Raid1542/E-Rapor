@@ -60,6 +60,7 @@ const getTahunAjaran = async (req, res) => {
 
         const formattedData = data.map(row => {
             const isAktif = row.status_ganjil === 'aktif' || row.status_genap === 'aktif';
+            const semesterAktif = row.semester_aktif?.toLowerCase() || 'ganjil';
             
             return {
                 id_induk: row.id_tahun_ajaran_induk,
@@ -75,6 +76,11 @@ const getTahunAjaran = async (req, res) => {
 
                 id_detail_ganjil: row.id_ganjil,
                 id_detail_genap: row.id_genap,
+
+                status_pts_ganjil: row.status_pts_ganjil || 'nonaktif',
+                status_pas_ganjil: row.status_pas_ganjil || 'nonaktif',
+                status_pts_genap: row.status_pts_genap || 'nonaktif',
+                status_pas_genap: row.status_pas_genap || 'nonaktif',
 
                 created_at: row.created_at
             };
