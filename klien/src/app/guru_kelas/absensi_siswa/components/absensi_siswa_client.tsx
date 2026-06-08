@@ -2,7 +2,7 @@
  * Nama File: absensi_siswa_client.tsx
  * Fungsi: Komponen client-side untuk mengelola absensi siswa oleh guru kelas.
  *         Menampilkan daftar siswa dengan opsi input/edit jumlah sakit, izin, dan alpha.
- * Pembuat: Raid Aqil Athallah  - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
+ * Pembuat:Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
  */
 
@@ -15,6 +15,7 @@ import { Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } fr
 
 interface SiswaAbsensi {
     id: number;
+    id_absensi: number | null;
     nama: string;
     nis: string;
     nisn: string;
@@ -79,20 +80,20 @@ const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataAbsensiPage() {
-    const [siswaList, setSiswaList]             = useState<SiswaAbsensi[]>([]);
-    const [loading, setLoading]                 = useState(true);
-    const [editingId, setEditingId]             = useState<number | null>(null);
-    const [editData, setEditData]               = useState({ jumlah_sakit: '0', jumlah_izin: '0', jumlah_alpha: '0' });
+    const [siswaList, setSiswaList]               = useState<SiswaAbsensi[]>([]);
+    const [loading, setLoading]                   = useState(true);
+    const [editingId, setEditingId]               = useState<number | null>(null);
+    const [editData, setEditData]                 = useState({ jumlah_sakit: '0', jumlah_izin: '0', jumlah_alpha: '0' });
     const [originalEditData, setOriginalEditData] = useState({ jumlah_sakit: '0', jumlah_izin: '0', jumlah_alpha: '0' });
-    const [searchQuery, setSearchQuery]         = useState('');
-    const [itemsPerPage, setItemsPerPage]       = useState(10);
-    const [currentPage, setCurrentPage]         = useState(1);
-    const [kelasNama, setKelasNama]             = useState<string>('Kelas Anda');
-    const [showModal, setShowModal]             = useState(false);
-    const [isModalClosing, setIsModalClosing]   = useState(false);
-    const [saving, setSaving]                   = useState(false);
-    const [semester, setSemester]               = useState<'Ganjil' | 'Genap'>('Ganjil');
-    const [jenisPenilaian, setJenisPenilaian]   = useState<'PTS' | 'PAS'>('PAS');
+    const [searchQuery, setSearchQuery]           = useState('');
+    const [itemsPerPage, setItemsPerPage]         = useState(10);
+    const [currentPage, setCurrentPage]           = useState(1);
+    const [kelasNama, setKelasNama]               = useState<string>('Kelas Anda');
+    const [showModal, setShowModal]               = useState(false);
+    const [isModalClosing, setIsModalClosing]     = useState(false);
+    const [saving, setSaving]                     = useState(false);
+    const [semester, setSemester]                 = useState<'Ganjil' | 'Genap'>('Ganjil');
+    const [jenisPenilaian, setJenisPenilaian]     = useState<'PTS' | 'PAS'>('PAS');
 
     // Notif modal
     const [notif, setNotif]      = useState<ModalConfig | null>(null);
@@ -197,22 +198,37 @@ export default function DataAbsensiPage() {
             return;
         }
 
-        const payload = {
-            jumlah_sakit:  editData.jumlah_sakit  === '' ? 0 : Number(editData.jumlah_sakit),
-            jumlah_izin:   editData.jumlah_izin   === '' ? 0 : Number(editData.jumlah_izin),
-            jumlah_alpha:  editData.jumlah_alpha  === '' ? 0 : Number(editData.jumlah_alpha),
-        };
+        const sakit = editData.jumlah_sakit === '' ? 0 : Number(editData.jumlah_sakit);
+        const izin  = editData.jumlah_izin   === '' ? 0 : Number(editData.jumlah_izin);
+        const alpha = editData.jumlah_alpha  === '' ? 0 : Number(editData.jumlah_alpha);
+
+        // Validasi maksimum
+        if (sakit > 180 || izin > 180 || alpha > 180) {
+            showNotif({
+                type: 'warning',
+                title: 'Nilai Tidak Valid',
+                message: 'Nilai sakit, izin, dan alpha tidak boleh lebih dari 180.',
+            });
+            return;
+        }
 
         setSaving(true);
         try {
-            const res = await fetch(`http://localhost:5000/api/guru-kelas/absensi/${editingId}`, {
-                method: 'PUT',
+            const res = await fetch(`http://localhost:5000/api/guru-kelas/absensi`, {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    id_siswa: editingId,
+                    sakit,
+                    izin,
+                    alpha,
+                }),
             });
             if (res.ok) {
                 setSiswaList(prev => prev.map(s =>
-                    s.id === editingId ? { ...s, ...payload, sudah_diinput: true } : s
+                    s.id === editingId
+                        ? { ...s, jumlah_sakit: sakit, jumlah_izin: izin, jumlah_alpha: alpha, sudah_diinput: true }
+                        : s
                 ));
                 handleCloseModal();
                 showNotif({ type: 'success', title: 'Berhasil Disimpan!', message: 'Data absensi siswa berhasil diperbarui.' });
@@ -460,7 +476,9 @@ export default function DataAbsensiPage() {
                         >
                             {/* Header */}
                             <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                                <h2 className="text-base font-bold text-white">Edit Absensi</h2>
+                                <h2 className="text-base font-bold text-white">
+                                    {siswa.sudah_diinput ? 'Edit Absensi' : 'Isi Absensi'}
+                                </h2>
                                 <button onClick={handleCloseModal}
                                     className="w-8 h-8 rounded-lg flex items-center justify-center"
                                     style={{ background: 'rgba(255,255,255,0.2)' }}>
@@ -494,6 +512,7 @@ export default function DataAbsensiPage() {
                                                 name={name}
                                                 value={editData[name as keyof typeof editData]}
                                                 onChange={handleChange}
+                                                onKeyDown={e => ['e','E','+','-','.'].includes(e.key) && e.preventDefault()}
                                                 min="0" max="180" step="1"
                                                 className="w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
                                                 placeholder="0"

@@ -1,21 +1,21 @@
 /**
  * Nama File: cekPenilaianStatus.js
  * Fungsi: Middleware untuk memeriksa status periode penilaian aktif (PTS/PAS) pada tahun ajaran berjalan.
- *         Menentukan jenis penilaian yang sedang berlangsung dan memvalidasi akses berdasarkan status tersebut.
- *         Hasil pemeriksaan disimpan ke objek `req` untuk digunakan oleh handler berikutnya.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../config/db');
 
-// Middleware untuk memeriksa status periode penilaian (PTS/PAS) pada tahun ajaran aktif
 const cekPenilaianStatus = async (req, res, next) => {
   try {
     const [taRows] = await db.execute(`
-      SELECT id_tahun_ajaran, semester, status_pts, status_pas 
-      FROM tahun_ajaran 
-      WHERE status = 'aktif' 
+      SELECT 
+        ta.id_tahun_ajaran,
+        ta.id_tahun_ajaran_induk,
+        ta.semester,
+        ta.status_pts,
+        ta.status_pas
+      FROM tahun_ajaran ta
+      WHERE ta.status = 'aktif'
       LIMIT 1
     `);
 
@@ -26,24 +26,46 @@ const cekPenilaianStatus = async (req, res, next) => {
       });
     }
 
-    const { status_pts, status_pas } = taRows[0];
+    const { 
+      id_tahun_ajaran, 
+      id_tahun_ajaran_induk,
+      semester,
+      status_pts, 
+      status_pas 
+    } = taRows[0];
 
-    // Ambil konteks dari request (jika ada)
-    const reqJenis = req.params?.jenis || req.body?.jenis_penilaian || req.penilaianContext?.jenis;
-    const reqSemester = req.params?.semester || req.penilaianContext?.semester;
+    // Set ID yang dibutuhkan controller
+    req.idTahunAjaranInduk = id_tahun_ajaran; // untuk validasi guru_kelas, siswa_kelas
+    req.idSemesterAktif    = id_tahun_ajaran;        // untuk query nilai, absensi, dll
+    req.tahunAjaranAktif   = taRows[0];
 
-    // Jika permintaan menyebutkan jenis penilaian
+    // Ambil konteks dari request jika ada
+    const reqJenis = req.penilaianContext?.jenis 
+      || req.params?.jenis 
+      || req.body?.jenis_penilaian;
+
+    const reqSemester = req.penilaianContext?.semester 
+      || req.params?.semester 
+      || semester;
+
+    // Set penilaianContext jika belum ada
+    if (!req.penilaianContext) {
+      req.penilaianContext = {};
+    }
+    req.penilaianContext.semester   = reqSemester || semester;
+    req.penilaianContext.status_pts = status_pts;
+    req.penilaianContext.status_pas = status_pas;
+
+    // Jika request menyebutkan jenis penilaian tertentu
     if (reqJenis && ['PTS', 'PAS'].includes(reqJenis.toUpperCase())) {
-      const jenis = reqJenis.toUpperCase();
+      const jenis  = reqJenis.toUpperCase();
       const status = jenis === 'PTS' ? status_pts : status_pas;
 
       if (status === 'aktif') {
-        // Periode ini aktif → boleh akses
-        req.jenis_penilaian = jenis;
-        req.tahunAjaranAktif = taRows[0];
+        req.jenis_penilaian          = jenis;
+        req.penilaianContext.jenis   = jenis;
         return next();
-      } else if (status === 'nonaktif' || status === 'selesai') {
-        // Periode ini sudah dikunci → BLOKIR
+      } else if (status === 'selesai') {
         return res.status(403).json({
           success: false,
           message: `🔒 Rapor ${jenis} sudah dikunci. Data tidak dapat diubah.`,
@@ -56,34 +78,28 @@ const cekPenilaianStatus = async (req, res, next) => {
       }
     }
 
-    // Jika tidak ada konteks jenis → pakai logika lama (fallback)
-    let jenis_penilaian = null;
+    // Fallback: tidak ada konteks jenis → tentukan otomatis
     if (status_pts === 'aktif' && status_pas === 'aktif') {
       return res.status(400).json({
         success: false,
         message: 'Kesalahan sistem: PTS dan PAS tidak boleh aktif bersamaan.',
       });
     } else if (status_pts === 'aktif') {
-      jenis_penilaian = 'PTS';
+      req.jenis_penilaian        = 'PTS';
+      req.penilaianContext.jenis = 'PTS';
     } else if (status_pas === 'aktif') {
-      jenis_penilaian = 'PAS';
+      req.jenis_penilaian        = 'PAS';
+      req.penilaianContext.jenis = 'PAS';
     } else {
       const isAnyLocked = status_pts === 'selesai' || status_pas === 'selesai';
-      if (isAnyLocked) {
-        return res.status(403).json({
-          success: false,
-          message: '🔒 Semua periode penilaian telah ditutup.',
-        });
-      } else {
-        return res.status(403).json({
-          success: false,
-          message: '⏳ Belum ada periode penilaian yang dibuka oleh admin.',
-        });
-      }
+      return res.status(403).json({
+        success: false,
+        message: isAnyLocked
+          ? '🔒 Semua periode penilaian telah ditutup.'
+          : '⏳ Belum ada periode penilaian yang dibuka oleh admin.',
+      });
     }
 
-    req.jenis_penilaian = jenis_penilaian;
-    req.tahunAjaranAktif = taRows[0];
     next();
   } catch (err) {
     console.error('Error di cekPenilaianStatus:', err);
