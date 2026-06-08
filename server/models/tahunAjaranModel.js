@@ -13,46 +13,38 @@ const tahunAjaranModel = {
   // Gabungkan Ganjil & Genap jadi 1 baris via LEFT JOIN
   async getAllTahunAjaran() {
     const [rows] = await db.execute(`
-      SELECT 
-        ti.id_tahun_ajaran_induk,
-        ti.tahun_ajaran,
-        
-        ta_ganjil.id_tahun_ajaran as id_ganjil,
-        ta_ganjil.tanggal_pembagian_pts as pts_ganjil,
-        ta_ganjil.tanggal_pembagian_pas as pas_ganjil,
-        ta_ganjil.status as status_ganjil,
-        ta_ganjil.status_pts as status_pts_ganjil,
-        ta_ganjil.status_pas as status_pas_ganjil,
-        
-        ta_genap.id_tahun_ajaran as id_genap,
-        ta_genap.tanggal_pembagian_pts as pts_genap,
-        ta_genap.tanggal_pembagian_pas as pas_genap,
-        ta_genap.status as status_genap,
-        ta_genap.status_pts as status_pts_genap,
-        ta_genap.status_pas as status_pas_genap,
-        
-        CASE 
-          WHEN ta_ganjil.status = 'aktif' THEN 'Ganjil'
-          WHEN ta_genap.status = 'aktif' THEN 'Genap'
-          ELSE NULL
-        END as semester_aktif
-        
-      FROM tahun_ajaran_induk ti
-      
-      LEFT JOIN tahun_ajaran ta_ganjil 
-        ON ti.id_tahun_ajaran_induk = ta_ganjil.id_tahun_ajaran_induk 
-        AND ta_ganjil.semester = 'Ganjil'
-      
-      LEFT JOIN tahun_ajaran ta_genap 
-        ON ti.id_tahun_ajaran_induk = ta_genap.id_tahun_ajaran_induk 
-        AND ta_genap.semester = 'Genap'
-        
-      ORDER BY ti.tahun_ajaran DESC
+        SELECT 
+            i.id_tahun_ajaran_induk,
+            i.tahun_ajaran,
+            i.created_at,
+            g.id_tahun_ajaran AS id_ganjil,
+            g.semester AS semester_ganjil,
+            g.status AS status_ganjil,
+            g.tanggal_pembagian_pts AS pts_ganjil,
+            g.tanggal_pembagian_pas AS pas_ganjil,
+            g.status_pts AS status_pts_ganjil,
+            g.status_pas AS status_pas_ganjil,
+            ge.id_tahun_ajaran AS id_genap,
+            ge.semester AS semester_genap,
+            ge.status AS status_genap,
+            ge.tanggal_pembagian_pts AS pts_genap,
+            ge.tanggal_pembagian_pas AS pas_genap,
+            ge.status_pts AS status_pts_genap,
+            ge.status_pas AS status_pas_genap,
+            CASE 
+                WHEN g.status = 'aktif' THEN 'Ganjil'
+                WHEN ge.status = 'aktif' THEN 'Genap'
+                ELSE NULL
+            END AS semester_aktif
+        FROM tahun_ajaran_induk i
+        LEFT JOIN tahun_ajaran g ON i.id_tahun_ajaran_induk = g.id_tahun_ajaran_induk AND g.semester = 'Ganjil'
+        LEFT JOIN tahun_ajaran ge ON i.id_tahun_ajaran_induk = ge.id_tahun_ajaran_induk AND ge.semester = 'Genap'
+        ORDER BY i.tahun_ajaran DESC
     `);
     return rows;
-  },
+},
 
-  // ✅ METHOD BARU: Ambil data tahun ajaran by ID (untuk cek hasChanges)
+  // Ambil data tahun ajaran by ID (untuk cek hasChanges)
   async getTahunAjaranById(id_induk) {
     const [rows] = await db.execute(`
       SELECT 

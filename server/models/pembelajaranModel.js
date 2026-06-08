@@ -255,6 +255,22 @@ const pembelajaranModel = {
       [kelasId]
     );
     return rows[0] || null;
+  },
+
+  async isMapelDuplicateInKelas(kelas_id, mapel_id, tahun_ajaran_id, excludeId = null) {
+    let sql = `
+      SELECT id FROM pembelajaran 
+      WHERE kelas_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?
+    `;
+    const params = [kelas_id, mapel_id, tahun_ajaran_id];
+
+    if (excludeId !== null && excludeId !== undefined) {
+      sql += ` AND id != ?`;
+      params.push(excludeId);
+    }
+
+    const [rows] = await db.execute(sql, params);
+    return rows.length > 0;
   }
 };
 
