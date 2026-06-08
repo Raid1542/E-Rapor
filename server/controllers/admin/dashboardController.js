@@ -3,9 +3,8 @@ const guruModel = require('../../models/guruModel');
 
 const getDashboardStats = async (req, res) => {
     try {
-        // Cari ID DETAIL dan ID INDUK yang status = 'aktif'
         const [taAktif] = await db.execute(`
-            SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester
+            SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran
             FROM tahun_ajaran 
             WHERE status = 'aktif' 
             LIMIT 1
@@ -17,6 +16,8 @@ const getDashboardStats = async (req, res) => {
                 data: {
                     guru: 0, siswa: 0, admin: 0,
                     ekstrakurikuler: 0, kelas: 0, mata_pelajaran: 0,
+                    tahun_ajaran: null,
+                    semester: null
                 }
             });
         }
@@ -24,14 +25,16 @@ const getDashboardStats = async (req, res) => {
         const taIdDetail = taAktif[0].id_tahun_ajaran;          
         const taIdInduk = taAktif[0].id_tahun_ajaran_induk;  
         const semesterAktif = taAktif[0].semester;             
+        const tahunAjaran = taAktif[0].tahun_ajaran;
 
         console.log('🔍 [Dashboard] TA Aktif:', { 
             taIdDetail, 
             taIdInduk, 
-            semester: semesterAktif 
+            semester: semesterAktif,
+            tahun_ajaran: tahunAjaran
         });
 
-        // Count Guru (aktif saja)
+        // Count Guru
         const [guruRows] = await db.execute(`
             SELECT COUNT(DISTINCT u.id_user) AS total
             FROM user u
@@ -41,7 +44,7 @@ const getDashboardStats = async (req, res) => {
         `);
         const guruCount = Number(guruRows[0].total) || 0;
 
-        // Count Siswa (hanya yang AKTIF + di TA aktif)
+        // Count Siswa
         const [siswaRows] = await db.execute(`
             SELECT COUNT(DISTINCT s.id_siswa) AS total
             FROM siswa s
@@ -51,36 +54,32 @@ const getDashboardStats = async (req, res) => {
         `, [taIdDetail]);
         const siswaCount = Number(siswaRows[0].total) || 0;
 
-        // Count Admin (aktif saja)
+        // Count Admin
         const [adminRows] = await db.execute(`
             SELECT COUNT(*) AS total
             FROM user u
             INNER JOIN user_role ur ON u.id_user = ur.id_user
-            WHERE ur.role = 'admin'
-                AND u.status = 'aktif'
+            WHERE ur.role = 'admin' AND u.status = 'aktif'
         `);
         const adminCount = Number(adminRows[0].total) || 0;
 
-        // Count Ekstrakurikuler (CEK 2 KEMUNGKINAN)
+        // Count Ekstrakurikuler
         const [ekskulRows] = await db.execute(`
-            SELECT COUNT(*) AS total
-            FROM ekstrakurikuler
+            SELECT COUNT(*) AS total FROM ekstrakurikuler
             WHERE tahun_ajaran_id IN (?, ?)
         `, [taIdDetail, taIdInduk]);
         const ekskulCount = Number(ekskulRows[0].total) || 0;
 
-        // Count Kelas (CEK 2 KEMUNGKINAN)
+        // Count Kelas
         const [kelasRows] = await db.execute(`
-            SELECT COUNT(*) AS total
-            FROM kelas
+            SELECT COUNT(*) AS total FROM kelas
             WHERE tahun_ajaran_id IN (?, ?)
         `, [taIdDetail, taIdInduk]);
         const kelasCount = Number(kelasRows[0].total) || 0;
 
-        // Count Mata Pelajaran (CEK 2 KEMUNGKINAN)
+        // Count Mata Pelajaran
         const [mapelRows] = await db.execute(`
-            SELECT COUNT(*) AS total
-            FROM mata_pelajaran
+            SELECT COUNT(*) AS total FROM mata_pelajaran
             WHERE tahun_ajaran_id IN (?, ?)
         `, [taIdDetail, taIdInduk]);
         const mapelCount = Number(mapelRows[0].total) || 0;
@@ -94,21 +93,9 @@ const getDashboardStats = async (req, res) => {
                 ekstrakurikuler: ekskulCount,
                 kelas: kelasCount,
                 mata_pelajaran: mapelCount,
-            },
-            debug: {
-                ta_aktif: {
-                    id_detail: taIdDetail,
-                    id_induk: taIdInduk,
-                    semester: semesterAktif
-                },
-                counts: {
-                    guru: guruCount,
-                    siswa: siswaCount,
-                    admin: adminCount,
-                    ekskul: ekskulCount,
-                    kelas: kelasCount,
-                    mapel: mapelCount
-                }
+                tahun_ajaran: tahunAjaran,
+                semester: semesterAktif,
+                id_detail: taIdDetail
             }
         });
     } catch (err) {
