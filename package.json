@@ -2,7 +2,8 @@
   "dependencies": {
     "adm-zip": "^0.5.17",
     "archiver": "^8.0.0",
-    "lucide-react": "^0.556.0"
+    "lucide-react": "^0.556.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "eslint": "^9.39.2",
