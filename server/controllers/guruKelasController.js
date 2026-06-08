@@ -945,7 +945,7 @@ exports.getMapelForGuruKelas = async (req, res) => {
           p.user_id AS pengajar_id,
           CASE WHEN p.user_id = ? THEN TRUE ELSE FALSE END AS bisa_input
         FROM pembelajaran p
-        JOIN mata_pelajaran mp ON p.mata_pelajaran_id = mp.id_mata_pelajaran
+        JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
         JOIN guru_kelas gk ON p.kelas_id = gk.kelas_id
         WHERE gk.user_id = ?
           AND p.tahun_ajaran_id = ?  
