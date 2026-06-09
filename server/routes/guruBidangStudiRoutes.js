@@ -84,6 +84,7 @@ router.get(
   '/nilai/:mapelId/:kelasId',
   authenticate,
   guruBidangStudiOnly,
+  cekPenilaianStatus,
   controller.getNilaiByMapelAndKelas
 );
 

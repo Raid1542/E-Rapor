@@ -6,10 +6,6 @@
 const db = require('../../config/db');
 const bcrypt = require('bcrypt');
 
-/**
- * 1. LIHAT PROFIL
- * GET /api/guru-bidang-studi/profil
- */
 exports.getProfil = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -64,10 +60,6 @@ exports.getProfil = async (req, res) => {
     }
 };
 
-/**
- * 2. EDIT PROFIL
- * PUT /api/guru-bidang-studi/profil
- */
 exports.editProfil = async (req, res) => {
     try {
         const {
@@ -148,10 +140,6 @@ exports.editProfil = async (req, res) => {
     }
 };
 
-/**
- * 3. GANTI PASSWORD
- * PUT /api/guru-bidang-studi/ganti-password
- */
 exports.gantiPassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;

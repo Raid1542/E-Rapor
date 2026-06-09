@@ -6,7 +6,7 @@
 
 module.exports = {
     // Profil (profil, password, foto)
-    ...require('./profilController'),
+    ...require('./profilPasswordController'),
 
     // Dashboard
     ...require('./dashboardController'),

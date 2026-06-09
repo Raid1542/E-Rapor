@@ -74,7 +74,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     const isConfirm = modal.type === 'confirm';
 
     return (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 ap-fadeIn">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
                 {!isConfirm && (
@@ -352,25 +352,20 @@ export default function AturPenilaianClient() {
 
         // Cek apakah ada perubahan
         const initial = initialEditKategoriDataRef.current;
-const isUnchanged =
-    initial &&
-    editKategoriData.min_nilai === initial.min_nilai &&
-    editKategoriData.max_nilai === initial.max_nilai &&
-    editKategoriData.deskripsi.trim() === initial.deskripsi.trim();
+        const isUnchanged =
+            initial &&
+            editKategoriData.min_nilai === initial.min_nilai &&
+            editKategoriData.max_nilai === initial.max_nilai &&
+            editKategoriData.deskripsi.trim() === initial.deskripsi.trim();
 
-if (isUnchanged) {
-    // Tutup modal edit DULU sebelum tampilkan warning
-    setShowEditKategori(false);
-    setEditKategoriClosing(false);
-    setEditKategoriId(null);
-    
-    // Baru tampilkan warning modal setelah modal edit tertutup
-    setTimeout(() => {
-        showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-    }, 50);
-    
-    return;
-}
+        if (isUnchanged) {
+            showModal({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Tidak ada data yang diubah. Silakan ubah salah satu field atau klik Batal.'
+            });
+            return;
+        }
 
         setIsSavingKategori(true);
         try {
@@ -568,7 +563,19 @@ if (isUnchanged) {
         );
     }
 
-    const totalBobot = bobotList.reduce((sum, b) => sum + b.bobot, 0);
+    // Hitung total bobot berdasarkan nilai yang ditampilkan
+    const totalBobot = bobotList.reduce((sum, b) => {
+        const komponen = komponenList.find((k) => k.id_komponen === b.komponen_id);
+        const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
+
+        // Saat PTS aktif, gunakan nilai display (PTS=100, lainnya=0)
+        const actualBobot = isPTSActive
+            ? (isPTS ? 100 : 0)
+            : b.bobot;
+
+        return sum + actualBobot;
+    }, 0);
+
     const isBobotValid = Math.abs(totalBobot - 100) < 0.01;
 
     // ====== RENDER ======
@@ -738,7 +745,6 @@ if (isUnchanged) {
                             ) : (
                                 <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
                                     <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
-                                    <p className="text-sm text-gray-400 mt-1">Silakan pilih mata pelajaran untuk melihat kategori nilai.</p>
                                 </div>
                             )}
                         </div>
@@ -794,35 +800,43 @@ if (isUnchanged) {
                                             {bobotList.map((bobot) => {
                                                 const komponen = komponenList.find((k) => k.id_komponen === bobot.komponen_id);
                                                 const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
-                                                const isEditable = !isPTSActive || isPTS;
+
+                                                // Saat PTS aktif: PTS = 100%, lainnya = 0% dan disabled
+                                                const displayBobot = isPTSActive
+                                                    ? (isPTS ? 100 : 0)
+                                                    : bobot.bobot;
+                                                const isEditable = !isPTSActive;
 
                                                 return (
                                                     <div
                                                         key={bobot.komponen_id}
                                                         className="flex items-center gap-4 p-4 rounded-xl"
                                                         style={{
-                                                            background: isEditable ? '#fffaf6' : '#f9fafb',
-                                                            border: `1px solid ${isEditable ? '#fde0c8' : '#e5e7eb'}`,
+                                                            background: isPTSActive && isPTS ? '#fff7ed' : isEditable ? '#fffaf6' : '#f9fafb',
+                                                            border: `1px solid ${isPTSActive && isPTS ? '#fdba74' : isEditable ? '#fde0c8' : '#e5e7eb'}`,
                                                         }}
                                                     >
                                                         <span className="font-semibold min-w-[150px] text-sm" style={{ color: '#7a3a0a' }}>
                                                             {komponen?.nama_komponen || 'Komponen'}
                                                         </span>
-                                                        <div className="flex items-center gap-2 flex-1">
+
+                                                        {/* Input di kanan dengan flex-1 */}
+                                                        <div className="flex items-center gap-2 flex-1 justify-end">
                                                             <input
                                                                 type="number"
                                                                 min="0"
                                                                 max="100"
                                                                 step="0.01"
-                                                                value={isPTSActive && !isPTS ? 0 : bobot.bobot}
+                                                                value={displayBobot}
                                                                 onChange={(e) => {
                                                                     if (isEditable) {
                                                                         handleBobotChange(bobot.komponen_id, e.target.value);
                                                                     }
                                                                 }}
                                                                 disabled={!isEditable}
-                                                                className={isEditable ? inputCls : inputDisabledCls}
+                                                                className={`${isEditable ? inputCls : inputDisabledCls} text-right`}
                                                                 style={{ maxWidth: '120px' }}
+                                                                readOnly={isPTSActive}
                                                             />
                                                             <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>%</span>
                                                         </div>
@@ -870,7 +884,6 @@ if (isUnchanged) {
                             ) : (
                                 <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
                                     <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
-                                    <p className="text-sm text-gray-400 mt-1">Silakan pilih mata pelajaran untuk mengatur bobot penilaian.</p>
                                 </div>
                             )}
                         </div>

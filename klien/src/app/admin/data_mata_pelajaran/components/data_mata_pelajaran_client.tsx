@@ -876,7 +876,7 @@ export default function DataMataPelajaranPage() {
                               </button>
                             </div>
                           ) : (
-                            <span className="text-gray-300 text-sm">—</span>
+                            <span className="text-gray-700">—</span>
                           )}
                         </td>
                       </tr>

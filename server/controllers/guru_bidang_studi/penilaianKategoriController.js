@@ -1,89 +1,15 @@
 /**
  * Nama File: penilaianKategoriController.js
- * Fungsi: Mengelola kategori nilai akademik (predikat A, B, C, dll)
+ * Fungsi: Controller untuk mengelola kategori nilai akademik (tipis, logic di model)
  */
 
-const db = require('../../config/db');
-
-const getTahunAjaranAktif = async () => {
-    const [taRows] = await db.execute(`
-        SELECT id_tahun_ajaran 
-        FROM tahun_ajaran 
-        WHERE status = 'aktif' 
-        LIMIT 1
-    `);
-    return taRows.length > 0 ? taRows[0] : null;
-};
-
-const cekRangeOverlap = async (mapelId, tahunAjaranId, minNilai, maxNilai, excludeId = null) => {
-    let query = `
-        SELECT id_config, min_nilai, max_nilai, deskripsi
-        FROM konfigurasi_nilai_rapor
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
-        AND (
-            (? <= max_nilai AND ? >= min_nilai)
-        )
-    `;
-    const params = [mapelId, tahunAjaranId, minNilai, maxNilai];
-    
-    if (excludeId) {
-        query += ` AND id_config != ?`;
-        params.push(excludeId);
-    }
-    
-    const [overlaps] = await db.execute(query, params);
-    return overlaps;
-};
-
-const cekCoverage0to100 = async (mapelId, tahunAjaranId) => {
-    const [kategoriRows] = await db.execute(`
-        SELECT min_nilai, max_nilai 
-        FROM konfigurasi_nilai_rapor 
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
-        ORDER BY min_nilai ASC
-    `, [mapelId, tahunAjaranId]);
-    
-    if (kategoriRows.length === 0) {
-        return { covered: false, gap: '0-100' };
-    }
-    
-    // Cek apakah dimulai dari 0
-    if (kategoriRows[0].min_nilai > 0) {
-        return { 
-            covered: false, 
-            gap: `0-${kategoriRows[0].min_nilai - 1}` 
-        };
-    }
-    
-    // Cek apakah ada gap antar kategori
-    for (let i = 0; i < kategoriRows.length - 1; i++) {
-        const currentMax = kategoriRows[i].max_nilai;
-        const nextMin = kategoriRows[i + 1].min_nilai;
-        
-        if (nextMin > currentMax + 1) {
-            return { 
-                covered: false, 
-                gap: `${currentMax + 1}-${nextMin - 1}` 
-            };
-        }
-    }
-    
-    // Cek apakah berakhir di 100
-    const lastMax = kategoriRows[kategoriRows.length - 1].max_nilai;
-    if (lastMax < 100) {
-        return { 
-            covered: false, 
-            gap: `${lastMax + 1}-100` 
-        };
-    }
-    
-    return { covered: true };
-};
+const kategoriModel = require('../../models/guru_bidang_studi/penilaianKategoriModel');
 
 exports.getKategoriAkademik = async (req, res) => {
     try {
         const { mapel_id } = req.query;
 
+        // Validasi parameter
         if (!mapel_id) {
             return res.status(400).json({
                 success: false,
@@ -99,7 +25,8 @@ exports.getKategoriAkademik = async (req, res) => {
             });
         }
 
-        const taAktif = await getTahunAjaranAktif();
+        // Ambil tahun ajaran aktif
+        const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
                 success: false,
@@ -109,16 +36,11 @@ exports.getKategoriAkademik = async (req, res) => {
 
         const semesterId = taAktif.id_tahun_ajaran;
 
-        const [kategori] = await db.execute(
-            `SELECT id_config AS id, min_nilai, max_nilai, deskripsi, urutan
-                FROM konfigurasi_nilai_rapor
-                WHERE mapel_id = ? AND tahun_ajaran_id = ?
-                ORDER BY urutan ASC`,
-            [mapelIdNum, semesterId]
-        );
+        // Ambil kategori
+        const kategori = await kategoriModel.getKategoriByMapel(mapelIdNum, semesterId);
 
-        // Cek coverage 0-100 (info untuk frontend)
-        const coverage = await cekCoverage0to100(mapelIdNum, semesterId);
+        // Cek coverage 0-100
+        const coverage = await kategoriModel.cekCoverage0to100(mapelIdNum, semesterId);
 
         res.json({
             success: true,
@@ -150,7 +72,7 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Range nilai valid
+        // Validasi range
         if (min_nilai < 0 || max_nilai > 100) {
             return res.status(400).json({
                 success: false,
@@ -165,7 +87,7 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Deskripsi wajib diisi
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({
                 success: false,
@@ -174,7 +96,7 @@ exports.createKategoriAkademik = async (req, res) => {
         }
         deskripsi = deskripsi.trim();
 
-        // mapel_id valid
+        // Validasi mapel_id
         const mapelIdNum = parseInt(mapel_id, 10);
         if (isNaN(mapelIdNum) || mapelIdNum <= 0) {
             return res.status(400).json({
@@ -183,7 +105,8 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        const taAktif = await getTahunAjaranAktif();
+        // Ambil tahun ajaran aktif
+        const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
                 success: false,
@@ -191,54 +114,43 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = taAktif.id_tahun_ajaran;
+        const semesterId = taAktif.id_tahun_ajaran;
+        const indukId = taAktif.id_tahun_ajaran_induk;
 
-        // Cek overlap dengan kategori lain (CRITICAL!)
-        const overlaps = await cekRangeOverlap(
+        // Cek overlap
+        const overlaps = await kategoriModel.cekRangeOverlap(
             mapelIdNum, 
-            tahun_ajaran_id, 
+            semesterId, 
             min_nilai, 
             max_nilai
         );
         
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => 
-                `${o.deskripsi} (${o.min_nilai}-${o.max_nilai})`
-            ).join(', ');
-            
             return res.status(400).json({
                 success: false,
-                message: `Range nilai ${min_nilai}-${max_nilai} tumpang tindih dengan kategori: ${overlapInfo}`
+                message: `Range nilai ${min_nilai}-${max_nilai} tumpang tindih dengan kategori: ${kategoriModel.formatOverlapInfo(overlaps)}`
             });
         }
 
-        // Cek apakah mapel ini ada di pembelajaran guru ini
+        // Validasi akses guru
         const userId = req.user.id;
-        const [validMapel] = await db.execute(
-            `SELECT 1 FROM pembelajaran 
-                WHERE user_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
-            [userId, mapelIdNum, tahun_ajaran_id]
-        );
+        const isValid = await kategoriModel.validateGuruMapel(userId, mapelIdNum, indukId);
         
-        if (validMapel.length === 0) {
+        if (!isValid) {
             return res.status(403).json({
                 success: false,
                 message: 'Anda tidak mengajar mata pelajaran ini'
             });
         }
 
-        // Insert kategori baru
-        const [result] = await db.execute(
-            `INSERT INTO konfigurasi_nilai_rapor 
-                (mapel_id, tahun_ajaran_id, min_nilai, max_nilai, deskripsi, urutan)
-                VALUES (?, ?, ?, ?, ?, 
-                    (SELECT IFNULL(MAX(urutan), 0) + 1 
-                    FROM (SELECT urutan 
-                            FROM konfigurasi_nilai_rapor 
-                            WHERE mapel_id = ? AND tahun_ajaran_id = ?) AS tmp)
-                )`,
-            [mapelIdNum, tahun_ajaran_id, min_nilai, max_nilai, deskripsi, mapelIdNum, tahun_ajaran_id]
-        );
+        // Insert kategori
+        const result = await kategoriModel.createKategori({
+            mapel_id: mapelIdNum,
+            semester_id: semesterId,
+            min_nilai,
+            max_nilai,
+            deskripsi
+        });
 
         res.json({
             success: true,
@@ -286,7 +198,6 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Deskripsi wajib
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({
                 success: false,
@@ -295,7 +206,8 @@ exports.updateKategoriAkademik = async (req, res) => {
         }
         deskripsi = deskripsi.trim();
 
-        const taAktif = await getTahunAjaranAktif();
+        // Ambil tahun ajaran aktif
+        const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
                 success: false,
@@ -303,66 +215,47 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = taAktif.id_tahun_ajaran;
+        const semesterId = taAktif.id_tahun_ajaran;
+        const indukId = taAktif.id_tahun_ajaran_induk;
 
-        // Cek apakah kategori ada
-        const [existing] = await db.execute(
-            `SELECT id_config, mapel_id, min_nilai, max_nilai, deskripsi 
-                FROM konfigurasi_nilai_rapor 
-                WHERE id_config = ?`,
-            [id]
-        );
-        
-        if (existing.length === 0) {
+        // Cek kategori ada
+        const existing = await kategoriModel.getKategoriById(id);
+        if (!existing) {
             return res.status(404).json({
                 success: false,
                 message: 'Kategori tidak ditemukan'
             });
         }
 
-        // Cek apakah ada perubahan (ceegah simpan tanpa perubahan)
-        const old = existing[0];
-        const isUnchanged = 
-            old.min_nilai === min_nilai &&
-            old.max_nilai === max_nilai &&
-            old.deskripsi.trim() === deskripsi;
-        
-        if (isUnchanged) {
+        // Cek apakah ada perubahan
+        if (kategoriModel.isUnchanged(existing, { min_nilai, max_nilai, deskripsi })) {
             return res.status(400).json({
                 success: false,
                 message: 'Tidak ada perubahan data.'
             });
         }
 
-        // Cek overlap (exclude kategori sendiri)
-        const overlaps = await cekRangeOverlap(
-            old.mapel_id,
-            tahun_ajaran_id,
+        // Cek overlap (exclude diri sendiri)
+        const overlaps = await kategoriModel.cekRangeOverlap(
+            existing.mapel_id,
+            semesterId,
             min_nilai,
             max_nilai,
-            id  // exclude diri sendiri
+            id
         );
         
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => 
-                `${o.deskripsi} (${o.min_nilai}-${o.max_nilai})`
-            ).join(', ');
-            
             return res.status(400).json({
                 success: false,
-                message: `Range nilai ${min_nilai}-${max_nilai} tumpang tindih dengan kategori: ${overlapInfo}`
+                message: `Range nilai ${min_nilai}-${max_nilai} tumpang tindih dengan kategori: ${kategoriModel.formatOverlapInfo(overlaps)}`
             });
         }
 
-        // Cek akses guru ke mapel ini
+        // Validasi akses guru
         const userId = req.user.id;
-        const [validMapel] = await db.execute(
-            `SELECT 1 FROM pembelajaran 
-                WHERE user_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
-            [userId, old.mapel_id, tahun_ajaran_id]
-        );
+        const isValid = await kategoriModel.validateGuruMapel(userId, existing.mapel_id, indukId);
         
-        if (validMapel.length === 0) {
+        if (!isValid) {
             return res.status(403).json({
                 success: false,
                 message: 'Anda tidak mengajar mata pelajaran ini'
@@ -370,18 +263,14 @@ exports.updateKategoriAkademik = async (req, res) => {
         }
 
         // Update kategori
-        const [result] = await db.execute(
-            `UPDATE konfigurasi_nilai_rapor 
-                SET 
-                min_nilai = ?,
-                max_nilai = ?,
-                deskripsi = ?,
-                urutan = ?
-                WHERE id_config = ?`,
-            [min_nilai, max_nilai, deskripsi, urutan, id]
-        );
+        const affectedRows = await kategoriModel.updateKategori(id, {
+            min_nilai,
+            max_nilai,
+            deskripsi,
+            urutan
+        });
 
-        if (result.affectedRows === 0) {
+        if (affectedRows === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Kategori tidak ditemukan'
@@ -406,7 +295,8 @@ exports.deleteKategoriAkademik = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const taAktif = await getTahunAjaranAktif();
+        // Ambil tahun ajaran aktif
+        const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
                 success: false,
@@ -414,62 +304,48 @@ exports.deleteKategoriAkademik = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = taAktif.id_tahun_ajaran;
+        const semesterId = taAktif.id_tahun_ajaran;
+        const indukId = taAktif.id_tahun_ajaran_induk;
 
         // Cek kategori ada
-        const [existing] = await db.execute(
-            `SELECT id_config, mapel_id, min_nilai, max_nilai 
-                FROM konfigurasi_nilai_rapor 
-                WHERE id_config = ?`,
-            [id]
-        );
-        
-        if (existing.length === 0) {
+        const kategori = await kategoriModel.getKategoriById(id);
+        if (!kategori) {
             return res.status(404).json({
                 success: false,
                 message: 'Kategori tidak ditemukan'
             });
         }
 
-        const kategori = existing[0];
-
-        // Cek akses guru
+        // Validasi akses guru
         const userId = req.user.id;
-        const [validMapel] = await db.execute(
-            `SELECT 1 FROM pembelajaran 
-                WHERE user_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
-            [userId, kategori.mapel_id, tahun_ajaran_id]
-        );
+        const isValid = await kategoriModel.validateGuruMapel(userId, kategori.mapel_id, indukId);
         
-        if (validMapel.length === 0) {
+        if (!isValid) {
             return res.status(403).json({
                 success: false,
                 message: 'Anda tidak mengajar mata pelajaran ini'
             });
         }
 
-        // Cek apakah ada nilai siswa yang pakai range ini (CRITICAL!)
-        const [nilaiRows] = await db.execute(`
-            SELECT COUNT(*) as total 
-            FROM nilai_rapor 
-            WHERE mapel_id = ? AND tahun_ajaran_id = ?
-            AND nilai_rapor BETWEEN ? AND ?
-        `, [kategori.mapel_id, tahun_ajaran_id, kategori.min_nilai, kategori.max_nilai]);
+        // Cek dampak ke nilai siswa
+        const affectedCount = await kategoriModel.cekNilaiSiswaInRange(
+            kategori.mapel_id,
+            semesterId,
+            kategori.min_nilai,
+            kategori.max_nilai
+        );
 
-        if (nilaiRows[0].total > 0) {
+        if (affectedCount > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Tidak dapat menghapus kategori. Ada ${nilaiRows[0].total} nilai siswa yang menggunakan range ${kategori.min_nilai}-${kategori.max_nilai}.`
+                message: `Tidak dapat menghapus kategori. Ada ${affectedCount} nilai siswa yang menggunakan range ${kategori.min_nilai}-${kategori.max_nilai}.`
             });
         }
 
         // Hapus kategori
-        const [result] = await db.execute(
-            `DELETE FROM konfigurasi_nilai_rapor WHERE id_config = ?`,
-            [id]
-        );
+        const affectedRows = await kategoriModel.deleteKategori(id);
 
-        if (result.affectedRows === 0) {
+        if (affectedRows === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Kategori tidak ditemukan'
