@@ -16,7 +16,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const controller = require('../controllers/guruBidangStudiController');
+const controller = require('../controllers/guru_bidang_studi');
 
 // Setup direktori upload
 const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
