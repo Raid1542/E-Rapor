@@ -6,8 +6,8 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
-const { hashPassword } = require('../utils/hash');
+const db = require('../../config/db');
+const { hashPassword } = require('../../utils/hash');
 
 const guruModel = {
   // Mengambil semua guru (hanya yang memiliki role guru kelas atau guru bidang studi)

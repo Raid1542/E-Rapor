@@ -9,7 +9,7 @@
 const jwt = require('jsonwebtoken');
 const { comparePassword } = require('../utils/hash');
 const db = require('../config/db');
-const userModel = require('../models/userModel');
+const userModel = require('../models/authModel');
 
 /**
  * Melakukan autentikasi pengguna berdasarkan email, password, dan role yang dipilih.

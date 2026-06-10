@@ -7,7 +7,7 @@
  *         gunakan req.idTahunAjaranInduk dari middleware, handle error DB.
  */
 
-const mapelModel = require('../../models/mapelModel');
+const mapelModel = require('../../models/admin/mapelModel');
 const db = require('../../config/db');
 
 const getIdTahunAjaranAktif = async (idInduk) => {
@@ -24,20 +24,20 @@ const getIdTahunAjaranAktif = async (idInduk) => {
 const getMataPelajaran = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
-        
+
         if (!tahun_ajaran_id || isNaN(Number(tahun_ajaran_id))) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'tahun_ajaran_id wajib diisi dan harus angka' 
+            return res.status(400).json({
+                success: false,
+                message: 'tahun_ajaran_id wajib diisi dan harus angka'
             });
         }
 
         const taId = await getIdTahunAjaranAktif(Number(tahun_ajaran_id));
-        
+
         if (!taId) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif di tahun ajaran ini.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif di tahun ajaran ini.'
             });
         }
 
@@ -45,9 +45,9 @@ const getMataPelajaran = async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get mata pelajaran:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal mengambil data mata pelajaran' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil data mata pelajaran'
         });
     }
 };
@@ -57,24 +57,24 @@ const getMataPelajaranById = async (req, res) => {
         const { id } = req.params;
         const idNum = Number(id);
         if (isNaN(idNum)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'ID tidak valid' 
+            return res.status(400).json({
+                success: false,
+                message: 'ID tidak valid'
             });
         }
         const rows = await mapelModel.getById(idNum);
         if (rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Mata pelajaran tidak ditemukan' 
+            return res.status(404).json({
+                success: false,
+                message: 'Mata pelajaran tidak ditemukan'
             });
         }
         res.json({ success: true, data: rows[0] });
     } catch (err) {
         console.error('Error get mata pelajaran by ID:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal mengambil detail mata pelajaran' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil detail mata pelajaran'
         });
     }
 };
@@ -82,29 +82,29 @@ const getMataPelajaranById = async (req, res) => {
 const tambahMataPelajaran = async (req, res) => {
     try {
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor } = req.body;
-        
+
         const idInduk = req.idTahunAjaranInduk;
 
         const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
-        
+
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif di tahun ajaran ini. Pastikan ada semester (Ganjil/Genap) yang statusnya AKTIF.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif di tahun ajaran ini. Pastikan ada semester (Ganjil/Genap) yang statusnya AKTIF.'
             });
         }
 
         if (!kode_mapel || !nama_mapel || !jenis || !kurikulum) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Kode mapel, nama mapel, jenis, dan kurikulum wajib diisi.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Kode mapel, nama mapel, jenis, dan kurikulum wajib diisi.'
             });
         }
 
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada tahun ajaran aktif.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada tahun ajaran aktif.'
             });
         }
 
@@ -153,7 +153,7 @@ const tambahMataPelajaran = async (req, res) => {
         let urutanRaporFinal = null;
         if (urutan_rapor !== null && urutan_rapor !== undefined && urutan_rapor !== '') {
             const urutanRaporNum = Number(urutan_rapor);
-            
+
             if (isNaN(urutanRaporNum) || !Number.isInteger(urutanRaporNum)) {
                 return res.status(400).json({
                     success: false,
@@ -229,20 +229,20 @@ const editMataPelajaran = async (req, res) => {
     try {
         const { id } = req.params;
         const idNum = Number(id);
-        
+
         if (isNaN(idNum)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'ID tidak valid' 
+            return res.status(400).json({
+                success: false,
+                message: 'ID tidak valid'
             });
         }
 
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor } = req.body;
-        
+
         const idInduk = req.idTahunAjaranInduk;
 
         const tahunAjaranAktif = await getIdTahunAjaranAktif(idInduk);
-        
+
         if (!tahunAjaranAktif) {
             return res.status(400).json({
                 success: false,
@@ -274,9 +274,9 @@ const editMataPelajaran = async (req, res) => {
         const trimmedKurikulum = (kurikulum || '').toString().trim();
 
         if (!trimmedKodeMapel || !trimmedNamaMapel || !trimmedJenis || !trimmedKurikulum) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Kode mapel, nama mapel, jenis, dan kurikulum wajib diisi.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Kode mapel, nama mapel, jenis, dan kurikulum wajib diisi.'
             });
         }
 
@@ -325,7 +325,7 @@ const editMataPelajaran = async (req, res) => {
         let urutanRaporFinal = null;
         if (urutan_rapor !== null && urutan_rapor !== undefined && urutan_rapor !== '') {
             const urutanRaporNum = Number(urutan_rapor);
-            
+
             if (isNaN(urutanRaporNum) || !Number.isInteger(urutanRaporNum)) {
                 return res.status(400).json({
                     success: false,
@@ -360,15 +360,15 @@ const editMataPelajaran = async (req, res) => {
         });
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Mata pelajaran tidak ditemukan' 
+            return res.status(404).json({
+                success: false,
+                message: 'Mata pelajaran tidak ditemukan'
             });
         }
 
-        res.json({ 
-            success: true, 
-            message: `Mata pelajaran "${namaMapelNormalized}" berhasil diperbarui.` 
+        res.json({
+            success: true,
+            message: `Mata pelajaran "${namaMapelNormalized}" berhasil diperbarui.`
         });
 
     } catch (err) {
@@ -399,11 +399,11 @@ const hapusMataPelajaran = async (req, res) => {
     try {
         const { id } = req.params;
         const idNum = Number(id);
-        
+
         if (isNaN(idNum)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'ID tidak valid' 
+            return res.status(400).json({
+                success: false,
+                message: 'ID tidak valid'
             });
         }
 
@@ -460,22 +460,22 @@ const hapusMataPelajaran = async (req, res) => {
 
         const result = await mapelModel.delete(idNum);
         if (result.affectedRows === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Mata pelajaran tidak ditemukan' 
+            return res.status(404).json({
+                success: false,
+                message: 'Mata pelajaran tidak ditemukan'
             });
         }
 
-        res.json({ 
-            success: true, 
-            message: 'Mata pelajaran berhasil dihapus' 
+        res.json({
+            success: true,
+            message: 'Mata pelajaran berhasil dihapus'
         });
 
     } catch (err) {
         console.error('Error hapus mata pelajaran:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal menghapus mata pelajaran' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal menghapus mata pelajaran'
         });
     }
 };

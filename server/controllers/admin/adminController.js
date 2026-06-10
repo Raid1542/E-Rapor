@@ -1,4 +1,4 @@
-const userModel = require('../../models/userModel');
+const userModel = require('../../models/admin/adminModel');
 const db = require('../../config/db');
 const bcrypt = require('bcrypt');
 

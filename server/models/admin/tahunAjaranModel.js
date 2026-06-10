@@ -6,7 +6,7 @@
  *   - Tambah method getTahunAjaranById untuk cek hasChanges
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const tahunAjaranModel = {
 
@@ -42,7 +42,7 @@ const tahunAjaranModel = {
         ORDER BY i.tahun_ajaran DESC
     `);
     return rows;
-},
+  },
 
   // Ambil data tahun ajaran by ID (untuk cek hasChanges)
   async getTahunAjaranById(id_induk) {
@@ -69,25 +69,25 @@ const tahunAjaranModel = {
         
       WHERE ti.id_tahun_ajaran_induk = ?
     `, [id_induk]);
-    
+
     return rows[0] || null;
   },
 
   // Insert ke Induk dulu, lalu auto-generate Ganjil & Genap
   async createTahunAjaran(data, connection = db) {
     const { tahun_ajaran, pts_ganjil, pas_ganjil, pts_genap, pas_genap } = data;
-    
+
     const conn = await connection.getConnection ? await connection.getConnection() : connection;
-    
+
     try {
       await conn.beginTransaction();
-      
+
       const [indukResult] = await conn.execute(
         `INSERT INTO tahun_ajaran_induk (tahun_ajaran) VALUES (?)`,
         [tahun_ajaran]
       );
       const id_induk = indukResult.insertId;
-      
+
       // ✅ Gunakan NULL untuk tanggal kosong
       await conn.execute(
         `INSERT INTO tahun_ajaran (
@@ -97,7 +97,7 @@ const tahunAjaranModel = {
           ) VALUES (?, ?, 'Ganjil', ?, ?, 'aktif', 'nonaktif', 'nonaktif')`,
         [id_induk, tahun_ajaran, pts_ganjil || null, pas_ganjil || null]
       );
-      
+
       await conn.execute(
         `INSERT INTO tahun_ajaran (
             id_tahun_ajaran_induk, tahun_ajaran, semester, 
@@ -106,10 +106,10 @@ const tahunAjaranModel = {
           ) VALUES (?, ?, 'Genap', ?, ?, 'nonaktif', 'nonaktif', 'nonaktif')`,
         [id_induk, tahun_ajaran, pts_genap || null, pas_genap || null]
       );
-      
+
       await conn.commit();
       return id_induk;
-      
+
     } catch (err) {
       await conn.rollback();
       throw err;
@@ -119,12 +119,12 @@ const tahunAjaranModel = {
   // ✅ DIPERBAIKI: Update dengan IF untuk handle string kosong
   async updateTahunAjaran(id_induk, data, connection = db) {
     const { pts_ganjil, pas_ganjil, pts_genap, pas_genap } = data;
-    
+
     const conn = await connection.getConnection ? await connection.getConnection() : connection;
-    
+
     try {
       await conn.beginTransaction();
-      
+
       // Update data Ganjil - gunakan IF untuk handle string kosong
       if (pts_ganjil !== undefined || pas_ganjil !== undefined) {
         await conn.execute(
@@ -135,7 +135,7 @@ const tahunAjaranModel = {
           [pts_ganjil, pts_ganjil, pas_ganjil, pas_ganjil, id_induk]
         );
       }
-      
+
       // Update data Genap
       if (pts_genap !== undefined || pas_genap !== undefined) {
         await conn.execute(
@@ -146,10 +146,10 @@ const tahunAjaranModel = {
           [pts_genap, pts_genap, pas_genap, pas_genap, id_induk]
         );
       }
-      
+
       await conn.commit();
       return true;
-      
+
     } catch (err) {
       await conn.rollback();
       throw err;
@@ -159,24 +159,24 @@ const tahunAjaranModel = {
   // Ganti Semester Aktif (Ganjil ↔ Genap)
   async gantiSemesterAktif(id_induk, semester_baru, connection = db) {
     const conn = await connection.getConnection ? await connection.getConnection() : connection;
-    
+
     try {
       await conn.beginTransaction();
-      
+
       await conn.execute(
         `UPDATE tahun_ajaran SET status = 'nonaktif' WHERE id_tahun_ajaran_induk = ?`,
         [id_induk]
       );
-      
+
       await conn.execute(
         `UPDATE tahun_ajaran SET status = 'aktif' 
           WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
         [id_induk, semester_baru]
       );
-      
+
       await conn.commit();
       return true;
-      
+
     } catch (err) {
       await conn.rollback();
       throw err;

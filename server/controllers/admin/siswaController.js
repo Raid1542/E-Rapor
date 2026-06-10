@@ -1,4 +1,4 @@
-const siswaModel = require('../../models/siswaModel');
+const siswaModel = require('../../models/admin/siswaModel');
 const db = require('../../config/db');
 const XLSX = require('xlsx');
 const fs = require('fs');
@@ -17,7 +17,7 @@ const getIdTahunAjaranAktif = async (idInduk) => {
 const getSiswa = async (req, res) => {
     try {
         let { tahun_ajaran_id } = req.query;
-        
+
         if (!tahun_ajaran_id) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran wajib dipilih' });
         }
@@ -74,14 +74,14 @@ const getSiswaByKelas = async (req, res) => {
             `SELECT tahun_ajaran_id FROM kelas WHERE id_kelas = ?`,
             [kelasId]
         );
-        
+
         if (kelasData.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Kelas tidak ditemukan' 
+            return res.status(404).json({
+                success: false,
+                message: 'Kelas tidak ditemukan'
             });
         }
-        
+
         const tahunAjaranId = kelasData[0].tahun_ajaran_id;
 
         const [rows] = await db.execute(
@@ -110,9 +110,9 @@ const getSiswaByKelas = async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get siswa by kelas:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal mengambil data siswa' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil data siswa'
         });
     }
 };
@@ -137,9 +137,9 @@ const tambahSiswa = async (req, res) => {
 
         const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif di tahun ajaran ini' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif di tahun ajaran ini'
             });
         }
 
@@ -158,7 +158,7 @@ const tambahSiswa = async (req, res) => {
                 message: 'Kelas tidak valid atau bukan milik tahun ajaran aktif'
             });
         }
-        
+
         const [cekDuplikat] = await db.execute(`
             SELECT s.id_siswa 
             FROM siswa s
@@ -196,17 +196,17 @@ const tambahSiswa = async (req, res) => {
 
     } catch (err) {
         console.error('Error tambah siswa:', err);
-        
+
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({
                 success: false,
                 message: 'NIS atau NISN sudah terdaftar di sistem!'
             });
         }
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             success: false,
-            message: err.message || 'Gagal menambah data siswa' 
+            message: err.message || 'Gagal menambah data siswa'
         });
     }
 };
@@ -225,7 +225,7 @@ const editSiswa = async (req, res) => {
             kelas_id,
             status,
         } = req.body;
-        
+
         const idInduk = req.idTahunAjaranInduk;
         if (!idInduk) {
             return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
@@ -233,9 +233,9 @@ const editSiswa = async (req, res) => {
 
         const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
         if (!tahunAjaranId) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif'
             });
         }
 
@@ -249,7 +249,7 @@ const editSiswa = async (req, res) => {
             return res.status(400).json({ success: false, message: 'kelas_id tidak valid' });
         }
 
-        const hasChanges = 
+        const hasChanges =
             String(existingSiswa.nis || '').trim() !== String(nis || '').trim() ||
             String(existingSiswa.nisn || '').trim() !== String(nisn || '').trim() ||
             String(existingSiswa.nama || '').toLowerCase().trim() !== String(nama_lengkap || '').toLowerCase().trim() ||
@@ -291,17 +291,17 @@ const editSiswa = async (req, res) => {
 
     } catch (err) {
         console.error('Error edit siswa:', err);
-        
+
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({
                 success: false,
                 message: 'NIS atau NISN sudah terdaftar di sistem!'
             });
         }
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             success: false,
-            message: err.message || 'Gagal memperbarui data siswa' 
+            message: err.message || 'Gagal memperbarui data siswa'
         });
     }
 };
@@ -311,13 +311,13 @@ const importSiswa = async (req, res) => {
     try {
         if (!req.file)
             return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
-            
+
         const workbook = XLSX.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-        
+
         if (data.length === 0) throw new Error('File Excel kosong');
-        
+
         const idInduk = req.idTahunAjaranInduk;
         if (!idInduk) {
             throw new Error('Tidak ada tahun ajaran aktif');
@@ -327,15 +327,15 @@ const importSiswa = async (req, res) => {
         if (!tahunAjaranId) {
             throw new Error('Tidak ada semester aktif di tahun ajaran ini');
         }
-        
+
         await connection.beginTransaction();
-        
+
         const skipped = [];
         let processedCount = 0;
-        
+
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
-            const rowNumber = i + 2; 
+            const rowNumber = i + 2;
 
             if (!row.nis || !row.nisn || !row.nama_lengkap || !row.kelas_id) {
                 skipped.push({
@@ -343,25 +343,25 @@ const importSiswa = async (req, res) => {
                     nama: row.nama_lengkap || '-',
                     reason: 'Kolom wajib (NIS, NISN, nama lengkap, kelas) tidak lengkap'
                 });
-                continue; 
+                continue;
             }
-            
+
             const [cekDuplikat] = await connection.execute(`
                 SELECT s.id_siswa 
                 FROM siswa s
                 JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
                 WHERE sk.tahun_ajaran_id = ? AND (s.nis = ? OR s.nisn = ?)
             `, [tahunAjaranId, String(row.nis).trim(), String(row.nisn).trim()]);
-            
+
             if (cekDuplikat.length > 0) {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
                     reason: `Siswa dengan NIS "${row.nis}" atau NISN "${row.nisn}" sudah ada di tahun ajaran ini`
                 });
-                continue; 
+                continue;
             }
-            
+
             // Parse tanggal lahir
             let tanggal_lahir = row.tanggal_lahir || null;
             if (typeof tanggal_lahir === 'number') {
@@ -375,7 +375,7 @@ const importSiswa = async (req, res) => {
                 tanggal_lahir = tanggal_lahir.trim();
                 if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) tanggal_lahir = null;
             }
-            
+
             // Cek kelas
             const [kelasRows] = await connection.execute(
                 'SELECT id_kelas FROM kelas WHERE nama_kelas = ? AND tahun_ajaran_id = ?',
@@ -387,10 +387,10 @@ const importSiswa = async (req, res) => {
                     nama: row.nama_lengkap || '-',
                     reason: `Kelas "${row.kelas_id}" tidak ditemukan di tahun ajaran aktif`
                 });
-                continue; 
+                continue;
             }
             const kelasId = kelasRows[0].id_kelas;
-            
+
             try {
                 await siswaModel.createSiswa(
                     {
@@ -424,34 +424,34 @@ const importSiswa = async (req, res) => {
                 }
             }
         }
-        
+
         await connection.commit();
         fs.unlinkSync(req.file.path);
-        
-        res.json({ 
+
+        res.json({
             success: true,
-            message: skipped.length > 0 
+            message: skipped.length > 0
                 ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati`
                 : `Import data siswa berhasil: ${processedCount} data ditambahkan`,
             total: processedCount,
             skipped: skipped
         });
-        
+
     } catch (err) {
         await connection.rollback();
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('Import siswa error:', err);
-        
+
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
                 message: 'Import gagal: Ada NIS atau NISN yang sudah terdaftar di tahun ajaran ini. Pastikan data unik untuk tahun ajaran yang dipilih.'
             });
         }
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             success: false,
-            message: err.message || 'Gagal mengimport data siswa' 
+            message: err.message || 'Gagal mengimport data siswa'
         });
     } finally {
         connection.release();

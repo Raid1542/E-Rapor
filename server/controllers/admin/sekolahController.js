@@ -1,4 +1,4 @@
-const sekolahModel = require('../../models/sekolahModel');
+const sekolahModel = require('../../models/admin/sekolahModel');
 const db = require('../../config/db');
 
 const getSekolah = async (req, res) => {
@@ -25,7 +25,7 @@ const editSekolah = async (req, res) => {
             email,
             website,
             kepala_sekolah,
-            niy_kepala_sekolah,  
+            niy_kepala_sekolah,
         } = req.body;
 
 
@@ -49,17 +49,17 @@ const editSekolah = async (req, res) => {
         if (niy_kepala_sekolah !== undefined) data.niy_kepala_sekolah = niy_kepala_sekolah;
 
         await sekolahModel.updateSekolah(data);
-        
-        
-        res.json({ 
-            success: true, 
-            message: 'Data sekolah berhasil diperbarui' 
+
+
+        res.json({
+            success: true,
+            message: 'Data sekolah berhasil diperbarui'
         });
     } catch (err) {
         console.error('Error update sekolah:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal memperbarui data sekolah' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal memperbarui data sekolah'
         });
     }
 };
@@ -68,11 +68,11 @@ const uploadLogo = async (req, res) => {
     try {
         if (!req.file)
             return res.status(400).json({ success: false, message: 'File logo diperlukan' });
-        
+
         const logoPath = `/uploads/${req.file.filename}`;
-        
+
         const [rows] = await db.execute('SELECT id FROM sekolah LIMIT 1');
-        
+
         if (rows.length > 0) {
             // Update existing
             await db.execute('UPDATE sekolah SET logo_path = ? WHERE id = ?', [logoPath, rows[0].id]);
@@ -83,17 +83,17 @@ const uploadLogo = async (req, res) => {
                 ['SDIT Ulil Albab Batam', logoPath] // ✅ Hanya isi yang essential
             );
         }
-        
-        res.json({ 
-            success: true, 
-            message: 'Logo berhasil diupdate', 
-            logoPath 
+
+        res.json({
+            success: true,
+            message: 'Logo berhasil diupdate',
+            logoPath
         });
     } catch (err) {
         console.error('Error upload logo:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal mengupload logo' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengupload logo'
         });
     }
 };

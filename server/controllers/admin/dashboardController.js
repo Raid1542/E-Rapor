@@ -1,5 +1,5 @@
 const db = require('../../config/db');
-const guruModel = require('../../models/guruModel');
+const guruModel = require('../../models/admin/guruModel');
 
 const getDashboardStats = async (req, res) => {
     try {
@@ -22,14 +22,14 @@ const getDashboardStats = async (req, res) => {
             });
         }
 
-        const taIdDetail = taAktif[0].id_tahun_ajaran;          
-        const taIdInduk = taAktif[0].id_tahun_ajaran_induk;  
-        const semesterAktif = taAktif[0].semester;             
+        const taIdDetail = taAktif[0].id_tahun_ajaran;
+        const taIdInduk = taAktif[0].id_tahun_ajaran_induk;
+        const semesterAktif = taAktif[0].semester;
         const tahunAjaran = taAktif[0].tahun_ajaran;
 
-        console.log('🔍 [Dashboard] TA Aktif:', { 
-            taIdDetail, 
-            taIdInduk, 
+        console.log('🔍 [Dashboard] TA Aktif:', {
+            taIdDetail,
+            taIdInduk,
             semester: semesterAktif,
             tahun_ajaran: tahunAjaran
         });
@@ -100,9 +100,9 @@ const getDashboardStats = async (req, res) => {
         });
     } catch (err) {
         console.error('Error getDashboardStats:', err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: 'Gagal memuat statistik dashboard' 
+            message: 'Gagal memuat statistik dashboard'
         });
     }
 };

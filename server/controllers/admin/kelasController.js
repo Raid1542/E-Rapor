@@ -1,13 +1,13 @@
-const kelasModel = require('../../models/kelasModel');
+const kelasModel = require('../../models/admin/kelasModel');
 const db = require('../../config/db');
 
 
 const getIdTahunAjaranAktif = async (idInduk) => {
     const [rows] = await db.execute(
         `SELECT id_tahun_ajaran 
-         FROM tahun_ajaran 
-         WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
-         LIMIT 1`,
+            FROM tahun_ajaran 
+            WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
+            LIMIT 1`,
         [idInduk]
     );
     return rows.length > 0 ? rows[0].id_tahun_ajaran : null;
@@ -16,7 +16,7 @@ const getIdTahunAjaranAktif = async (idInduk) => {
 const getKelas = async (req, res) => {
     try {
         let { tahun_ajaran_id } = req.query;
-        
+
         if (!tahun_ajaran_id) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran wajib dipilih' });
         }
@@ -36,11 +36,11 @@ const getKelas = async (req, res) => {
                         LIMIT 1`,
                     [tahun_ajaran_id]
                 );
-                
+
                 if (firstSemester.length === 0) {
                     return res.json({ success: true, data: [] });
                 }
-                
+
                 tahun_ajaran_id = firstSemester[0].id_tahun_ajaran;
             } else {
                 tahun_ajaran_id = activeSemester;
@@ -135,7 +135,7 @@ const getKelasForDropdown = async (req, res) => {
 };
 
 const tambahKelas = async (req, res) => {
-    const { nama_kelas, fase, user_id } = req.body; 
+    const { nama_kelas, fase, user_id } = req.body;
     const idInduk = req.idTahunAjaranInduk;
 
     if (!nama_kelas || !fase || !idInduk) {
@@ -145,9 +145,9 @@ const tambahKelas = async (req, res) => {
     try {
         const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif di tahun ajaran ini' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif di tahun ajaran ini'
             });
         }
 
@@ -228,9 +228,9 @@ const editKelas = async (req, res) => {
 
         const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif'
             });
         }
 
@@ -325,9 +325,9 @@ const hapusKelas = async (req, res) => {
 
         const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif'
             });
         }
 
@@ -395,9 +395,9 @@ const setWaliKelas = async (req, res) => {
 
         const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak ada semester aktif'
             });
         }
 

@@ -6,7 +6,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const SCHOOL_ID = 1;
 
@@ -31,7 +31,7 @@ const sekolahModel = {
         website: 'https://sekolah.sch.id',
         kepala_sekolah: 'Kepala Sekolah',
         niy_kepala_sekolah: '0000000000000000',
-        logo_path: null,  
+        logo_path: null,
       };
 
       const current = existing || defaultData;

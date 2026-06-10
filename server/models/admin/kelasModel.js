@@ -6,7 +6,7 @@
  * Tanggal: 1 Oktober 2-25
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 // Daftar fase yang valid sesuai ENUM di database
 const VALID_FASE = ['A', 'B', 'C'];

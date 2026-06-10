@@ -1,5 +1,5 @@
 const db = require('../../config/db');
-const tahunAjaranModel = require('../../models/tahunAjaranModel');
+const tahunAjaranModel = require('../../models/admin/tahunAjaranModel');
 
 // ═══════════════════════════════════════════════════════════════
 // HELPER: Konversi id_induk → id_detail (semester aktif)
@@ -35,15 +35,15 @@ const getKelasByTahunAjaran = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'tahun_ajaran_id wajib diisi' 
+            return res.status(400).json({
+                success: false,
+                message: 'tahun_ajaran_id wajib diisi'
             });
         }
 
         // Cari semester aktif dari id_induk
         const semesterAktif = await getIdTahunAjaranAktif(tahun_ajaran_id);
-        
+
         if (!semesterAktif) {
             return res.status(404).json({
                 success: false,
@@ -77,7 +77,7 @@ const getDaftarSiswaUntukRapor = async (req, res) => {
 
         // FIX: Cari semester aktif dari id_induk
         const semesterAktif = await getIdTahunAjaranAktif(tahunAjaranIdInduk);
-        
+
         if (!semesterAktif) {
             return res.status(404).json({
                 success: false,
@@ -117,31 +117,31 @@ const aturStatusPenilaian = async (req, res) => {
 
         // Validasi input dasar
         if (!['PTS', 'PAS'].includes(jenis)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Jenis harus PTS atau PAS' 
+            return res.status(400).json({
+                success: false,
+                message: 'Jenis harus PTS atau PAS'
             });
         }
         if (!['aktif', 'nonaktif', 'selesai'].includes(status)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Status harus aktif, nonaktif, atau selesai' 
+            return res.status(400).json({
+                success: false,
+                message: 'Status harus aktif, nonaktif, atau selesai'
             });
         }
         if (!tahun_ajaran_id || tahun_ajaran_id <= 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tahun ajaran ID wajib diisi' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tahun ajaran ID wajib diisi'
             });
         }
 
         // Cari semester aktif dari id_induk
         const semesterAktif = await getIdTahunAjaranAktif(tahun_ajaran_id);
-        
+
         if (!semesterAktif) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Tidak ada semester aktif untuk tahun ajaran ini' 
+            return res.status(404).json({
+                success: false,
+                message: 'Tidak ada semester aktif untuk tahun ajaran ini'
             });
         }
 
@@ -154,51 +154,51 @@ const aturStatusPenilaian = async (req, res) => {
         );
 
         if (statusRows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Tahun ajaran tidak ditemukan' 
+            return res.status(404).json({
+                success: false,
+                message: 'Tahun ajaran tidak ditemukan'
             });
         }
 
         const { status_pts, status_pas } = statusRows[0];
 
         // === VALIDASI BISNIS: PTS & PAS TIDAK BOLEH AKTIF BERSAMAAN ===
-        
+
         if (jenis === 'PAS' && status === 'aktif') {
             if (status_pts === 'aktif') {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Tidak bisa membuka PAS karena PTS masih aktif. Selesaikan PTS terlebih dahulu.' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Tidak bisa membuka PAS karena PTS masih aktif. Selesaikan PTS terlebih dahulu.'
                 });
             }
             if (status_pts === 'nonaktif') {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Tidak bisa membuka PAS karena PTS belum diselesaikan. Arsipkan PTS terlebih dahulu.' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Tidak bisa membuka PAS karena PTS belum diselesaikan. Arsipkan PTS terlebih dahulu.'
                 });
             }
         }
 
         if (jenis === 'PTS' && status === 'aktif') {
             if (status_pas === 'aktif') {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Tidak bisa membuka PTS karena PAS masih aktif. Selesaikan PAS terlebih dahulu.' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Tidak bisa membuka PTS karena PAS masih aktif. Selesaikan PAS terlebih dahulu.'
                 });
             }
         }
 
         if (jenis === 'PTS' && status === 'aktif' && status_pas === 'selesai') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Tidak bisa membuka PTS karena PAS sudah selesai diarsipkan.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Tidak bisa membuka PTS karena PAS sudah selesai diarsipkan.'
             });
         }
 
         if (jenis === 'PAS' && status === 'aktif' && status_pts !== 'selesai') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Harus menyelesaikan PTS terlebih dahulu sebelum membuka PAS.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Harus menyelesaikan PTS terlebih dahulu sebelum membuka PAS.'
             });
         }
 
@@ -316,23 +316,23 @@ const ambilDataRaporLengkap = async (siswaId, taId, semester) => {
 const arsipkanRapor = async (req, res) => {
     try {
         const { jenis, semester, tahun_ajaran_id } = req.body;
-        
+
         if (!['PTS', 'PAS'].includes(jenis)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Jenis harus PTS atau PAS' 
+            return res.status(400).json({
+                success: false,
+                message: 'Jenis harus PTS atau PAS'
             });
         }
         if (!['Ganjil', 'Genap'].includes(semester)) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Semester harus Ganjil atau Genap' 
+            return res.status(400).json({
+                success: false,
+                message: 'Semester harus Ganjil atau Genap'
             });
         }
 
         // Cari semester aktif dari id_induk
         const semesterAktif = await getIdTahunAjaranAktif(tahun_ajaran_id);
-        
+
         if (!semesterAktif) {
             return res.status(404).json({
                 success: false,
@@ -388,9 +388,9 @@ const arsipkanRapor = async (req, res) => {
         });
     } catch (err) {
         console.error('Error arsipkanRapor:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Gagal mengarsipkan rapor' 
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengarsipkan rapor'
         });
     }
 };

@@ -7,15 +7,15 @@
  *   - Perkuat validasi duplikasi untuk tambah
  */
 
-const tahunAjaranModel = require('../../models/tahunAjaranModel');
+const tahunAjaranModel = require('../../models/admin/tahunAjaranModel');
 const db = require('../../config/db');
 
 const sanitizeDate = (value) => {
     if (value === undefined || value === null || value === '') return null;
-    
+
     const str = String(value).trim();
     if (str === '') return null;
-    
+
     // Validasi format YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
         const date = new Date(str);
@@ -23,7 +23,7 @@ const sanitizeDate = (value) => {
             return str;
         }
     }
-    
+
     // Coba parse format lain
     const date = new Date(str);
     if (!isNaN(date.getTime())) {
@@ -32,22 +32,22 @@ const sanitizeDate = (value) => {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
-    
+
     return null;
 };
 
 const formatDateForCompare = (dateValue) => {
     if (!dateValue) return '';
-    
+
     // Jika sudah format YYYY-MM-DD
     if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
         return dateValue;
     }
-    
+
     // Jika Date object atau string lain
     const date = new Date(dateValue);
     if (isNaN(date.getTime())) return '';
-    
+
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -61,7 +61,7 @@ const getTahunAjaran = async (req, res) => {
         const formattedData = data.map(row => {
             const isAktif = row.status_ganjil === 'aktif' || row.status_genap === 'aktif';
             const semesterAktif = row.semester_aktif?.toLowerCase() || 'ganjil';
-            
+
             return {
                 id_induk: row.id_tahun_ajaran_induk,
                 tahun_ajaran: row.tahun_ajaran,
@@ -116,7 +116,7 @@ const tambahTahunAjaran = async (req, res) => {
         // ═══ VALIDASI 2: Format tahun harus angka ═══
         const t1 = parseInt(tahun1);
         const t2 = parseInt(tahun2);
-        
+
         if (isNaN(t1) || isNaN(t2)) {
             return res.status(400).json({
                 success: false,
@@ -166,31 +166,31 @@ const tambahTahunAjaran = async (req, res) => {
         };
 
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
-            
+
             // Nonaktifkan semua TA aktif sebelumnya
             await connection.execute(`
                 UPDATE tahun_ajaran 
                 SET status = 'nonaktif' 
                 WHERE status = 'aktif'
             `);
-            
+
             // Buat tahun ajaran baru
             const id_induk = await tahunAjaranModel.createTahunAjaran(sanitizedData, connection);
-            
+
             await connection.commit();
-            
+
             res.status(201).json({
                 success: true,
                 message: `Tahun ajaran ${tahun_ajaran} berhasil ditambahkan. Tahun ajaran sebelumnya otomatis dinonaktifkan.`,
                 id_induk
             });
-            
+
         } catch (err) {
             await connection.rollback();
-            
+
             // Handle error duplikasi dari database (safety net)
             if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
                 return res.status(400).json({
@@ -198,7 +198,7 @@ const tambahTahunAjaran = async (req, res) => {
                     message: `Tahun ajaran "${tahun_ajaran}" sudah ada di sistem.`
                 });
             }
-            
+
             throw err;
         } finally {
             connection.release();
@@ -249,7 +249,7 @@ const updateTahunAjaran = async (req, res) => {
         };
 
         // ═══ VALIDASI 3: Cek apakah ada perubahan (hasChanges) ═══
-        const hasChanges = 
+        const hasChanges =
             formatDateForCompare(dataLama.pts_ganjil) !== (dataBaru.pts_ganjil || '') ||
             formatDateForCompare(dataLama.pas_ganjil) !== (dataBaru.pas_ganjil || '') ||
             formatDateForCompare(dataLama.pts_genap) !== (dataBaru.pts_genap || '') ||
@@ -302,10 +302,10 @@ const gantiSemester = async (req, res) => {
         }
 
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
-            
+
             const [cekInduk] = await connection.execute(
                 `SELECT id_tahun_ajaran_induk, tahun_ajaran FROM tahun_ajaran_induk WHERE id_tahun_ajaran_induk = ?`,
                 [id_induk]
@@ -320,7 +320,7 @@ const gantiSemester = async (req, res) => {
             }
 
             const semesterLama = semester_baru === 'Ganjil' ? 'Genap' : 'Ganjil';
-            
+
             const [idSemesterLama] = await connection.execute(`
                 SELECT id_tahun_ajaran FROM tahun_ajaran 
                 WHERE id_tahun_ajaran_induk = ? AND semester = ?
@@ -335,12 +335,12 @@ const gantiSemester = async (req, res) => {
             }
 
             const id_ta_lama = idSemesterLama[0].id_tahun_ajaran;
-            
+
             // Validasi data (SKIP jika tabel belum ada)
             let totalSiswa = 0;
             let totalKelas = 0;
             let siswaSudahInput = 0;
-            
+
             try {
                 const [cekSiswa] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.siswa_id) as total_siswa
@@ -348,25 +348,25 @@ const gantiSemester = async (req, res) => {
                     WHERE sk.tahun_ajaran_id = ?
                 `, [id_induk]);
                 totalSiswa = cekSiswa[0]?.total_siswa || 0;
-                
+
                 const [cekKelas] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.kelas_id) as total_kelas
                     FROM siswa_kelas sk
                     WHERE sk.tahun_ajaran_id = ?
                 `, [id_induk]);
                 totalKelas = cekKelas[0]?.total_kelas || 0;
-                
+
                 const [cekAdaNilai] = await connection.execute(`
                     SELECT COUNT(DISTINCT nr.siswa_id) as siswa_sudah_input
                     FROM nilai_rapor nr
                     WHERE nr.id_tahun_ajaran = ?
                 `, [id_ta_lama]);
                 siswaSudahInput = cekAdaNilai[0]?.siswa_sudah_input || 0;
-                
+
             } catch (queryErr) {
                 console.warn('⚠️ Warning: Tabel siswa_kelas/nilai_rapor belum ada, skip validasi');
             }
-            
+
             if (totalSiswa > 0 && siswaSudahInput === 0) {
                 await connection.rollback();
                 return res.status(400).json({
@@ -376,7 +376,7 @@ const gantiSemester = async (req, res) => {
                     warning: true
                 });
             }
-            
+
             if (siswaSudahInput > 0) {
                 const [cekNilai] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.siswa_id) as siswa_belum_lengkap
@@ -394,7 +394,7 @@ const gantiSemester = async (req, res) => {
                         )
                     )
                 `, [id_induk, id_ta_lama, id_ta_lama]);
-                
+
                 if (cekNilai[0].siswa_belum_lengkap > 0) {
                     await connection.rollback();
                     return res.status(400).json({
@@ -411,21 +411,21 @@ const gantiSemester = async (req, res) => {
                 SET status = 'nonaktif' 
                 WHERE id_tahun_ajaran_induk = ? AND semester = ?
             `, [id_induk, semesterLama]);
-            
+
             await connection.execute(`
                 UPDATE tahun_ajaran 
                 SET status = 'aktif' 
                 WHERE id_tahun_ajaran_induk = ? AND semester = ?
             `, [id_induk, semester_baru]);
-            
+
             await connection.commit();
-            
+
             res.json({
                 success: true,
                 message: `Semester berhasil diganti ke ${semester_baru}.`,
                 semester_aktif: semester_baru
             });
-            
+
         } catch (err) {
             await connection.rollback();
             console.error('Error transaction:', err);

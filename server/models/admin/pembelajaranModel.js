@@ -8,7 +8,7 @@
  *         (getByKelasId, getWaliKelas, isDuplicate, hasNilaiRapor, dll)
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const pembelajaranModel = {
   async getAllByTahunAjaran(tahunAjaranId) {

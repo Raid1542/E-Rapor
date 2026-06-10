@@ -8,7 +8,7 @@
  *         tambah method validasi duplikasi nama & urutan rapor.
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const mapelModel = {
   async getAllByTahunAjaran(tahun_ajaran_id) {

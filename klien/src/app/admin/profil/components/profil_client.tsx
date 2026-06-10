@@ -109,7 +109,7 @@ const ProfilePage = () => {
 
   const [formData, setFormData] = useState({
     nama: '', nuptk: '', niy: '', jenisKelamin: 'Laki-laki',
-    telepon: '', email: '', alamat: ''
+    telepon: '', email: '', alamat: '', tempatLahir: '', tanggalLahir: ''
   });
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -170,7 +170,9 @@ const ProfilePage = () => {
           jenisKelamin: userData.jenis_kelamin || 'Laki-laki',
           telepon: userData.no_telepon || '',
           email: userData.email_sekolah || '',
-          alamat: userData.alamat || ''
+          alamat: userData.alamat || '',
+          tempatLahir: userData.tempat_lahir || '',
+          tanggalLahir: userData.tanggal_lahir || ''
         };
         setFormData(loadedData);
         // Simpan snapshot data awal untuk deteksi perubahan
@@ -240,6 +242,8 @@ const ProfilePage = () => {
           jenis_kelamin: formData.jenisKelamin,
           no_telepon: formData.telepon,
           alamat: formData.alamat,
+          tempat_lahir: formData.tempatLahir,
+          tanggal_lahir: formData.tanggalLahir,
           status: 'aktif'
         })
       });
@@ -253,7 +257,9 @@ const ProfilePage = () => {
           nuptk: formData.nuptk,
           jenis_kelamin: formData.jenisKelamin,
           no_telepon: formData.telepon,
-          alamat: formData.alamat
+          alamat: formData.alamat,
+          tempat_lahir: formData.tempatLahir,
+          tanggal_lahir: formData.tanggalLahir
         };
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
         setIsConfirmed(false);
@@ -534,6 +540,37 @@ const ProfilePage = () => {
                   <label className={labelCls} style={labelColor}>Telepon</label>
                   <input type="tel" name="telepon" value={formData.telepon} onChange={handleChange}
                     placeholder="Misal: 081234567890" className={inputCls} />
+                </div>
+
+                {/* Tempat Lahir - BARU */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelCls} style={labelColor}>
+                    Tempat Lahir <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="tempatLahir"
+                    value={formData.tempatLahir}
+                    onChange={handleChange}
+                    placeholder="Masukkan tempat lahir"
+                    className={inputCls}
+                    required
+                  />
+                </div>
+
+                {/* Tanggal Lahir - BARU */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelCls} style={labelColor}>
+                    Tanggal Lahir <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="tanggalLahir"
+                    value={formData.tanggalLahir}
+                    onChange={handleChange}
+                    className={inputCls}
+                    required
+                  />
                 </div>
 
                 {/* Alamat */}

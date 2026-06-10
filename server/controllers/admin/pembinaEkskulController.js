@@ -1,4 +1,4 @@
-const pembinaEkskulModel = require('../../models/pembinaEkskulModel');
+const pembinaEkskulModel = require('../../models/admin/pembinaEkskulModel');
 const db = require('../../config/db');
 const XLSX = require('xlsx');
 const fs = require('fs');

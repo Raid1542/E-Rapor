@@ -3,7 +3,7 @@
  * Fungsi: Model untuk mengelola data ekstrakurikuler dan keanggotaannya
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const ekstrakurikulerModel = {
 

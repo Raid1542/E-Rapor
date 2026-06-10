@@ -1,5 +1,5 @@
 const XLSX = require('xlsx');
-const guruModel = require('../../models/guruModel');
+const guruModel = require('../../models/admin/guruModel');
 const db = require('../../config/db');
 const fs = require('fs');
 
