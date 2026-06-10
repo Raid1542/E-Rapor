@@ -27,13 +27,6 @@ const getDashboardStats = async (req, res) => {
         const semesterAktif = taAktif[0].semester;
         const tahunAjaran = taAktif[0].tahun_ajaran;
 
-        console.log('🔍 [Dashboard] TA Aktif:', {
-            taIdDetail,
-            taIdInduk,
-            semester: semesterAktif,
-            tahun_ajaran: tahunAjaran
-        });
-
         // Count Guru
         const [guruRows] = await db.execute(`
             SELECT COUNT(DISTINCT u.id_user) AS total
@@ -49,9 +42,9 @@ const getDashboardStats = async (req, res) => {
             SELECT COUNT(DISTINCT s.id_siswa) AS total
             FROM siswa s
             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-            WHERE sk.tahun_ajaran_id = ?
+            WHERE sk.id_tahun_ajaran_induk = ? 
                 AND (s.status = 'aktif' OR s.status IS NULL)
-        `, [taIdDetail]);
+        `, [taIdInduk]); 
         const siswaCount = Number(siswaRows[0].total) || 0;
 
         // Count Admin

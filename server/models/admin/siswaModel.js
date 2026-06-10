@@ -1,16 +1,24 @@
 /**
  * Nama File: siswaModel.js
- * Fungsi: Model untuk mengelola data siswa, termasuk operasi CRUD,
- *         pengelolaan relasi dengan kelas dan tahun ajaran melalui tabel siswa_kelas.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Fungsi: Model untuk mengelola data siswa
  */
 
 const db = require('../../config/db');
 
 const siswaModel = {
-  // Mengambil semua data siswa berdasarkan tahun ajaran
   async getSiswaByTahunAjaran(tahunAjaranId) {
+    // Ambil id_tahun_ajaran_induk dari tahunAjaranId
+    const [taInfo] = await db.execute(
+        `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+        [tahunAjaranId]
+    );
+
+    if (taInfo.length === 0) {
+        return [];
+    }
+
+    const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
+
     const [rows] = await db.execute(
       `
         SELECT 
@@ -28,16 +36,27 @@ const siswaModel = {
         FROM siswa s
         INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
         INNER JOIN kelas k ON sk.kelas_id = k.id_kelas
-        WHERE sk.tahun_ajaran_id = ?
+        WHERE sk.id_tahun_ajaran_induk = ?
         ORDER BY s.nama_lengkap ASC
       `,
-      [tahunAjaranId]
+      [idTahunAjaranInduk]
     );
     return rows;
   },
 
-  // Mengambil data siswa berdasarkan ID (opsional: filter tahun ajaran)
   async getSiswaById(id, tahunAjaranId = null) {
+    let idTahunAjaranInduk = null;
+    
+    if (tahunAjaranId) {
+        const [taInfo] = await db.execute(
+            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            [tahunAjaranId]
+        );
+        if (taInfo.length > 0) {
+            idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
+        }
+    }
+
     let query = `
       SELECT 
           s.id_siswa AS id,
@@ -52,16 +71,16 @@ const siswaModel = {
           k.fase,
           s.status,
           sk.kelas_id,
-          sk.tahun_ajaran_id
+          sk.id_tahun_ajaran_induk
       FROM siswa s
       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
       INNER JOIN kelas k ON sk.kelas_id = k.id_kelas
     `;
     const params = [id];
 
-    if (tahunAjaranId) {
-      query += ` WHERE s.id_siswa = ? AND sk.tahun_ajaran_id = ?`;
-      params.push(tahunAjaranId);
+    if (idTahunAjaranInduk) {
+      query += ` WHERE s.id_siswa = ? AND sk.id_tahun_ajaran_induk = ?`;
+      params.push(idTahunAjaranInduk);
     } else {
       query += ` WHERE s.id_siswa = ?`;
     }
@@ -70,8 +89,7 @@ const siswaModel = {
     return rows[0] || null;
   },
 
-  // Menambahkan siswa baru (ke tabel siswa dan siswa_kelas)
-  async createSiswa(siswaData, tahunAjaranId, connection = null) {
+  async createSiswa(siswaData, idTahunAjaranInduk, connection = null) {
     const useConn = connection || db;
     const {
       nis,
@@ -107,17 +125,16 @@ const siswaModel = {
 
     await useConn.execute(
       `
-        INSERT INTO siswa_kelas (siswa_id, kelas_id, tahun_ajaran_id)
+        INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk)
         VALUES (?, ?, ?)
       `,
-      [siswaId, siswaData.kelas_id, tahunAjaranId]
+      [siswaId, siswaData.kelas_id, idTahunAjaranInduk]
     );
 
     return siswaId;
   },
 
-  // Memperbarui data siswa (dan kelas di tahun ajaran tertentu)
-  async updateSiswa(id, siswaData, tahunAjaranId, connection = null) {
+  async updateSiswa(id, siswaData, idTahunAjaranInduk, connection = null) {
     const useConn = connection || db;
     const {
       nis,
@@ -157,28 +174,34 @@ const siswaModel = {
     );
 
     const [existing] = await useConn.execute(
-      `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND tahun_ajaran_id = ?`,
-      [id, tahunAjaranId]
+      `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?`,
+      [id, idTahunAjaranInduk]
     );
 
     if (existing.length > 0) {
       await useConn.execute(
-        `UPDATE siswa_kelas SET kelas_id = ? WHERE siswa_id = ? AND tahun_ajaran_id = ?`,
-        [siswaData.kelas_id, id, tahunAjaranId]
+        `UPDATE siswa_kelas SET kelas_id = ? WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?`,
+        [siswaData.kelas_id, id, idTahunAjaranInduk]
       );
     } else {
       await useConn.execute(
-        `INSERT INTO siswa_kelas (siswa_id, kelas_id, tahun_ajaran_id) VALUES (?, ?, ?)`,
-        [id, siswaData.kelas_id, tahunAjaranId]
+        `INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk) VALUES (?, ?, ?)`,
+        [id, siswaData.kelas_id, idTahunAjaranInduk]
       );
     }
 
     return true;
   },
 
-  // Menghapus siswa (dari siswa_kelas dan siswa)
-  async deleteSiswa(id) {
-    await db.execute('DELETE FROM siswa_kelas WHERE siswa_id = ?', [id]);
+  async deleteSiswa(id, idTahunAjaranInduk = null) {
+    if (idTahunAjaranInduk) {
+        await db.execute(
+            'DELETE FROM siswa_kelas WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?',
+            [id, idTahunAjaranInduk]
+        );
+    } else {
+        await db.execute('DELETE FROM siswa_kelas WHERE siswa_id = ?', [id]);
+    }
     const [result] = await db.execute('DELETE FROM siswa WHERE id_siswa = ?', [id]);
     return result.affectedRows > 0;
   },

@@ -172,6 +172,7 @@ router.post('/kelas/:id/guru', adminOnlyWithTahunAjaran, admin.setWaliKelas);
 
 // --- Tahun Ajaran & Semester ---
 router.get('/tahun-ajaran', adminOnly, admin.getTahunAjaran);
+router.get('/semester-list', adminOnly, admin.getSemesterList); 
 router.post('/tahun-ajaran', adminOnly, admin.tambahTahunAjaran);
 router.put('/tahun-ajaran/:id_induk', adminOnly, admin.updateTahunAjaran);
 router.put('/tahun-ajaran/:id_induk/semester', adminOnly, admin.gantiSemester);
@@ -186,6 +187,8 @@ router.delete('/mata-pelajaran/:id', adminOnlyWithTahunAjaran, admin.hapusMataPe
 // --- PEMBELAJARAN ---
 router.get('/pembelajaran', adminOnly, admin.getPembelajaran);
 router.get('/pembelajaran/dropdown', adminOnlyWithTahunAjaran, admin.getDropdownPembelajaran);
+router.post('/pembelajaran/tambah-wajib', adminOnlyWithTahunAjaran, admin.tambahMapelWajib);
+router.post('/pembelajaran/tambah-pilihan', adminOnlyWithTahunAjaran, admin.tambahMapelPilihan);
 router.get('/pembelajaran/kelas/:kelasId', adminOnly, admin.getPembelajaranByKelas);
 router.post('/pembelajaran', adminOnlyWithTahunAjaran, admin.tambahPembelajaran);
 router.put('/pembelajaran/:id', adminOnlyWithTahunAjaran, admin.editPembelajaran);

@@ -34,34 +34,47 @@ const kelasModel = {
   },
 
   async getByIdWithDetails(id, tahunAjaranId) {
+    // ✅ TAMBAHAN: Ambil id_tahun_ajaran_induk dari tahunAjaranId
+    const [taInfo] = await db.execute(
+      `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+      [tahunAjaranId]
+    );
+
+    if (taInfo.length === 0) {
+      return null;
+    }
+
+    const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
+
+    // ✅ DIPERBAIKI: Gunakan id_tahun_ajaran_induk untuk siswa_kelas
     const [rows] = await db.execute(
       `
-      SELECT 
-          k.id_kelas AS id,
-          k.nama_kelas,
-          k.fase,
-          k.tahun_ajaran_id,             
-          COALESCE(wk.nama_lengkap, '-') AS wali_kelas,
-          wk.user_id AS wali_kelas_id,
-          COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa,
-          ta.status AS status_tahun_ajaran  
-      FROM kelas k
-      LEFT JOIN (
-          SELECT 
-              gk.kelas_id,
-              u.nama_lengkap,
-              gk.user_id
-          FROM guru_kelas gk
-          JOIN user u ON gk.user_id = u.id_user
-          WHERE gk.tahun_ajaran_id = ?
-      ) wk ON k.id_kelas = wk.kelas_id
-      LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.tahun_ajaran_id = ?
-      LEFT JOIN tahun_ajaran ta ON k.tahun_ajaran_id = ta.id_tahun_ajaran
-      WHERE k.id_kelas = ? 
-      AND k.tahun_ajaran_id = ?
-      GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, wk.nama_lengkap, wk.user_id, ta.status
-      `,
-      [tahunAjaranId, tahunAjaranId, id, tahunAjaranId]
+        SELECT 
+            k.id_kelas AS id,
+            k.nama_kelas,
+            k.fase,
+            k.tahun_ajaran_id,             
+            COALESCE(wk.nama_lengkap, '-') AS wali_kelas,
+            wk.user_id AS wali_kelas_id,
+            COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa,
+            ta.status AS status_tahun_ajaran  
+        FROM kelas k
+        LEFT JOIN (
+            SELECT 
+                gk.kelas_id,
+                u.nama_lengkap,
+                gk.user_id
+            FROM guru_kelas gk
+            JOIN user u ON gk.user_id = u.id_user
+            WHERE gk.tahun_ajaran_id = ?
+        ) wk ON k.id_kelas = wk.kelas_id
+        LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = ?
+        LEFT JOIN tahun_ajaran ta ON k.tahun_ajaran_id = ta.id_tahun_ajaran
+        WHERE k.id_kelas = ? 
+        AND k.tahun_ajaran_id = ?
+        GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, wk.nama_lengkap, wk.user_id, ta.status
+        `,
+      [tahunAjaranId, idTahunAjaranInduk, id, tahunAjaranId]
     );
     return rows[0] || null;
   },

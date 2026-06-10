@@ -224,16 +224,24 @@ export default function SiswaPerKelasPage() {
     }, []);
 
     // ── FETCH SISWA ───────────────────────────────────────────────────────────
-    const fetchSiswaByKelas = useCallback(async (kelasId: number) => {
+    const fetchSiswaByKelas = useCallback(async (kelasId: number, tahunAjaranId?: number) => {
         try {
             const token = localStorage.getItem('token');
-            if (!token) return;
-            const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}/siswa`, {
+            if (!token) return { success: false, data: [] };
+
+            let url = `http://localhost:5000/api/admin/kelas/${kelasId}/siswa`;
+            if (tahunAjaranId) {
+                url += `?tahun_ajaran_id=${tahunAjaranId}`;
+            }
+
+            const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
             const data = await res.json();
+
             if (data.success) {
-                setSiswaList(data.data.map((s: any) => ({
+                const siswaMapped = data.data.map((s: any) => ({
                     id: s.id_siswa,
                     nama: s.nama_lengkap,
                     nis: s.nis,
@@ -245,10 +253,14 @@ export default function SiswaPerKelasPage() {
                     status: s.status,
                     kelas: s.nama_kelas,
                     ...s
-                })));
+                }));
+                setSiswaList(siswaMapped);
+                return { success: true, data: siswaMapped };
             }
+            return { success: false, data: [] };
         } catch (err) {
             console.error('Error fetch siswa:', err);
+            return { success: false, data: [] };
         }
     }, []);
 
@@ -450,6 +462,10 @@ export default function SiswaPerKelasPage() {
         const fd = new FormData();
         fd.append('file', importFile);
 
+        if (kelasInfo?.id_kelas) {
+            fd.append('kelas_id', String(kelasInfo.id_kelas));
+        }
+
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('http://localhost:5000/api/admin/siswa/import', {
@@ -480,12 +496,22 @@ export default function SiswaPerKelasPage() {
             } else {
                 let userMessage = result.message || 'Terjadi kesalahan saat mengimpor data siswa.';
 
-                // Deteksi error duplikasi
-                if (userMessage.includes('NIS') || userMessage.includes('NISN') || userMessage.includes('duplikat')) {
-                    userMessage = '⚠️ Data Duplikat Ditemukan\n\n' + userMessage + '\n\nPastikan NIS dan NISN unik untuk tahun ajaran ini, atau gunakan tahun ajaran yang berbeda.';
+                // Deteksi error kelas mismatch
+                if (result.mismatch_count && result.mismatch_count > 0) {
+                    // Pesan sudah lengkap dari backend
+                    showModal({
+                        type: 'error',
+                        title: 'Import Dibatalkan',
+                        message: userMessage
+                    });
                 }
-
-                showModal({ type: 'error', title: 'Import Gagal', message: userMessage });
+                // Deteksi error duplikasi
+                else if (userMessage.includes('NIS') || userMessage.includes('NISN') || userMessage.includes('duplikat')) {
+                    userMessage = 'Data Duplikat Ditemukan\n\n' + userMessage + '\n\nPastikan NIS dan NISN unik untuk tahun ajaran ini, atau gunakan tahun ajaran yang berbeda.';
+                    showModal({ type: 'error', title: 'Import Gagal', message: userMessage });
+                } else {
+                    showModal({ type: 'error', title: 'Import Gagal', message: userMessage });
+                }
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
@@ -508,9 +534,9 @@ export default function SiswaPerKelasPage() {
             headers: { Authorization: `Bearer ${token}` }
         })
             .then(res => res.json())
-            .then(data => {
+            .then(async (data) => {
                 if (data.success) {
-                    setKelasInfo({
+                    const kelasData = {
                         id_kelas: data.data.id_kelas || data.data.id,
                         nama_kelas: data.data.nama_kelas,
                         wali_kelas: data.data.wali_kelas || '-',
@@ -519,17 +545,22 @@ export default function SiswaPerKelasPage() {
                         jumlah_siswa: data.data.jumlah_siswa || 0,
                         tahun_ajaran_id: data.data.tahun_ajaran_id,
                         is_aktif: data.data.is_aktif || false,
-                    });
+                    };
+
+                    setKelasInfo(kelasData);
+
                     if (data.data.tahun_ajaran_id) {
                         fetchKelasDropdown(data.data.tahun_ajaran_id);
                     }
+
+                    await fetchSiswaByKelas(kelasId, data.data.tahun_ajaran_id);
                 }
             })
             .catch(() => {
                 showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat mengambil data kelas.' });
-            });
+            })
+            .finally(() => setLoading(false));
 
-        fetchSiswaByKelas(kelasId).finally(() => setLoading(false));
     }, [id, fetchKelasDropdown, fetchSiswaByKelas, showModal]);
 
     // ── FILTER & SEARCH ───────────────────────────────────────────────────────

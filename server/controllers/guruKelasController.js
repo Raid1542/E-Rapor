@@ -24,9 +24,9 @@ const ExcelJS = require('exceljs');
 // Models
 const absensiModel = require('../models/absensiModel');
 const catatanWaliKelasModel = require('../models/catatanWaliKelasModel');
-const ekstrakurikulerModel = require('../models/ekstrakurikulerModel');
+const ekstrakurikulerModel = require('../models/admin/ekstrakurikulerModel');
 const kokurikulerModel = require('../models/kokurikulerModel');
-const guruModel = require('../models/guruModel');
+const guruModel = require('../models/admin/guruModel');
 const nilaiModel = require('../models/nilaiModel');
 const konfigurasiNilaiRaporModel = require('../models/konfigurasiNilaiRaporModel');
 const konfigurasiNilaiKokurikulerModel = require('../models/konfigurasiNilaiKokurikuler');

@@ -330,46 +330,67 @@ export default function DataAdminClient() {
     };
 
     const handleSubmitEdit = async (): Promise<void> => {
-        if (!validate()) return;
-        if (!hasChanges()) {
-            showModal({
-                type: 'warning',
-                title: 'Tidak Ada Perubahan',
-                message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
-            });
-            return;
-        }
+    if (!validate()) return;
+    if (!hasChanges()) {
+        showModal({
+            type: 'warning',
+            title: 'Tidak Ada Perubahan',
+            message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
+        });
+        return;
+    }
 
-        const token = localStorage.getItem('token');
-        if (!token) {
-            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
-            return;
-        }
-        try {
-            const payload = {
-                nama_lengkap: formData.nama, email_sekolah: formData.email,
-                status: formData.statusAdmin, niy: formData.niy,
-                nuptk: formData.nuptk, tempat_lahir: formData.tempat_lahir,
-                tanggal_lahir: formData.tanggal_lahir, jenis_kelamin: formData.jenisKelamin,
-                alamat: formData.alamat, no_telepon: formData.no_telepon,
-            };
-            const res = await fetch(`http://localhost:5000/api/admin/admin/${editId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(payload),
-            });
-            if (res.ok) {
-                setShowEdit(false); setEditId(null); handleReset(); await fetchAdmin();
-                showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data admin ${formData.nama} berhasil diperbarui.` });
-            } else {
-                const err = await res.json();
-                const isDuplicate = err.message && (err.message.includes('sudah terdaftar') || err.message.includes('sudah ada'));
-                showModal({ type: 'error', title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan saat memperbarui data admin.' });
+    const token = localStorage.getItem('token');
+    if (!token) {
+        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+        return;
+    }
+    try {
+        const payload = {
+            nama_lengkap: formData.nama, email_sekolah: formData.email,
+            status: formData.statusAdmin, niy: formData.niy,
+            nuptk: formData.nuptk, tempat_lahir: formData.tempat_lahir,
+            tanggal_lahir: formData.tanggal_lahir, jenis_kelamin: formData.jenisKelamin,
+            alamat: formData.alamat, no_telepon: formData.no_telepon,
+        };
+        const res = await fetch(`http://localhost:5000/api/admin/admin/${editId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+                const currentUser = JSON.parse(storedUser);
+                if (currentUser.id === editId) {
+                    const updatedUser = {
+                        ...currentUser,
+                        nama_lengkap: formData.nama,
+                        email_sekolah: formData.email,
+                        niy: formData.niy,
+                        nuptk: formData.nuptk,
+                        tempat_lahir: formData.tempat_lahir,
+                        tanggal_lahir: formData.tanggal_lahir,
+                        jenis_kelamin: formData.jenisKelamin,
+                        alamat: formData.alamat,
+                        no_telepon: formData.no_telepon,
+                    };
+                    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                    window.dispatchEvent(new Event('profileDataUpdated'));
+                }
             }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+
+            setShowEdit(false); setEditId(null); handleReset(); await fetchAdmin();
+            showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data admin ${formData.nama} berhasil diperbarui.` });
+        } else {
+            const err = await res.json();
+            const isDuplicate = err.message && (err.message.includes('sudah terdaftar') || err.message.includes('sudah ada'));
+            showModal({ type: 'error', title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan saat memperbarui data admin.' });
         }
-    };
+    } catch {
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+    }
+};
 
     const handleReset = (): void => {
         setFormData({

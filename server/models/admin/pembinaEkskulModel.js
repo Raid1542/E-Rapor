@@ -5,7 +5,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const pembinaEkskulModel = {
 

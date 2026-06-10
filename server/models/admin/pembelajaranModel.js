@@ -271,7 +271,74 @@ const pembelajaranModel = {
 
     const [rows] = await db.execute(sql, params);
     return rows.length > 0;
+  },
+
+  // Ambil mapel wajib yang BELUM ditugaskan di kelas ini
+  async getMapelWajibBelumDitugaskan(kelasId, tahunAjaranId) {
+    const [rows] = await db.execute(`
+      SELECT 
+        mp.id_mata_pelajaran AS id,
+        mp.nama_mapel,
+        mp.kode_mapel,
+        mp.urutan_rapor
+      FROM mata_pelajaran mp
+      WHERE mp.tahun_ajaran_id = ? 
+        AND mp.jenis = 'wajib'
+        AND NOT EXISTS (
+          SELECT 1 FROM pembelajaran p 
+          WHERE p.mapel_id = mp.id_mata_pelajaran 
+            AND p.kelas_id = ?
+        )
+      ORDER BY mp.urutan_rapor ASC, mp.nama_mapel ASC
+    `, [tahunAjaranId, kelasId]);
+    return rows;
+  },
+
+  // Ambil mapel pilihan yang BELUM ditugaskan di kelas ini
+  async getMapelPilihanBelumDitugaskan(kelasId, tahunAjaranId) {
+    const [rows] = await db.execute(`
+      SELECT 
+        mp.id_mata_pelajaran AS id,
+        mp.nama_mapel,
+        mp.kode_mapel
+      FROM mata_pelajaran mp
+      WHERE mp.tahun_ajaran_id = ? 
+        AND mp.jenis = 'pilihan'
+        AND NOT EXISTS (
+          SELECT 1 FROM pembelajaran p 
+          WHERE p.mapel_id = mp.id_mata_pelajaran 
+            AND p.kelas_id = ?
+        )
+      ORDER BY mp.nama_mapel ASC
+    `, [tahunAjaranId, kelasId]);
+    return rows;
+  },
+
+  // Bulk insert mapel wajib (otomatis ke guru kelas)
+  async bulkInsertMapelWajib(kelasId, mapelIds, guruKelasId, tahunAjaranId, connection) {
+    const inserted = [];
+    
+    for (const mapelId of mapelIds) {
+      // Cek apakah sudah ada (double check)
+      const [cek] = await connection.execute(`
+        SELECT id FROM pembelajaran 
+        WHERE kelas_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?
+      `, [kelasId, mapelId, tahunAjaranId]);
+      
+      if (cek.length === 0) {
+        await connection.execute(`
+          INSERT INTO pembelajaran (kelas_id, mapel_id, user_id, tahun_ajaran_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, NOW(), NOW())
+        `, [kelasId, mapelId, guruKelasId, tahunAjaranId]);
+        
+        inserted.push(mapelId);
+      }
+    }
+    
+    return inserted;
   }
 };
+
+
 
 module.exports = pembelajaranModel;

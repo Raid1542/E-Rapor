@@ -47,6 +47,17 @@ const getKelas = async (req, res) => {
             }
         }
 
+        const [taInfo] = await db.execute(
+            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            [tahun_ajaran_id]
+        );
+
+        if (taInfo.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
+
         const [rows] = await db.execute(
             `
             SELECT 
@@ -63,12 +74,12 @@ const getKelas = async (req, res) => {
                 JOIN user u ON gk.user_id = u.id_user
                 WHERE gk.tahun_ajaran_id = ?
             ) wk ON k.id_kelas = wk.kelas_id
-            LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.tahun_ajaran_id = ?
+            LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = ?
             WHERE k.tahun_ajaran_id = ?  
             GROUP BY k.id_kelas, k.nama_kelas, k.fase, wk.nama_lengkap, wk.user_id
             ORDER BY k.nama_kelas ASC
             `,
-            [tahun_ajaran_id, tahun_ajaran_id, tahun_ajaran_id]
+            [tahun_ajaran_id, idTahunAjaranInduk, tahun_ajaran_id]
         );
         res.json({ success: true, data: rows });
     } catch (err) {

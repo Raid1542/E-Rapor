@@ -192,7 +192,7 @@ export default function DashboardClient() {
         { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru' },
         { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
         { label: 'Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler' },
-        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas' },
+        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas_siswa' },
         { label: 'Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran' },
     ];
 
@@ -387,7 +387,7 @@ export default function DashboardClient() {
                                 </p>
                                 {stats.siswa > 0 && kelasList.length === 0 && (
                                     <button
-                                        onClick={() => router.push('/admin/data_kelas')}
+                                        onClick={() => router.push('/admin/data_kelas_siswa')}
                                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
                                         style={{ background: 'linear-gradient(135deg, #c95b08, #e8690a)' }}
                                     >

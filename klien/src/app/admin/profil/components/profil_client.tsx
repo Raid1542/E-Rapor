@@ -119,6 +119,7 @@ const ProfilePage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Simpan data awal untuk mendeteksi perubahan
   const initialFormDataRef = useRef<typeof formData | null>(null);
@@ -143,39 +144,54 @@ const ProfilePage = () => {
         const userData: UserProfile = JSON.parse(storedUser);
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-        if (!userData.profileImage || !userData.profileImage.trim()) {
-          const res = await fetch(`http://localhost:5000/api/admin/admin/${userData.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (res.ok) {
-            const apiResponse = await res.json();
-            const freshData = apiResponse.data;
-            const updatedUser = { ...userData, profileImage: freshData.profileImage || null };
-            localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        // ✅ FIX: SELALU fetch data terbaru dari backend
+        const res = await fetch(`http://localhost:5000/api/admin/admin/${userData.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
 
-            if (freshData.profileImage && freshData.profileImage.trim()) {
-              setProfileImage(`${baseUrl}${freshData.profileImage}`);
-            } else {
-              setProfileImage(null);
-            }
-          }
-        } else {
-          setProfileImage(`${baseUrl}${userData.profileImage}`);
+        let freshData = userData; // Default: pakai data localStorage
+
+        if (res.ok) {
+          const apiResponse = await res.json();
+          freshData = apiResponse.data;
+
+          // Update localStorage dengan data terbaru dari backend
+          const updatedUser = {
+            ...userData,
+            nama_lengkap: freshData.nama || userData.nama_lengkap,
+            email_sekolah: freshData.email || userData.email_sekolah,
+            niy: freshData.niy || '',
+            nuptk: freshData.nuptk || '',
+            tempat_lahir: freshData.tempat_lahir || '',
+            tanggal_lahir: freshData.tanggal_lahir || null,
+            jenis_kelamin: freshData.jenis_kelamin || 'Laki-laki',
+            alamat: freshData.alamat || '',
+            no_telepon: freshData.no_telepon || '',
+            profileImage: freshData.profileImage || null,
+          };
+          localStorage.setItem('currentUser', JSON.stringify(updatedUser));
         }
 
+        // Set foto profil
+        if (freshData.profileImage && freshData.profileImage.trim()) {
+          setProfileImage(`${baseUrl}${freshData.profileImage}`);
+        } else {
+          setProfileImage(null);
+        }
+
+        // Load data ke form - SELALU dari data terbaru
         const loadedData = {
-          nama: userData.nama_lengkap || '',
-          nuptk: userData.nuptk || '',
-          niy: userData.niy || '',
-          jenisKelamin: userData.jenis_kelamin || 'Laki-laki',
-          telepon: userData.no_telepon || '',
-          email: userData.email_sekolah || '',
-          alamat: userData.alamat || '',
-          tempatLahir: userData.tempat_lahir || '',
-          tanggalLahir: userData.tanggal_lahir || ''
+          nama: freshData.nama || freshData.nama_lengkap || '',
+          nuptk: freshData.nuptk || '',
+          niy: freshData.niy || '',
+          jenisKelamin: freshData.jenis_kelamin || 'Laki-laki',
+          telepon: freshData.no_telepon || '',
+          email: freshData.email || freshData.email_sekolah || '',
+          alamat: freshData.alamat || '',
+          tempatLahir: freshData.tempat_lahir || '',
+          tanggalLahir: freshData.tanggal_lahir || ''
         };
         setFormData(loadedData);
-        // Simpan snapshot data awal untuk deteksi perubahan
         initialFormDataRef.current = { ...loadedData };
       } catch (e) {
         console.error('Gagal memuat data profil:', e);
@@ -191,10 +207,53 @@ const ProfilePage = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ── Validasi Tanggal Lahir (usia minimal 18 tahun) ────────────────────────
+
+  const validateTanggalLahir = (tanggal: string): string | null => {
+    if (!tanggal) return 'Tanggal lahir wajib diisi';
+
+    const dob = new Date(tanggal);
+    if (isNaN(dob.getTime())) return 'Tanggal lahir tidak valid';
+
+    const today = new Date();
+    const dobMid = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
+    const todMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    if (dobMid > todMid) {
+      return 'Tanggal lahir tidak boleh di masa depan';
+    }
+
+    // Hitung usia
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+
+    if (age < 18) {
+      return `Usia minimal 18 tahun`;
+    }
+
+    return null;
+  };
+
   // ── Submit profil ──────────────────────────────────────────────────────────
 
   const handleSubmitProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Cek tanggal lahir (usia minimal 18 tahun)
+    const tanggalError = validateTanggalLahir(formData.tanggalLahir);
+    if (tanggalError) {
+      setErrors({ tanggalLahir: tanggalError });
+      showModal({
+        type: 'warning',
+        title: 'Tanggal Lahir Tidak Valid',
+        message: tanggalError
+      });
+      return;
+    }
+
+    // Clear error jika valid
+    setErrors({});
 
     // Cek apakah ada perubahan dibanding data awal
     const initial = initialFormDataRef.current;
@@ -204,7 +263,9 @@ const ProfilePage = () => {
       formData.niy !== initial.niy ||
       formData.jenisKelamin !== initial.jenisKelamin ||
       formData.telepon !== initial.telepon ||
-      formData.alamat !== initial.alamat;
+      formData.alamat !== initial.alamat ||
+      formData.tempatLahir !== initial.tempatLahir ||
+      formData.tanggalLahir !== initial.tanggalLahir;
 
     if (!hasChanges) {
       showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah. Silakan ubah data terlebih dahulu sebelum menyimpan.' });
@@ -542,7 +603,7 @@ const ProfilePage = () => {
                     placeholder="Misal: 081234567890" className={inputCls} />
                 </div>
 
-                {/* Tempat Lahir - BARU */}
+                {/* Tempat Lahir*/}
                 <div className="flex flex-col gap-1.5">
                   <label className={labelCls} style={labelColor}>
                     Tempat Lahir <span className="text-red-500">*</span>
@@ -558,7 +619,7 @@ const ProfilePage = () => {
                   />
                 </div>
 
-                {/* Tanggal Lahir - BARU */}
+                {/* Tanggal Lahir */}
                 <div className="flex flex-col gap-1.5">
                   <label className={labelCls} style={labelColor}>
                     Tanggal Lahir <span className="text-red-500">*</span>
@@ -567,10 +628,28 @@ const ProfilePage = () => {
                     type="date"
                     name="tanggalLahir"
                     value={formData.tanggalLahir}
-                    onChange={handleChange}
-                    className={inputCls}
+                    onChange={(e) => {
+                      handleChange(e);
+                      // Clear error saat user mengubah tanggal
+                      if (errors.tanggalLahir) {
+                        setErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.tanggalLahir;
+                          return newErrors;
+                        });
+                      }
+                    }}
+                    className={errors.tanggalLahir
+                      ? "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400"
+                      : inputCls
+                    }
                     required
                   />
+                  {errors.tanggalLahir && (
+                    <p className="text-red-500 text-xs flex items-center gap-1">
+                      {errors.tanggalLahir}
+                    </p>
+                  )}
                 </div>
 
                 {/* Alamat */}

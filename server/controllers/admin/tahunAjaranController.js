@@ -101,6 +101,49 @@ const getTahunAjaran = async (req, res) => {
     }
 };
 
+const getSemesterList = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT 
+                ta.id_tahun_ajaran,
+                ta.id_tahun_ajaran_induk,
+                ta.tahun_ajaran,
+                ta.semester,
+                ta.status,
+                ta.tanggal_pembagian_pts,
+                ta.tanggal_pembagian_pas,
+                tai.tahun_ajaran as tahun_ajaran_induk
+            FROM tahun_ajaran ta
+            LEFT JOIN tahun_ajaran_induk tai ON ta.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk
+            WHERE ta.semester IS NOT NULL
+            ORDER BY tai.tahun_ajaran DESC, ta.semester ASC
+        `);
+
+        const formattedData = rows.map(row => ({
+            id: row.id_tahun_ajaran,
+            id_induk: row.id_tahun_ajaran_induk,
+            tahun_ajaran: row.tahun_ajaran,
+            semester: row.semester,
+            is_aktif: row.status === 'aktif',
+            tanggal_pembagian_pts: row.tanggal_pembagian_pts,
+            tanggal_pembagian_pas: row.tanggal_pembagian_pas
+        }));
+
+        res.json({
+            success: true,
+            data: formattedData,
+            total: formattedData.length
+        });
+
+    } catch (err) {
+        console.error('Error get semester list:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal memuat data semester'
+        });
+    }
+};
+
 const tambahTahunAjaran = async (req, res) => {
     try {
         const { tahun1, tahun2, pts_ganjil, pas_ganjil, pts_genap, pas_genap } = req.body;
@@ -446,6 +489,7 @@ const gantiSemester = async (req, res) => {
 
 module.exports = {
     getTahunAjaran,
+    getSemesterList,
     tambahTahunAjaran,
     updateTahunAjaran,
     gantiSemester
