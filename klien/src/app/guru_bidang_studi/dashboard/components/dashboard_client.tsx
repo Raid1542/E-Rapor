@@ -57,6 +57,7 @@ interface Warning {
     masalah: string;
 }
 
+// Tambah 3 field baru
 interface DashboardData {
     tahun_ajaran: string;
     semester: string;
@@ -65,6 +66,9 @@ interface DashboardData {
     total_kelas: number;
     total_siswa: number;
     total_mapel: number;
+    total_penilaian_dibutuhkan: number;
+    total_penilaian_ada: number;
+    overall_progress: number;
     mata_pelajaran_list: MapelItem[];
     warnings: Warning[];
 }
@@ -200,10 +204,17 @@ export default function DashboardClient() {
     // ── Derived stats ─────────────────────────────────────────────────────────
 
     const list = dashboard.mata_pelajaran_list;
+
+    // Gunakan data dari backend
     const totalMapel = dashboard.total_mapel || list.length;
     const totalSiswa = dashboard.total_siswa || 0;
     const totalKelas = dashboard.total_kelas || 0;
-    const totalSudahDinilai = list.reduce((s, m) => s + m.sudah_dinilai, 0);
+    const totalPenilaianDibutuhkan = dashboard.total_penilaian_dibutuhkan || 0;
+    const totalPenilaianAda = dashboard.total_penilaian_ada || 0;
+    const overallProgress = dashboard.overall_progress || 0;
+
+    // Untuk kompatibilitas dengan kode lama
+    const totalSudahDinilai = totalPenilaianAda;
 
     const selesai = list.filter(m => m.belum_dinilai === 0 && m.total_siswa > 0).length;
     const belumMulai = list.filter(m => m.sudah_dinilai === 0).length;
@@ -213,12 +224,19 @@ export default function DashboardClient() {
     const semesterDisplay = dashboard.semester === 'Ganjil' ? 'Ganjil' :
         dashboard.semester === 'Genap' ? 'Genap' : '-';
 
-    // ── Data untuk Pie Chart (Progress per Mapel) ─────────────────────────────
-    const pieData = list.map(m => ({
-        name: m.nama,
-        value: m.sudah_dinilai,
-        id: m.id
-    }));
+
+    const pieData = [
+        {
+            name: 'Sudah Dinilai',
+            value: totalPenilaianAda,
+            color: '#16a34a'
+        },
+        {
+            name: 'Belum Dinilai',
+            value: totalPenilaianDibutuhkan - totalPenilaianAda,
+            color: '#fde0c8'
+        }
+    ];
 
     // ── Custom Tooltip ────────────────────────────────────────────────────────
     const CustomTooltip = ({ active, payload }: any) => {
@@ -249,8 +267,7 @@ export default function DashboardClient() {
         return null;
     };
 
-    // ── Stat cards config ─────────────────────────────────────────────────────
-
+    // Stat cards dengan progress yang benar
     const statCards = [
         {
             label: 'Mata Pelajaran',
@@ -271,14 +288,14 @@ export default function DashboardClient() {
             value: totalSiswa,
             icon: <Users className="w-5 h-5" />,
             path: '/guru_bidang_studi/input_nilai',
-            sub: `${totalSudahDinilai} sudah dinilai`,
+            sub: `${totalSudahDinilai} penilaian sudah diinput`,
         },
         {
             label: 'Progress',
-            value: `${totalSiswa > 0 ? Math.round((totalSudahDinilai / totalSiswa) * 100) : 0}%`,
+            value: `${overallProgress}%`,  // ← GUNAKAN overallProgress
             icon: <Target className="w-5 h-5" />,
             path: '/guru_bidang_studi/input_nilai',
-            sub: 'Penilaian selesai',
+            sub: `${totalPenilaianAda} dari ${totalPenilaianDibutuhkan} penilaian`,
         },
     ];
 
@@ -430,16 +447,18 @@ export default function DashboardClient() {
                                                     cy="50%"
                                                     innerRadius={80}
                                                     outerRadius={130}
-                                                    paddingAngle={2}
+                                                    paddingAngle={0}
                                                     dataKey="value"
                                                     stroke="#fff"
                                                     strokeWidth={2}
+                                                    startAngle={90}
+                                                    endAngle={-270}
                                                 >
                                                     {pieData.map((entry, index) => (
                                                         <Cell
                                                             key={`cell-${index}`}
-                                                            fill={PIE_COLORS[index % PIE_COLORS.length]}
-                                                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                                                            fill={entry.color}
+                                                            className="transition-opacity"
                                                         />
                                                     ))}
                                                 </Pie>
@@ -448,17 +467,17 @@ export default function DashboardClient() {
                                         </ResponsiveContainer>
                                     </div>
 
-                                    {/* Center Label */}
+                                    {/*Center Label dengan data yang benar */}
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <div className="text-center">
                                             <p className="text-5xl font-black" style={{ color: '#c95b08' }}>
-                                                {totalSudahDinilai}
+                                                {totalPenilaianAda}
                                             </p>
                                             <p className="text-sm text-gray-500 font-semibold mt-1">
-                                                dari {totalSiswa} Siswa
+                                                dari {totalPenilaianDibutuhkan} Penilaian
                                             </p>
                                             <p className="text-xs text-gray-400 mt-0.5">
-                                                {totalSiswa > 0 ? Math.round((totalSudahDinilai / totalSiswa) * 100) : 0}% selesai
+                                                {overallProgress}% selesai
                                             </p>
                                         </div>
                                     </div>

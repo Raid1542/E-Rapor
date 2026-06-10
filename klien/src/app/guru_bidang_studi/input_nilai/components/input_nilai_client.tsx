@@ -428,20 +428,18 @@ export default function InputNilaiClient() {
             setFilteredSiswa(prev => prev.map(s => (s.id === editingSiswa.id ? updatedSiswa : s)));
 
             setEditKomponenClosing(true);
-            setTimeout(() => {
-                setEditingSiswa(null);
-                setEditKomponenClosing(false);
+            const perubahanMsg = data.perubahan && data.perubahan.length > 0
+                ? '\n\nPerubahan:\n' + data.perubahan.map((p: any) => `• ${p.komponen}: ${p.lama ?? '-'} → ${p.baru ?? '-'}`).join('\n')
+                : '';
 
-                const perubahanMsg = data.perubahan && data.perubahan.length > 0
-                    ? '\n\nPerubahan:\n' + data.perubahan.map((p: any) => `• ${p.komponen}: ${p.lama ?? '-'} → ${p.baru ?? '-'}`).join('\n')
-                    : '';
+            setEditingSiswa(null);
+            setEditKomponenClosing(false);
 
-                showModal({
-                    type: 'success',
-                    title: 'Nilai Berhasil Disimpan!',
-                    message: `Nilai ${data.message || 'berhasil diperbarui'} untuk ${editingSiswa.nama}.${perubahanMsg}`
-                });
-            }, 200);
+            showModal({
+                type: 'success',
+                title: 'Nilai Berhasil Disimpan!',
+                message: `Nilai ${data.message || 'berhasil diperbarui'} untuk ${editingSiswa.nama}.${perubahanMsg}`
+            });
         } catch (err) {
             console.error('Error simpan nilai komponen:', err);
             showModal({
@@ -917,7 +915,7 @@ export default function InputNilaiClient() {
 
                             {/* Nilai Komponen - UH, PTS, PAS Terpisah */}
                             <h3 className="text-sm font-bold mb-3" style={{ color: '#7a3a0a' }}>Nilai per Komponen</h3>
-                            
+
                             {/* UH Components */}
                             <div className="mb-4">
                                 <h4 className="text-xs font-semibold mb-2 px-2" style={{ color: '#c95b08' }}>Ulangan Harian</h4>
@@ -926,9 +924,9 @@ export default function InputNilaiClient() {
                                         const nilai = detailSiswa.nilai[k.id];
                                         return (
                                             <div key={k.id} className="p-3 rounded-xl text-center"
-                                                style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
-                                                <div className="text-xs font-semibold mb-1 text-gray-600">{k.nama}</div>
-                                                <div className="text-2xl font-bold text-gray-700">
+                                                style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                                <div className="text-xs font-semibold mb-1" style={{ color: '#c95b08' }}>{k.nama}</div>
+                                                <div className="text-2xl font-bold" style={{ color: '#7a3a0a' }}>
                                                     {nilai !== null ? nilai : '—'}
                                                 </div>
                                             </div>
