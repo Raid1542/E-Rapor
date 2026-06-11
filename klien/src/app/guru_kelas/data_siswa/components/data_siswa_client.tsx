@@ -24,10 +24,10 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -50,10 +50,20 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG     = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' };
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+
+const btnPrimary = {
+    base: "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' },
+    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
+    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+};
 
 const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
     <button onClick={onClick}
@@ -99,19 +109,19 @@ const formatJenisKelamin = (jk: string): string => {
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function DataSiswaPage() {
-    const [siswaList,     setSiswaList]     = useState<Siswa[]>([]);
+    const [siswaList, setSiswaList] = useState<Siswa[]>([]);
     const [filteredSiswa, setFilteredSiswa] = useState<Siswa[]>([]);
-    const [loading,       setLoading]       = useState(true);
-    const [showDetail,    setShowDetail]    = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [showDetail, setShowDetail] = useState(false);
     const [detailClosing, setDetailClosing] = useState(false);
     const [selectedSiswa, setSelectedSiswa] = useState<Siswa | null>(null);
-    const [searchQuery,   setSearchQuery]   = useState('');
-    const [kelasNama,     setKelasNama]     = useState<string>('Kelas Anda');
-    const [itemsPerPage,  setItemsPerPage]  = useState(10);
-    const [currentPage,   setCurrentPage]   = useState(1);
-    const [modal,         setModal]         = useState<ModalConfig | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [kelasNama, setKelasNama] = useState<string>('Kelas Anda');
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [modal, setModal] = useState<ModalConfig | null>(null);
 
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
     const closeDetail = () => {
@@ -172,16 +182,16 @@ export default function DataSiswaPage() {
 
     const handleDetail = (siswa: Siswa) => { setSelectedSiswa(siswa); setShowDetail(true); };
 
-    const totalPages   = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
-    const startIndex   = (currentPage - 1) * itemsPerPage;
-    const endIndex     = startIndex + itemsPerPage;
+    const totalPages = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const currentSiswa = filteredSiswa.slice(startIndex, endIndex);
 
     // ── Pagination ─────────────────────────────────────────────────────────────
     const renderPagination = () => {
         const pages: ReactNode[] = [];
-        const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive   = "text-white border-orange-500";
+        const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+        const btnActive = "text-white border-orange-500";
         const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
         pages.push(
@@ -308,18 +318,18 @@ export default function DataSiswaPage() {
                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
                                             style={{
                                                 background: siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#eff6ff' : '#fdf2f8',
-                                                color:      siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#1d4ed8' : '#9d174d',
-                                                border:     `1px solid ${siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#bfdbfe' : '#fbcfe8'}`,
+                                                color: siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#1d4ed8' : '#9d174d',
+                                                border: `1px solid ${siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#bfdbfe' : '#fbcfe8'}`,
                                             }}>
                                             {formatJenisKelamin(siswa.jenis_kelamin)}
                                         </span>
                                     </td>
                                     <td className="px-5 py-3.5 text-center">
                                         <button onClick={() => handleDetail(siswa)}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#d4f0de')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}>
+                                            className={btnPrimary.base}
+                                            style={btnPrimary.style}
+                                            onMouseEnter={btnPrimary.hover}
+                                            onMouseLeave={btnPrimary.leave}>
                                             <Eye size={13} /> Detail
                                         </button>
                                     </td>
@@ -366,32 +376,24 @@ export default function DataSiswaPage() {
                                     </span>
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-800">{selectedSiswa.nama}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mt-1"
-                                    style={{
-                                        background: selectedSiswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#eff6ff' : '#fdf2f8',
-                                        color:      selectedSiswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#1d4ed8' : '#9d174d',
-                                        border:     `1px solid ${selectedSiswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#bfdbfe' : '#fbcfe8'}`,
-                                    }}>
-                                    {formatJenisKelamin(selectedSiswa.jenis_kelamin)}
-                                </span>
                             </div>
 
                             {/* Detail rows */}
                             <div className="space-y-2.5">
                                 {[
-                                    { label: 'Kelas',         value: selectedSiswa.kelas },
-                                    { label: 'NIS',           value: selectedSiswa.nis },
-                                    { label: 'NISN',          value: selectedSiswa.nisn },
-                                    { label: 'Tempat Lahir',  value: selectedSiswa.tempat_lahir || '-' },
+                                    { label: 'Kelas', value: selectedSiswa.kelas },
+                                    { label: 'NIS', value: selectedSiswa.nis },
+                                    { label: 'NISN', value: selectedSiswa.nisn },
+                                    { label: 'Tempat Lahir', value: selectedSiswa.tempat_lahir || '-' },
                                     { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedSiswa.tanggal_lahir) },
                                     { label: 'Jenis Kelamin', value: formatJenisKelamin(selectedSiswa.jenis_kelamin) },
-                                    { label: 'Fase',          value: selectedSiswa.fase || '-' },
+                                    { label: 'Fase', value: selectedSiswa.fase || '-' },
                                 ].map((item, i) => (
                                     <div key={i} className="grid grid-cols-4 gap-2 pb-2.5"
                                         style={{ borderBottom: '1px solid #fde0c8' }}>
                                         <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                                        <span className="text-xs text-gray-400">:</span>
-                                        <span className="text-xs text-gray-700 col-span-2 break-words">{item.value}</span>
+                                        <span className="text-xs text-gray-700">:</span>
+                                        <span className="text-xs text-gray-700 col-span-2 wrap-break-word">{item.value}</span>
                                     </div>
                                 ))}
                             </div>

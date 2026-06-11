@@ -1,6 +1,6 @@
 /**
  * Nama File: cekPenilaianStatus.js
- * Fungsi: Middleware untuk memeriksa status periode penilaian aktif (PTS/PAS) pada tahun ajaran berjalan.
+ * Fungsi: Middleware untuk memeriksa status periode penilaian aktif (PTS/PAS)
  */
 
 const db = require('../config/db');
@@ -34,9 +34,8 @@ const cekPenilaianStatus = async (req, res, next) => {
       status_pas 
     } = taRows[0];
 
-    // Set ID yang dibutuhkan controller
-    req.idTahunAjaranInduk = id_tahun_ajaran; // untuk validasi guru_kelas, siswa_kelas
-    req.idSemesterAktif    = id_tahun_ajaran;        // untuk query nilai, absensi, dll
+    req.idTahunAjaranInduk = id_tahun_ajaran_induk;
+    req.idSemesterAktif    = id_tahun_ajaran;
     req.tahunAjaranAktif   = taRows[0];
 
     // Ambil konteks dari request jika ada
@@ -102,7 +101,7 @@ const cekPenilaianStatus = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error('Error di cekPenilaianStatus:', err);
+    console.error('❌ Error di cekPenilaianStatus:', err);
     res.status(500).json({
       success: false,
       message: 'Gagal memeriksa status penilaian',

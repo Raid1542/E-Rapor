@@ -209,7 +209,7 @@ export default function Header({ user }: HeaderProps) {
             <div className="w-1 h-7 rounded-full" style={{ background: 'rgba(255,255,255,0.5)' }} />
             <div>
               <h1 className="text-lg font-bold text-white tracking-tight leading-tight">
-                Dashboard Wali Kelas
+                Dashboard Guru Kelas
               </h1>
               {user.class && (
                 <p className="text-xs leading-tight" style={{ color: 'rgba(255,255,255,0.8)' }}>
@@ -234,7 +234,7 @@ export default function Header({ user }: HeaderProps) {
               <Avatar size="sm" />
               <div className="text-left hidden sm:block">
                 <p className="text-xs font-bold text-white leading-tight drop-shadow-sm">{user.nama_lengkap}</p>
-                <p className="text-[10px] text-white/90 leading-tight font-medium">Wali Kelas</p>
+                <p className="text-[10px] text-white/90 leading-tight font-medium">Guru Kelas</p>
               </div>
               <ChevronDown
                 className="w-3.5 h-3.5 text-white transition-transform duration-200"
@@ -262,7 +262,7 @@ export default function Header({ user }: HeaderProps) {
                         className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wide"
                         style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
                       >
-                        Wali Kelas{user.class ? ` – Kelas ${user.class}` : ''}
+                        Guru Kelas{user.class ? ` – Kelas ${user.class}` : ''}
                       </span>
                     </div>
                   </div>

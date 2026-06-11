@@ -50,7 +50,7 @@ const uploadFoto = multer({
   },
 });
 
-const guruKelasController    = require('../controllers/guruKelasController');
+const guruKelasController    = require('../controllers/guru_kelas/');
 const absensiController       = require('../controllers/guru_kelas/absensiController');
 const aturPenilaianController = require('../controllers/guru_kelas/aturPenilaianController');
 
