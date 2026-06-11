@@ -6,6 +6,7 @@
  * Update: Support pilih semester spesifik (Ganjil/Genap),
  *         disable CRUD untuk semester non-aktif.
  *         Struktur dropdown sama dengan Data Pembelajaran.
+ *         Dropdown TA menampilkan "(Aktif)" untuk TA yang aktif.
  */
 
 'use client';
@@ -40,6 +41,7 @@ interface MataPelajaran {
 interface TahunAjaran {
   id: number;
   tahun_ajaran: string;
+  is_aktif: boolean;
 }
 
 interface SemesterOption {
@@ -176,6 +178,7 @@ export default function DataMataPelajaranPage() {
 
   // ── Fetch Functions ────────────────────────────────────────────────────────
 
+  // Tambah is_aktif saat mapping data
   const fetchTahunAjaranList = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -191,13 +194,13 @@ export default function DataMataPelajaranPage() {
         const uniqueTA = Array.from(
           new Map(data.data.map((item: any) => [item.id_induk, {
             id: item.id_induk,
-            tahun_ajaran: item.tahun_ajaran
+            tahun_ajaran: item.tahun_ajaran,
+            is_aktif: item.status === 'AKTIF'  // ← TAMBAH INI
           }])).values()
         );
 
         setTahunAjaranList(uniqueTA);
 
-        // Load saved tahun ajaran
         const savedTA = localStorage.getItem('selectedTahunAjaranId_mapel');
         if (savedTA) {
           const savedId = Number(savedTA);
@@ -733,7 +736,7 @@ export default function DataMataPelajaranPage() {
               <option value="">-- Pilih Tahun Ajaran --</option>
               {tahunAjaranList.map(ta => (
                 <option key={ta.id} value={ta.id}>
-                  {ta.tahun_ajaran}
+                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
                 </option>
               ))}
             </select>

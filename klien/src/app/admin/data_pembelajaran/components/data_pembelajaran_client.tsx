@@ -418,17 +418,7 @@ export default function DataPembelajaranPage() {
     localStorage.removeItem('pembelajaran_selectedKelas');
 
     // Fetch semester untuk TA ini
-    const semesters = await fetchSemesterByTahunAjaran(id);
-
-    // Auto-select semester aktif jika ada
-    const activeSemester = semesters.find((s: SemesterOption) => s.is_aktif);
-    if (activeSemester) {
-      setSelectedSemesterId(activeSemester.id);
-      setIsSemesterActive(true);
-      localStorage.setItem('pembelajaran_selectedSemester', activeSemester.id.toString());
-      await fetchKelasList(activeSemester.id);
-      await fetchDropdowns(activeSemester.id);
-    }
+    await fetchSemesterByTahunAjaran(id);
   };
 
   // ── Handler: Pilih Semester ────────────────────────────────────────────────
@@ -511,7 +501,7 @@ export default function DataPembelajaranPage() {
         body: JSON.stringify({
           kelas_id: selectedKelasId,
           mapel_ids: selectedMapelWajibIds,
-          semester_id: selectedSemesterId  
+          semester_id: selectedSemesterId
         })
       });
 
@@ -572,7 +562,7 @@ export default function DataPembelajaranPage() {
           kelas_id: selectedKelasId,
           mapel_id: Number(formDataPilihan.mapel_id),
           user_id: Number(formDataPilihan.user_id),
-          semester_id: selectedSemesterId 
+          semester_id: selectedSemesterId
         })
       });
 
@@ -627,7 +617,7 @@ export default function DataPembelajaranPage() {
           kelas_id: selectedKelasId,
           mapel_id: Number(formDataPilihan.mapel_id),
           user_id: Number(formDataPilihan.user_id),
-          semester_id: selectedSemesterId  
+          semester_id: selectedSemesterId
         })
       });
 
@@ -657,12 +647,12 @@ export default function DataPembelajaranPage() {
         try {
           const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${id}`, {
             method: 'DELETE',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}` 
+              Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({
-              semester_id: selectedSemesterId  
+              semester_id: selectedSemesterId
             })
           });
           const result = await res.json();

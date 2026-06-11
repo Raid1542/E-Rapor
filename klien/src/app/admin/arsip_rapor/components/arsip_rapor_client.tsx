@@ -2,7 +2,8 @@
  * Nama File: arsip_rapor_client.tsx
  * Fungsi: Komponen utama halaman Arsip Rapor untuk admin.
  *         Mengelola status penilaian (PTS/PAS) dan unduh rapor siswa.
- * UI: Konsisten dengan DataMataPelajaranPage
+ * Update: Struktur dropdown sama dengan DataMataPelajaranPage
+ *         (TA → Semester → Jenis → Kelas)
  */
 
 'use client';
@@ -41,7 +42,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
+// ─── NOTIF MODAL (Z-Index Tinggi) ─────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
@@ -56,7 +57,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     const isConfirm = modal.type === 'confirm';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ar-fadeIn">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 ar-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ar-scaleIn">
                 {!isConfirm && (
@@ -99,9 +100,14 @@ const labelColor = { color: '#7a3a0a' };
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 
-interface TahunAjaran {
+interface TahunAjaranInduk {
     id: number;
     tahun_ajaran: string;
+    is_aktif?: boolean;
+}
+
+interface SemesterOption {
+    id: number;
     semester: string;
     is_aktif: boolean;
     status_pts: StatusPenilaian;
@@ -150,13 +156,18 @@ const getStatusStyle = (status: StatusPenilaian) => {
 
 export default function ArsipRaporPage() {
     const API_BASE = 'http://localhost:5000/api';
+    const { showSessionExpired, handleLogout } = useSession();
 
     // ── States ─────────────────────────────────────────────────────────────────
-    const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
+    const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaranInduk[]>([]);
+    const [activeTahunAjaranId, setActiveTahunAjaranId] = useState<number | null>(null);
+    const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
     const [kelasList, setKelasList] = useState<Kelas[]>([]);
     const [siswaList, setSiswaList] = useState<Siswa[]>([]);
 
     const [selectedTA, setSelectedTA] = useState<number | null>(null);
+    const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
+    const [selectedSemester, setSelectedSemester] = useState<string | null>(null); // 'Ganjil' | 'Genap'
     const [selectedJenis, setSelectedJenis] = useState<'PTS' | 'PAS' | null>(null);
     const [selectedKelas, setSelectedKelas] = useState<number | null>(null);
 
@@ -171,11 +182,10 @@ export default function ArsipRaporPage() {
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
-    const { showSessionExpired, handleLogout } = useSession();
 
-    // ── Fetch Tahun Ajaran (PAKAI ENDPOINT SAMA DENGAN MAPEL) ──────────────────
+    // ── Fetch Functions ────────────────────────────────────────────────────────
 
-    const fetchTahunAjaran = async () => {
+    const fetchTahunAjaranList = async () => {
         setLoadingTA(true);
         try {
             const token = localStorage.getItem('token');
@@ -187,18 +197,20 @@ export default function ArsipRaporPage() {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                setTahunAjaranList(data.data.map((ta: any) => {
-                    const semester = ta.semester_aktif?.toLowerCase() || 'ganjil';
+                const uniqueTA = Array.from(
+                    new Map(data.data.map((item: any) => [item.id_induk, {
+                        id: item.id_induk,
+                        tahun_ajaran: item.tahun_ajaran,
+                        is_aktif: item.status === 'AKTIF'  // ✅ Simpan status aktif
+                    }])).values()
+                ) as TahunAjaranInduk[];
 
-                    return {
-                        id: ta.id_induk,
-                        tahun_ajaran: ta.tahun_ajaran,
-                        semester: semester,
-                        is_aktif: ta.status === 'AKTIF',
-                        status_pts: semester === 'ganjil' ? ta.status_pts_ganjil : ta.status_pts_genap,
-                        status_pas: semester === 'ganjil' ? ta.status_pas_ganjil : ta.status_pas_genap,
-                    };
-                }));
+                setTahunAjaranList(uniqueTA);
+
+                const activeTA = uniqueTA.find(ta => ta.is_aktif);
+                if (activeTA) {
+                    setActiveTahunAjaranId(activeTA.id);
+                }
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
@@ -207,17 +219,69 @@ export default function ArsipRaporPage() {
         }
     };
 
-    // ── Fetch Kelas ────────────────────────────────────────────────────────────
+    const fetchSemesterByTahunAjaran = async (idInduk: number) => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
 
-    const fetchKelas = async (taId: number) => {
+            const res = await fetch(`${API_BASE}/admin/semester-list`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // Filter semester untuk TA yang dipilih + ambil status PTS/PAS
+                const semesters = data.data
+                    .filter((sem: any) => sem.id_induk === idInduk)
+                    .map((sem: any) => ({
+                        id: sem.id,
+                        semester: sem.semester,
+                        is_aktif: sem.is_aktif,
+                        status_pts: 'nonaktif' as StatusPenilaian,
+                        status_pas: 'nonaktif' as StatusPenilaian,
+                    }));
+
+                // Ambil status PTS/PAS dari endpoint tahun-ajaran
+                const resTA = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const dataTA = await resTA.json();
+                if (resTA.ok && dataTA.success) {
+                    const taData = dataTA.data.find((t: any) => t.id_induk === idInduk);
+                    if (taData) {
+                        semesters.forEach(sem => {
+                            if (sem.semester === 'Ganjil') {
+                                sem.status_pts = taData.status_pts_ganjil || 'nonaktif';
+                                sem.status_pas = taData.status_pas_ganjil || 'nonaktif';
+                            } else if (sem.semester === 'Genap') {
+                                sem.status_pts = taData.status_pts_genap || 'nonaktif';
+                                sem.status_pas = taData.status_pas_genap || 'nonaktif';
+                            }
+                        });
+                    }
+                }
+
+                setSemesterOptions(semesters);
+
+                setSelectedSemesterId(null);
+                setSelectedSemester(null);
+            }
+        } catch (err) {
+            console.error('Error fetch semester:', err);
+        }
+    };
+
+    const fetchKelas = async (semesterId: number) => {
+        if (!selectedSemester) return;
         setLoadingKelas(true);
         setKelasList([]);
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
-            const res = await fetch(`${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${taId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await fetch(
+                `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${selectedTA}&semester=${selectedSemester}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
             const data = await res.json();
             if (res.ok && data.success) {
                 setKelasList(data.data || []);
@@ -231,17 +295,17 @@ export default function ArsipRaporPage() {
         }
     };
 
-    // ── Fetch Siswa ────────────────────────────────────────────────────────────
-
-    const fetchSiswa = async (taId: number, kelasId: number) => {
+    const fetchSiswa = async () => {
+        if (!selectedTA || !selectedKelas || !selectedSemester) return;
         setLoadingSiswa(true);
         setSiswaList([]);
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
-            const res = await fetch(`${API_BASE}/admin/arsip-rapor/daftar-siswa/${taId}/${kelasId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await fetch(
+                `${API_BASE}/admin/arsip-rapor/daftar-siswa/${selectedTA}/${selectedKelas}?semester=${selectedSemester}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
             const data = await res.json();
             if (res.ok && data.success) {
                 setSiswaList(data.data || []);
@@ -257,30 +321,66 @@ export default function ArsipRaporPage() {
 
     // ── Effects ────────────────────────────────────────────────────────────────
 
-    useEffect(() => { fetchTahunAjaran(); }, []);
+    useEffect(() => {
+        fetchTahunAjaranList();
+    }, []);
 
     useEffect(() => {
         if (selectedTA) {
-            fetchKelas(selectedTA);
+            fetchSemesterByTahunAjaran(selectedTA);
         } else {
-            setKelasList([]);
+            setSemesterOptions([]);
+            setSelectedSemesterId(null);
+            setSelectedSemester(null);
+            setSelectedJenis(null);
             setSelectedKelas(null);
+            setKelasList([]);
             setSiswaList([]);
         }
     }, [selectedTA]);
 
     useEffect(() => {
-        if (selectedTA && selectedKelas) {
-            fetchSiswa(selectedTA, selectedKelas);
+        if (selectedSemesterId && selectedSemester) {
+            fetchKelas(selectedSemesterId);
+        } else {
+            setKelasList([]);
+            setSelectedKelas(null);
+            setSiswaList([]);
+        }
+    }, [selectedSemesterId, selectedSemester]);
+
+    useEffect(() => {
+        if (selectedKelas && selectedJenis) {
+            fetchSiswa();
         } else {
             setSiswaList([]);
         }
-    }, [selectedKelas, selectedTA]);
+    }, [selectedKelas, selectedJenis]);
+
+    // ── Derived Data ───────────────────────────────────────────────────────────
+
+    const currentSemester = semesterOptions.find(s => s.id === selectedSemesterId);
+    const statusSaatIni: StatusPenilaian = selectedJenis === 'PTS'
+        ? (currentSemester?.status_pts || 'nonaktif')
+        : (currentSemester?.status_pas || 'nonaktif');
+    const statusStyle = getStatusStyle(statusSaatIni);
+
+    const kelas = kelasList.find(k => k.id_kelas === selectedKelas);
+
+    const filteredSiswa = siswaList.filter(s => {
+        const q = searchQuery.toLowerCase().trim();
+        if (!q) return true;
+        return (
+            s.nama.toLowerCase().includes(q) ||
+            s.nis.toLowerCase().includes(q) ||
+            s.nisn.toLowerCase().includes(q)
+        );
+    });
 
     // ── Handlers ───────────────────────────────────────────────────────────────
 
     const handleUbahStatus = async (statusBaru: StatusPenilaian) => {
-        if (!selectedTA || !selectedJenis) return;
+        if (!selectedTA || !selectedJenis || !selectedSemester) return;
 
         setLoadingAction(true);
         try {
@@ -296,7 +396,8 @@ export default function ArsipRaporPage() {
                 body: JSON.stringify({
                     jenis: selectedJenis,
                     status: statusBaru,
-                    tahun_ajaran_id: selectedTA
+                    tahun_ajaran_id: selectedTA,
+                    semester: selectedSemester
                 })
             });
 
@@ -308,7 +409,8 @@ export default function ArsipRaporPage() {
                     title: 'Status Diperbarui!',
                     message: result.message || `Status ${selectedJenis} berhasil diubah.`
                 });
-                await fetchTahunAjaran();
+                // Refresh semester data
+                if (selectedTA) await fetchSemesterByTahunAjaran(selectedTA);
             } else {
                 showModal({
                     type: 'error',
@@ -324,10 +426,7 @@ export default function ArsipRaporPage() {
     };
 
     const handleArsipkan = async () => {
-        if (!selectedTA || !selectedJenis) return;
-
-        const ta = tahunAjaranList.find(t => t.id === selectedTA);
-        if (!ta) return;
+        if (!selectedTA || !selectedJenis || !selectedSemester) return;
 
         setLoadingAction(true);
         try {
@@ -342,7 +441,7 @@ export default function ArsipRaporPage() {
                 },
                 body: JSON.stringify({
                     jenis: selectedJenis,
-                    semester: ta.semester === 'ganjil' ? 'Ganjil' : 'Genap',
+                    semester: selectedSemester,
                     tahun_ajaran_id: selectedTA
                 })
             });
@@ -355,7 +454,7 @@ export default function ArsipRaporPage() {
                     title: 'Berhasil Diarsipkan!',
                     message: result.message || `${selectedJenis} berhasil diarsipkan dan dikunci.`
                 });
-                await fetchTahunAjaran();
+                if (selectedTA) await fetchSemesterByTahunAjaran(selectedTA);
             } else {
                 showModal({
                     type: 'error',
@@ -371,22 +470,18 @@ export default function ArsipRaporPage() {
     };
 
     const handleDownloadRapor = async (siswaId: number, namaSiswa: string) => {
-        if (!selectedTA || !selectedJenis) {
+        if (!selectedTA || !selectedJenis || !selectedSemester) {
             showModal({ type: 'warning', title: 'Data Tidak Lengkap', message: 'Pastikan semua filter sudah dipilih.' });
             return;
         }
-
-        const ta = tahunAjaranList.find(t => t.id === selectedTA);
-        if (!ta) return;
 
         setDownloadingId(siswaId);
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const semester = ta.semester === 'ganjil' ? 'Ganjil' : 'Genap';
             const res = await fetch(
-                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${selectedJenis}/${semester}/${selectedTA}`,
+                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${selectedJenis}/${selectedSemester}/${selectedTA}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -399,7 +494,7 @@ export default function ArsipRaporPage() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Rapor_${selectedJenis}_${namaSiswa.replace(/\s+/g, '_')}.docx`;
+            a.download = `Rapor_${selectedJenis}_${selectedSemester}_${namaSiswa.replace(/\s+/g, '_')}.docx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -415,39 +510,14 @@ export default function ArsipRaporPage() {
         }
     };
 
-    // ── Derived Data ───────────────────────────────────────────────────────────
-
-    const ta = tahunAjaranList.find(t => t.id === selectedTA);
-    const statusSaatIni: StatusPenilaian = selectedJenis === 'PTS'
-        ? (ta?.status_pts || 'nonaktif')
-        : (ta?.status_pas || 'nonaktif');
-    const statusStyle = getStatusStyle(statusSaatIni);
-
-    const kelas = kelasList.find(k => k.id_kelas === selectedKelas);
-
-    const filteredSiswa = siswaList.filter(s => {
-        const q = searchQuery.toLowerCase().trim();
-        if (!q) return true;
-        return (
-            s.nama.toLowerCase().includes(q) ||
-            s.nis.toLowerCase().includes(q) ||
-            s.nisn.toLowerCase().includes(q)
-        );
-    });
-
     // ── RENDER ─────────────────────────────────────────────────────────────────
 
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {showSessionExpired && (
-                <SessionExpiredModal onConfirm={handleLogout} />
-            )}
-
-
-            {/* ── Page Header ──────────────────────────────────────────────────── */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Arsip Rapor</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
@@ -455,8 +525,7 @@ export default function ArsipRaporPage() {
                 </p>
             </div>
 
-            {/* ── CARD FILTER ──────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl overflow-hidden mb-6" style={CARD_STYLE}>
+            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
                 {/* Card Header */}
                 <div className="px-6 py-4" style={HEADER_GRAD}>
                     <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -465,52 +534,122 @@ export default function ArsipRaporPage() {
                     </h2>
                 </div>
 
-                {/* Filter Fields */}
-                <div className="p-6">
-                    {/* ═══ DROPDOWN TAHUN AJARAN (SAMA PERSIS MAPEL) ═══ */}
-                    <div className="flex flex-wrap items-center gap-3 mb-5">
-                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
+                {/* ═══ DROPDOWN TAHUN AJARAN ═══ */}
+                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                            Tahun Ajaran
+                        </label>
                         <select
                             value={selectedTA ?? ''}
                             onChange={(e) => {
                                 const value = e.target.value;
-                                if (value === '') {
+                                if (value === '' || value === 'no-data') {
                                     setSelectedTA(null);
-                                    setSelectedJenis(null);
-                                    setSelectedKelas(null);
-                                    setSiswaList([]);
+                                    setSelectedSemesterId(null);
+                                    setSelectedSemester(null);
+                                    localStorage.removeItem('arsip_selectedTA');
+                                    localStorage.removeItem('arsip_selectedSemester');
                                     return;
                                 }
                                 const id = Number(value);
                                 setSelectedTA(id);
+                                setSelectedSemesterId(null);
+                                setSelectedSemester(null);
                                 setSelectedJenis(null);
                                 setSelectedKelas(null);
                                 setSiswaList([]);
+                                localStorage.setItem('arsip_selectedTA', id.toString());
+                                localStorage.removeItem('arsip_selectedSemester');
                             }}
-                            className={selectCls + ' min-w-[220px]'}
+                            className={`${selectCls} min-w-[220px]`}
                             disabled={loadingTA}
                         >
                             <option value="">-- Pilih Tahun Ajaran --</option>
-                            {tahunAjaranList.map(taItem => (
-                                <option key={taItem.id} value={taItem.id}>
-                                    {taItem.tahun_ajaran} {taItem.is_aktif ? '(Aktif)' : ''}
+                            {tahunAjaranList.map(ta => (
+                                <option key={ta.id} value={ta.id}>
+                                    {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
                                 </option>
                             ))}
                         </select>
                     </div>
+                </div>
 
-                    {selectedTA === null ? (
-                        <div className="py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
-                            <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
+                {selectedTA === null ? (
+                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
+                    </div>
+                ) : (
+                    <>
+                        {/* ═══ DROPDOWN SEMESTER ═══ */}
+                        <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                    Semester
+                                </label>
+                                <select
+                                    value={selectedSemesterId ?? ''}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        if (value === '' || value === 'no-data') {
+                                            setSelectedSemesterId(null);
+                                            setSelectedSemester(null);
+                                            setSelectedJenis(null);
+                                            setSelectedKelas(null);
+                                            setSiswaList([]);
+                                            localStorage.removeItem('arsip_selectedSemester');
+                                            return;
+                                        }
+                                        const id = Number(value);
+                                        const sem = semesterOptions.find(s => s.id === id);
+                                        setSelectedSemesterId(id);
+                                        setSelectedSemester(sem?.semester || null);
+                                        setSelectedJenis(null);
+                                        setSelectedKelas(null);
+                                        setSiswaList([]);
+                                        localStorage.setItem('arsip_selectedSemester', id.toString());
+                                    }}
+                                    className={`${selectCls} min-w-[220px]`}
+                                >
+                                    <option value="">-- Pilih Semester --</option>
+                                    {semesterOptions.map(sem => (
+                                        <option key={sem.id} value={sem.id}>
+                                            {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                {/* Badge Status */}
+                                {selectedSemesterId && currentSemester && (
+                                    currentSemester.is_aktif ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                            style={{ background: '#d4f0dd', color: '#1a7a3a', border: '1px solid #86efac' }}>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                                            Aktif
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                            style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
+                                            <Lock size={12} />
+                                            Nonaktif
+                                        </span>
+                                    )
+                                )}
+                            </div>
                         </div>
-                    ) : (
-                        <>
-                            {/* ═══ TOOLBAR: Jenis Penilaian + Search ═══ */}
-                            <div className="px-0 py-4" style={{ borderTop: '1px solid #fde0c8', borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    {/* Dropdown Jenis Penilaian */}
+
+                        {selectedSemesterId === null ? (
+                            <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* ═══ DROPDOWN JENIS PENILAIAN ═══ */}
+                                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                                     <div className="flex flex-wrap items-center gap-3">
-                                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Jenis Penilaian</label>
+                                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                            Jenis Penilaian
+                                        </label>
                                         <select
                                             value={selectedJenis ?? ''}
                                             onChange={(e) => {
@@ -519,303 +658,294 @@ export default function ArsipRaporPage() {
                                                 setSelectedKelas(null);
                                                 setSiswaList([]);
                                             }}
-                                            className={selectCls + ' min-w-[220px]'}
+                                            className={`${selectCls} min-w-[220px]`}
                                         >
                                             <option value="">-- Pilih Jenis --</option>
                                             <option value="PTS">PTS (Penilaian Tengah Semester)</option>
                                             <option value="PAS">PAS (Penilaian Akhir Semester)</option>
                                         </select>
                                     </div>
-
-                                    {/* Search */}
-                                    {selectedJenis && (
-                                        <div className="relative min-w-[200px] sm:min-w-[220px]">
-                                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                                <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                                            </div>
-                                            <input
-                                                type="text"
-                                                placeholder="Cari siswa..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                                            />
-                                            {searchQuery && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSearchQuery('')}
-                                                    className="absolute inset-y-0 right-2 flex items-center"
-                                                    style={{ color: '#c95b08' }}
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
 
-                            {/* ═══ PANEL STATUS (muncul setelah pilih Jenis) ═══ */}
-                            {selectedJenis && ta && (
-                                <div className="pt-5 mt-5" style={{ borderTop: '1px solid #fde0c8' }}>
-                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                        {/* Status Badge */}
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                            <span className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-                                                Status {selectedJenis}:
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-                                                    style={{
-                                                        background: statusStyle.bg,
-                                                        color: statusStyle.color,
-                                                        border: `1px solid ${statusStyle.border}`
-                                                    }}
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: statusStyle.dot }} />
-                                                    {statusStyle.icon}
-                                                    {statusStyle.text}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Tombol Aksi */}
-                                        <div className="flex flex-wrap gap-2">
-                                            {statusSaatIni === 'nonaktif' && (
-                                                <button
-                                                    onClick={() => {
-                                                        showModal({
-                                                            type: 'confirm',
-                                                            title: `Aktifkan ${selectedJenis}?`,
-                                                            message: `Guru akan bisa mulai menginput nilai ${selectedJenis} untuk semua kelas.\n\nLanjutkan?`,
-                                                            onConfirm: () => handleUbahStatus('aktif')
-                                                        });
-                                                    }}
-                                                    disabled={loadingAction}
-                                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                                                    style={{
-                                                        background: 'linear-gradient(135deg,#16a34a,#22c55e)',
-                                                        boxShadow: '0 3px 10px rgba(22,163,74,0.25)'
-                                                    }}
-                                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#15803d,#16a34a)')}
-                                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#16a34a,#22c55e)')}
-                                                >
-                                                    <Play size={15} /> Aktifkan {selectedJenis}
-                                                </button>
-                                            )}
-
-                                            {statusSaatIni === 'aktif' && (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            showModal({
-                                                                type: 'confirm',
-                                                                title: `Nonaktifkan ${selectedJenis}?`,
-                                                                message: `Guru tidak akan bisa mengedit nilai ${selectedJenis} untuk sementara waktu.\n\nLanjutkan?`,
-                                                                onConfirm: () => handleUbahStatus('nonaktif')
-                                                            });
-                                                        }}
-                                                        disabled={loadingAction}
-                                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                                                        style={{
-                                                            background: 'linear-gradient(135deg,#d97706,#f59e0b)',
-                                                            boxShadow: '0 3px 10px rgba(217,119,6,0.25)'
-                                                        }}
-                                                        onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#b45309,#d97706)')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#d97706,#f59e0b)')}
-                                                    >
-                                                        <Pause size={15} /> Nonaktifkan
-                                                    </button>
-
-                                                    <button
-                                                        onClick={() => {
-                                                            showModal({
-                                                                type: 'confirm',
-                                                                title: `⚠️ Arsipkan & Kunci ${selectedJenis}?`,
-                                                                message: `PERHATIAN!\n\nSetelah diarsipkan:\n• Data nilai ${selectedJenis} akan terkunci PERMANEN\n• Guru TIDAK BISA mengedit nilai lagi\n• Rapor bisa diunduh\n\nTindakan ini tidak dapat dibatalkan!`,
-                                                                onConfirm: handleArsipkan
-                                                            });
-                                                        }}
-                                                        disabled={loadingAction}
-                                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                                                        style={{
-                                                            background: 'linear-gradient(135deg,#dc2626,#ef4444)',
-                                                            boxShadow: '0 3px 10px rgba(220,38,38,0.25)'
-                                                        }}
-                                                        onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#b91c1c,#dc2626)')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#dc2626,#ef4444)')}
-                                                    >
-                                                        <Lock size={15} /> Arsipkan & Kunci
-                                                    </button>
-                                                </>
-                                            )}
-
-                                            {statusSaatIni === 'selesai' && (
-                                                <div
-                                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
-                                                    style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}
-                                                >
-                                                    <Lock size={15} /> Data Terkunci Permanen
-                                                </div>
-                                            )}
-                                        </div>
+                                {selectedJenis === null ? (
+                                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Jenis Penilaian Terlebih Dahulu</p>
                                     </div>
-
-                                    {/* Info Box */}
-                                    <div className="mt-4 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                        <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                                            <span className="font-semibold">ℹ️ Info: </span>
-                                            {statusSaatIni === 'nonaktif' && `Penilaian ${selectedJenis} belum dibuka. Guru tidak bisa input nilai.`}
-                                            {statusSaatIni === 'aktif' && `Penilaian ${selectedJenis} sedang aktif. Guru bisa input/edit nilai.`}
-                                            {statusSaatIni === 'selesai' && `Penilaian ${selectedJenis} sudah ditutup dan dikunci. Data tidak bisa diubah.`}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ═══ DROPDOWN KELAS (muncul setelah pilih Jenis) ═══ */}
-                            {selectedJenis && (
-                                <div className="mt-5 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
-                                    <div className="flex flex-wrap items-center gap-3 mb-4">
-                                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Kelas</label>
-                                        {loadingKelas ? (
-                                            <div className="text-sm text-gray-400">Memuat kelas...</div>
-                                        ) : (
-                                            <select
-                                                value={selectedKelas ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setSelectedKelas(val ? Number(val) : null);
-                                                }}
-                                                className={selectCls + ' min-w-[220px]'}
-                                            >
-                                                <option value="">-- Pilih Kelas --</option>
-                                                {kelasList.map((k, index) => (
-                                                    <option key={`kelas-${k.id_kelas}-${index}`} value={k.id_kelas}>
-                                                        {k.nama_kelas}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </div>
-
-                                    {/* Info count */}
-                                    {selectedKelas && siswaList.length > 0 && (
-                                        <p className="text-xs" style={{ color: '#c95b08' }}>
-                                            Menampilkan {filteredSiswa.length === 0 ? 0 : 1}–{filteredSiswa.length} dari {filteredSiswa.length} data
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* ── AREA DAFTAR SISWA ────────────────────────────────────────────── */}
-            {!selectedKelas ? (
-                <div className="bg-white rounded-2xl py-12 text-center" style={{ ...CARD_STYLE, border: '2px dashed #fde0c8' }}>
-                    <FileText className="w-16 h-16 mx-auto mb-4" style={{ color: '#f5a623' }} />
-                    <h3 className="text-base font-semibold mb-1" style={{ color: '#c95b08' }}>
-                        {!selectedTA ? 'Pilih Tahun Ajaran Terlebih Dahulu' :
-                            !selectedJenis ? 'Pilih Jenis Penilaian' :
-                                'Pilih Kelas'}
-                    </h3>
-                </div>
-            ) : loadingSiswa ? (
-                <div className="bg-white rounded-2xl py-12 text-center" style={CARD_STYLE}>
-                    <div className="flex flex-col items-center gap-3">
-                        <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                        <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data siswa...</span>
-                    </div>
-                </div>
-            ) : (
-                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                    {/* Table Header */}
-                    <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                        <h2 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>
-                            Daftar Siswa — {selectedJenis} — {kelas?.nama_kelas}
-                        </h2>
-                        <p className="text-xs mt-0.5" style={{ color: '#c95b08' }}>
-                            {siswaList.length} siswa ditemukan
-                        </p>
-                    </div>
-
-                    {/* Table */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm border-collapse">
-                            <thead>
-                                <tr style={TH_GRAD}>
-                                    {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Aksi'].map(h => (
-                                        <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredSiswa.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                                            {searchQuery ? 'Tidak ada siswa yang cocok dengan pencarian' : 'Tidak ada data siswa'}
-                                        </td>
-                                    </tr>
                                 ) : (
-                                    filteredSiswa.map((siswa, index) => (
-                                        <tr
-                                            key={siswa.id_siswa}
-                                            className="transition-colors"
-                                            style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
-                                        >
-                                            <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
-                                            <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
-                                            <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nis}</td>
-                                            <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nisn || '—'}</td>
-                                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                                                <button
-                                                    onClick={() => handleDownloadRapor(siswa.id_siswa, siswa.nama)}
-                                                    disabled={downloadingId === siswa.id_siswa}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                                                    style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
-                                                    onMouseEnter={e => { if (downloadingId !== siswa.id_siswa) e.currentTarget.style.background = '#d4f0de'; }}
-                                                    onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}
-                                                >
-                                                    {downloadingId === siswa.id_siswa ? (
+                                    <>
+                                        {/* ═══ PANEL STATUS ═══ */}
+                                        <div className="px-5 py-5" style={{ borderBottom: '1px solid #fde0c8' }}>
+                                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                                    <span className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                                        Status {selectedJenis}:
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+                                                            style={{
+                                                                background: statusStyle.bg,
+                                                                color: statusStyle.color,
+                                                                border: `1px solid ${statusStyle.border}`
+                                                            }}
+                                                        >
+                                                            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: statusStyle.dot }} />
+                                                            {statusStyle.icon}
+                                                            {statusStyle.text}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2">
+                                                    {statusSaatIni === 'nonaktif' && (
+                                                        <button
+                                                            onClick={() => {
+                                                                showModal({
+                                                                    type: 'confirm',
+                                                                    title: `Aktifkan ${selectedJenis}?`,
+                                                                    message: `Guru akan bisa mulai menginput nilai ${selectedJenis} untuk semua kelas.\n\nLanjutkan?`,
+                                                                    onConfirm: () => handleUbahStatus('aktif')
+                                                                });
+                                                            }}
+                                                            disabled={loadingAction}
+                                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                                            style={{
+                                                                background: 'linear-gradient(135deg,#16a34a,#22c55e)',
+                                                                boxShadow: '0 3px 10px rgba(22,163,74,0.25)'
+                                                            }}
+                                                            onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#15803d,#16a34a)')}
+                                                            onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#16a34a,#22c55e)')}
+                                                        >
+                                                            <Play size={15} /> Aktifkan {selectedJenis}
+                                                        </button>
+                                                    )}
+
+                                                    {statusSaatIni === 'aktif' && (
                                                         <>
-                                                            <div className="w-3 h-3 rounded-full border-2 border-green-300 border-t-green-600 animate-spin" />
-                                                            Mengunduh...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Download size={13} /> Unduh Rapor
+                                                            <button
+                                                                onClick={() => {
+                                                                    showModal({
+                                                                        type: 'confirm',
+                                                                        title: `Nonaktifkan ${selectedJenis}?`,
+                                                                        message: `Guru tidak akan bisa mengedit nilai ${selectedJenis} untuk sementara waktu.\n\nLanjutkan?`,
+                                                                        onConfirm: () => handleUbahStatus('nonaktif')
+                                                                    });
+                                                                }}
+                                                                disabled={loadingAction}
+                                                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg,#d97706,#f59e0b)',
+                                                                    boxShadow: '0 3px 10px rgba(217,119,6,0.25)'
+                                                                }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#b45309,#d97706)')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#d97706,#f59e0b)')}
+                                                            >
+                                                                <Pause size={15} /> Nonaktifkan
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => {
+                                                                    showModal({
+                                                                        type: 'confirm',
+                                                                        title: `⚠️ Arsipkan & Kunci ${selectedJenis}?`,
+                                                                        message: `PERHATIAN!\n\nSetelah diarsipkan:\n• Data nilai ${selectedJenis} akan terkunci PERMANEN\n• Guru TIDAK BISA mengedit nilai lagi\n• Rapor bisa diunduh\n\nTindakan ini tidak dapat dibatalkan!`,
+                                                                        onConfirm: handleArsipkan
+                                                                    });
+                                                                }}
+                                                                disabled={loadingAction}
+                                                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg,#dc2626,#ef4444)',
+                                                                    boxShadow: '0 3px 10px rgba(220,38,38,0.25)'
+                                                                }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#b91c1c,#dc2626)')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#dc2626,#ef4444)')}
+                                                            >
+                                                                <Lock size={15} /> Arsipkan & Kunci
+                                                            </button>
                                                         </>
                                                     )}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
 
-                    {/* Info Box */}
-                    <div className="px-5 py-4" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
-                        <div className="flex items-start gap-2">
-                            <FileText size={15} className="mt-0.5 flex-shrink-0" style={{ color: '#c95b08' }} />
-                            <div>
-                                <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Informasi Unduhan</p>
-                                <ul className="text-xs space-y-0.5" style={{ color: '#c95b08' }}>
-                                    <li>• Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
-                                    <li>• Buka dengan Microsoft Word atau LibreOffice untuk tampilan terbaik</li>
-                                    <li>• PAS Semester Genap mencantumkan status kenaikan kelas</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                                                    {statusSaatIni === 'selesai' && (
+                                                        <div
+                                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                                                            style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}
+                                                        >
+                                                            <Lock size={15} /> Data Terkunci Permanen
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                                                    <span className="font-semibold">ℹ️ Info: </span>
+                                                    {statusSaatIni === 'nonaktif' && `Penilaian ${selectedJenis} belum dibuka. Guru tidak bisa input nilai.`}
+                                                    {statusSaatIni === 'aktif' && `Penilaian ${selectedJenis} sedang aktif. Guru bisa input/edit nilai.`}
+                                                    {statusSaatIni === 'selesai' && `Penilaian ${selectedJenis} sudah ditutup dan dikunci. Data tidak bisa diubah.`}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* ═══ DROPDOWN KELAS ═══ */}
+                                        <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                                    Kelas
+                                                </label>
+                                                {loadingKelas ? (
+                                                    <div className="text-sm text-gray-400">Memuat kelas...</div>
+                                                ) : (
+                                                    <select
+                                                        value={selectedKelas ?? ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setSelectedKelas(val ? Number(val) : null);
+                                                        }}
+                                                        className={`${selectCls} min-w-[220px]`}
+                                                    >
+                                                        <option value="">-- Pilih Kelas --</option>
+                                                        {kelasList.map((k, index) => (
+                                                            <option key={`kelas-${k.id_kelas}-${index}`} value={k.id_kelas}>
+                                                                {k.nama_kelas}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {selectedKelas === null ? (
+                                            <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                                                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Kelas Terlebih Dahulu</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {/* ═══ TOOLBAR - SEARCH ═══ */}
+                                                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                                        <div>
+                                                            <p className="text-xs" style={{ color: '#c95b08' }}>
+                                                                Menampilkan {filteredSiswa.length === 0 ? 0 : 1}–{filteredSiswa.length} dari {filteredSiswa.length} data
+                                                            </p>
+                                                        </div>
+                                                        <div className="relative min-w-[200px] sm:min-w-[220px]">
+                                                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                                                <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Cari siswa..."
+                                                                value={searchQuery}
+                                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                                className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                                                            />
+                                                            {searchQuery && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSearchQuery('')}
+                                                                    className="absolute inset-y-0 right-2 flex items-center"
+                                                                    style={{ color: '#c95b08' }}
+                                                                >
+                                                                    <X className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* ═══ TABLE SISWA ═══ */}
+                                                {loadingSiswa ? (
+                                                    <div className="py-12 text-center">
+                                                        <div className="flex flex-col items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                                                            <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data siswa...</span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full min-w-[640px] text-sm border-collapse">
+                                                                <thead>
+                                                                    <tr style={TH_GRAD}>
+                                                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Aksi'].map(h => (
+                                                                            <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
+                                                                        ))}
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {filteredSiswa.length === 0 ? (
+                                                                        <tr>
+                                                                            <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
+                                                                                {searchQuery ? 'Tidak ada siswa yang cocok dengan pencarian' : 'Tidak ada data siswa'}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ) : (
+                                                                        filteredSiswa.map((siswa, index) => (
+                                                                            <tr
+                                                                                key={siswa.id_siswa}
+                                                                                className="transition-colors"
+                                                                                style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                                                onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
+                                                                            >
+                                                                                <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                                                                                <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
+                                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nis}</td>
+                                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nisn || '—'}</td>
+                                                                                <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                                                    <button
+                                                                                        onClick={() => handleDownloadRapor(siswa.id_siswa, siswa.nama)}
+                                                                                        disabled={downloadingId === siswa.id_siswa}
+                                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                                                                                        style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
+                                                                                        onMouseEnter={e => { if (downloadingId !== siswa.id_siswa) e.currentTarget.style.background = '#d4f0de'; }}
+                                                                                        onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}
+                                                                                    >
+                                                                                        {downloadingId === siswa.id_siswa ? (
+                                                                                            <>
+                                                                                                <div className="w-3 h-3 rounded-full border-2 border-green-300 border-t-green-600 animate-spin" />
+                                                                                                Mengunduh...
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                <Download size={13} /> Unduh Rapor
+                                                                                            </>
+                                                                                        )}
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))
+                                                                    )}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+
+                                                        {/* Info Box */}
+                                                        <div className="px-5 py-4" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                                            <div className="flex items-start gap-2">
+                                                                <FileText size={15} className="mt-0.5 shrink-0" style={{ color: '#c95b08' }} />
+                                                                <div>
+                                                                    <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Informasi Unduhan</p>
+                                                                    <ul className="text-xs space-y-0.5" style={{ color: '#c95b08' }}>
+                                                                        <li>• Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
+                                                                        <li>• Buka dengan Microsoft Word atau LibreOffice untuk tampilan terbaik</li>
+                                                                        <li>• PAS Semester Genap mencantumkan status kenaikan kelas</li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

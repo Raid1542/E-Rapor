@@ -88,7 +88,6 @@ const tahunAjaranModel = {
       );
       const id_induk = indukResult.insertId;
 
-      // ✅ Gunakan NULL untuk tanggal kosong
       await conn.execute(
         `INSERT INTO tahun_ajaran (
             id_tahun_ajaran_induk, tahun_ajaran, semester, 
@@ -116,7 +115,7 @@ const tahunAjaranModel = {
     }
   },
 
-  // ✅ DIPERBAIKI: Update dengan IF untuk handle string kosong
+  // Update dengan IF untuk handle string kosong
   async updateTahunAjaran(id_induk, data, connection = db) {
     const { pts_ganjil, pas_ganjil, pts_genap, pas_genap } = data;
 

@@ -208,20 +208,29 @@ router.get('/siswa/:id/ekstrakurikuler', adminOnly, admin.getEkskulBySiswa);
 // Dashboard
 router.get('/dashboard/stats', adminOnlyWithTahunAjaran, admin.getDashboardStats);
 
-// Rapor
+// RAPOR 
 router.get('/arsip-rapor/tahun-ajaran', adminOnly, admin.getTahunAjaranAll);
 router.get('/arsip-rapor/kelas', adminOnly, (req, res, next) => {
-  const { tahun_ajaran_id } = req.query;
+  const { tahun_ajaran_id, semester } = req.query;
   if (!tahun_ajaran_id) {
     return res.status(400).json({ success: false, message: 'tahun_ajaran_id wajib diisi' });
+  }
+  if (!semester || !['Ganjil', 'Genap'].includes(semester)) {
+    return res.status(400).json({ success: false, message: 'semester wajib diisi (Ganjil/Genap)' });
   }
   next();
 }, admin.getKelasByTahunAjaran);
 router.get('/arsip-rapor/daftar-siswa/:tahunAjaranId/:kelasId', adminOnly, (req, res, next) => {
   const { tahunAjaranId, kelasId } = req.params;
+  const { semester } = req.query;
+  
   if (!tahunAjaranId || !kelasId) {
     return res.status(400).json({ success: false, message: 'tahun_ajaran_id dan kelas_id wajib diisi' });
   }
+  if (!semester || !['Ganjil', 'Genap'].includes(semester)) {
+    return res.status(400).json({ success: false, message: 'semester wajib diisi (Ganjil/Genap)' });
+  }
+  
   req.tahunAjaranId = parseInt(tahunAjaranId, 10);
   req.kelasId = parseInt(kelasId, 10);
   if (isNaN(req.tahunAjaranId) || isNaN(req.kelasId)) {

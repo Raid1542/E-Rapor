@@ -1,9 +1,18 @@
 const db = require('../../config/db');
 const tahunAjaranModel = require('../../models/admin/tahunAjaranModel');
 
-// ═══════════════════════════════════════════════════════════════
-// HELPER: Konversi id_induk → id_detail (semester aktif)
-// ═══════════════════════════════════════════════════════════════
+const getIdSemester = async (idInduk, semester) => {
+    const [rows] = await db.execute(
+        `SELECT id_tahun_ajaran, semester, status, status_pts, status_pas 
+            FROM tahun_ajaran 
+            WHERE id_tahun_ajaran_induk = ? AND semester = ?
+            LIMIT 1`,
+        [idInduk, semester]
+    );
+    return rows.length > 0 ? rows[0] : null;
+};
+
+// Helper lama (untuk backward compatibility)
 const getIdTahunAjaranAktif = async (idInduk) => {
     const [rows] = await db.execute(
         `SELECT id_tahun_ajaran, semester 
@@ -15,9 +24,6 @@ const getIdTahunAjaranAktif = async (idInduk) => {
     return rows.length > 0 ? rows[0] : null;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// GET: Semua Tahun Ajaran (untuk dropdown)
-// ═══════════════════════════════════════════════════════════════
 const getTahunAjaranAll = async (req, res) => {
     try {
         const rows = await tahunAjaranModel.getAllTahunAjaran();
@@ -28,12 +34,10 @@ const getTahunAjaranAll = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// GET: Kelas berdasarkan Tahun Ajaran (id_induk)
-// ═══════════════════════════════════════════════════════════════
 const getKelasByTahunAjaran = async (req, res) => {
     try {
-        const { tahun_ajaran_id } = req.query;
+        const { tahun_ajaran_id, semester } = req.query;
+
         if (!tahun_ajaran_id) {
             return res.status(400).json({
                 success: false,
@@ -41,64 +45,91 @@ const getKelasByTahunAjaran = async (req, res) => {
             });
         }
 
-        // Cari semester aktif dari id_induk
-        const semesterAktif = await getIdTahunAjaranAktif(tahun_ajaran_id);
-
-        if (!semesterAktif) {
-            return res.status(404).json({
+        if (!semester || !['Ganjil', 'Genap'].includes(semester)) {
+            return res.status(400).json({
                 success: false,
-                message: 'Tidak ada semester aktif untuk tahun ajaran ini'
+                message: 'semester wajib diisi (Ganjil atau Genap)'
             });
         }
 
-        //  Ambil kelas berdasarkan id_tahun_ajaran yang aktif
+        const semesterData = await getIdSemester(tahun_ajaran_id, semester);
+
+        if (!semesterData) {
+            return res.status(404).json({
+                success: false,
+                message: `Semester ${semester} tidak ditemukan untuk tahun ajaran ini`
+            });
+        }
+
+        // Ambil kelas berdasarkan id_tahun_ajaran spesifik
         const [rows] = await db.execute(
             `SELECT id_kelas, nama_kelas 
                 FROM kelas 
                 WHERE tahun_ajaran_id = ? 
                 ORDER BY nama_kelas`,
-            [semesterAktif.id_tahun_ajaran]
+            [semesterData.id_tahun_ajaran]
         );
 
-        res.json({ success: true, data: rows });
+        res.json({
+            success: true,
+            data: rows,
+            semester_info: {
+                id: semesterData.id_tahun_ajaran,
+                semester: semesterData.semester,
+                status: semesterData.status
+            }
+        });
     } catch (err) {
         console.error('Error get kelas by tahun ajaran:', err);
         res.status(500).json({ success: false, message: 'Gagal memuat daftar kelas' });
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// GET: Daftar Siswa untuk Rapor
-// ═══════════════════════════════════════════════════════════════
 const getDaftarSiswaUntukRapor = async (req, res) => {
     try {
         const tahunAjaranIdInduk = req.tahunAjaranId;
         const kelasId = req.kelasId;
+        const { semester } = req.query;
 
-        // FIX: Cari semester aktif dari id_induk
-        const semesterAktif = await getIdTahunAjaranAktif(tahunAjaranIdInduk);
+        if (!semester || !['Ganjil', 'Genap'].includes(semester)) {
+            return res.status(400).json({
+                success: false,
+                message: 'semester wajib diisi (Ganjil atau Genap)'
+            });
+        }
 
-        if (!semesterAktif) {
+        const semesterData = await getIdSemester(tahunAjaranIdInduk, semester);
+
+        if (!semesterData) {
             return res.status(404).json({
                 success: false,
-                message: 'Tidak ada semester aktif untuk tahun ajaran ini'
+                message: `Semester ${semester} tidak ditemukan`
             });
         }
 
         const [siswaRows] = await db.execute(
             `SELECT 
-                s.id_siswa,
-                s.nama_lengkap AS nama,
-                s.nis,
-                s.nisn
-            FROM siswa s
-            INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-            WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ?
-            ORDER BY s.nama_lengkap`,
-            [kelasId, semesterAktif.id_tahun_ajaran]
+            s.id_siswa,
+            s.nama_lengkap AS nama,
+            s.nis,
+            s.nisn
+        FROM siswa s
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
+        ORDER BY s.nama_lengkap`,
+            [kelasId, tahunAjaranIdInduk]  
         );
 
-        res.json({ success: true, data: siswaRows });
+        res.json({
+            success: true,
+            data: siswaRows,
+            semester_info: {
+                id: semesterData.id_tahun_ajaran,
+                semester: semesterData.semester,
+                status_pts: semesterData.status_pts,
+                status_pas: semesterData.status_pas
+            }
+        });
     } catch (err) {
         console.error('Error getDaftarSiswaUntukRapor:', err);
         res.status(500).json({
@@ -108,14 +139,10 @@ const getDaftarSiswaUntukRapor = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// POST: Atur Status Penilaian (PTS/PAS)
-// ═══════════════════════════════════════════════════════════════
 const aturStatusPenilaian = async (req, res) => {
     try {
-        const { jenis, status, tahun_ajaran_id } = req.body;
+        const { jenis, status, tahun_ajaran_id, semester } = req.body;
 
-        // Validasi input dasar
         if (!['PTS', 'PAS'].includes(jenis)) {
             return res.status(400).json({
                 success: false,
@@ -134,35 +161,24 @@ const aturStatusPenilaian = async (req, res) => {
                 message: 'Tahun ajaran ID wajib diisi'
             });
         }
-
-        // Cari semester aktif dari id_induk
-        const semesterAktif = await getIdTahunAjaranAktif(tahun_ajaran_id);
-
-        if (!semesterAktif) {
-            return res.status(404).json({
+        if (!semester || !['Ganjil', 'Genap'].includes(semester)) {
+            return res.status(400).json({
                 success: false,
-                message: 'Tidak ada semester aktif untuk tahun ajaran ini'
+                message: 'Semester wajib diisi (Ganjil atau Genap)'
             });
         }
 
-        const idTahunAjaranAktif = semesterAktif.id_tahun_ajaran;
+        const semesterData = await getIdSemester(tahun_ajaran_id, semester);
 
-        // Ambil status PTS dan PAS saat ini
-        const [statusRows] = await db.execute(
-            `SELECT status_pts, status_pas FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-            [idTahunAjaranAktif]
-        );
-
-        if (statusRows.length === 0) {
+        if (!semesterData) {
             return res.status(404).json({
                 success: false,
-                message: 'Tahun ajaran tidak ditemukan'
+                message: `Semester ${semester} tidak ditemukan`
             });
         }
 
-        const { status_pts, status_pas } = statusRows[0];
-
-        // === VALIDASI BISNIS: PTS & PAS TIDAK BOLEH AKTIF BERSAMAAN ===
+        const idTahunAjaran = semesterData.id_tahun_ajaran;
+        const { status_pts, status_pas } = semesterData;
 
         if (jenis === 'PAS' && status === 'aktif') {
             if (status_pts === 'aktif') {
@@ -202,21 +218,20 @@ const aturStatusPenilaian = async (req, res) => {
             });
         }
 
-        // === UPDATE STATUS ===
         const statusField = jenis === 'PTS' ? 'status_pts' : 'status_pas';
         const query = `UPDATE tahun_ajaran SET ${statusField} = ? WHERE id_tahun_ajaran = ?`;
 
-        await db.execute(query, [status, idTahunAjaranAktif]);
+        await db.execute(query, [status, idTahunAjaran]);
 
-        console.log(`Status ${jenis} diubah menjadi "${status}" untuk TA ID: ${tahun_ajaran_id} (semester ${semesterAktif.semester})`);
+        console.log(`Status ${jenis} diubah menjadi "${status}" untuk TA ID: ${tahun_ajaran_id}, Semester: ${semester}`);
 
         res.json({
             success: true,
-            message: `Status ${jenis} berhasil diubah menjadi "${status}"`,
+            message: `Status ${jenis} semester ${semester} berhasil diubah menjadi "${status}"`,
             data: {
                 jenis,
                 status,
-                semester_aktif: semesterAktif.semester,
+                semester,
                 status_pts: jenis === 'PTS' ? status : status_pts,
                 status_pas: jenis === 'PAS' ? status : status_pas
             }
@@ -230,9 +245,6 @@ const aturStatusPenilaian = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// HELPER: Ambil data rapor lengkap untuk arsip
-// ═══════════════════════════════════════════════════════════════
 const ambilDataRaporLengkap = async (siswaId, taId, semester) => {
     const data = {};
 
@@ -310,9 +322,6 @@ const ambilDataRaporLengkap = async (siswaId, taId, semester) => {
     return data;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// POST: Arsipkan Rapor
-// ═══════════════════════════════════════════════════════════════
 const arsipkanRapor = async (req, res) => {
     try {
         const { jenis, semester, tahun_ajaran_id } = req.body;
@@ -329,20 +338,35 @@ const arsipkanRapor = async (req, res) => {
                 message: 'Semester harus Ganjil atau Genap'
             });
         }
-
-        // Cari semester aktif dari id_induk
-        const semesterAktif = await getIdTahunAjaranAktif(tahun_ajaran_id);
-
-        if (!semesterAktif) {
-            return res.status(404).json({
+        if (!tahun_ajaran_id) {
+            return res.status(400).json({
                 success: false,
-                message: 'Tidak ada semester aktif untuk tahun ajaran ini'
+                message: 'Tahun ajaran ID wajib diisi'
             });
         }
 
-        const taId = semesterAktif.id_tahun_ajaran;
+        // Cari semester spesifik (bukan semester aktif)
+        const semesterData = await getIdSemester(tahun_ajaran_id, semester);
 
-        // 1. Ambil semua siswa di semua kelas untuk tahun ajaran ini
+        if (!semesterData) {
+            return res.status(404).json({
+                success: false,
+                message: `Semester ${semester} tidak ditemukan`
+            });
+        }
+
+        const taId = semesterData.id_tahun_ajaran;
+
+        // Validasi: status harus 'aktif' dulu baru bisa diarsipkan
+        const statusField = jenis === 'PTS' ? 'status_pts' : 'status_pas';
+        if (semesterData[statusField] !== 'aktif') {
+            return res.status(400).json({
+                success: false,
+                message: `${jenis} harus dalam status aktif terlebih dahulu sebelum bisa diarsipkan`
+            });
+        }
+
+        // 1. Ambil semua siswa di semua kelas untuk semester ini
         const [siswaList] = await db.execute(
             `SELECT sk.siswa_id, sk.kelas_id FROM siswa_kelas sk
                 WHERE sk.tahun_ajaran_id = ?`,
@@ -352,11 +376,11 @@ const arsipkanRapor = async (req, res) => {
         if (siswaList.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Tidak ada siswa di tahun ajaran ini'
+                message: 'Tidak ada siswa di semester ini'
             });
         }
 
-        // 2. Ambil semua data rapor lengkap dan simpan ke arsip
+        // Ambil semua data rapor lengkap dan simpan ke arsip
         for (const siswa of siswaList) {
             const dataRapor = await ambilDataRaporLengkap(
                 siswa.siswa_id,
@@ -375,10 +399,8 @@ const arsipkanRapor = async (req, res) => {
             );
         }
 
-        // 3. Update status menjadi 'selesai'
-        const field = jenis === 'PTS' ? 'status_pts' : 'status_pas';
-        const query = `UPDATE tahun_ajaran SET ${field} = 'selesai' WHERE id_tahun_ajaran = ?`;
-
+        // Update status menjadi 'selesai'
+        const query = `UPDATE tahun_ajaran SET ${statusField} = 'selesai' WHERE id_tahun_ajaran = ?`;
         await db.execute(query, [taId]);
 
         res.json({

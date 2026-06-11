@@ -1,10 +1,11 @@
 /**
  * Nama File: profil_client.tsx
  * Fungsi: Komponen client-side untuk manajemen profil guru bidang studi.
- *         Memungkinkan pengeditan data pribadi (nama, NUPTK, alamat, dsb.)
+ *         Memungkinkan pengeditan data pribadi (nama, NUPTK, alamat, tempat/tanggal lahir, dsb.)
  *         dan pengunggahan foto profil.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Syahrul Ramadhan - NIM: 3312301093
  * Tanggal: 15 September 2025
+ * Update: Template disesuaikan dengan profil Admin (tambah tempat/tanggal lahir, validasi usia)
  * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage & Profil Admin
  */
 
@@ -94,6 +95,7 @@ const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(20
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 const readonlyCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 outline-none bg-gray-50 border-gray-200 cursor-not-allowed";
 
 const labelCls = "block text-sm font-semibold mb-1.5";
@@ -108,7 +110,7 @@ const ProfilePage = () => {
 
     const [formData, setFormData] = useState({
         nama: '', nuptk: '', niy: '', jenisKelamin: 'Laki-laki',
-        telepon: '', email: '', alamat: ''
+        telepon: '', email: '', alamat: '', tempatLahir: '', tanggalLahir: ''
     });
 
     const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -118,8 +120,8 @@ const ProfilePage = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [isConfirmed, setIsConfirmed] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Simpan data awal untuk mendeteksi perubahan
     const initialFormDataRef = useRef<typeof formData | null>(null);
 
     const [modal, setModal] = useState<ModalConfig | null>(null);
@@ -141,73 +143,56 @@ const ProfilePage = () => {
             try {
                 const userData: UserProfile = JSON.parse(storedUser);
 
-                // ✅ PERUBAHAN: Endpoint untuk guru bidang studi
                 const res = await fetch(`${API_URL}/api/guru-bidang-studi/profil`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
+                let freshData: any = userData;
+
                 if (res.ok) {
                     const apiResponse = await res.json();
-                    const freshData = apiResponse.user;
+                    freshData = apiResponse.user || apiResponse.data || apiResponse;
 
                     const updatedUser = {
                         ...userData,
                         nama_lengkap: freshData.nama_lengkap || userData.nama_lengkap,
                         email_sekolah: freshData.email_sekolah || userData.email_sekolah,
-                        niy: freshData.niy || userData.niy,
-                        nuptk: freshData.nuptk || userData.nuptk,
-                        jenis_kelamin: freshData.jenis_kelamin || userData.jenis_kelamin,
-                        no_telepon: freshData.no_telepon || userData.no_telepon,
-                        alamat: freshData.alamat || userData.alamat,
-                        profileImage: freshData.profileImage || null
+                        niy: freshData.niy || userData.niy || '',
+                        nuptk: freshData.nuptk || userData.nuptk || '',
+                        jenis_kelamin: freshData.jenis_kelamin || userData.jenis_kelamin || 'Laki-laki',
+                        no_telepon: freshData.no_telepon || userData.no_telepon || '',
+                        alamat: freshData.alamat || userData.alamat || '',
+                        tempat_lahir: freshData.tempat_lahir || '',
+                        tanggal_lahir: freshData.tanggal_lahir || null,
+                        profileImage: freshData.profileImage || freshData.foto_path || null
                     };
                     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
-                    if (freshData.profileImage && freshData.profileImage.trim()) {
-                        const imgUrl = freshData.profileImage.startsWith('http')
-                            ? freshData.profileImage
-                            : freshData.profileImage.startsWith('/')
-                                ? `${API_URL}${freshData.profileImage}`
-                                : `${API_URL}/${freshData.profileImage}`;
-                        setProfileImage(imgUrl);
-                    } else {
-                        setProfileImage(null);
-                    }
-
-                    const loadedData = {
-                        nama: freshData.nama_lengkap || '',
-                        nuptk: freshData.nuptk || '',
-                        niy: freshData.niy || '',
-                        jenisKelamin: freshData.jenis_kelamin || 'Laki-laki',
-                        telepon: freshData.no_telepon || '',
-                        email: freshData.email_sekolah || '',
-                        alamat: freshData.alamat || ''
-                    };
-                    setFormData(loadedData);
-                    initialFormDataRef.current = { ...loadedData };
-                } else {
-                    // Fallback ke localStorage jika API gagal
-                    const loadedData = {
-                        nama: userData.nama_lengkap || '',
-                        nuptk: userData.nuptk || '',
-                        niy: userData.niy || '',
-                        jenisKelamin: userData.jenis_kelamin || 'Laki-laki',
-                        telepon: userData.no_telepon || '',
-                        email: userData.email_sekolah || '',
-                        alamat: userData.alamat || ''
-                    };
-                    setFormData(loadedData);
-                    initialFormDataRef.current = { ...loadedData };
-
-                    if (userData.profileImage) {
-                        const imgUrl = userData.profileImage.startsWith('http')
-                            ? userData.profileImage
-                            : userData.profileImage.startsWith('/')
-                                ? `${API_URL}${userData.profileImage}`
-                                : `${API_URL}/${userData.profileImage}`;
-                        setProfileImage(imgUrl);
-                    }
                 }
+
+                if (freshData.profileImage && freshData.profileImage.trim()) {
+                    const imgUrl = freshData.profileImage.startsWith('http')
+                        ? freshData.profileImage
+                        : freshData.profileImage.startsWith('/')
+                            ? `${API_URL}${freshData.profileImage}`
+                            : `${API_URL}/${freshData.profileImage}`;
+                    setProfileImage(imgUrl);
+                } else {
+                    setProfileImage(null);
+                }
+
+                const loadedData = {
+                    nama: freshData.nama_lengkap || '',
+                    nuptk: freshData.nuptk || '',
+                    niy: freshData.niy || '',
+                    jenisKelamin: freshData.jenis_kelamin || 'Laki-laki',
+                    telepon: freshData.no_telepon || '',
+                    email: freshData.email_sekolah || '',
+                    alamat: freshData.alamat || '',
+                    tempatLahir: freshData.tempat_lahir || '',
+                    tanggalLahir: freshData.tanggal_lahir || ''
+                };
+                setFormData(loadedData);
+                initialFormDataRef.current = { ...loadedData };
             } catch (e) {
                 console.error('Gagal memuat data profil:', e);
                 showModal({ type: 'network', title: 'Gagal Memuat Profil', message: 'Tidak dapat memuat data profil. Periksa koneksi internet Anda.' });
@@ -222,12 +207,51 @@ const ProfilePage = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // ── Validasi Tanggal Lahir (usia minimal 18 tahun) ────────────────────────
+
+    const validateTanggalLahir = (tanggal: string): string | null => {
+        if (!tanggal) return 'Tanggal lahir wajib diisi';
+
+        const dob = new Date(tanggal);
+        if (isNaN(dob.getTime())) return 'Tanggal lahir tidak valid';
+
+        const today = new Date();
+        const dobMid = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
+        const todMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+        if (dobMid > todMid) {
+            return 'Tanggal lahir tidak boleh di masa depan';
+        }
+
+        let age = today.getFullYear() - dob.getFullYear();
+        const m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+
+        if (age < 18) {
+            return `Usia minimal 18 tahun`;
+        }
+
+        return null;
+    };
+
     // ── Submit profil ──────────────────────────────────────────────────────────
 
     const handleSubmitProfile = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Cek apakah ada perubahan dibanding data awal
+        const tanggalError = validateTanggalLahir(formData.tanggalLahir);
+        if (tanggalError) {
+            setErrors({ tanggalLahir: tanggalError });
+            showModal({
+                type: 'warning',
+                title: 'Tanggal Lahir Tidak Valid',
+                message: tanggalError
+            });
+            return;
+        }
+
+        setErrors({});
+
         const initial = initialFormDataRef.current;
         const hasChanges = !initial ||
             formData.nama !== initial.nama ||
@@ -235,7 +259,9 @@ const ProfilePage = () => {
             formData.niy !== initial.niy ||
             formData.jenisKelamin !== initial.jenisKelamin ||
             formData.telepon !== initial.telepon ||
-            formData.alamat !== initial.alamat;
+            formData.alamat !== initial.alamat ||
+            formData.tempatLahir !== initial.tempatLahir ||
+            formData.tanggalLahir !== initial.tanggalLahir;
 
         if (!hasChanges) {
             showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah. Silakan ubah data terlebih dahulu sebelum menyimpan.' });
@@ -256,7 +282,6 @@ const ProfilePage = () => {
 
         setIsSaving(true);
         try {
-            // ✅ PERUBAHAN: Endpoint untuk guru bidang studi
             const response = await fetch(`${API_URL}/api/guru-bidang-studi/profil`, {
                 method: 'PUT',
                 headers: {
@@ -271,6 +296,8 @@ const ProfilePage = () => {
                     jenis_kelamin: formData.jenisKelamin,
                     no_telepon: formData.telepon,
                     alamat: formData.alamat,
+                    tempat_lahir: formData.tempatLahir,
+                    tanggal_lahir: formData.tanggalLahir,
                 })
             });
 
@@ -281,8 +308,16 @@ const ProfilePage = () => {
                 const updatedUser: UserProfile = {
                     ...userData,
                     ...result.user,
-                    profileImage: result.user.profileImage || result.user.foto_path || userData.profileImage,
-                    role: result.user.role || 'guru bidang studi',
+                    nama_lengkap: formData.nama,
+                    email_sekolah: formData.email,
+                    niy: formData.niy,
+                    nuptk: formData.nuptk,
+                    jenis_kelamin: formData.jenisKelamin,
+                    no_telepon: formData.telepon,
+                    alamat: formData.alamat,
+                    tempat_lahir: formData.tempatLahir,
+                    tanggal_lahir: formData.tanggalLahir,
+                    profileImage: result.user?.profileImage || result.user?.foto_path || userData.profileImage,
                 };
 
                 localStorage.setItem('currentUser', JSON.stringify(updatedUser));
@@ -334,7 +369,6 @@ const ProfilePage = () => {
         formDataUpload.append('foto', file);
 
         try {
-            // ✅ PERUBAHAN: Endpoint untuk guru bidang studi
             const response = await fetch(`${API_URL}/api/guru-bidang-studi/upload_foto`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}` },
@@ -401,7 +435,6 @@ const ProfilePage = () => {
                 <div className="lg:w-72 flex-shrink-0 w-full">
                     <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-                        {/* Card header */}
                         <div className="px-5 py-4" style={HEADER_GRAD}>
                             <p className="text-sm font-bold text-white">Foto Profil</p>
                         </div>
@@ -423,7 +456,6 @@ const ProfilePage = () => {
                                         <span className="text-3xl font-bold" style={{ color: '#c95b08' }}>{initials}</span>
                                     )}
                                 </div>
-                                {/* Camera badge */}
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
@@ -448,7 +480,6 @@ const ProfilePage = () => {
 
                             <div className="w-full" style={{ borderTop: '1px solid #fde0c8' }} />
 
-                            {/* ✅ PERUBAHAN: Ubah Password - Redirect ke halaman guru bidang studi */}
                             <button
                                 type="button"
                                 onClick={() => router.push('/guru_bidang_studi/ubah_password')}
@@ -467,7 +498,6 @@ const ProfilePage = () => {
                             <div className="w-full">
                                 <p className="text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>Ganti Foto Profil</p>
 
-                                {/* Drop zone / file chooser */}
                                 <div
                                     className="w-full flex items-center rounded-xl overflow-hidden cursor-pointer transition-all"
                                     style={{ border: '1px solid #fde0c8', background: '#fffaf6' }}
@@ -495,7 +525,6 @@ const ProfilePage = () => {
                                     disabled={isUploading}
                                 />
 
-                                {/* Upload button */}
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
@@ -526,7 +555,6 @@ const ProfilePage = () => {
                 <div className="flex-1 w-full">
                     <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-                        {/* Card header */}
                         <div className="px-6 py-4" style={HEADER_GRAD}>
                             <p className="text-base font-bold text-white">Edit Profil</p>
                         </div>
@@ -534,14 +562,12 @@ const ProfilePage = () => {
                         <form onSubmit={handleSubmitProfile}>
                             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                                {/* Nama */}
                                 <div className="flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>Nama <span className="text-red-500">*</span></label>
                                     <input type="text" name="nama" value={formData.nama} onChange={handleChange}
                                         placeholder="Masukkan nama lengkap" className={inputCls} required />
                                 </div>
 
-                                {/* Email (readonly) */}
                                 <div className="flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>Email Akun</label>
                                     <input type="email" name="email" value={formData.email}
@@ -549,21 +575,18 @@ const ProfilePage = () => {
                                     <p className="text-xs text-gray-400">Email tidak dapat diubah</p>
                                 </div>
 
-                                {/* NUPTK */}
                                 <div className="flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>NUPTK</label>
                                     <input type="text" name="nuptk" value={formData.nuptk} onChange={handleChange}
                                         placeholder="Nomor Unik Pendidik" className={inputCls} />
                                 </div>
 
-                                {/* NIY */}
                                 <div className="flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>NIY</label>
                                     <input type="text" name="niy" value={formData.niy} onChange={handleChange}
                                         placeholder="Nomor Induk Yayasan" className={inputCls} />
                                 </div>
 
-                                {/* Jenis Kelamin */}
                                 <div className="flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>Jenis Kelamin <span className="text-red-500">*</span></label>
                                     <select name="jenisKelamin" value={formData.jenisKelamin} onChange={handleChange}
@@ -573,14 +596,55 @@ const ProfilePage = () => {
                                     </select>
                                 </div>
 
-                                {/* Telepon */}
                                 <div className="flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>Telepon</label>
                                     <input type="tel" name="telepon" value={formData.telepon} onChange={handleChange}
                                         placeholder="Misal: 081234567890" className={inputCls} />
                                 </div>
 
-                                {/* Alamat */}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className={labelCls} style={labelColor}>
+                                        Tempat Lahir <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="tempatLahir"
+                                        value={formData.tempatLahir}
+                                        onChange={handleChange}
+                                        placeholder="Masukkan tempat lahir"
+                                        className={inputCls}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label className={labelCls} style={labelColor}>
+                                        Tanggal Lahir <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        name="tanggalLahir"
+                                        value={formData.tanggalLahir}
+                                        onChange={(e) => {
+                                            handleChange(e);
+                                            if (errors.tanggalLahir) {
+                                                setErrors(prev => {
+                                                    const newErrors = { ...prev };
+                                                    delete newErrors.tanggalLahir;
+                                                    return newErrors;
+                                                });
+                                            }
+                                        }}
+                                        className={errors.tanggalLahir ? inputErrCls : inputCls}
+                                        required
+                                    />
+                                    {errors.tanggalLahir && (
+                                        <p className="text-red-500 text-xs flex items-center gap-1">
+                                            {errors.tanggalLahir}
+                                        </p>
+                                    )}
+                                </div>
+
                                 <div className="md:col-span-2 flex flex-col gap-1.5">
                                     <label className={labelCls} style={labelColor}>Alamat</label>
                                     <textarea name="alamat" value={formData.alamat} onChange={handleChange}
@@ -588,7 +652,6 @@ const ProfilePage = () => {
                                 </div>
                             </div>
 
-                            {/* Konfirmasi + Simpan */}
                             <div className="px-6 pb-6">
                                 <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                                     <label className="flex items-start gap-2 cursor-pointer mb-5">
