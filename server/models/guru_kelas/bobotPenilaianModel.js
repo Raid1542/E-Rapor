@@ -6,7 +6,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const BobotPenilaianModel = {
   // Mengambil semua bobot komponen untuk satu mata pelajaran

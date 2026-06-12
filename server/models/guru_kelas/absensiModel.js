@@ -6,7 +6,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 // Model absensi untuk operasi terkait data kehadiran siswa
 const absensiModel = {

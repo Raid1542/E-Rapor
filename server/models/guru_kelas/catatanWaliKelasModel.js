@@ -7,7 +7,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const catatanWaliKelasModel = {
   // Mengambil daftar siswa beserta catatan wali kelas berdasarkan kelas, tahun ajaran, dan semester
