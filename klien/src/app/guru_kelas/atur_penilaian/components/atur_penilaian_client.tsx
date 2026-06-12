@@ -1,107 +1,29 @@
+/**
+ * Nama File: atur_penilaian_client.tsx
+ * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian
+ *         oleh guru kelas, mencakup kategori kokurikuler, akademik, dan bobot.
+ * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage
+ * 
+ */
+
 'use client';
-
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
-
-type ModalType = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
-
-interface AspekKokurikuler   { id_aspek_kokurikuler: number; nama: string; }
-interface KategoriAkademik   { id: number; min_nilai: number; max_nilai: number; deskripsi: string; urutan: number; }
-interface KategoriKokurikuler{ id: number; min_nilai: number; max_nilai: number; grade: string; deskripsi: string; urutan: number; id_aspek_kokurikuler: number; }
-interface KomponenPenilaian  { id_komponen: number; nama_komponen: string; urutan: number; }
-interface BobotItem          { komponen_id: number; bobot: number; is_active: boolean; }
-interface MapelItem          { mata_pelajaran_id: number; nama_mapel: string; jenis: 'wajib' | 'pilihan'; bisa_input: boolean; }
-
+// ====== KONSTANTA API ======
 const API = 'http://localhost:5000/api/guru-kelas';
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
-const GlobalStyles = () => (
-  <style jsx global>{`
-    @keyframes ds-fadeIn  { from { opacity:0 } to { opacity:1 } }
-    @keyframes ds-scaleIn { from { opacity:0; transform:scale(0.93) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
-    @keyframes ds-pulse   { 0%,100% { transform:scale(1) } 50% { transform:scale(1.1) } }
-    .ds-fadeIn  { animation: ds-fadeIn  0.2s ease }
-    .ds-scaleIn { animation: ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1) }
-    .ds-pulse   { animation: ds-pulse   0.6s ease 0.15s }
-  `}</style>
-);
-
-// ─── MODAL STYLES ─────────────────────────────────────────────────────────────
-const MODAL_STYLES: Record<ModalType, { iconBg:string; ring:string; icon:React.ReactNode; btn:string }> = {
-  success: { iconBg:'bg-green-50',  ring:'ring-green-100',  icon:<CheckCircle2 size={40} className="text-green-500"/>,  btn:'bg-green-500 hover:bg-green-600' },
-  error:   { iconBg:'bg-red-50',    ring:'ring-red-100',    icon:<AlertCircle  size={40} className="text-red-500"/>,    btn:'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg:'bg-orange-50', ring:'ring-orange-100', icon:<ShieldAlert  size={40} className="text-orange-500"/>, btn:'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg:'bg-slate-100', ring:'ring-slate-200',  icon:<WifiOff      size={40} className="text-slate-500"/>,  btn:'bg-slate-600 hover:bg-slate-700' },
-};
-
-const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-  const s = MODAL_STYLES[modal.type];
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ds-fadeIn">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose}/>
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ds-scaleIn">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18}/></button>
-        <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ds-pulse`}>{s.icon}</div>
-        <div className="text-center">
-          <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-          <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-        </div>
-        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
-      </div>
-    </div>
-  );
-};
-
-const ConfirmModal = ({ message, onConfirm, onCancel }: { message:string; onConfirm:()=>void; onCancel:()=>void }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ds-fadeIn">
-    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel}/>
-    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ds-scaleIn">
-      <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 ds-pulse">
-        <ShieldAlert size={40} className="text-orange-500"/>
-      </div>
-      <div className="text-center">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi</h3>
-        <p className="text-sm text-gray-500 leading-relaxed mt-2">{message}</p>
-      </div>
-      <div className="flex gap-3 w-full">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-xl border font-semibold text-sm" style={{ borderColor:'#fde0c8', color:'#7a3a0a' }}>Batal</button>
-        <button onClick={onConfirm} className="flex-1 py-3 rounded-xl text-white font-semibold text-sm" style={{ background:'linear-gradient(135deg,#e8690a,#f5a623)' }}>Ya, Lanjutkan</button>
-      </div>
-    </div>
-  </div>
-);
-
-// ─── SHARED STYLES ────────────────────────────────────────────────────────────
-const CARD_STYLE  = { border:'1px solid #f97316', boxShadow:'0 2px 16px rgba(200,80,10,0.15)' };
-const HEADER_GRAD = { background:'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background:'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const labelCls    = "block text-sm font-semibold mb-1.5";
-const labelColor  = { color:'#7a3a0a' };
-
-const BtnSecondary = ({ onClick, children }: { onClick:()=>void; children:React.ReactNode }) => (
-  <button onClick={onClick} className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-    style={{ borderColor:'#fde0c8', color:'#7a3a0a', background:'#fff' }}
-    onMouseEnter={e=>(e.currentTarget.style.background='#fff0e5')}
-    onMouseLeave={e=>(e.currentTarget.style.background='#fff')}>{children}</button>
-);
-const BtnPrimary = ({ onClick, children, disabled }: { onClick:()=>void; children:React.ReactNode; disabled?:boolean }) => (
-  <button onClick={onClick} disabled={disabled}
-    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${disabled?'opacity-40 cursor-not-allowed':''}`}
-    style={{ background:'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow:disabled?'none':'0 3px 12px rgba(232,105,10,0.3)' }}
-    onMouseEnter={e=>{ if(!disabled) e.currentTarget.style.background='linear-gradient(135deg,#c95b08,#e8690a)' }}
-    onMouseLeave={e=>{ if(!disabled) e.currentTarget.style.background='linear-gradient(135deg,#e8690a,#f5a623)' }}>{children}</button>
-);
-
-// ─── HELPER: authenticated fetch dengan error handling token ─────────────────
+// ====== HELPER: Authenticated Fetch ======
 const authFetch = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('token');
-  if (!token) throw Object.assign(new Error('Sesi Anda telah berakhir. Silakan login kembali.'), { code: 'NO_TOKEN' });
-
-  const res = await fetch(url, {
+  if (!token) {
+    const err: any = new Error('Token tidak ditemukan');
+    err.code = 'NO_TOKEN';
+    throw err;
+  }
+  return fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -109,258 +31,438 @@ const authFetch = async (url: string, options: RequestInit = {}) => {
       ...(options.headers || {}),
     },
   });
-
-  // Token expired / invalid
-  if (res.status === 401 || res.status === 403) {
-    const data = await res.json().catch(() => ({}));
-    if (data.code === 'TOKEN_EXPIRED') {
-      localStorage.removeItem('token');
-      throw Object.assign(new Error('Sesi Anda telah berakhir. Silakan login kembali.'), { code: 'TOKEN_EXPIRED' });
-    }
-    throw Object.assign(new Error(data.message || 'Akses ditolak'), { code: 'FORBIDDEN' });
-  }
-
-  return res;
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-export default function AturPenilaianPage() {
+// ====== HELPER: Parse Error dari Backend ======
+const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
+  try {
+    const data = await res.json();
+    return {
+      message: data.message || 'Terjadi kesalahan',
+      code: data.code
+    };
+  } catch {
+    return { message: 'Terjadi kesalahan' };
+  }
+};
+
+// ====== TYPES ======
+type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
+
+interface ModalConfig {
+  type: ModalType;
+  title: string;
+  message: string;
+  onConfirm?: () => void;
+}
+
+interface AspekKokurikuler {
+  id_aspek_kokurikuler: number;
+  nama: string;
+}
+
+interface MapelItem {
+  mata_pelajaran_id: number;
+  nama_mapel: string;
+  jenis: 'wajib' | 'pilihan';
+}
+
+interface KategoriAkademik {
+  id: number;
+  min_nilai: number;
+  max_nilai: number;
+  deskripsi: string;
+  urutan: number;
+}
+
+interface KategoriKokurikuler {
+  id: number;
+  min_nilai: number;
+  max_nilai: number;
+  grade: string;
+  deskripsi: string;
+  urutan: number;
+  id_aspek_kokurikuler: number;
+}
+
+interface KomponenPenilaian {
+  id_komponen: number;
+  nama_komponen: string;
+  urutan: number;
+}
+
+interface BobotItem {
+  komponen_id: number;
+  bobot: number;
+}
+
+interface CoverageInfo {
+  covered: boolean;
+  gap?: string;
+}
+
+// ====== GLOBAL STYLES ======
+const GlobalStyles = () => (
+  <style jsx global>{`
+    @keyframes ap-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes ap-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes ap-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    .ap-fadeIn  { animation: ap-fadeIn  0.2s ease; }
+    .ap-scaleIn { animation: ap-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+    .ap-pulse   { animation: ap-pulse   0.6s ease 0.15s; }
+  `}</style>
+);
+
+// ====== NOTIF MODAL ======
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+  confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+};
+
+const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+  const s = MODAL_STYLES[modal.type];
+  const isConfirm = modal.type === 'confirm';
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
+        {!isConfirm && (
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        )}
+        <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ap-pulse`}>{s.icon}</div>
+        <div className="text-center">
+          <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
+          <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+        </div>
+        {isConfirm ? (
+          <div className="flex gap-3 w-full">
+            <button onClick={onClose}
+              className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
+              style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+            >Batal</button>
+            <button onClick={() => { modal.onConfirm?.(); onClose(); }}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+            >Ya, Lanjutkan</button>
+          </div>
+        ) : (
+          <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ====== CONFIRM MODAL ======
+const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
+      <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ap-pulse">
+        <Trash2 size={36} className="text-red-500" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Hapus</h3>
+        <p className="text-sm text-gray-500 leading-relaxed mt-2">{message}</p>
+      </div>
+      <div className="flex gap-3 w-full">
+        <button onClick={onCancel}
+          className="flex-1 py-3 rounded-xl border font-semibold text-sm transition-colors"
+          style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>
+          Batal
+        </button>
+        <button onClick={onConfirm}
+          className="flex-1 py-3 rounded-xl text-white font-semibold text-sm bg-red-500 hover:bg-red-600 transition-colors">
+          Ya, Hapus
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// ====== COVERAGE WARNING BANNER ======
+const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
+  if (!coverage || coverage.covered) return null;
+
+  return (
+    <div className="mb-4 p-3 rounded-xl flex items-start gap-2"
+      style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+      <AlertTriangle size={18} className="text-yellow-600 mt-0.5 flex-shrink-0" />
+      <div className="text-xs" style={{ color: '#78350f' }}>
+        <strong>Peringatan:</strong> Range nilai 0-100 belum lengkap.
+        Ada gap pada rentang <strong>{coverage.gap}</strong>.
+        Siswa dengan nilai di rentang ini tidak akan mendapatkan deskripsi di rapor.
+      </div>
+    </div>
+  );
+};
+
+// ====== SHARED STYLE CONSTANTS ======
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
+
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+
+const btnPrimary = {
+  base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
+  hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
+  leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+};
+
+const labelCls = "block text-sm font-semibold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
+  <button onClick={onClick} disabled={disabled}
+    className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+    onMouseEnter={e => { if (!disabled) (e.currentTarget.style.background = '#fff0e5'); }}
+    onMouseLeave={e => { if (!disabled) (e.currentTarget.style.background = '#fff'); }}
+  >{children}</button>
+);
+
+// ====== MAIN COMPONENT ======
+export default function AturPenilaianGuruKelasClient() {
+  const { showSessionExpired, handleLogout } = useSession();
+
   const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
   const [activeTab, setActiveTab] = useState<'kokurikuler' | 'akademik' | 'bobot'>('kokurikuler');
+  const [loading, setLoading] = useState(true);
 
-  // Loading state terpisah
-  const [pageLoading, setPageLoading]       = useState(true);
-  const [kategoriLoading, setKategoriLoading] = useState(false);
-  const [bobotLoading, setBobotLoading]     = useState(false);
-  const [savingKategori, setSavingKategori] = useState(false);
-  const [savingBobot, setSavingBobot]       = useState(false);
-
-  const [pageError, setPageError] = useState<string | null>(null);
-
-  // Data
-  const [aspekList,    setAspekList]    = useState<AspekKokurikuler[]>([]);
-  const [mapelList,    setMapelList]    = useState<MapelItem[]>([]);
+  // Data pendukung
+  const [aspekList, setAspekList] = useState<AspekKokurikuler[]>([]);
+  const [mapelList, setMapelList] = useState<MapelItem[]>([]);
   const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
 
   // Kategori
   const [kategoriList, setKategoriList] = useState<(KategoriAkademik | KategoriKokurikuler)[]>([]);
+  const [kategoriLoading, setKategoriLoading] = useState(false);
+  const [coverageInfo, setCoverageInfo] = useState<CoverageInfo | null>(null);
 
   // Modal edit/tambah kategori
-  const [showEditKategori,    setShowEditKategori]    = useState(false);
-  const [editKategoriId,      setEditKategoriId]      = useState<number | null>(null);
+  const [showEditKategori, setShowEditKategori] = useState(false);
+  const [editKategoriId, setEditKategoriId] = useState<number | null>(null);
   const [editKategoriClosing, setEditKategoriClosing] = useState(false);
   const [editKategoriData, setEditKategoriData] = useState<{
     min_nilai: number; max_nilai: number; grade?: string; deskripsi: string; id_aspek_kokurikuler?: number;
   }>({ min_nilai: 0, max_nilai: 100, deskripsi: '' });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const initialEditKategoriDataRef = useRef<typeof editKategoriData | null>(null);
 
   // Mapel selection (akademik)
-  const [selectedMapelAkademik,     setSelectedMapelAkademik]     = useState<number | null>(null);
-  const [selectedMapelForRataRata,  setSelectedMapelForRataRata]  = useState(false);
+  const [selectedMapelAkademik, setSelectedMapelAkademik] = useState<number | null>(null);
+  const [selectedMapelForRataRata, setSelectedMapelForRataRata] = useState(false);
 
   // Bobot
   const [selectedMapelId, setSelectedMapelId] = useState<number | null>(null);
-  const [bobotList,        setBobotList]        = useState<BobotItem[]>([]);
+  const [bobotList, setBobotList] = useState<BobotItem[]>([]);
+  const [bobotLoading, setBobotLoading] = useState(false);
+  const [isBobotLocked, setIsBobotLocked] = useState(false);
   const initialBobotListRef = useRef<BobotItem[]>([]);
 
+  // Saving state
+  const [isSavingBobot, setIsSavingBobot] = useState(false);
+  const [isSavingKategori, setIsSavingKategori] = useState(false);
+
   // Modals
-  const [modal,      setModal]      = useState<ModalConfig | null>(null);
-  const [confirmCfg, setConfirmCfg] = useState<{ message:string; onConfirm:()=>void } | null>(null);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
-  // AbortController untuk cancel fetch lama (fix race condition)
-  const abortRef = useRef<AbortController | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const closeModal = useCallback(() => setModal(null), []);
 
-  const showModal   = useCallback((cfg: ModalConfig) => setModal(cfg), []);
-  const closeModal  = useCallback(() => setModal(null), []);
-  const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
-
-  // ── Token expired handler ──────────────────────────────────────────────────
-  const handleAuthError = useCallback((err: any) => {
-    if (err.code === 'NO_TOKEN' || err.code === 'TOKEN_EXPIRED') {
-      showModal({ type: 'warning', title: 'Sesi Berakhir', message: 'Sesi Anda telah berakhir. Silakan login kembali.' });
-      // Redirect ke login setelah 2 detik
-      setTimeout(() => { window.location.href = '/login'; }, 2000);
-      return true;
-    }
-    return false;
-  }, [showModal]);
-
-  // ── Fetch data awal (komponen, mapel, aspek, tahun ajaran) ─────────────────
+  // ====== FETCH DATA DUKUNGAN ======
   useEffect(() => {
-    const fetchInitial = async () => {
-      setPageLoading(true);
-      setPageError(null);
+    const fetchData = async () => {
+      setLoading(true);
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          setPageError('Token tidak ditemukan. Silakan login kembali.');
+          showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
           return;
         }
 
         const headers = { Authorization: `Bearer ${token}` };
 
-        // Ambil semua data pendukung secara paralel
         const [taRes, komponenRes, mapelRes, aspekRes] = await Promise.all([
-          fetch(`${API}/tahun-ajaran/aktif`,                       { headers }),
-          fetch(`${API}/atur-penilaian/komponen`,                  { headers }),
-          fetch(`${API}/mapel`,                                    { headers }),
-          fetch(`${API}/atur-penilaian/aspek-kokurikuler`,         { headers }),
+          fetch(`${API}/tahun-ajaran/aktif`, { headers }),
+          fetch(`${API}/atur-penilaian/komponen`, { headers }),
+          fetch(`${API}/mapel`, { headers }),
+          fetch(`${API}/atur-penilaian/aspek-kokurikuler`, { headers }),
         ]);
 
-        // Cek masing-masing response dengan pesan spesifik
         if (!taRes.ok) {
-          const err = await taRes.json().catch(() => ({}));
-          throw new Error(err.message || 'Gagal mengambil data tahun ajaran aktif. Pastikan admin sudah mengatur tahun ajaran.');
+          const err = await parseBackendError(taRes);
+          throw new Error(err.message);
         }
         if (!komponenRes.ok) {
-          const err = await komponenRes.json().catch(() => ({}));
-          throw new Error(err.message || 'Gagal mengambil komponen penilaian. Hubungi admin untuk mengkonfigurasi komponen.');
+          const err = await parseBackendError(komponenRes);
+          throw new Error(err.message);
         }
         if (!mapelRes.ok) {
-          const err = await mapelRes.json().catch(() => ({}));
-          throw new Error(err.message || 'Gagal mengambil daftar mata pelajaran.');
+          const err = await parseBackendError(mapelRes);
+          throw new Error(err.message);
         }
         if (!aspekRes.ok) {
-          const err = await aspekRes.json().catch(() => ({}));
-          throw new Error(err.message || 'Gagal mengambil aspek kokurikuler. Hubungi admin untuk mengkonfigurasi aspek.');
+          const err = await parseBackendError(aspekRes);
+          throw new Error(err.message);
         }
 
         const [taData, komponenData, mapelData, aspekData] = await Promise.all([
           taRes.json(), komponenRes.json(), mapelRes.json(), aspekRes.json(),
         ]);
 
-        const { status_pts, status_pas } = taData.data || {};
+        const { status_pts, status_pas } = taData.data;
         setJenisPenilaianAktif(status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null);
         setKomponenList(komponenData.data || []);
-        setMapelList([...(mapelData.wajib || []), ...(mapelData.pilihan || [])]);
+
+        // Format mapel: backend return { wajib: [], pilihan: [] }
+        const mapelWajib = mapelData.data?.wajib || mapelData.wajib || [];
+        const mapelPilihan = mapelData.data?.pilihan || mapelData.pilihan || [];
+        setMapelList([...mapelWajib, ...mapelPilihan]);
+
         setAspekList(aspekData.data || []);
       } catch (err: any) {
-        // Cek jika error jaringan (TypeError: Failed to fetch)
-        if (err instanceof TypeError && err.message.includes('fetch')) {
-          setPageError('Tidak dapat terhubung ke server. Pastikan backend berjalan di localhost:5000.');
-        } else {
-          setPageError(err.message || 'Gagal memuat data pendukung');
-        }
+        console.error('Error fetch data pendukung:', err);
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
       } finally {
-        setPageLoading(false);
+        setLoading(false);
       }
     };
-    fetchInitial();
-  }, []);
+    fetchData();
+  }, [showModal]);
 
-  // ── Fetch kategori (dengan AbortController untuk fix race condition) ────────
+  // ====== FETCH KATEGORI ======
   useEffect(() => {
+    if (loading) return;
     if (activeTab === 'bobot') return;
-    if (pageLoading) return;
-
-    // Cancel request sebelumnya
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-    const signal = abortRef.current.signal;
 
     const fetchKategori = async () => {
       setKategoriLoading(true);
+      setCoverageInfo(null);
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
 
         let endpoint = '';
-        if (activeTab === 'akademik') {
-          if (selectedMapelForRataRata)             endpoint = 'atur-penilaian/kategori-rata-rata';
-          else if (selectedMapelAkademik !== null)   endpoint = `atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}`;
-          else { setKategoriList([]); setKategoriLoading(false); return; }
-        } else {
-          endpoint = 'atur-penilaian/kategori-kokurikuler';
+        if (activeTab === 'kokurikuler') {
+          endpoint = `${API}/atur-penilaian/kategori-kokurikuler`;
+        } else if (activeTab === 'akademik') {
+          if (selectedMapelForRataRata) {
+            endpoint = `${API}/atur-penilaian/kategori-rata-rata`;
+          } else if (selectedMapelAkademik !== null) {
+            endpoint = `${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}`;
+          } else {
+            setKategoriList([]);
+            setKategoriLoading(false);
+            return;
+          }
         }
 
-        const res = await fetch(`${API}/${endpoint}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal,
-        });
-
-        if (signal.aborted) return; // Request sudah di-cancel, abaikan
-
+        const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || `Gagal mengambil kategori`);
+          const err = await parseBackendError(res);
+          throw new Error(err.message);
         }
-
         const data = await res.json();
         setKategoriList(data.data || []);
-      } catch (err: any) {
-        if (err.name === 'AbortError') return; // Normal, abaikan
-        if (err instanceof TypeError && err.message.includes('fetch')) {
-          showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        } else {
-          showModal({ type: 'network', title: 'Gagal Memuat', message: err.message || 'Terjadi kesalahan saat memuat kategori.' });
+
+        // Simpan coverage info untuk akademik & rata-rata
+        if (activeTab === 'akademik' && data.coverage) {
+          setCoverageInfo(data.coverage);
         }
+      } catch (err: any) {
+        showModal({ type: 'error', title: 'Gagal Memuat', message: err.message || 'Gagal memuat kategori' });
       } finally {
-        if (!signal.aborted) setKategoriLoading(false);
+        setKategoriLoading(false);
       }
     };
+
     fetchKategori();
+  }, [activeTab, selectedMapelAkademik, selectedMapelForRataRata, loading, showModal]);
 
-    return () => { abortRef.current?.abort(); };
-  }, [activeTab, selectedMapelAkademik, selectedMapelForRataRata, pageLoading]);
+  // ====== FETCH BOBOT ======
+  useEffect(() => {
+    if (selectedMapelId === null || activeTab !== 'bobot') {
+      setBobotList([]);
+      initialBobotListRef.current = [];
+      setIsBobotLocked(false);
+      return;
+    }
 
-  // ── Reset state mapel saat ganti tab ──────────────────────────────────────
+    const fetchBobot = async () => {
+      setBobotLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(
+          `${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!res.ok) {
+          const err = await parseBackendError(res);
+          throw new Error(err.message);
+        }
+
+        const result = await res.json();
+        const bobotData: any[] = result.data || [];
+        setIsBobotLocked(result.is_locked || false);
+
+        const bobotMap = new Map<number, number>();
+        bobotData.forEach((b: any) => {
+          const numBobot = typeof b.bobot === 'number' ? b.bobot : parseFloat(b.bobot);
+          bobotMap.set(b.komponen_id, isNaN(numBobot) ? 0 : numBobot);
+        });
+
+        const fullBobot = komponenList.map((k) => ({
+          komponen_id: k.id_komponen,
+          bobot: bobotMap.get(k.id_komponen) || 0,
+        }));
+
+        setBobotList(fullBobot);
+        initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
+      } catch (err: any) {
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal mengambil bobot penilaian' });
+      } finally {
+        setBobotLoading(false);
+      }
+    };
+
+    fetchBobot();
+  }, [selectedMapelId, komponenList, activeTab, showModal]);
+
+  // ====== TAB CHANGE HANDLER ======
   const handleTabChange = (tab: 'kokurikuler' | 'akademik' | 'bobot') => {
     if (tab !== 'akademik') {
-      // Jangan reset saat kembali ke akademik, tapi reset saat pergi dari akademik
       setSelectedMapelAkademik(null);
       setSelectedMapelForRataRata(false);
+      setCoverageInfo(null);
+    }
+    if (tab !== 'bobot') {
+      setSelectedMapelId(null);
+      setIsBobotLocked(false);
     }
     setKategoriList([]);
     setActiveTab(tab);
   };
 
-  // ── Fetch bobot ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (selectedMapelId === null || activeTab !== 'bobot') {
-      setBobotList([]);
-      initialBobotListRef.current = [];
-      return;
-    }
-    const fetchBobot = async () => {
-      setBobotLoading(true);
-      try {
-        const res = await authFetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`);
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || 'Gagal mengambil bobot penilaian');
-        }
-        const data = await res.json();
-        const bobotData: any[] = data.data || [];
-        const bobotMap = new Map<number, number>();
-        bobotData.forEach((b: any) => {
-          const num = typeof b.bobot === 'number' ? b.bobot : parseFloat(b.bobot);
-          bobotMap.set(b.komponen_id, isNaN(num) ? 0 : num);
-        });
-        const fullBobot = komponenList.map(k => ({
-          komponen_id: k.id_komponen,
-          bobot:       bobotMap.get(k.id_komponen) || 0,
-          is_active:   true,
-        }));
-        setBobotList(fullBobot);
-        initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
-      } catch (err: any) {
-        if (handleAuthError(err)) return;
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal mengambil bobot penilaian.' });
-      } finally {
-        setBobotLoading(false);
-      }
-    };
-    fetchBobot();
-  }, [selectedMapelId, komponenList, activeTab]);
-
-  // ── Modal kategori ─────────────────────────────────────────────────────────
+  // ====== MODAL KATEGORI ======
   const openEditKategori = (kategori: KategoriAkademik | KategoriKokurikuler | null = null) => {
+    setErrors({});
     if (kategori) {
       setEditKategoriId(kategori.id);
       const d = {
         min_nilai: kategori.min_nilai,
         max_nilai: kategori.max_nilai,
-        grade:     'grade' in kategori ? kategori.grade : undefined,
+        grade: 'grade' in kategori ? kategori.grade : undefined,
         deskripsi: kategori.deskripsi,
         id_aspek_kokurikuler: 'id_aspek_kokurikuler' in kategori ? kategori.id_aspek_kokurikuler : undefined,
       };
@@ -380,277 +482,343 @@ export default function AturPenilaianPage() {
 
   const closeEditKategori = () => {
     setEditKategoriClosing(true);
-    setTimeout(() => { setShowEditKategori(false); setEditKategoriClosing(false); setEditKategoriId(null); }, 200);
+    setTimeout(() => {
+      setShowEditKategori(false);
+      setEditKategoriClosing(false);
+      setEditKategoriId(null);
+      setErrors({});
+    }, 200);
   };
 
-  // ── Validasi form kategori (frontend) ──────────────────────────────────────
-  const validateKategoriForm = (): string | null => {
-    const { min_nilai, max_nilai, deskripsi, grade, id_aspek_kokurikuler } = editKategoriData;
+  // ====== SAVE KATEGORI ======
+  const handleSaveKategori = async () => {
+    const ne: Record<string, string> = {};
+
+    if (isNaN(editKategoriData.min_nilai) || isNaN(editKategoriData.max_nilai)) {
+      ne.form = 'Nilai min dan max harus berupa angka.';
+    } else {
+      if (editKategoriData.min_nilai < 0 || editKategoriData.max_nilai > 100) {
+        ne.form = 'Nilai harus antara 0 dan 100.';
+      }
+      if (editKategoriData.min_nilai >= editKategoriData.max_nilai) {
+        ne.form = `Nilai minimum (${editKategoriData.min_nilai}) harus lebih kecil dari nilai maksimum (${editKategoriData.max_nilai}).`;
+      }
+    }
+
+    if (!editKategoriData.deskripsi || editKategoriData.deskripsi.trim().length < 3) {
+      ne.deskripsi = 'Deskripsi minimal 3 karakter.';
+    }
 
     if (activeTab === 'kokurikuler') {
-      if (!id_aspek_kokurikuler) return 'Pilih aspek kokurikuler terlebih dahulu.';
-      if (!grade?.trim())         return 'Grade tidak boleh kosong. Contoh: A, B+, C.';
+      if (!editKategoriData.id_aspek_kokurikuler) {
+        ne.form = 'Pilih aspek kokurikuler terlebih dahulu.';
+      }
+      const grade = editKategoriData.grade?.trim() || '';
+      if (!grade) {
+        ne.grade = 'Grade tidak boleh kosong.';
+      } else if (grade.length !== 1) {
+        ne.grade = 'Grade harus tepat 1 karakter (A, B, C, dst).';
+      }
+    } else if (activeTab === 'akademik') {
+      if (!selectedMapelForRataRata && selectedMapelAkademik === null) {
+        ne.form = 'Pilih mata pelajaran terlebih dahulu.';
+      }
     }
-    if (!deskripsi.trim())  return 'Deskripsi tidak boleh kosong.';
-    if (min_nilai < 0 || max_nilai > 100) return 'Nilai harus berada dalam rentang 0–100.';
-    if (min_nilai >= max_nilai)  return 'Nilai minimum harus lebih kecil dari nilai maksimum.';
 
-    return null; // Valid
-  };
+    if (Object.keys(ne).length > 0) {
+      setErrors(ne);
+      showModal({ type: 'warning', title: 'Form Belum Lengkap', message: Object.values(ne).join('\n') });
+      return;
+    }
 
-  // ── Simpan kategori ────────────────────────────────────────────────────────
-  const handleSaveKategori = async () => {
-    // Cek tidak ada perubahan
+    // Cek apakah ada perubahan
     const initial = initialEditKategoriDataRef.current;
-    if (initial &&
+    const isUnchanged =
+      initial &&
       editKategoriData.min_nilai === initial.min_nilai &&
       editKategoriData.max_nilai === initial.max_nilai &&
-      editKategoriData.deskripsi === initial.deskripsi &&
+      editKategoriData.deskripsi.trim() === initial.deskripsi.trim() &&
       editKategoriData.grade === initial.grade &&
-      editKategoriData.id_aspek_kokurikuler === initial.id_aspek_kokurikuler
-    ) {
+      editKategoriData.id_aspek_kokurikuler === initial.id_aspek_kokurikuler;
+
+    if (isUnchanged) {
       showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
       return;
     }
 
-    // Validasi frontend
-    const validationError = validateKategoriForm();
-    if (validationError) {
-      showModal({ type: 'warning', title: 'Data Tidak Valid', message: validationError });
-      return;
-    }
-
-    setSavingKategori(true);
+    setIsSavingKategori(true);
     try {
-      const isAkademik = activeTab === 'akademik';
+      const token = localStorage.getItem('token');
       let endpoint = '';
       let payload: any;
 
-      if (isAkademik) {
+      if (activeTab === 'kokurikuler') {
+        endpoint = `${API}/atur-penilaian/kategori-kokurikuler`;
+        payload = {
+          min_nilai: editKategoriData.min_nilai,
+          max_nilai: editKategoriData.max_nilai,
+          grade: editKategoriData.grade?.trim().toUpperCase(),
+          deskripsi: editKategoriData.deskripsi.trim(),
+          urutan: 0,
+          id_aspek_kokurikuler: editKategoriData.id_aspek_kokurikuler,
+        };
+      } else if (activeTab === 'akademik') {
         if (selectedMapelForRataRata) {
-          endpoint = 'atur-penilaian/kategori-rata-rata';
-          payload  = { min_nilai: editKategoriData.min_nilai, max_nilai: editKategoriData.max_nilai, deskripsi: editKategoriData.deskripsi, urutan: 0 };
+          endpoint = `${API}/atur-penilaian/kategori-rata-rata`;
+          payload = {
+            min_nilai: Math.floor(editKategoriData.min_nilai),
+            max_nilai: Math.floor(editKategoriData.max_nilai),
+            deskripsi: editKategoriData.deskripsi.trim(),
+            urutan: 0,
+          };
         } else {
-          if (selectedMapelAkademik === null) {
-            showModal({ type: 'warning', title: 'Pilih Mata Pelajaran', message: 'Pilih mata pelajaran terlebih dahulu.' });
-            return;
-          }
-          endpoint = 'atur-penilaian/kategori-akademik';
-          payload  = { min_nilai: editKategoriData.min_nilai, max_nilai: editKategoriData.max_nilai, deskripsi: editKategoriData.deskripsi, urutan: 0, mapel_id: selectedMapelAkademik };
+          endpoint = `${API}/atur-penilaian/kategori-akademik`;
+          payload = {
+            min_nilai: Math.floor(editKategoriData.min_nilai),
+            max_nilai: Math.floor(editKategoriData.max_nilai),
+            deskripsi: editKategoriData.deskripsi.trim(),
+            urutan: 0,
+            mapel_id: selectedMapelAkademik,
+          };
         }
-      } else {
-        endpoint = 'atur-penilaian/kategori-kokurikuler';
-        payload  = { min_nilai: editKategoriData.min_nilai, max_nilai: editKategoriData.max_nilai, grade: editKategoriData.grade?.trim().toUpperCase(), deskripsi: editKategoriData.deskripsi, urutan: 0, id_aspek_kokurikuler: editKategoriData.id_aspek_kokurikuler };
       }
 
-      const url    = editKategoriId ? `${API}/${endpoint}/${editKategoriId}` : `${API}/${endpoint}`;
+      const url = editKategoriId ? `${endpoint}/${editKategoriId}` : endpoint;
       const method = editKategoriId ? 'PUT' : 'POST';
 
-      const res = await authFetch(url, { method, body: JSON.stringify(payload) });
-      const data = await res.json();
-
-      if (!res.ok) {
-        // Mapping kode error backend ke pesan ramah pengguna
-        if (data.code === 'RANGE_OVERLAP') {
-          showModal({ type: 'warning', title: 'Rentang Nilai Bertabrakan', message: data.message || 'Rentang nilai yang Anda masukkan bertabrakan dengan kategori yang sudah ada.\nSesuaikan nilai min/max agar tidak tumpang tindih.' });
-        } else if (data.code === 'RANGE_ERROR') {
-          showModal({ type: 'warning', title: 'Rentang Tidak Valid', message: data.message });
-        } else if (data.code === 'VALIDATION_ERROR') {
-          showModal({ type: 'warning', title: 'Data Tidak Lengkap', message: data.message });
-        } else {
-          showModal({ type: 'error', title: 'Gagal Menyimpan', message: data.message || 'Terjadi kesalahan saat menyimpan kategori.' });
-        }
-        return;
-      }
-
-      // Reload daftar kategori
-      let reloadUrl = `${API}/${endpoint}`;
-      if (isAkademik && !selectedMapelForRataRata && selectedMapelAkademik) reloadUrl += `?mapel_id=${selectedMapelAkademik}`;
-      const token   = localStorage.getItem('token');
-      const resRel  = await fetch(reloadUrl, { headers: { Authorization: `Bearer ${token}` } });
-      const relData = await resRel.json();
-      setKategoriList(relData.data || []);
-
-      closeEditKategori();
-      showModal({
-        type: 'success',
-        title: editKategoriId ? 'Kategori Diperbarui!' : 'Kategori Ditambahkan!',
-        message: editKategoriId ? 'Kategori berhasil diperbarui.' : 'Kategori baru berhasil ditambahkan.',
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
-    } catch (err: any) {
-      if (handleAuthError(err)) return;
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        // FORCE CLOSE modal edit DULU
+        setShowEditKategori(false);
+        setEditKategoriClosing(false);
+        setEditKategoriId(null);
+        setErrors({});
+
+        setTimeout(() => {
+          showModal({
+            type: 'success',
+            title: editKategoriId ? 'Kategori Diperbarui!' : 'Kategori Ditambahkan!',
+            message: result.message || 'Berhasil!',
+          });
+        }, 50);
+
+        // Reload kategori
+        let reloadUrl = endpoint;
+        if (activeTab === 'akademik' && !selectedMapelForRataRata && selectedMapelAkademik) {
+          reloadUrl += `?mapel_id=${selectedMapelAkademik}`;
+        }
+        const reloadRes = await fetch(reloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const reloadData = await reloadRes.json();
+        setKategoriList(reloadData.data || []);
+        if (activeTab === 'akademik' && reloadData.coverage) {
+          setCoverageInfo(reloadData.coverage);
+        }
       } else {
-        showModal({ type: 'error', title: 'Terjadi Kesalahan', message: err.message || 'Gagal menyimpan kategori.' });
+        // ✅ Handle error code dari backend
+        const errorCode = result.code;
+        let errorMessage = result.message || 'Terjadi kesalahan.';
+        let errorTitle = editKategoriId ? 'Gagal Memperbarui' : 'Gagal Menambahkan';
+
+        if (errorCode === 'RANGE_OVERLAP') {
+          errorTitle = '⚠️ Range Nilai Bertabrakan';
+          errorMessage = `${result.message}\n\nSilakan sesuaikan nilai min/max agar tidak tumpang tindih dengan kategori lain.`;
+        } else if (errorCode === 'DUPLICATE_GRADE') {
+          errorTitle = '⚠️ Grade Sudah Ada';
+          errorMessage = `${result.message}\n\nGunakan grade lain atau edit kategori yang sudah ada.`;
+        }
+
+        showModal({ type: 'error', title: errorTitle, message: errorMessage });
       }
+    } catch (err: any) {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
     } finally {
-      setSavingKategori(false);
+      setIsSavingKategori(false);
     }
   };
 
-  // ── Hapus kategori ─────────────────────────────────────────────────────────
-  const handleDeleteKategori = (id: number) => {
-    showConfirm('Hapus kategori ini? Tindakan tidak dapat dibatalkan.', async () => {
-      try {
-        const endpoint = activeTab === 'akademik'
-          ? (selectedMapelForRataRata ? 'atur-penilaian/kategori-rata-rata' : 'atur-penilaian/kategori-akademik')
-          : 'atur-penilaian/kategori-kokurikuler';
+  // ====== DELETE KATEGORI ======
+  const handleDeleteKategori = (id: number, deskripsi: string) => {
+    showModal({
+      type: 'confirm',
+      title: 'Hapus Kategori',
+      message: `Apakah Anda yakin ingin menghapus kategori "${deskripsi}"?\n\nTindakan ini tidak dapat dibatalkan.`,
+      onConfirm: async () => {
+        try {
+          const token = localStorage.getItem('token');
+          let endpoint = '';
 
-        const res  = await authFetch(`${API}/${endpoint}/${id}`, { method: 'DELETE' });
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (data.code === 'NOT_FOUND') {
-            showModal({ type: 'warning', title: 'Tidak Ditemukan', message: 'Kategori sudah dihapus atau tidak ditemukan.' });
-            setKategoriList(prev => prev.filter(k => k.id !== id));
-          } else {
-            showModal({ type: 'error', title: 'Gagal Menghapus', message: data.message || 'Terjadi kesalahan saat menghapus kategori.' });
+          if (activeTab === 'kokurikuler') {
+            endpoint = `${API}/atur-penilaian/kategori-kokurikuler/${id}`;
+          } else if (activeTab === 'akademik') {
+            if (selectedMapelForRataRata) {
+              endpoint = `${API}/atur-penilaian/kategori-rata-rata/${id}`;
+            } else {
+              endpoint = `${API}/atur-penilaian/kategori-akademik/${id}`;
+            }
           }
-          return;
-        }
 
-        setKategoriList(prev => prev.filter(k => k.id !== id));
-        showModal({ type: 'success', title: 'Kategori Dihapus!', message: 'Kategori berhasil dihapus.' });
-      } catch (err: any) {
-        if (handleAuthError(err)) return;
-        if (err instanceof TypeError && err.message.includes('fetch')) {
-          showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        } else {
-          showModal({ type: 'error', title: 'Terjadi Kesalahan', message: err.message });
+          const res = await fetch(endpoint, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          const result = await res.json();
+
+          if (res.ok) {
+            setKategoriList(kategoriList.filter((k) => k.id !== id));
+            showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Kategori berhasil dihapus.' });
+          } else {
+            // ✅ Handle error khusus untuk kategori yang sedang dipakai
+            let errorMessage = result.message || 'Gagal menghapus kategori.';
+            let errorTitle = 'Gagal Menghapus';
+
+            if (errorMessage.includes('nilai siswa')) {
+              errorTitle = '⚠️ Kategori Sedang Digunakan';
+              errorMessage = `${result.message}\n\nAnda tidak dapat menghapus kategori yang sudah digunakan oleh siswa. Ubah range nilai kategori lain sebagai gantinya.`;
+            }
+
+            showModal({ type: 'error', title: errorTitle, message: errorMessage });
+          }
+        } catch (err) {
+          showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menghubungi server.' });
         }
-      }
+      },
     });
   };
 
-  // ── Bobot handlers ─────────────────────────────────────────────────────────
+  // ====== BOBOT HANDLERS ======
   const isPTSActive = jenisPenilaianAktif === 'PTS';
 
   const handleBobotChange = (komponenId: number, value: string) => {
-    const newValue = parseFloat(value) || 0;
-    setBobotList(prev => prev.map(b => b.komponen_id === komponenId ? { ...b, bobot: newValue } : b));
+    let num = parseFloat(value);
+    if (isNaN(num)) num = 0;
+    if (num < 0) num = 0;
+    if (num > 100) num = 100;
+    num = Math.round(num * 100) / 100;
+
+    setBobotList((prev) =>
+      prev.map((b) => (b.komponen_id === komponenId ? { ...b, bobot: num } : b))
+    );
   };
 
   const handleSaveBobot = async () => {
     if (!selectedMapelId) return;
 
-    // Cek tidak ada perubahan
-    const isUnchanged = bobotList.every((b, i) => {
-      const ini = initialBobotListRef.current[i];
-      return ini && b.komponen_id === ini.komponen_id && b.bobot === ini.bobot;
+    const isUnchanged = bobotList.every((b) => {
+      const initial = initialBobotListRef.current.find((i) => i.komponen_id === b.komponen_id);
+      return initial && Math.abs(b.bobot - initial.bobot) < 0.01;
     });
+
     if (isUnchanged) {
-      showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data bobot yang diubah.' });
+      showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
       return;
     }
 
-    // Validasi tidak ada bobot negatif
-    if (bobotList.some(b => b.bobot < 0)) {
-      showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh bernilai negatif.' });
+    const adaNegatif = bobotList.some(b => b.bobot < 0);
+    if (adaNegatif) {
+      showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' });
       return;
     }
 
-    // Validasi total = 100
     const total = bobotList.reduce((sum, b) => sum + b.bobot, 0);
-    if (Math.abs(total - 100) > 0.1) {
-      showModal({ type: 'warning', title: 'Total Bobot Salah', message: `Total bobot saat ini ${total.toFixed(1)}%.\nHarus tepat 100%.` });
+    if (Math.abs(total - 100) > 0.01) {
+      showModal({
+        type: 'warning',
+        title: 'Total Bobot Salah',
+        message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%`,
+      });
       return;
     }
 
-    setSavingBobot(true);
-    try {
-      const res  = await authFetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`, {
-        method: 'PUT',
-        body:   JSON.stringify(bobotList),
+    if (isPTSActive) {
+      showModal({
+        type: 'warning',
+        title: 'Periode PTS Aktif',
+        message: 'Bobot tidak dapat diubah saat periode PTS aktif.',
       });
-      const data = await res.json();
+      return;
+    }
 
-      if (!res.ok) {
-        if (data.code === 'PERIOD_LOCKED') {
-          showModal({ type: 'warning', title: 'Periode Terkunci', message: data.message });
-        } else if (data.code === 'BOBOT_NOT_100') {
-          showModal({ type: 'warning', title: 'Total Bobot Salah', message: data.message });
-        } else {
-          showModal({ type: 'error', title: 'Gagal Menyimpan', message: data.message || 'Gagal menyimpan bobot penilaian.' });
+    setIsSavingBobot(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(bobotList),
         }
-        return;
-      }
+      );
 
-      initialBobotListRef.current = JSON.parse(JSON.stringify(bobotList));
-      showModal({ type: 'success', title: 'Bobot Disimpan!', message: 'Bobot penilaian berhasil disimpan.\nNilai rapor seluruh siswa telah dihitung ulang.' });
-    } catch (err: any) {
-      if (handleAuthError(err)) return;
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+      const result = await res.json();
+
+      if (res.ok) {
+        showModal({ type: 'success', title: 'Bobot Disimpan!', message: result.message || 'Bobot penilaian berhasil disimpan.' });
+        initialBobotListRef.current = JSON.parse(JSON.stringify(bobotList));
       } else {
-        showModal({ type: 'error', title: 'Terjadi Kesalahan', message: err.message });
+        // ✅ Handle error code dari backend
+        const errorCode = result.code;
+        let errorMessage = result.message || 'Gagal menyimpan bobot.';
+        let errorTitle = 'Gagal Menyimpan';
+
+        if (errorCode === 'PERIOD_LOCKED') {
+          errorTitle = '🔒 Periode Terkunci';
+          errorMessage = `${result.message}\n\nAnda tidak dapat mengubah bobot saat periode PTS aktif.`;
+        } else if (errorCode === 'BOBOT_NOT_100') {
+          errorTitle = '⚠️ Total Bobot Salah';
+          errorMessage = result.message;
+        }
+
+        showModal({ type: 'error', title: errorTitle, message: errorMessage });
       }
+    } catch (err) {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan bobot.' });
     } finally {
-      setSavingBobot(false);
+      setIsSavingBobot(false);
     }
   };
 
-  // ── Loading / Error page ───────────────────────────────────────────────────
-  if (pageLoading) {
+  // ====== LOADING STATE ======
+  if (loading) {
     return (
-      <div className="flex-1 min-h-screen flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-full border-4 animate-spin" style={{ borderColor:'#fde0c8', borderTopColor:'#e8690a' }}/>
-          <p className="text-sm font-semibold" style={{ color:'#c95b08' }}>Memuat data...</p>
+      <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
+        <div className="text-center">
+          <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+          <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
         </div>
       </div>
     );
   }
 
-  if (pageError) {
-    return (
-      <div className="flex-1 min-h-screen flex items-center justify-center bg-white p-6">
-        <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl max-w-md w-full text-center" style={CARD_STYLE}>
-          <AlertCircle size={48} className="text-red-500"/>
-          <div>
-            <p className="text-base font-bold text-red-600 mb-2">Gagal Memuat Halaman</p>
-            <p className="text-sm text-gray-500 leading-relaxed">{pageError}</p>
-          </div>
-          <button onClick={() => window.location.reload()}
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-white"
-            style={{ background:'linear-gradient(135deg,#e8690a,#f5a623)' }}>
-            Coba Lagi
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const totalBobot = bobotList.reduce((sum, b) => {
+    const komponen = komponenList.find((k) => k.id_komponen === b.komponen_id);
+    const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
+    const actualBobot = isPTSActive ? (isPTS ? 100 : 0) : b.bobot;
+    return sum + actualBobot;
+  }, 0);
 
-  // ── Helpers render ─────────────────────────────────────────────────────────
-  const tabs: { key:'kokurikuler'|'akademik'|'bobot'; label:string }[] = [
-    { key:'kokurikuler', label:'Kategori Kokurikuler' },
-    { key:'akademik',    label:'Kategori Akademik' },
-    { key:'bobot',       label:'Atur Bobot Penilaian' },
-  ];
-
-  const emptyState = (msg: string) => (
-    <div className="text-center py-12 rounded-2xl" style={{ background:'#fffaf6', border:'2px dashed #fde0c8' }}>
-      <p className="text-base font-semibold" style={{ color:'#c95b08' }}>Pilih Mata Pelajaran</p>
-      <p className="text-sm text-gray-400 mt-1">{msg}</p>
-    </div>
-  );
-
-  const LoadingRow = ({ cols }: { cols: number }) => (
-    <tr><td colSpan={cols} className="py-10 text-center">
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin"/>
-        <span className="text-sm text-gray-400">Memuat...</span>
-      </div>
-    </td></tr>
-  );
-
+  const isBobotValid = Math.abs(totalBobot - 100) < 0.01;
   const mapelWajibList = mapelList.filter(m => m.jenis === 'wajib');
 
-  // ─── RENDER ────────────────────────────────────────────────────────────────
+  // ====== RENDER ======
   return (
-    <div className="flex-1 min-h-screen p-6 bg-white">
-      <GlobalStyles/>
-      {modal     && <NotifModal modal={modal} onClose={closeModal}/>}
+    <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
+      <GlobalStyles />
+      {modal && <NotifModal modal={modal} onClose={closeModal} />}
       {confirmCfg && (
         <ConfirmModal
           message={confirmCfg.message}
@@ -658,306 +826,455 @@ export default function AturPenilaianPage() {
           onCancel={() => setConfirmCfg(null)}
         />
       )}
+      {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Atur Penilaian</h1>
-        <p className="text-sm mt-0.5" style={{ color:'#c95b08' }}>Kelola kategori dan bobot penilaian kelas Anda</p>
+        <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola kategori dan bobot penilaian kelas Anda</p>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-2xl overflow-hidden mb-5" style={CARD_STYLE}>
-        <div className="flex" style={{ borderBottom:'1px solid #fde0c8' }}>
-          {tabs.map(tab => (
-            <button key={tab.key} onClick={() => handleTabChange(tab.key)}
-              className="relative px-5 py-3.5 text-sm font-semibold transition-colors"
-              style={{
-                color:       activeTab === tab.key ? '#e8690a' : '#888',
-                borderBottom: activeTab === tab.key ? '2px solid #e8690a' : '2px solid transparent',
-                background:  activeTab === tab.key ? '#fffaf6' : 'transparent',
-              }}>
-              {tab.label}
+      <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+        {/* Tabs */}
+        <div className="px-6 py-3 border-b" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+          <div className="flex gap-2">
+            <button
+              className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 ${activeTab === 'kokurikuler'
+                ? 'border-orange-500 text-orange-600 bg-orange-50'
+                : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
+                }`}
+              onClick={() => handleTabChange('kokurikuler')}
+            >
+              Kategori Kokurikuler
             </button>
-          ))}
+            <button
+              className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 ${activeTab === 'akademik'
+                ? 'border-orange-500 text-orange-600 bg-orange-50'
+                : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
+                }`}
+              onClick={() => handleTabChange('akademik')}
+            >
+              Kategori Akademik
+            </button>
+            <button
+              className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 ${activeTab === 'bobot'
+                ? 'border-orange-500 text-orange-600 bg-orange-50'
+                : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
+                }`}
+              onClick={() => handleTabChange('bobot')}
+            >
+              Atur Bobot Penilaian
+            </button>
+          </div>
         </div>
 
-        <div className="p-5">
-
-          {/* ── TAB: KOKURIKULER ─────────────────────────────────────────── */}
+        {/* Tab Content */}
+        <div className="p-6">
+          {/* ====== TAB: KOKURIKULER ====== */}
           {activeTab === 'kokurikuler' && (
-            <>
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <p className="text-base font-bold text-gray-800">Kategori Nilai Kokurikuler</p>
-                  <p className="text-xs mt-0.5" style={{ color:'#c95b08' }}>Atur grade dan rentang nilai kokurikuler per aspek</p>
+            <div>
+              {jenisPenilaianAktif && (
+                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                  <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                    <span className="font-bold">ℹ️ Info: </span>
+                    Periode <strong>{jenisPenilaianAktif}</strong> sedang aktif.
+                  </p>
                 </div>
-                <BtnPrimary onClick={() => openEditKategori()}>
-                  <Plus size={15}/> Tambah Kategori
-                </BtnPrimary>
+              )}
+
+              <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: '1px solid #fde0c8' }}>
+                <p className="text-xs" style={{ color: '#c95b08' }}>
+                  Menampilkan {kategoriList.length} kategori kokurikuler
+                </p>
+                <button
+                  onClick={() => openEditKategori()}
+                  className={btnPrimary.base}
+                  style={btnPrimary.style}
+                  onMouseEnter={btnPrimary.hover}
+                  onMouseLeave={btnPrimary.leave}
+                >
+                  <Plus size={16} />
+                  Tambah Kategori
+                </button>
               </div>
-              <div className="overflow-x-auto rounded-xl" style={{ border:'1px solid #fde0c8' }}>
-                <table className="w-full min-w-[600px] text-sm border-collapse">
+
+              <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid #fde0c8' }}>
+                <table className="w-full min-w-[700px] text-sm border-collapse">
                   <thead>
                     <tr style={TH_GRAD}>
-                      {['Aspek','Grade','Range Nilai','Deskripsi','Aksi'].map(h => (
+                      {['No.', 'Aspek', 'Grade', 'Range Nilai', 'Deskripsi', 'Aksi'].map(h => (
                         <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {kategoriLoading ? <LoadingRow cols={5}/> :
-                     kategoriList.length === 0 ? (
-                      <tr><td colSpan={5} className="py-10 text-center text-sm text-gray-400">Belum ada kategori kokurikuler. Klik "Tambah Kategori" untuk mulai.</td></tr>
-                     ) : kategoriList.map((k, idx) => (
-                      <tr key={k.id} className="transition-colors"
-                        style={{ borderBottom:'1px solid #fde0c8', background: idx%2===0?'#fff':'#fffaf6' }}
-                        onMouseEnter={e=>(e.currentTarget.style.background='#fff0e5')}
-                        onMouseLeave={e=>(e.currentTarget.style.background=idx%2===0?'#fff':'#fffaf6')}>
-                        <td className="px-5 py-3.5 text-center text-gray-700">
-                          {aspekList.find(a => a.id_aspek_kokurikuler === (k as KategoriKokurikuler).id_aspek_kokurikuler)?.nama || '-'}
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
-                            style={{ background:'#fff0e5', color:'#c95b08', border:'1px solid #fde0c8' }}>
-                            {(k as KategoriKokurikuler).grade}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-center text-gray-700">{k.min_nilai} – {k.max_nilai}</td>
-                        <td className="px-5 py-3.5 text-center text-gray-600 max-w-[200px] truncate" title={k.deskripsi}>{k.deskripsi}</td>
-                        <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                          <div className="flex justify-center gap-2">
-                            <button onClick={() => openEditKategori(k)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
-                              style={{ background:'#fff0e5', border:'1px solid #f5a623', color:'#b35a08' }}
-                              onMouseEnter={e=>(e.currentTarget.style.background='#ffe4c8')}
-                              onMouseLeave={e=>(e.currentTarget.style.background='#fff0e5')}>
-                              <Pencil size={12}/> Edit
-                            </button>
-                            <button onClick={() => handleDeleteKategori(k.id)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
-                              style={{ background:'#fef2f2', border:'1px solid #fca5a5', color:'#b91c1c' }}
-                              onMouseEnter={e=>(e.currentTarget.style.background='#fee2e2')}
-                              onMouseLeave={e=>(e.currentTarget.style.background='#fef2f2')}>
-                              <Trash2 size={12}/> Hapus
-                            </button>
-                          </div>
+                    {kategoriLoading ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
+                          <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-2" />
+                          Memuat data...
                         </td>
                       </tr>
-                    ))}
+                    ) : kategoriList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
+                          Belum ada kategori kokurikuler.
+                        </td>
+                      </tr>
+                    ) : (
+                      kategoriList.map((kategori, index) => {
+                        const k = kategori as KategoriKokurikuler;
+                        const aspek = aspekList.find(a => a.id_aspek_kokurikuler === k.id_aspek_kokurikuler);
+                        return (
+                          <tr
+                            key={k.id}
+                            className="transition-colors"
+                            style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                            onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
+                          >
+                            <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                            <td className="px-5 py-3.5 text-center text-gray-700">{aspek?.nama || '-'}</td>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
+                                style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+                                {k.grade}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold"
+                                style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+                                {Math.floor(k.min_nilai)} – {Math.floor(k.max_nilai)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-gray-700" style={{ maxWidth: '250px' }}>
+                              <span className="truncate block" title={k.deskripsi}>{k.deskripsi}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                              <div className="flex justify-center gap-2">
+                                <button
+                                  onClick={() => openEditKategori(k)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                  style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                >
+                                  <Pencil size={13} /> Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteKategori(k.id, k.deskripsi)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                  style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                >
+                                  <Trash2 size={13} /> Hapus
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
-            </>
+            </div>
           )}
 
-          {/* ── TAB: AKADEMIK ────────────────────────────────────────────── */}
+          {/* ====== TAB: AKADEMIK ====== */}
           {activeTab === 'akademik' && (
-            <>
-              <div className="mb-5">
-                <p className="text-base font-bold text-gray-800 mb-1">Kategori Nilai Akademik</p>
-                <p className="text-xs" style={{ color:'#c95b08' }}>Atur rentang nilai per mata pelajaran</p>
-              </div>
-              <div className="mb-5">
-                <label className={labelCls} style={labelColor}>Pilih Mata Pelajaran</label>
+            <div>
+              {jenisPenilaianAktif && (
+                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                  <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                    <span className="font-bold">ℹ️ Info: </span>
+                    Periode <strong>{jenisPenilaianAktif}</strong> sedang aktif.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label className={labelCls} style={labelColor}>
+                  Pilih Kategori <span className="text-red-500">*</span>
+                </label>
                 <select
-                  value={selectedMapelAkademik || (selectedMapelForRataRata ? 'rata-rata' : '')}
-                  onChange={e => {
+                  value={selectedMapelForRataRata ? 'rata-rata' : (selectedMapelAkademik || '')}
+                  onChange={(e) => {
                     const val = e.target.value;
-                    if (val === 'rata-rata') { setSelectedMapelAkademik(null); setSelectedMapelForRataRata(true); }
-                    else { setSelectedMapelAkademik(val ? Number(val) : null); setSelectedMapelForRataRata(false); }
+                    if (val === 'rata-rata') {
+                      setSelectedMapelForRataRata(true);
+                      setSelectedMapelAkademik(null);
+                    } else {
+                      setSelectedMapelForRataRata(false);
+                      setSelectedMapelAkademik(val ? Number(val) : null);
+                    }
                   }}
-                  className="max-w-xs border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200">
+                  className={inputCls}
+                  style={{ maxWidth: '400px' }}
+                >
                   <option value="">-- Pilih Mata Pelajaran --</option>
                   <option value="rata-rata">📚 Rata-rata Seluruh Mapel</option>
-                  {mapelWajibList.map(m => (
-                    <option key={m.mata_pelajaran_id} value={m.mata_pelajaran_id}>{m.nama_mapel}</option>
+                  {mapelWajibList.map((mapel) => (
+                    <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
+                      {mapel.nama_mapel}
+                    </option>
                   ))}
                 </select>
               </div>
 
               {(selectedMapelAkademik || selectedMapelForRataRata) ? (
                 <>
-                  <div className="flex justify-end mb-4">
-                    <BtnPrimary onClick={() => openEditKategori()}>
-                      <Plus size={15}/> Tambah Kategori
-                    </BtnPrimary>
+                  {/* ✅ Coverage Warning Banner */}
+                  <CoverageWarning coverage={coverageInfo} />
+
+                  <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: '1px solid #fde0c8' }}>
+                    <p className="text-xs" style={{ color: '#c95b08' }}>
+                      Menampilkan {kategoriList.length} kategori nilai
+                    </p>
+                    <button
+                      onClick={() => openEditKategori()}
+                      className={btnPrimary.base}
+                      style={btnPrimary.style}
+                      onMouseEnter={btnPrimary.hover}
+                      onMouseLeave={btnPrimary.leave}
+                    >
+                      <Plus size={16} />
+                      Tambah Kategori
+                    </button>
                   </div>
-                  <div className="overflow-x-auto rounded-xl" style={{ border:'1px solid #fde0c8' }}>
-                    <table className="w-full min-w-[500px] text-sm border-collapse">
+
+                  <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid #fde0c8' }}>
+                    <table className="w-full min-w-[600px] text-sm border-collapse">
                       <thead>
                         <tr style={TH_GRAD}>
-                          {['Range Nilai','Deskripsi','Aksi'].map(h => (
-                            <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide">{h}</th>
+                          {['No.', 'Range Nilai', 'Deskripsi', 'Aksi'].map(h => (
+                            <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {kategoriLoading ? <LoadingRow cols={3}/> :
-                         kategoriList.length === 0 ? (
-                          <tr><td colSpan={3} className="py-10 text-center text-sm text-gray-400">
-                            {selectedMapelForRataRata ? 'Belum ada kategori untuk rata-rata nilai.' : 'Belum ada kategori untuk mata pelajaran ini.'}
-                          </td></tr>
-                         ) : kategoriList.map((k, idx) => (
-                          <tr key={k.id} className="transition-colors"
-                            style={{ borderBottom:'1px solid #fde0c8', background:idx%2===0?'#fff':'#fffaf6' }}
-                            onMouseEnter={e=>(e.currentTarget.style.background='#fff0e5')}
-                            onMouseLeave={e=>(e.currentTarget.style.background=idx%2===0?'#fff':'#fffaf6')}>
-                            <td className="px-5 py-3.5 text-center">
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
-                                style={{ background:'#fff0e5', color:'#c95b08', border:'1px solid #fde0c8' }}>
-                                {k.min_nilai} – {k.max_nilai}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5 text-center text-gray-600 max-w-[250px] truncate" title={k.deskripsi}>{k.deskripsi}</td>
-                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                              <div className="flex justify-center gap-2">
-                                <button onClick={() => openEditKategori(k)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
-                                  style={{ background:'#fff0e5', border:'1px solid #f5a623', color:'#b35a08' }}
-                                  onMouseEnter={e=>(e.currentTarget.style.background='#ffe4c8')}
-                                  onMouseLeave={e=>(e.currentTarget.style.background='#fff0e5')}>
-                                  <Pencil size={12}/> Edit
-                                </button>
-                                <button onClick={() => handleDeleteKategori(k.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
-                                  style={{ background:'#fef2f2', border:'1px solid #fca5a5', color:'#b91c1c' }}
-                                  onMouseEnter={e=>(e.currentTarget.style.background='#fee2e2')}
-                                  onMouseLeave={e=>(e.currentTarget.style.background='#fef2f2')}>
-                                  <Trash2 size={12}/> Hapus
-                                </button>
-                              </div>
+                        {kategoriLoading ? (
+                          <tr>
+                            <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
+                              <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-2" />
+                              Memuat data...
                             </td>
                           </tr>
-                        ))}
+                        ) : kategoriList.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
+                              Belum ada kategori untuk {selectedMapelForRataRata ? 'rata-rata' : 'mata pelajaran ini'}.
+                            </td>
+                          </tr>
+                        ) : (
+                          kategoriList.map((kategori, index) => (
+                            <tr
+                              key={kategori.id}
+                              className="transition-colors"
+                              style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                              onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
+                            >
+                              <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                              <td className="px-5 py-3.5 text-center">
+                                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold"
+                                  style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+                                  {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-gray-700" style={{ maxWidth: '300px' }}>
+                                <span className="truncate block" title={kategori.deskripsi}>
+                                  {kategori.deskripsi}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                <div className="flex justify-center gap-2">
+                                  <button
+                                    onClick={() => openEditKategori(kategori)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                    style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                  >
+                                    <Pencil size={13} /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                    style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                  >
+                                    <Trash2 size={13} /> Hapus
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </>
-              ) : emptyState('Pilih mata pelajaran untuk melihat dan mengatur kategori nilainya.')}
-            </>
+              ) : (
+                <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                  <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
+                </div>
+              )}
+            </div>
           )}
 
-          {/* ── TAB: BOBOT ───────────────────────────────────────────────── */}
+          {/* ====== TAB: BOBOT ====== */}
           {activeTab === 'bobot' && (
-            <>
-              <div className="mb-5">
-                <p className="text-base font-bold text-gray-800 mb-1">Atur Bobot Penilaian</p>
-                <p className="text-xs" style={{ color:'#c95b08' }}>Tentukan persentase bobot tiap komponen nilai</p>
-              </div>
-              <div className="mb-5">
-                <label className={labelCls} style={labelColor}>Pilih Mata Pelajaran</label>
+            <div>
+              {isPTSActive && (
+                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                  <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                    <span className="font-bold">ℹ️ Periode PTS Aktif: </span>
+                    Sistem otomatis menetapkan <strong>PTS = 100%</strong>. Anda tidak perlu mengatur bobot manual.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label className={labelCls} style={labelColor}>
+                  Mata Pelajaran <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={selectedMapelId || ''}
-                  onChange={e => setSelectedMapelId(e.target.value ? Number(e.target.value) : null)}
-                  className="max-w-xs border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200">
+                  onChange={(e) =>
+                    setSelectedMapelId(e.target.value ? Number(e.target.value) : null)
+                  }
+                  className={inputCls}
+                  style={{ maxWidth: '400px' }}
+                >
                   <option value="">-- Pilih Mata Pelajaran --</option>
-                  {mapelWajibList.map(m => (
-                    <option key={m.mata_pelajaran_id} value={m.mata_pelajaran_id}>{m.nama_mapel}</option>
+                  {mapelWajibList.map((mapel) => (
+                    <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
+                      {mapel.nama_mapel}
+                    </option>
                   ))}
                 </select>
               </div>
 
               {selectedMapelId ? (
                 bobotLoading ? (
-                  <div className="flex flex-col items-center gap-2 py-10">
-                    <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin"/>
-                    <span className="text-sm text-gray-400">Memuat bobot...</span>
+                  <div className="py-12 text-center">
+                    <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-gray-400">Memuat bobot...</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {/* Banner PTS aktif */}
-                    {isPTSActive && (
-                      <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background:'#fff0e5', border:'1px solid #fde0c8' }}>
-                        <span className="text-lg mt-0.5">ℹ️</span>
-                        <div>
-                          <p className="text-sm font-bold" style={{ color:'#7a3a0a' }}>Periode PTS Aktif</p>
-                          <p className="text-xs mt-1" style={{ color:'#c95b08' }}>
-                            Sistem otomatis menetapkan <strong>PTS = 100%</strong>. Bobot tidak dapat diubah di periode ini.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Daftar bobot */}
-                    <div className="rounded-xl overflow-hidden" style={{ border:'1px solid #fde0c8' }}>
-                      {bobotList.map((bobot, idx) => {
-                        const komponen   = komponenList.find(k => k.id_komponen === bobot.komponen_id);
-                        const isPTS      = komponen && /^PTS$/i.test(komponen.nama_komponen);
-                        const isEditable = !isPTSActive || isPTS;
-                        // Saat PTS aktif, tampilkan nilai aktual (PTS=100, lainnya=0)
-                        const displayVal = isPTSActive ? (isPTS ? 100 : 0) : bobot.bobot;
+                  <div>
+                    <div className="space-y-3 mb-6">
+                      {bobotList.map((bobot) => {
+                        const komponen = komponenList.find((k) => k.id_komponen === bobot.komponen_id);
+                        const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
+                        const displayBobot = isPTSActive ? (isPTS ? 100 : 0) : bobot.bobot;
+                        const isEditable = !isPTSActive;
 
                         return (
-                          <div key={bobot.komponen_id}
-                            className="flex items-center justify-between px-5 py-3.5"
-                            style={{ borderBottom: idx < bobotList.length-1 ? '1px solid #fde0c8':'none', background:idx%2===0?'#fff':'#fffaf6' }}>
-                            <span className="text-sm font-semibold text-gray-700 min-w-[120px]">
+                          <div
+                            key={bobot.komponen_id}
+                            className="flex items-center gap-4 p-4 rounded-xl"
+                            style={{
+                              background: isPTSActive && isPTS ? '#fff7ed' : isEditable ? '#fffaf6' : '#f9fafb',
+                              border: `1px solid ${isPTSActive && isPTS ? '#fdba74' : isEditable ? '#fde0c8' : '#e5e7eb'}`,
+                            }}
+                          >
+                            <span className="font-semibold min-w-[150px] text-sm" style={{ color: '#7a3a0a' }}>
                               {komponen?.nama_komponen || 'Komponen'}
                             </span>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1 justify-end">
                               <input
-                                type="number" min="0" max="100"
-                                value={displayVal}
-                                onChange={e => { if (isEditable && !isPTSActive) handleBobotChange(bobot.komponen_id, e.target.value); }}
-                                disabled={!isEditable || isPTSActive}
-                                className="w-24 rounded-xl px-3 py-2 text-sm text-center outline-none transition-all focus:ring-2 focus:ring-orange-400"
-                                style={{
-                                  border:     `1px solid ${isEditable && !isPTSActive ? '#f5a623':'#e5e7eb'}`,
-                                  background: isEditable && !isPTSActive ? '#fff0e5':'#f9fafb',
-                                  color:      isEditable && !isPTSActive ? '#7a3a0a':'#9ca3af',
-                                  cursor:     isEditable && !isPTSActive ? 'text':'not-allowed',
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={displayBobot}
+                                onChange={(e) => {
+                                  if (isEditable) {
+                                    handleBobotChange(bobot.komponen_id, e.target.value);
+                                  }
                                 }}
+                                disabled={!isEditable}
+                                className={`${isEditable ? inputCls : inputDisabledCls} text-right`}
+                                style={{ maxWidth: '120px' }}
+                                readOnly={isPTSActive}
                               />
-                              <span className="text-sm font-semibold w-4" style={{ color:'#c95b08' }}>%</span>
+                              <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>%</span>
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Total bobot */}
-                    <div className="flex items-center justify-between px-5 py-3 rounded-xl"
-                      style={{ background:'#fffaf6', border:'1px solid #fde0c8' }}>
-                      <span className="text-sm font-bold text-gray-800">Total Bobot</span>
-                      <span className="text-lg font-bold"
-                        style={{ color: isPTSActive ? '#16a34a' : Math.abs(bobotList.reduce((s,b)=>s+b.bobot,0)-100)<0.1?'#16a34a':'#dc2626' }}>
-                        {isPTSActive ? '100.00' : bobotList.reduce((s,b)=>s+b.bobot,0).toFixed(2)}%
-                      </span>
+                    <div className="p-4 rounded-xl mb-6" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-sm" style={{ color: '#7a3a0a' }}>Total Bobot:</span>
+                        <span className={`text-lg font-bold ${isBobotValid ? 'text-green-600' : 'text-red-600'}`}>
+                          {totalBobot.toFixed(2)}%
+                          {isBobotValid ? ' ✓' : ' ✗'}
+                        </span>
+                      </div>
                     </div>
 
                     {!isPTSActive && (
-                      <div className="flex justify-end">
-                        <BtnPrimary onClick={handleSaveBobot} disabled={savingBobot}>
-                          {savingBobot ? 'Menyimpan...' : 'Simpan Bobot'}
-                        </BtnPrimary>
+                      <div className="flex justify-end pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                        <button
+                          onClick={handleSaveBobot}
+                          disabled={isSavingBobot || !isBobotValid}
+                          className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
+                          style={btnPrimary.style}
+                          onMouseEnter={btnPrimary.hover}
+                          onMouseLeave={btnPrimary.leave}
+                        >
+                          {isSavingBobot ? (
+                            <>
+                              <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                              Menyimpan...
+                            </>
+                          ) : (
+                            <>Simpan Bobot</>
+                          )}
+                        </button>
                       </div>
                     )}
                   </div>
                 )
-              ) : emptyState('Pilih mata pelajaran untuk mengatur bobot komponen penilaiannya.')}
-            </>
+              ) : (
+                <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                  <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
+                </div>
+              )}
+            </div>
           )}
-
         </div>
       </div>
 
-      {/* ── Modal Edit/Tambah Kategori ────────────────────────────────── */}
+      {/* ====== MODAL EDIT KATEGORI ====== */}
       {showEditKategori && (
-        <div className={`fixed inset-0 flex items-center justify-center z-50 p-3 transition-opacity duration-200 ${editKategoriClosing?'opacity-0':'opacity-100'}`}
-          onClick={e => { if (e.target === e.currentTarget) closeEditKategori(); }}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"/>
-          <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${editKategoriClosing?'opacity-0 scale-95':'opacity-100 scale-100'}`}
-            style={CARD_STYLE}>
-
-            {/* Modal header */}
-            <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+        <div
+          className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${editKategoriClosing ? 'opacity-0' : 'opacity-100'}`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeEditKategori();
+          }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-200 ${editKategoriClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+            style={CARD_STYLE}
+          >
+            <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
               <h2 className="text-base font-bold text-white">
                 {editKategoriId ? 'Edit Kategori' : 'Tambah Kategori'}
               </h2>
-              <button onClick={closeEditKategori}
+              <button
+                onClick={closeEditKategori}
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background:'rgba(255,255,255,0.2)' }}>
-                <X size={16} className="text-white"/>
+                style={{ background: 'rgba(255,255,255,0.2)' }}
+              >
+                <X size={16} className="text-white" />
               </button>
             </div>
 
@@ -965,68 +1282,111 @@ export default function AturPenilaianPage() {
               {/* Aspek & Grade (kokurikuler only) */}
               {activeTab === 'kokurikuler' && (
                 <>
-                  <div>
-                    <label className={labelCls} style={labelColor}>Aspek Kokurikuler <span className="text-red-500">*</span></label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls} style={labelColor}>
+                      Aspek Kokurikuler <span className="text-red-500">*</span>
+                    </label>
                     <select
                       value={editKategoriData.id_aspek_kokurikuler || ''}
-                      onChange={e => setEditKategoriData({ ...editKategoriData, id_aspek_kokurikuler: Number(e.target.value) })}
-                      className={inputCls}>
+                      onChange={(e) => setEditKategoriData({ ...editKategoriData, id_aspek_kokurikuler: Number(e.target.value) })}
+                      className={errors.form ? inputErrCls : inputCls}
+                    >
                       <option value="">-- Pilih Aspek --</option>
                       {aspekList.map(a => (
                         <option key={a.id_aspek_kokurikuler} value={a.id_aspek_kokurikuler}>{a.nama}</option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className={labelCls} style={labelColor}>Grade <span className="text-red-500">*</span></label>
-                    <input type="text"
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls} style={labelColor}>
+                      Grade <span className="text-red-500">*</span>
+                      <span className="ml-2 text-xs font-normal text-gray-400">(1 karakter: A, B, C, dst)</span>
+                    </label>
+                    <input
+                      type="text"
                       value={editKategoriData.grade || ''}
-                      onChange={e => setEditKategoriData({ ...editKategoriData, grade: e.target.value.toUpperCase() })}
-                      className={inputCls} maxLength={3} placeholder="A, B+, C, dst."/>
+                      onChange={(e) => setEditKategoriData({ ...editKategoriData, grade: e.target.value.toUpperCase().slice(0, 1) })}
+                      className={errors.grade ? inputErrCls : inputCls}
+                      maxLength={1}
+                      placeholder="A"
+                    />
+                    {errors.grade && <p className="text-red-500 text-xs">{errors.grade}</p>}
                   </div>
                 </>
               )}
 
               {/* Range nilai */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls} style={labelColor}>Nilai Min <span className="text-red-500">*</span></label>
-                  <input type="number" min="0" max="100"
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelCls} style={labelColor}>
+                    Nilai Minimum <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
                     value={editKategoriData.min_nilai}
-                    onChange={e => setEditKategoriData({ ...editKategoriData, min_nilai: Number(e.target.value) })}
-                    className={inputCls}/>
+                    onChange={(e) => setEditKategoriData({ ...editKategoriData, min_nilai: Number(e.target.value) })}
+                    className={errors.form ? inputErrCls : inputCls}
+                  />
                 </div>
-                <div>
-                  <label className={labelCls} style={labelColor}>Nilai Max <span className="text-red-500">*</span></label>
-                  <input type="number" min="0" max="100"
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelCls} style={labelColor}>
+                    Nilai Maksimum <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
                     value={editKategoriData.max_nilai}
-                    onChange={e => setEditKategoriData({ ...editKategoriData, max_nilai: Number(e.target.value) })}
-                    className={inputCls}/>
+                    onChange={(e) => setEditKategoriData({ ...editKategoriData, max_nilai: Number(e.target.value) })}
+                    className={errors.form ? inputErrCls : inputCls}
+                  />
                 </div>
               </div>
 
-              {/* Peringatan real-time min >= max */}
+              {/* ✅ Real-time validation warning */}
               {editKategoriData.min_nilai >= editKategoriData.max_nilai && (
-                <p className="text-xs text-red-500 -mt-2">⚠ Nilai minimum harus lebih kecil dari nilai maksimum</p>
+                <div className="p-2 rounded-lg text-xs" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                  ⚠️ Nilai minimum harus lebih kecil dari nilai maksimum
+                </div>
               )}
 
               {/* Deskripsi */}
-              <div>
-                <label className={labelCls} style={labelColor}>Deskripsi <span className="text-red-500">*</span></label>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>
+                  Deskripsi <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   value={editKategoriData.deskripsi}
-                  onChange={e => setEditKategoriData({ ...editKategoriData, deskripsi: e.target.value })}
-                  className={inputCls} rows={3}
-                  placeholder="Contoh: Sangat Baik, Perlu Bimbingan, dll."/>
+                  onChange={(e) => setEditKategoriData({ ...editKategoriData, deskripsi: e.target.value })}
+                  className={errors.deskripsi ? inputErrCls : inputCls}
+                  rows={3}
+                  placeholder="Contoh: Sangat Baik, Perlu Bimbingan, dll."
+                />
+                {errors.deskripsi && <p className="text-red-500 text-xs">{errors.deskripsi}</p>}
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-2" style={{ borderTop:'1px solid #fde0c8' }}>
-                <BtnSecondary onClick={closeEditKategori}>Batal</BtnSecondary>
-                <BtnPrimary onClick={handleSaveKategori} disabled={savingKategori}>
-                  {savingKategori ? 'Menyimpan...' : 'Simpan'}
-                </BtnPrimary>
-              </div>
+            <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+              <BtnSecondary onClick={closeEditKategori} disabled={isSavingKategori}>Batal</BtnSecondary>
+              <button
+                onClick={handleSaveKategori}
+                disabled={isSavingKategori}
+                className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
+                style={btnPrimary.style}
+                onMouseEnter={btnPrimary.hover}
+                onMouseLeave={btnPrimary.leave}
+              >
+                {isSavingKategori ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>Simpan</>
+                )}
+              </button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 /**
  * Nama File: profilController.js
- * Fungsi: Controller untuk profil guru kelas (edit, ganti password, upload foto)
+ * Fungsi: Mengelola profil guru kelas
  */
 
 const db = require('../../config/db');
@@ -9,51 +9,33 @@ const guruModel = require('../../models/admin/guruModel');
 
 /**
  * PUT /profil
- * Update data profil guru kelas
+ * Memperbarui data profil guru (user + guru)
  */
 exports.editProfil = async (req, res) => {
     try {
         const userId = req.user.id;
-        const {
-            nama_lengkap,
-            email_sekolah,
-            niy,
-            nuptk,
-            jenis_kelamin,
-            no_telepon,
-            alamat,
-            tempat_lahir,
-            tanggal_lahir,
-        } = req.body;
+        const { nama_lengkap, email_sekolah, niy, nuptk, jenis_kelamin, no_telepon, alamat } = req.body;
 
         if (!nama_lengkap || !email_sekolah) {
-            return res.status(400).json({
-                message: 'Nama dan email wajib diisi'
-            });
+            return res.status(400).json({ message: 'Nama dan email wajib diisi' });
         }
 
-        // Update tabel user
         await db.execute(
             'UPDATE user SET nama_lengkap = ?, email_sekolah = ? WHERE id_user = ?',
             [nama_lengkap, email_sekolah, userId]
         );
 
-        // Update tabel guru
         await db.execute(
-            `UPDATE guru 
-       SET niy = ?, nuptk = ?, jenis_kelamin = ?, no_telepon = ?, alamat = ?, 
-           tempat_lahir = ?, tanggal_lahir = ?
-       WHERE user_id = ?`,
-            [niy, nuptk, jenis_kelamin, no_telepon, alamat, tempat_lahir || null, tanggal_lahir || null, userId]
+            'UPDATE guru SET niy = ?, nuptk = ?, jenis_kelamin = ?, no_telepon = ?, alamat = ? WHERE user_id = ?',
+            [niy, nuptk, jenis_kelamin, no_telepon, alamat, userId]
         );
 
-        // Ambil data terbaru
         const [userRows] = await db.execute(
             'SELECT id_user, nama_lengkap, email_sekolah FROM user WHERE id_user = ?',
             [userId]
         );
         const [guruRows] = await db.execute(
-            'SELECT niy, nuptk, jenis_kelamin, no_telepon, alamat, tempat_lahir, tanggal_lahir, foto_path FROM guru WHERE user_id = ?',
+            'SELECT niy, nuptk, jenis_kelamin, no_telepon, alamat, foto_path FROM guru WHERE user_id = ?',
             [userId]
         );
 
@@ -71,8 +53,6 @@ exports.editProfil = async (req, res) => {
             jenis_kelamin: guruRows[0].jenis_kelamin,
             no_telepon: guruRows[0].no_telepon,
             alamat: guruRows[0].alamat,
-            tempat_lahir: guruRows[0].tempat_lahir,
-            tanggal_lahir: guruRows[0].tanggal_lahir,
             profileImage: guruRows[0].foto_path || null,
         };
 
@@ -85,7 +65,7 @@ exports.editProfil = async (req, res) => {
 
 /**
  * PUT /ganti-password
- * Ganti password akun guru kelas
+ * Mengganti password akun setelah validasi password lama
  */
 exports.gantiPassword = async (req, res) => {
     try {
@@ -93,16 +73,10 @@ exports.gantiPassword = async (req, res) => {
         const { oldPassword, newPassword } = req.body;
 
         if (!oldPassword || !newPassword || newPassword.length < 8) {
-            return res.status(400).json({
-                message: 'Password lama & baru wajib, minimal 8 karakter'
-            });
+            return res.status(400).json({ message: 'Password lama & baru wajib, minimal 8 karakter' });
         }
 
-        const [rows] = await db.execute(
-            'SELECT password FROM user WHERE id_user = ?',
-            [userId]
-        );
-
+        const [rows] = await db.execute('SELECT password FROM user WHERE id_user = ?', [userId]);
         if (rows.length === 0) {
             return res.status(404).json({ message: 'User tidak ditemukan' });
         }
@@ -113,10 +87,7 @@ exports.gantiPassword = async (req, res) => {
         }
 
         const newHashedPassword = await bcrypt.hash(newPassword, 10);
-        await db.execute(
-            'UPDATE user SET password = ? WHERE id_user = ?',
-            [newHashedPassword, userId]
-        );
+        await db.execute('UPDATE user SET password = ? WHERE id_user = ?', [newHashedPassword, userId]);
 
         res.json({ message: 'Kata sandi berhasil diubah' });
     } catch (err) {
@@ -127,7 +98,7 @@ exports.gantiPassword = async (req, res) => {
 
 /**
  * PUT /upload_foto
- * Upload foto profil guru kelas
+ * Mengupload foto profil guru
  */
 exports.uploadFotoProfil = async (req, res) => {
     try {
@@ -153,5 +124,3 @@ exports.uploadFotoProfil = async (req, res) => {
         res.status(500).json({ message: 'Gagal mengupload foto profil' });
     }
 };
-
-module.exports = exports;

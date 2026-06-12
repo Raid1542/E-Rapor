@@ -10,17 +10,12 @@ const catatanWaliController = require('./catatanWaliController');
 const ekskulController = require('./ekskulController');
 const kokurikulerController = require('./kokurikulerController');
 const nilaiAkademikController = require('./nilaiAkademikController');
-const konfigurasiController = require('./konfigurasiController');
+const aturPenilaianController = require('./aturPenilaianController');
 const rekapanController = require('./rekapanController');
 const raporController = require('./raporController');
 const tahunAjaranController = require('./tahunAjaranController');
-const dashboardController = require('./dashboardController'); 
-const aturPenilaianController = require('./aturPenilaianController');
 
 module.exports = {
-    // Dashboard
-    ...dashboardController,
-
     // Profil
     ...profilController,
 
@@ -42,8 +37,8 @@ module.exports = {
     // Nilai Akademik
     ...nilaiAkademikController,
 
-    // Konfigurasi Penilaian
-    ...konfigurasiController,
+    // Atur Penilaian
+    ...aturPenilaianController,
 
     // Rekapan
     ...rekapanController,
@@ -53,7 +48,4 @@ module.exports = {
 
     // Tahun Ajaran
     ...tahunAjaranController,
-
-    // Atur Penilaian
-    ...aturPenilaianController,
 };

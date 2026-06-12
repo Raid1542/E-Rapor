@@ -1,6 +1,6 @@
 /**
  * Nama File: rekapanController.js
- * Fungsi: Controller untuk rekapan nilai dan export Excel
+ * Fungsi: Mengelola rekapan nilai untuk guru kelas
  */
 
 const db = require('../../config/db');
@@ -8,21 +8,21 @@ const ExcelJS = require('exceljs');
 
 /**
  * GET /rekapan-nilai
- * Ambil rekapan nilai seluruh siswa di kelas
+ * Mendapatkan rekapan nilai seluruh siswa di kelas
  */
 exports.getRekapanNilai = async (req, res) => {
     try {
         const userId = req.user.id;
-
+        
         // Ambil ID dari middleware
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;  // Untuk jadwal: guru_kelas, siswa_kelas, pembelajaran
-        const semesterId = req.idSemesterAktif;              // Untuk nilai: nilai_rapor, konfigurasi
+        const tahunAjaranIndukId = req.idTahunAjaranInduk;  // Untuk jadwal
+        const semesterId = req.idSemesterAktif;              // Untuk nilai
         const { semester, status_pts, status_pas } = req.penilaianContext || {};
 
         if (!tahunAjaranIndukId || !semesterId || !semester) {
-            return res.status(400).json({
-                success: false,
-                message: 'Data tahun ajaran atau semester tidak ditemukan'
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Data tahun ajaran atau semester tidak ditemukan' 
             });
         }
 
@@ -30,75 +30,93 @@ exports.getRekapanNilai = async (req, res) => {
 
         // Query jadwal pakai ID INDUK
         const [kelasRows] = await db.execute(
-            `SELECT k.id_kelas FROM kelas k 
-       INNER JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-       WHERE gk.user_id = ? AND gk.id_tahun_ajaran_induk = ?`,
+            `SELECT k.id_kelas 
+             FROM kelas k 
+             INNER JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
+             WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
             [userId, tahunAjaranIndukId]
         );
 
         if (kelasRows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Anda belum mengampu kelas di tahun ajaran ini'
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Anda belum mengampu kelas di tahun ajaran ini' 
             });
         }
+
         const kelasId = kelasRows[0].id_kelas;
 
-        // Query mapel & siswa pakai ID INDUK
+        // Query mapel pakai ID INDUK
         const [mapelRows] = await db.execute(
             `SELECT DISTINCT mp.id_mata_pelajaran, mp.kode_mapel 
-       FROM mata_pelajaran mp 
-       INNER JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mapel_id 
-       WHERE p.kelas_id = ? AND p.id_tahun_ajaran_induk = ? 
-       ORDER BY mp.urutan_rapor IS NULL, mp.urutan_rapor ASC, mp.id_mata_pelajaran ASC`,
+             FROM mata_pelajaran mp 
+             INNER JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mata_pelajaran_id 
+             WHERE p.kelas_id = ? AND p.tahun_ajaran_id = ? 
+             ORDER BY mp.urutan_rapor IS NULL, mp.urutan_rapor ASC, mp.id_mata_pelajaran ASC`,
             [kelasId, tahunAjaranIndukId]
         );
+
         const mapelList = mapelRows.map(row => row.kode_mapel);
         const mapelIdToKode = new Map(mapelRows.map(row => [row.id_mata_pelajaran, row.kode_mapel]));
 
+        // Query siswa pakai ID INDUK
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
-       FROM siswa s 
-       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-       WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
-       ORDER BY s.nama_lengkap`,
+             FROM siswa s 
+             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+             WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ? 
+             ORDER BY s.nama_lengkap`,
             [kelasId, tahunAjaranIndukId]
         );
 
         if (siswaRows.length === 0) {
-            return res.json({ success: true, siswa: [], mapel_list: mapelList });
+            return res.json({ 
+                success: true, 
+                siswa: [], 
+                mapel_list: mapelList 
+            });
         }
 
-        // Query nilai & config pakai ID SEMESTER
+        // Query nilai pakai ID SEMESTER
         const [nilaiRows] = await db.execute(
             `SELECT nr.siswa_id, nr.mapel_id, nr.nilai_rapor AS nilai 
-       FROM nilai_rapor nr 
-       WHERE nr.kelas_id = ? AND nr.id_tahun_ajaran_induk = ? AND nr.semester = ? AND nr.jenis_penilaian = ?`,
+             FROM nilai_rapor nr 
+             WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? 
+             AND nr.semester = ? AND nr.jenis_penilaian = ?`,
             [kelasId, semesterId, semester, jenisAktif]
         );
 
+        // Build nilai map
         const nilaiMap = {};
-        siswaRows.forEach(s => {
-            nilaiMap[s.id_siswa] = {};
-            mapelList.forEach(kode => { nilaiMap[s.id_siswa][kode] = null; });
-        });
-        nilaiRows.forEach(row => {
-            const kode = mapelIdToKode.get(row.mapel_id);
-            if (kode && nilaiMap[row.siswa_id]) nilaiMap[row.siswa_id][kode] = row.nilai;
+        siswaRows.forEach(s => { 
+            nilaiMap[s.id_siswa] = {}; 
+            mapelList.forEach(kode => { 
+                nilaiMap[s.id_siswa][kode] = null; 
+            }); 
         });
 
+        nilaiRows.forEach(row => { 
+            const kode = mapelIdToKode.get(row.mapel_id); 
+            if (kode && nilaiMap[row.siswa_id]) {
+                nilaiMap[row.siswa_id][kode] = row.nilai; 
+            }
+        });
+
+        // Query config rata-rata pakai ID SEMESTER
         const [configRataRata] = await db.execute(
             `SELECT min_nilai, max_nilai, deskripsi 
-       FROM konfigurasi_nilai_rapor 
-       WHERE mapel_id IS NULL AND id_tahun_ajaran_induk = ? 
-       ORDER BY min_nilai DESC`,
+             FROM konfigurasi_nilai_rapor 
+             WHERE mapel_id IS NULL AND is_active = 1 AND tahun_ajaran_id = ? 
+             ORDER BY min_nilai DESC`,
             [semesterId]
         );
 
         const getDeskripsiRataRata = (nilai, configList) => {
             if (nilai == null || nilai < 0) return 'Belum ada deskripsi';
-            for (const c of configList) {
-                if (nilai >= c.min_nilai && nilai <= c.max_nilai) return c.deskripsi;
+            for (const c of configList) { 
+                if (nilai >= c.min_nilai && nilai <= c.max_nilai) {
+                    return c.deskripsi; 
+                }
             }
             return 'Belum ada deskripsi';
         };
@@ -106,43 +124,63 @@ exports.getRekapanNilai = async (req, res) => {
         const siswa = siswaRows.map(s => {
             const nilaiMapel = nilaiMap[s.id_siswa] || {};
             const nilaiValid = Object.values(nilaiMapel).filter(v => v !== null);
-            const rataRata = nilaiValid.length > 0
-                ? Math.floor((nilaiValid.reduce((a, b) => a + b, 0) / nilaiValid.length) * 100) / 100
+            
+            const rataRata = nilaiValid.length > 0 
+                ? Math.floor((nilaiValid.reduce((a, b) => a + b, 0) / nilaiValid.length) * 100) / 100 
                 : null;
+            
             const rataRataBulat = rataRata !== null ? Math.floor(rataRata) : null;
-            const deskripsiRataRata = rataRataBulat !== null
-                ? getDeskripsiRataRata(rataRataBulat, configRataRata)
+            const deskripsiRataRata = rataRataBulat !== null 
+                ? getDeskripsiRataRata(rataRataBulat, configRataRata) 
                 : 'Belum ada deskripsi';
-            return {
-                id_siswa: s.id_siswa,
-                nama: s.nama,
-                nis: s.nis,
-                nilai_mapel: nilaiMapel,
-                rata_rata: rataRata,
-                deskripsi_rata_rata: deskripsiRataRata,
-                ranking: null
+
+            return { 
+                id_siswa: s.id_siswa, 
+                nama: s.nama, 
+                nis: s.nis, 
+                nilai_mapel: nilaiMapel, 
+                rata_rata: rataRata, 
+                deskripsi_rata_rata: deskripsiRataRata, 
+                ranking: null 
             };
         });
 
-        siswa.filter(s => s.rata_rata !== null)
+        // Hitung ranking
+        siswa
+            .filter(s => s.rata_rata !== null)
             .sort((a, b) => b.rata_rata - a.rata_rata)
-            .forEach((s, idx) => { s.ranking = idx + 1; });
-        siswa.forEach(s => { if (s.rata_rata === null) s.ranking = null; });
+            .forEach((s, idx) => { 
+                s.ranking = idx + 1; 
+            });
 
-        res.json({ success: true, siswa, mapel_list: mapelList });
+        siswa.forEach(s => { 
+            if (s.rata_rata === null) s.ranking = null; 
+        });
+
+        res.json({ 
+            success: true, 
+            siswa, 
+            mapel_list: mapelList 
+        });
+
     } catch (error) {
         console.error('Error di getRekapanNilai:', error);
-        res.status(500).json({ success: false, message: 'Gagal memuat rekapan nilai' });
+        res.status(500).json({ 
+            success: false, 
+            message: 'Gagal memuat rekapan nilai' 
+        });
     }
 };
 
 /**
  * GET /rekapan-nilai/export-excel
- * Export rekapan nilai ke Excel
+ * Mengekspor rekapan nilai seluruh siswa ke format Excel
  */
 exports.exportRekapanNilaiExcel = async (req, res) => {
     try {
         const userId = req.user.id;
+        
+        // Ambil ID dari middleware
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
         const { semester } = req.penilaianContext || {};
@@ -151,69 +189,92 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
             throw new Error('Data tahun ajaran atau semester tidak ditemukan');
         }
 
-        // Jadwal & siswa pakai ID INDUK
+        const jenisAktif = req.penilaianContext?.status_pts === 'aktif' ? 'PTS' : 'PAS';
+
+        // Query jadwal pakai ID INDUK
         const [kelasRows] = await db.execute(
-            `SELECT k.id_kelas FROM kelas k 
-       JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-       WHERE gk.user_id = ? AND gk.id_tahun_ajaran_induk = ?`,
+            `SELECT k.id_kelas 
+             FROM kelas k 
+             JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
+             WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
             [userId, tahunAjaranIndukId]
         );
 
-        if (kelasRows.length === 0) throw new Error('Kelas tidak ditemukan');
+        if (kelasRows.length === 0) {
+            throw new Error('Kelas tidak ditemukan');
+        }
+
         const kelasId = kelasRows[0].id_kelas;
 
+        // Query siswa pakai ID INDUK
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
-       FROM siswa s 
-       JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-       WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
-       ORDER BY s.nama_lengkap`,
+             FROM siswa s 
+             JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+             WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ? 
+             ORDER BY s.nama_lengkap`,
             [kelasId, tahunAjaranIndukId]
         );
 
-        // Nilai pakai ID SEMESTER
+        // Query nilai pakai ID SEMESTER
         const [nilaiRows] = await db.execute(
             `SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai 
-       FROM nilai_rapor nr 
-       JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran 
-       WHERE nr.kelas_id = ? AND nr.id_tahun_ajaran_induk = ? AND nr.semester = ?`,
-            [kelasId, semesterId, semester]
+             FROM nilai_rapor nr 
+             JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran 
+             WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? 
+             AND nr.semester = ? AND nr.jenis_penilaian = ?`,
+            [kelasId, semesterId, semester, jenisAktif]
         );
 
+        // Build mapel list
         const kodeMapelSet = new Set();
         nilaiRows.forEach(row => kodeMapelSet.add(row.kode_mapel));
         const mapelList = Array.from(kodeMapelSet);
 
+        // Build nilai map
         const nilaiMap = {};
-        nilaiRows.forEach(row => {
-            if (!nilaiMap[row.siswa_id]) nilaiMap[row.siswa_id] = {};
-            nilaiMap[row.siswa_id][row.kode_mapel] = row.nilai;
+        nilaiRows.forEach(row => { 
+            if (!nilaiMap[row.siswa_id]) {
+                nilaiMap[row.siswa_id] = {}; 
+            }
+            nilaiMap[row.siswa_id][row.kode_mapel] = row.nilai; 
         });
 
+        // Build siswa data
         const siswa = siswaRows.map(s => {
             const nilaiMapel = {};
-            mapelList.forEach(kode => {
-                nilaiMapel[kode] = nilaiMap[s.id_siswa]?.[kode] || null;
+            mapelList.forEach(kode => { 
+                nilaiMapel[kode] = nilaiMap[s.id_siswa]?.[kode] || null; 
             });
+            
             const nilaiArray = Object.values(nilaiMapel).filter(v => v !== null);
-            const rataRata = nilaiArray.length > 0
-                ? parseFloat((nilaiArray.reduce((a, b) => a + b, 0) / nilaiArray.length).toFixed(2))
+            const rataRata = nilaiArray.length > 0 
+                ? parseFloat((nilaiArray.reduce((a, b) => a + b, 0) / nilaiArray.length).toFixed(2)) 
                 : null;
-            return {
-                id_siswa: s.id_siswa,
-                nama: s.nama,
-                nis: s.nis,
-                nilai_mapel: nilaiMapel,
-                rata_rata: rataRata
+
+            return { 
+                id_siswa: s.id_siswa, 
+                nama: s.nama, 
+                nis: s.nis, 
+                nilai_mapel: nilaiMapel, 
+                rata_rata: rataRata,
+                ranking: null 
             };
         });
 
-        siswa.filter(s => s.rata_rata !== null)
+        // Hitung ranking
+        siswa
+            .filter(s => s.rata_rata !== null)
             .sort((a, b) => b.rata_rata - a.rata_rata)
-            .forEach((s, i) => { s.ranking = i + 1; });
-        siswa.forEach(s => { if (s.rata_rata === null) s.ranking = null; });
+            .forEach((s, i) => { 
+                s.ranking = i + 1; 
+            });
 
-        // Generate Excel dengan ExcelJS
+        siswa.forEach(s => { 
+            if (s.rata_rata === null) s.ranking = null; 
+        });
+
+        // Generate Excel
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Rekapan Nilai');
 
@@ -223,7 +284,11 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
         // Gaya header
         worksheet.getRow(1).eachCell(cell => {
             cell.font = { bold: true };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+            cell.fill = { 
+                type: 'pattern', 
+                pattern: 'solid', 
+                fgColor: { argb: 'FFD3D3D3' } 
+            };
             cell.alignment = { horizontal: 'center' };
         });
 
@@ -240,6 +305,7 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
                 const val = s.nilai_mapel[kode];
                 return val !== null ? Math.floor(val) : '-';
             });
+
             worksheet.addRow([
                 idx + 1,
                 s.nama,
@@ -254,12 +320,14 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=rekapan_nilai_kelas.xlsx');
+        
         await workbook.xlsx.write(res);
         res.end();
+
     } catch (err) {
         console.error('Error exportRekapanNilaiExcel:', err);
-        res.status(500).json({ message: 'Gagal mengekspor file Excel' });
+        res.status(500).json({ 
+            message: 'Gagal mengekspor file Excel' 
+        });
     }
 };
-
-module.exports = exports;
