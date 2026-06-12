@@ -7,7 +7,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const nilaiModel = {
   // Mengecek apakah user berhak menginput nilai untuk mapel di kelas tertentu

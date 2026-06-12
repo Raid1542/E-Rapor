@@ -6,10 +6,10 @@
 const db = require('../../config/db');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
-const nilaiModel = require('../../models/nilaiModel');
+const nilaiModel = require('../../models/guru_kelas/nilaiModel');
 const bobotPenilaianModel = require('../../models/guru_kelas/bobotPenilaianModel');
-const komponenPenilaianModel = require('../../models/komponenPenilaianModel');
-const konfigurasiNilaiRaporModel = require('../../models/konfigurasiNilaiRaporModel');
+const komponenPenilaianModel = require('../../models/guru_kelas/komponenPenilaianModel');
+const konfigurasiNilaiRaporModel = require('../../models/guru_kelas/konfigurasiNilaiRaporModel');
 const { isMapelWajibGuruKelas, updateAllNilaiRaporForMapel, getDeskripsiFromKategori } = require('./helpers');
 
 /**

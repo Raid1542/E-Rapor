@@ -6,7 +6,7 @@
  * Tanggal: 1 Oktober 2025
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const komponenPenilaianModel = {
   // Mengambil semua komponen penilaian aktif, diurutkan berdasarkan urutan
