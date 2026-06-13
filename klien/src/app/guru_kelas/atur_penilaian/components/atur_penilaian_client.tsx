@@ -593,11 +593,7 @@ export default function AturPenilaianGuruKelasClient() {
       } else if (grade.length !== 1) {
         ne.grade = 'Grade harus tepat 1 karakter (A, B, C, dst).';
       }
-    } else if (activeTab === 'akademik') {
-      if (selectedMapelAkademik === null) {
-        ne.form = 'Pilih mata pelajaran terlebih dahulu.';
-      }
-    }
+    } 
 
     if (Object.keys(ne).length > 0) {
       setErrors(ne);
@@ -1102,7 +1098,7 @@ export default function AturPenilaianGuruKelasClient() {
 
               <div className="mb-6">
                 <label className={labelCls} style={labelColor}>
-                  Pilih Mata Pelajaran <span className="text-red-500">*</span>
+                  Mata Pelajaran
                 </label>
                 <select
                   value={selectedMapelAkademik || ''}
@@ -1237,7 +1233,7 @@ export default function AturPenilaianGuruKelasClient() {
 
               <div className="mb-6">
                 <label className={labelCls} style={labelColor}>
-                  Mata Pelajaran <span className="text-red-500">*</span>
+                  Mata Pelajaran
                 </label>
                 <select
                   value={selectedMapelId || ''}
