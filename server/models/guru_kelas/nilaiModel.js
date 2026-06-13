@@ -42,7 +42,7 @@ const nilaiModel = {
     } = data;
 
     const [siswaCheck] = await db.execute(
-      `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?`,
+      `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?`,
       [siswa_id, kelas_id, tahun_ajaran_id]
     );
     if (siswaCheck.length === 0) {
@@ -95,7 +95,7 @@ const nilaiModel = {
         AND nd.mapel_id = ? 
         AND nd.tahun_ajaran_id = ?
       LEFT JOIN komponen_penilaian kp ON nd.komponen_id = kp.id_komponen
-      WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ?
+      WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
       ORDER BY s.nama_lengkap, kp.urutan
     `;
     const [results] = await db.execute(query, [

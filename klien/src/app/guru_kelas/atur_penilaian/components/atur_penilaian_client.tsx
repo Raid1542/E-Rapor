@@ -8,41 +8,48 @@
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ====== KONSTANTA API ======
 const API = 'http://localhost:5000/api/guru-kelas';
 
-// ====== HELPER: Authenticated Fetch ======
-const authFetch = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    const err: any = new Error('Token tidak ditemukan');
-    err.code = 'NO_TOKEN';
-    throw err;
-  }
-  return fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  });
-};
-
 // ====== HELPER: Parse Error dari Backend ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
   try {
+    const contentType = res.headers.get('content-type');
+
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await res.text();
+
+      if (res.status === 404) {
+        return {
+          message: 'Endpoint tidak ditemukan. Pastikan backend routes sudah terdaftar.',
+          code: 'NOT_FOUND'
+        };
+      }
+
+      if (res.status === 500) {
+        return {
+          message: 'Server error. Periksa console backend.',
+          code: 'SERVER_ERROR'
+        };
+      }
+
+      return {
+        message: `Server error (${res.status}). Periksa koneksi backend.`,
+        code: 'INVALID_RESPONSE'
+      };
+    }
+
     const data = await res.json();
     return {
       message: data.message || 'Terjadi kesalahan',
       code: data.code
     };
-  } catch {
-    return { message: 'Terjadi kesalahan' };
+  } catch (error) {
+    return { message: 'Gagal memproses response dari server' };
   }
 };
 
@@ -99,6 +106,10 @@ interface BobotItem {
 interface CoverageInfo {
   covered: boolean;
   gap?: string;
+  gaps?: Array<{
+    aspek: string;
+    gap: string;
+  }>;
 }
 
 // ====== GLOBAL STYLES ======
@@ -187,14 +198,29 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
 const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
   if (!coverage || coverage.covered) return null;
 
+  const gaps = coverage.gaps || (coverage.gap ? [{ aspek: 'Akademik', gap: coverage.gap }] : []);
+
+  if (gaps.length === 0) return null;
+
   return (
     <div className="mb-4 p-3 rounded-xl flex items-start gap-2"
       style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
       <AlertTriangle size={18} className="text-yellow-600 mt-0.5 flex-shrink-0" />
       <div className="text-xs" style={{ color: '#78350f' }}>
         <strong>Peringatan:</strong> Range nilai 0-100 belum lengkap.
-        Ada gap pada rentang <strong>{coverage.gap}</strong>.
-        Siswa dengan nilai di rentang ini tidak akan mendapatkan deskripsi di rapor.
+        {gaps.length === 1 ? (
+          <>
+            {' '}Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <strong>{gaps[0].gap}</strong>.
+          </>
+        ) : (
+          <ul className="mt-1 ml-4 list-disc">
+            {gaps.map((g, i) => (
+              <li key={i}>
+                <strong>{g.aspek}:</strong> gap pada rentang <strong>{g.gap}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
@@ -259,7 +285,6 @@ export default function AturPenilaianGuruKelasClient() {
 
   // Mapel selection (akademik)
   const [selectedMapelAkademik, setSelectedMapelAkademik] = useState<number | null>(null);
-  const [selectedMapelForRataRata, setSelectedMapelForRataRata] = useState(false);
 
   // Bobot
   const [selectedMapelId, setSelectedMapelId] = useState<number | null>(null);
@@ -278,6 +303,8 @@ export default function AturPenilaianGuruKelasClient() {
 
   const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
+
+  const [isNotAssigned, setIsNotAssigned] = useState(false);
 
   // ====== FETCH DATA DUKUNGAN ======
   useEffect(() => {
@@ -317,28 +344,35 @@ export default function AturPenilaianGuruKelasClient() {
         }
 
         const [taData, komponenData, mapelData, aspekData] = await Promise.all([
-          taRes.json(), komponenRes.json(), mapelRes.json(), aspekRes.json(),
+          taRes.json(),
+          komponenRes.json(),
+          mapelRes.json(),
+          aspekRes.json(),
         ]);
 
         const { status_pts, status_pas } = taData.data;
-        setJenisPenilaianAktif(status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null);
+        const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
+        setJenisPenilaianAktif(jenisAktif);
         setKomponenList(komponenData.data || []);
 
-        // Format mapel: backend return { wajib: [], pilihan: [] }
         const mapelWajib = mapelData.data?.wajib || mapelData.wajib || [];
         const mapelPilihan = mapelData.data?.pilihan || mapelData.pilihan || [];
-        setMapelList([...mapelWajib, ...mapelPilihan]);
+        const allMapel = [...mapelWajib, ...mapelPilihan];
+        setMapelList(allMapel);
 
         setAspekList(aspekData.data || []);
+
+        if (jenisAktif && allMapel.length === 0) {
+          setIsNotAssigned(true);
+        }
       } catch (err: any) {
-        console.error('Error fetch data pendukung:', err);
         showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [showModal]);
+  }, [showModal, handleLogout]);
 
   // ====== FETCH KATEGORI ======
   useEffect(() => {
@@ -353,12 +387,11 @@ export default function AturPenilaianGuruKelasClient() {
         if (!token) return;
 
         let endpoint = '';
+
         if (activeTab === 'kokurikuler') {
           endpoint = `${API}/atur-penilaian/kategori-kokurikuler`;
         } else if (activeTab === 'akademik') {
-          if (selectedMapelForRataRata) {
-            endpoint = `${API}/atur-penilaian/kategori-rata-rata`;
-          } else if (selectedMapelAkademik !== null) {
+          if (selectedMapelAkademik !== null) {
             endpoint = `${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}`;
           } else {
             setKategoriList([]);
@@ -367,19 +400,43 @@ export default function AturPenilaianGuruKelasClient() {
           }
         }
 
-        const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) {
-          const err = await parseBackendError(res);
-          throw new Error(err.message);
+        if (!endpoint) {
+          setKategoriList([]);
+          setKategoriLoading(false);
+          return;
         }
-        const data = await res.json();
-        setKategoriList(data.data || []);
 
-        // Simpan coverage info untuk akademik & rata-rata
-        if (activeTab === 'akademik' && data.coverage) {
-          setCoverageInfo(data.coverage);
+        const res = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+          let errorData;
+          try {
+            errorData = await res.json();
+          } catch {
+            errorData = { message: await res.text(), code: null };
+          }
+
+          if (res.status === 403 || errorData.code === 'NOT_ASSIGNED') {
+            setIsNotAssigned(true);
+            return;
+          }
+
+          throw new Error(errorData.message || `HTTP ${res.status}`);
         }
+
+        const data = await res.json();
+        const formattedData = (data.data || []).map((item: any) => ({
+          ...item,
+          min_nilai: Math.floor(parseFloat(item.min_nilai)),
+          max_nilai: Math.floor(parseFloat(item.max_nilai)),
+        }));
+
+        setKategoriList(formattedData);
+        setCoverageInfo(data.coverage || null);
       } catch (err: any) {
+        if (err.message?.includes('belum ditugaskan')) return;
         showModal({ type: 'error', title: 'Gagal Memuat', message: err.message || 'Gagal memuat kategori' });
       } finally {
         setKategoriLoading(false);
@@ -387,7 +444,7 @@ export default function AturPenilaianGuruKelasClient() {
     };
 
     fetchKategori();
-  }, [activeTab, selectedMapelAkademik, selectedMapelForRataRata, loading, showModal]);
+  }, [activeTab, selectedMapelAkademik, loading, showModal, handleLogout]);
 
   // ====== FETCH BOBOT ======
   useEffect(() => {
@@ -408,8 +465,19 @@ export default function AturPenilaianGuruKelasClient() {
         );
 
         if (!res.ok) {
-          const err = await parseBackendError(res);
-          throw new Error(err.message);
+          let errorData;
+          try {
+            errorData = await res.json();
+          } catch {
+            errorData = { message: await res.text(), code: null };
+          }
+
+          if (res.status === 403 || errorData.code === 'NOT_ASSIGNED') {
+            setIsNotAssigned(true);
+            return;
+          }
+
+          throw new Error(errorData.message || `HTTP ${res.status}`);
         }
 
         const result = await res.json();
@@ -430,6 +498,9 @@ export default function AturPenilaianGuruKelasClient() {
         setBobotList(fullBobot);
         initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
       } catch (err: any) {
+        // Jangan tampilkan error jika sudah ada modal "belum ditugaskan"
+        if (err.message.includes('belum ditugaskan')) return;
+
         showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal mengambil bobot penilaian' });
       } finally {
         setBobotLoading(false);
@@ -437,13 +508,12 @@ export default function AturPenilaianGuruKelasClient() {
     };
 
     fetchBobot();
-  }, [selectedMapelId, komponenList, activeTab, showModal]);
+  }, [selectedMapelId, komponenList, activeTab, showModal, handleLogout]);
 
   // ====== TAB CHANGE HANDLER ======
   const handleTabChange = (tab: 'kokurikuler' | 'akademik' | 'bobot') => {
     if (tab !== 'akademik') {
       setSelectedMapelAkademik(null);
-      setSelectedMapelForRataRata(false);
       setCoverageInfo(null);
     }
     if (tab !== 'bobot') {
@@ -460,8 +530,8 @@ export default function AturPenilaianGuruKelasClient() {
     if (kategori) {
       setEditKategoriId(kategori.id);
       const d = {
-        min_nilai: kategori.min_nilai,
-        max_nilai: kategori.max_nilai,
+        min_nilai: Math.floor(kategori.min_nilai),
+        max_nilai: Math.floor(kategori.max_nilai),
         grade: 'grade' in kategori ? kategori.grade : undefined,
         deskripsi: kategori.deskripsi,
         id_aspek_kokurikuler: 'id_aspek_kokurikuler' in kategori ? kategori.id_aspek_kokurikuler : undefined,
@@ -503,6 +573,10 @@ export default function AturPenilaianGuruKelasClient() {
       if (editKategoriData.min_nilai >= editKategoriData.max_nilai) {
         ne.form = `Nilai minimum (${editKategoriData.min_nilai}) harus lebih kecil dari nilai maksimum (${editKategoriData.max_nilai}).`;
       }
+      const range = editKategoriData.max_nilai - editKategoriData.min_nilai;
+      if (range < 3) {
+        ne.form = `Range nilai minimal 3 poin. Saat ini: ${range} poin (${editKategoriData.min_nilai}-${editKategoriData.max_nilai}).`;
+      }
     }
 
     if (!editKategoriData.deskripsi || editKategoriData.deskripsi.trim().length < 3) {
@@ -520,7 +594,7 @@ export default function AturPenilaianGuruKelasClient() {
         ne.grade = 'Grade harus tepat 1 karakter (A, B, C, dst).';
       }
     } else if (activeTab === 'akademik') {
-      if (!selectedMapelForRataRata && selectedMapelAkademik === null) {
+      if (selectedMapelAkademik === null) {
         ne.form = 'Pilih mata pelajaran terlebih dahulu.';
       }
     }
@@ -531,7 +605,6 @@ export default function AturPenilaianGuruKelasClient() {
       return;
     }
 
-    // Cek apakah ada perubahan
     const initial = initialEditKategoriDataRef.current;
     const isUnchanged =
       initial &&
@@ -563,24 +636,14 @@ export default function AturPenilaianGuruKelasClient() {
           id_aspek_kokurikuler: editKategoriData.id_aspek_kokurikuler,
         };
       } else if (activeTab === 'akademik') {
-        if (selectedMapelForRataRata) {
-          endpoint = `${API}/atur-penilaian/kategori-rata-rata`;
-          payload = {
-            min_nilai: Math.floor(editKategoriData.min_nilai),
-            max_nilai: Math.floor(editKategoriData.max_nilai),
-            deskripsi: editKategoriData.deskripsi.trim(),
-            urutan: 0,
-          };
-        } else {
-          endpoint = `${API}/atur-penilaian/kategori-akademik`;
-          payload = {
-            min_nilai: Math.floor(editKategoriData.min_nilai),
-            max_nilai: Math.floor(editKategoriData.max_nilai),
-            deskripsi: editKategoriData.deskripsi.trim(),
-            urutan: 0,
-            mapel_id: selectedMapelAkademik,
-          };
-        }
+        endpoint = `${API}/atur-penilaian/kategori-akademik`;
+        payload = {
+          min_nilai: Math.floor(editKategoriData.min_nilai),
+          max_nilai: Math.floor(editKategoriData.max_nilai),
+          deskripsi: editKategoriData.deskripsi.trim(),
+          urutan: 0,
+          mapel_id: selectedMapelAkademik,
+        };
       }
 
       const url = editKategoriId ? `${endpoint}/${editKategoriId}` : endpoint;
@@ -598,23 +661,26 @@ export default function AturPenilaianGuruKelasClient() {
       const result = await res.json();
 
       if (res.ok) {
-        // FORCE CLOSE modal edit DULU
         setShowEditKategori(false);
         setEditKategoriClosing(false);
         setEditKategoriId(null);
         setErrors({});
 
         setTimeout(() => {
+          let successMessage = result.message || 'Berhasil!';
+          if (result.warnings && result.warnings.length > 0) {
+            successMessage += '\n\n' + result.warnings.join('\n');
+          }
+
           showModal({
-            type: 'success',
+            type: result.warnings?.length > 0 ? 'warning' : 'success',
             title: editKategoriId ? 'Kategori Diperbarui!' : 'Kategori Ditambahkan!',
-            message: result.message || 'Berhasil!',
+            message: successMessage,
           });
         }, 50);
 
-        // Reload kategori
         let reloadUrl = endpoint;
-        if (activeTab === 'akademik' && !selectedMapelForRataRata && selectedMapelAkademik) {
+        if (activeTab === 'akademik' && selectedMapelAkademik) {
           reloadUrl += `?mapel_id=${selectedMapelAkademik}`;
         }
         const reloadRes = await fetch(reloadUrl, { headers: { Authorization: `Bearer ${token}` } });
@@ -624,17 +690,22 @@ export default function AturPenilaianGuruKelasClient() {
           setCoverageInfo(reloadData.coverage);
         }
       } else {
-        // ✅ Handle error code dari backend
         const errorCode = result.code;
         let errorMessage = result.message || 'Terjadi kesalahan.';
         let errorTitle = editKategoriId ? 'Gagal Memperbarui' : 'Gagal Menambahkan';
 
         if (errorCode === 'RANGE_OVERLAP') {
-          errorTitle = '⚠️ Range Nilai Bertabrakan';
+          errorTitle = 'Range Nilai Bertabrakan';
           errorMessage = `${result.message}\n\nSilakan sesuaikan nilai min/max agar tidak tumpang tindih dengan kategori lain.`;
         } else if (errorCode === 'DUPLICATE_GRADE') {
-          errorTitle = '⚠️ Grade Sudah Ada';
+          errorTitle = 'Grade Sudah Ada';
           errorMessage = `${result.message}\n\nGunakan grade lain atau edit kategori yang sudah ada.`;
+        } else if (errorCode === 'INVALID_GRADE_ORDER') {
+          errorTitle = 'Urutan Grade Tidak Valid';
+          errorMessage = `${result.message}\n\nGrade yang lebih tinggi (A) harus punya range nilai lebih tinggi dari grade yang lebih rendah (B, C, D).`;
+        } else if (errorCode === 'MIN_RANGE_NOT_MET') {
+          errorTitle = 'Range Terlalu Kecil';
+          errorMessage = result.message;
         }
 
         showModal({ type: 'error', title: errorTitle, message: errorMessage });
@@ -660,11 +731,7 @@ export default function AturPenilaianGuruKelasClient() {
           if (activeTab === 'kokurikuler') {
             endpoint = `${API}/atur-penilaian/kategori-kokurikuler/${id}`;
           } else if (activeTab === 'akademik') {
-            if (selectedMapelForRataRata) {
-              endpoint = `${API}/atur-penilaian/kategori-rata-rata/${id}`;
-            } else {
-              endpoint = `${API}/atur-penilaian/kategori-akademik/${id}`;
-            }
+            endpoint = `${API}/atur-penilaian/kategori-akademik/${id}`;
           }
 
           const res = await fetch(endpoint, {
@@ -678,12 +745,12 @@ export default function AturPenilaianGuruKelasClient() {
             setKategoriList(kategoriList.filter((k) => k.id !== id));
             showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Kategori berhasil dihapus.' });
           } else {
-            // ✅ Handle error khusus untuk kategori yang sedang dipakai
+            const errorCode = result.code;
             let errorMessage = result.message || 'Gagal menghapus kategori.';
             let errorTitle = 'Gagal Menghapus';
 
-            if (errorMessage.includes('nilai siswa')) {
-              errorTitle = '⚠️ Kategori Sedang Digunakan';
+            if (errorCode === 'CATEGORY_IN_USE' || errorMessage.includes('nilai siswa')) {
+              errorTitle = 'Kategori Sedang Digunakan';
               errorMessage = `${result.message}\n\nAnda tidak dapat menghapus kategori yang sudah digunakan oleh siswa. Ubah range nilai kategori lain sebagai gantinya.`;
             }
 
@@ -770,16 +837,15 @@ export default function AturPenilaianGuruKelasClient() {
         showModal({ type: 'success', title: 'Bobot Disimpan!', message: result.message || 'Bobot penilaian berhasil disimpan.' });
         initialBobotListRef.current = JSON.parse(JSON.stringify(bobotList));
       } else {
-        // ✅ Handle error code dari backend
         const errorCode = result.code;
         let errorMessage = result.message || 'Gagal menyimpan bobot.';
         let errorTitle = 'Gagal Menyimpan';
 
         if (errorCode === 'PERIOD_LOCKED') {
-          errorTitle = '🔒 Periode Terkunci';
+          errorTitle = 'Periode Terkunci';
           errorMessage = `${result.message}\n\nAnda tidak dapat mengubah bobot saat periode PTS aktif.`;
         } else if (errorCode === 'BOBOT_NOT_100') {
-          errorTitle = '⚠️ Total Bobot Salah';
+          errorTitle = 'Total Bobot Salah';
           errorMessage = result.message;
         }
 
@@ -796,9 +862,47 @@ export default function AturPenilaianGuruKelasClient() {
   if (loading) {
     return (
       <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
+        <GlobalStyles />
         <div className="text-center">
           <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
           <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ====== MODAL AKSES DITOLAK (GURU BELUM DITUGASKAN) ======
+  if (isNotAssigned) {
+    return (
+      <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
+        <GlobalStyles />
+        {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ap-scaleIn">
+            <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ap-pulse">
+              <AlertCircle size={48} className="text-red-500" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Anda belum ditugaskan sebagai guru kelas di semester ini.
+                <br />
+                Silakan hubungi Administrator untuk penugasan kelas.
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
+              style={{
+                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
+              }}
+            >
+              <LogOut size={18} /> Logout
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -881,6 +985,8 @@ export default function AturPenilaianGuruKelasClient() {
                   </p>
                 </div>
               )}
+
+              <CoverageWarning coverage={coverageInfo} />
 
               <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: '1px solid #fde0c8' }}>
                 <p className="text-xs" style={{ color: '#c95b08' }}>
@@ -996,25 +1102,18 @@ export default function AturPenilaianGuruKelasClient() {
 
               <div className="mb-6">
                 <label className={labelCls} style={labelColor}>
-                  Pilih Kategori <span className="text-red-500">*</span>
+                  Pilih Mata Pelajaran <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={selectedMapelForRataRata ? 'rata-rata' : (selectedMapelAkademik || '')}
+                  value={selectedMapelAkademik || ''}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val === 'rata-rata') {
-                      setSelectedMapelForRataRata(true);
-                      setSelectedMapelAkademik(null);
-                    } else {
-                      setSelectedMapelForRataRata(false);
-                      setSelectedMapelAkademik(val ? Number(val) : null);
-                    }
+                    setSelectedMapelAkademik(val ? Number(val) : null);
                   }}
                   className={inputCls}
                   style={{ maxWidth: '400px' }}
                 >
                   <option value="">-- Pilih Mata Pelajaran --</option>
-                  <option value="rata-rata">📚 Rata-rata Seluruh Mapel</option>
                   {mapelWajibList.map((mapel) => (
                     <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
                       {mapel.nama_mapel}
@@ -1023,9 +1122,8 @@ export default function AturPenilaianGuruKelasClient() {
                 </select>
               </div>
 
-              {(selectedMapelAkademik || selectedMapelForRataRata) ? (
+              {selectedMapelAkademik ? (
                 <>
-                  {/* ✅ Coverage Warning Banner */}
                   <CoverageWarning coverage={coverageInfo} />
 
                   <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: '1px solid #fde0c8' }}>
@@ -1064,7 +1162,7 @@ export default function AturPenilaianGuruKelasClient() {
                         ) : kategoriList.length === 0 ? (
                           <tr>
                             <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
-                              Belum ada kategori untuk {selectedMapelForRataRata ? 'rata-rata' : 'mata pelajaran ini'}.
+                              Belum ada kategori untuk mata pelajaran ini.
                             </td>
                           </tr>
                         ) : (
@@ -1214,7 +1312,6 @@ export default function AturPenilaianGuruKelasClient() {
                         <span className="font-bold text-sm" style={{ color: '#7a3a0a' }}>Total Bobot:</span>
                         <span className={`text-lg font-bold ${isBobotValid ? 'text-green-600' : 'text-red-600'}`}>
                           {totalBobot.toFixed(2)}%
-                          {isBobotValid ? ' ✓' : ' ✗'}
                         </span>
                       </div>
                     </div>
@@ -1325,8 +1422,15 @@ export default function AturPenilaianGuruKelasClient() {
                     type="number"
                     min="0"
                     max="100"
+                    step="1"
                     value={editKategoriData.min_nilai}
-                    onChange={(e) => setEditKategoriData({ ...editKategoriData, min_nilai: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setEditKategoriData({
+                        ...editKategoriData,
+                        min_nilai: isNaN(val) ? 0 : Math.floor(val)
+                      });
+                    }}
                     className={errors.form ? inputErrCls : inputCls}
                   />
                 </div>
@@ -1338,19 +1442,51 @@ export default function AturPenilaianGuruKelasClient() {
                     type="number"
                     min="0"
                     max="100"
+                    step="1"
                     value={editKategoriData.max_nilai}
-                    onChange={(e) => setEditKategoriData({ ...editKategoriData, max_nilai: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setEditKategoriData({
+                        ...editKategoriData,
+                        max_nilai: isNaN(val) ? 0 : Math.floor(val)
+                      });
+                    }}
                     className={errors.form ? inputErrCls : inputCls}
                   />
                 </div>
               </div>
 
-              {/* ✅ Real-time validation warning */}
-              {editKategoriData.min_nilai >= editKategoriData.max_nilai && (
-                <div className="p-2 rounded-lg text-xs" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                  ⚠️ Nilai minimum harus lebih kecil dari nilai maksimum
-                </div>
-              )}
+              {/* Real-time validation warnings */}
+              {(() => {
+                const minVal = parseInt(editKategoriData.min_nilai.toString());
+                const maxVal = parseInt(editKategoriData.max_nilai.toString());
+
+                if (isNaN(minVal) || isNaN(maxVal)) {
+                  return (
+                    <div className="p-2 rounded-lg text-xs" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                      Nilai harus berupa angka
+                    </div>
+                  );
+                }
+
+                if (minVal >= maxVal) {
+                  return (
+                    <div className="p-2 rounded-lg text-xs" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                      Nilai minimum ({minVal}) harus lebih kecil dari nilai maksimum ({maxVal})
+                    </div>
+                  );
+                }
+
+                if (maxVal - minVal < 3) {
+                  return (
+                    <div className="p-2 rounded-lg text-xs" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                      Range nilai minimal 3 poin (saat ini: {maxVal - minVal} poin)
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
 
               {/* Deskripsi */}
               <div className="flex flex-col gap-1.5">

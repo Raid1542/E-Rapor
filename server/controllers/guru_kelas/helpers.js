@@ -9,17 +9,22 @@ const db = require('../../config/db');
  * Helper: Validasi apakah mata pelajaran adalah mapel wajib yang diampu guru kelas
  */
 exports.isMapelWajibGuruKelas = async (userId, mapelId, tahunAjaranIndukId) => {
-    const [rows] = await db.execute(`
-        SELECT mp.id_mata_pelajaran
-        FROM mata_pelajaran mp
-        JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mata_pelajaran_id
-        JOIN guru_kelas gk ON p.kelas_id = gk.kelas_id
-        WHERE mp.id_mata_pelajaran = ?
-        AND gk.user_id = ?
-        AND mp.jenis = 'wajib'
-        AND gk.tahun_ajaran_id = ?
-    `, [mapelId, userId, tahunAjaranIndukId]);
-    return rows.length > 0;
+    try {
+        const [rows] = await db.execute(`
+            SELECT mp.id_mata_pelajaran
+            FROM mata_pelajaran mp
+            JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mapel_id
+            JOIN guru_kelas gk ON p.kelas_id = gk.kelas_id
+            WHERE mp.id_mata_pelajaran = ?
+            AND gk.user_id = ?
+            AND mp.jenis = 'wajib'
+            AND gk.tahun_ajaran_id = ?
+        `, [mapelId, userId, tahunAjaranIndukId]);
+        return rows.length > 0;
+    } catch (err) {
+        console.error('Error di isMapelWajibGuruKelas:', err);
+        return false;
+    }
 };
 
 /**
@@ -69,23 +74,34 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
 
         const [gkRows] = await db.execute(
             `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
-            [userId, tahunAjaranIndukId]
+            [userId, semesterId]
         );
         if (gkRows.length === 0) throw new Error('Kelas aktif tidak ditemukan');
         const { kelas_id } = gkRows[0];
 
         const [siswaRows] = await db.execute(
-            `SELECT id_siswa FROM siswa_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?`,
+            `SELECT id_siswa FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelas_id, tahunAjaranIndukId]
         );
 
         const [komponenRows] = await db.execute(`SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`);
+        
         const [bobotRows] = await db.execute(
-            `SELECT komponen_id, bobot FROM konfigurasi_mapel_komponen WHERE mapel_id = ? AND tahun_ajaran_id = ?`,
-            [mapelId, semesterId]
+            `SELECT komponen_id, bobot, kelas_id FROM konfigurasi_mapel_komponen 
+                WHERE mapel_id = ? AND is_active = 1
+                AND (kelas_id = ? OR kelas_id IS NULL)
+                ORDER BY kelas_id DESC`,
+            [mapelId, kelas_id]
         );
 
-        const bobotMap = new Map(bobotRows.map(b => [b.komponen_id, parseFloat(b.bobot) || 0]));
+        // Logic prioritas bobot: spesifik kelas menimpa global
+        const bobotMap = new Map();
+        bobotRows.forEach(b => {
+            if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
+                bobotMap.set(b.komponen_id, parseFloat(b.bobot) || 0);
+            }
+        });
+
         const uhKomponenIds = komponenRows.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(k => k.id_komponen);
         const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
         const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
@@ -129,8 +145,11 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             }
             nilaiRapor = Math.floor(nilaiRapor);
 
+            // Cek dulu struktur tabel, jika ada tahun_ajaran_id tetap pakai
             const [kategoriRows] = await db.execute(
-                `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? ORDER BY min_nilai DESC`,
+                `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
+                    WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND is_active = 1
+                    ORDER BY min_nilai DESC`,
                 [mapelId, semesterId]
             );
 
@@ -165,13 +184,31 @@ exports.getRekapanData = async (userId, req) => {
 
     if (!tahunAjaranIndukId || !semesterId || !semester) throw new Error('Data tahun ajaran atau semester tidak ditemukan');
 
-    const [kelasRows] = await db.query(`SELECT k.id_kelas FROM kelas k JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`, [userId, tahunAjaranIndukId]);
+    const [kelasRows] = await db.query(
+        `SELECT k.id_kelas FROM kelas k 
+            JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
+            WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`, 
+        [userId, semesterId]
+    );
     if (kelasRows.length === 0) throw new Error('Kelas tidak ditemukan');
     const kelasId = kelasRows[0].id_kelas;
 
-    const [siswaRows] = await db.query(`SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ? ORDER BY s.nama_lengkap`, [kelasId, tahunAjaranIndukId]);
+    const [siswaRows] = await db.query(
+        `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
+            FROM siswa s 
+            JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+            WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
+            ORDER BY s.nama_lengkap`, 
+        [kelasId, tahunAjaranIndukId]
+    );
 
-    const [nilaiRows] = await db.query(`SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai FROM nilai_rapor nr JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ?`, [kelasId, semesterId, semester]);
+    const [nilaiRows] = await db.query(
+        `SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai 
+            FROM nilai_rapor nr 
+            JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran 
+            WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ?`, 
+        [kelasId, semesterId, semester]
+    );
 
     const kodeMapelSet = new Set();
     nilaiRows.forEach(row => kodeMapelSet.add(row.kode_mapel));
@@ -195,4 +232,56 @@ exports.getRekapanData = async (userId, req) => {
     siswa.forEach(s => { if (s.rata_rata === null) s.ranking = null; });
 
     return { siswa, mapel_list: mapelList };
+};
+
+/**
+ * Helper: Validasi urutan grade untuk kokurikuler
+ */
+exports.validateGradeOrder = async (idAspek, tahunAjaranId, semester, kelasId, grade, minNilai, maxNilai, excludeId = null) => {
+    const gradeOrder = { 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'E': 0 };
+    const newGradeValue = gradeOrder[grade.toUpperCase()];
+    
+    if (newGradeValue === undefined) return { valid: true };
+
+    let query = `
+        SELECT id_kategori_grade_kokurikuler, grade, rentang_min, rentang_max 
+        FROM kategori_grade_kokurikuler 
+        WHERE id_aspek_kokurikuler = ? 
+        AND tahun_ajaran_id = ? 
+        AND semester = ?
+        AND kelas_id = ?
+    `;
+    const params = [idAspek, tahunAjaranId, semester, kelasId];
+
+    if (excludeId) {
+        query += ` AND id_kategori_grade_kokurikuler != ?`;
+        params.push(excludeId);
+    }
+
+    const [existingRows] = await db.execute(query, params);
+
+    for (const existing of existingRows) {
+        const existingGradeValue = gradeOrder[existing.grade.toUpperCase()];
+        if (existingGradeValue === undefined) continue;
+
+        if (newGradeValue > existingGradeValue) {
+            if (minNilai < existing.rentang_max) {
+                return {
+                    valid: false,
+                    message: `Grade ${grade} (lebih tinggi) harus memiliki range nilai di atas ${existing.grade} (max ${existing.rentang_max}). Range Anda: ${minNilai}-${maxNilai}`
+                };
+            }
+        }
+
+        if (newGradeValue < existingGradeValue) {
+            if (maxNilai > existing.rentang_min) {
+                return {
+                    valid: false,
+                    message: `Grade ${grade} (lebih rendah) harus memiliki range nilai di bawah ${existing.grade} (min ${existing.rentang_min}). Range Anda: ${minNilai}-${maxNilai}`
+                };
+            }
+        }
+    }
+
+    return { valid: true };
 };
