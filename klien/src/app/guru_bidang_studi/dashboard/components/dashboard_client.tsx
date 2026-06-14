@@ -1,6 +1,7 @@
 /**
  * Nama File: dashboard_client.tsx
  * Fungsi: Dashboard guru bidang studi - Template Admin Style
+ * UPDATE: Tambah notifikasi akses ditolak saat tidak ada mapel yang diajar
  * Tema: Oranye elegan, konsisten dengan dashboard admin
  */
 
@@ -11,7 +12,7 @@ import {
     ChevronRight, Users, Book, Calendar, Award,
     CheckCircle2, AlertCircle, Clock, TrendingUp,
     Zap, AlertTriangle, CalendarDays, Settings,
-    ClipboardList, BookOpen, GraduationCap, Target
+    ClipboardList, BookOpen, GraduationCap, Target, LogOut
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
@@ -21,6 +22,18 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip
 } from 'recharts';
+
+// ─── GLOBAL STYLES (SAMA DENGAN atur_penilaian_gbs_client) ─────────────────────
+const GlobalStyles = () => (
+    <style jsx global>{`
+    @keyframes ap-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes ap-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes ap-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    .ap-fadeIn  { animation: ap-fadeIn  0.2s ease; }
+    .ap-scaleIn { animation: ap-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+    .ap-pulse   { animation: ap-pulse   0.6s ease 0.15s; }
+  `}</style>
+);
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 
@@ -57,7 +70,6 @@ interface Warning {
     masalah: string;
 }
 
-// Tambah 3 field baru
 interface DashboardData {
     tahun_ajaran: string;
     semester: string;
@@ -186,17 +198,42 @@ export default function DashboardClient() {
         );
     }
 
-    // ── Empty state ────────────────────────────────────────────────────────────
+    // ── ✅ MODAL AKSES DITOLAK (TEMPLATE SAMA DENGAN atur_penilaian_gbs_client) ──
 
     if (!user || !dashboard || dashboard.mata_pelajaran_list.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-6"
-                style={{ background: '#fdf6f0' }}>
-                <div className="text-5xl">📚</div>
-                <p className="text-base font-semibold text-gray-700">Belum Ditugaskan</p>
-                <p className="text-sm text-gray-400 text-center max-w-xs">
-                    Anda belum ditugaskan mengajar mata pelajaran apapun di tahun ajaran ini.
-                </p>
+            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: '#fdf6f0' }}>
+                <GlobalStyles />
+                {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn">
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ap-scaleIn">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ap-pulse">
+                            <AlertCircle size={48} className="text-red-500" />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                                Anda belum ditugaskan mengajar mata pelajaran pilihan di semester ini.
+                                <br />
+                                Silakan hubungi Administrator untuk penugasan mata pelajaran.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                        >
+                            <LogOut size={18} /> Logout
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -205,7 +242,6 @@ export default function DashboardClient() {
 
     const list = dashboard.mata_pelajaran_list;
 
-    // Gunakan data dari backend
     const totalMapel = dashboard.total_mapel || list.length;
     const totalSiswa = dashboard.total_siswa || 0;
     const totalKelas = dashboard.total_kelas || 0;
@@ -213,14 +249,12 @@ export default function DashboardClient() {
     const totalPenilaianAda = dashboard.total_penilaian_ada || 0;
     const overallProgress = dashboard.overall_progress || 0;
 
-    // Untuk kompatibilitas dengan kode lama
     const totalSudahDinilai = totalPenilaianAda;
 
     const selesai = list.filter(m => m.belum_dinilai === 0 && m.total_siswa > 0).length;
     const belumMulai = list.filter(m => m.sudah_dinilai === 0).length;
     const sedangBerjalan = totalMapel - selesai - belumMulai;
 
-    // ── Format semester display ───────────────────────────────────────────────
     const semesterDisplay = dashboard.semester === 'Ganjil' ? 'Ganjil' :
         dashboard.semester === 'Genap' ? 'Genap' : '-';
 
@@ -267,7 +301,7 @@ export default function DashboardClient() {
         return null;
     };
 
-    // Stat cards dengan progress yang benar
+    // Stat cards
     const statCards = [
         {
             label: 'Mata Pelajaran',
@@ -292,7 +326,7 @@ export default function DashboardClient() {
         },
         {
             label: 'Progress',
-            value: `${overallProgress}%`,  // ← GUNAKAN overallProgress
+            value: `${overallProgress}%`,
             icon: <Target className="w-5 h-5" />,
             path: '/guru_bidang_studi/input_nilai',
             sub: `${totalPenilaianAda} dari ${totalPenilaianDibutuhkan} penilaian`,
@@ -303,6 +337,7 @@ export default function DashboardClient() {
 
     return (
         <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
+            <GlobalStyles />
 
             {showSessionExpired && (
                 <SessionExpiredModal onConfirm={handleLogout} />
@@ -350,7 +385,6 @@ export default function DashboardClient() {
                         style={{ background: 'rgba(255,255,255,0.05)' }} />
 
                     <div className="flex items-center justify-between relative z-10">
-                        {/* Kiri: Icon + Info TA */}
                         <div className="flex items-center gap-4">
                             <div
                                 className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg"
@@ -375,7 +409,6 @@ export default function DashboardClient() {
                             </div>
                         </div>
 
-                        {/* Kanan: Semester Info */}
                         <div className="flex-shrink-0">
                             <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 shadow-lg">
                                 <Calendar size={16} className="text-white" />
@@ -396,7 +429,6 @@ export default function DashboardClient() {
             {/* ── CARD: PROGRESS PENILAIAN DENGAN DONUT CHART ───────────────── */}
             <div className="mb-6">
                 <Card className="overflow-hidden">
-                    {/* Header */}
                     <div
                         className="px-6 py-4 flex items-center justify-between"
                         style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)' }}
@@ -420,7 +452,6 @@ export default function DashboardClient() {
                         </button>
                     </div>
 
-                    {/* Content: Chart + Legend */}
                     <div className="p-6">
                         {totalSiswa === 0 ? (
                             <div className="text-center py-16">
@@ -436,7 +467,6 @@ export default function DashboardClient() {
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
-                                {/* Donut Chart */}
                                 <div className="lg:col-span-3 relative">
                                     <div className="h-80">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -467,7 +497,6 @@ export default function DashboardClient() {
                                         </ResponsiveContainer>
                                     </div>
 
-                                    {/*Center Label dengan data yang benar */}
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <div className="text-center">
                                             <p className="text-5xl font-black" style={{ color: '#c95b08' }}>
@@ -483,7 +512,6 @@ export default function DashboardClient() {
                                     </div>
                                 </div>
 
-                                {/* Legend / Daftar Mapel */}
                                 <div className="lg:col-span-2">
                                     <h4 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
                                         <BookOpen className="w-4 h-4" />

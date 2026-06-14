@@ -1,6 +1,6 @@
 /**
  * Nama File: penilaianBobotController.js
- * Fungsi: Controller untuk mengelola bobot penilaian (tipis, logic di model)
+ * UPDATE: Fix bug parameter, sesuaikan dengan model & middleware
  */
 
 const bobotModel = require('../../models/guru_bidang_studi/penilaianBobotModel');
@@ -8,9 +8,24 @@ const bobotModel = require('../../models/guru_bidang_studi/penilaianBobotModel')
 exports.getBobotPenilaian = async (req, res) => {
     try {
         const { mapelId } = req.params;
+        const { kelas_id } = req.query; 
         const userId = req.user.id;
 
-        // Ambil tahun ajaran aktif
+        if (!kelas_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parameter kelas_id wajib diisi (via query string)'
+            });
+        }
+
+        const kelasIdNum = parseInt(kelas_id, 10);
+        if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'kelas_id tidak valid'
+            });
+        }
+
         const taAktif = await bobotModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(500).json({
@@ -19,12 +34,9 @@ exports.getBobotPenilaian = async (req, res) => {
             });
         }
 
-        // Validasi akses guru
-        const isValid = await bobotModel.validateGuruMapel(
-            userId, 
-            mapelId, 
-            taAktif.id_tahun_ajaran_induk
-        );
+        const semesterId = taAktif.id_tahun_ajaran;
+
+        const isValid = await bobotModel.validateGuruMapel(userId, mapelId, semesterId);
         if (!isValid) {
             return res.status(403).json({
                 success: false,
@@ -32,7 +44,6 @@ exports.getBobotPenilaian = async (req, res) => {
             });
         }
 
-        // Ambil komponen penilaian
         const komponenList = await bobotModel.getAllKomponenPenilaian();
         if (komponenList.length === 0) {
             return res.status(404).json({
@@ -41,7 +52,6 @@ exports.getBobotPenilaian = async (req, res) => {
             });
         }
 
-        // Jika PTS aktif → return bobot locked (PTS = 100%)
         if (taAktif.status_pts === 'aktif') {
             const ptsKomponen = komponenList.find(k => /^PTS$/i.test(k.nama_komponen));
             const result = komponenList.map(k => ({
@@ -53,12 +63,15 @@ exports.getBobotPenilaian = async (req, res) => {
             return res.json({
                 success: true,
                 data: result,
-                is_locked: true
+                is_locked: true,
+                mapel: req.penugasanMapel?.nama_mapel || 'Mata Pelajaran',
+                kelas_id: kelasIdNum,
+                kelas_list: req.penugasanMapel?.kelas_list || []
             });
         }
 
-        // Ambil bobot dari database
-        const bobotMap = await bobotModel.getBobotMapByMapel(mapelId);
+        const bobotMap = await bobotModel.getBobotMapByMapel(mapelId, semesterId, kelasIdNum);
+        
         const result = komponenList.map(k => ({
             komponen_id: k.id_komponen,
             bobot: bobotMap.get(k.id_komponen) || 0,
@@ -67,7 +80,10 @@ exports.getBobotPenilaian = async (req, res) => {
         res.json({
             success: true,
             data: result,
-            is_locked: false
+            is_locked: false,
+            mapel: req.penugasanMapel?.nama_mapel || 'Mata Pelajaran',
+            kelas_id: kelasIdNum,
+            kelas_list: req.penugasanMapel?.kelas_list || []
         });
 
     } catch (err) {
@@ -79,13 +95,29 @@ exports.getBobotPenilaian = async (req, res) => {
     }
 };
 
+// GANTI SELURUH fungsi updateBobotPenilaian dengan ini:
 exports.updateBobotPenilaian = async (req, res) => {
     try {
         const { mapelId } = req.params;
-        const bobotList = req.body;
+        const { kelas_id, bobot_list } = req.body;
         const userId = req.user.id;
 
-        // Validasi input
+        if (!kelas_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parameter kelas_id wajib diisi di body'
+            });
+        }
+
+        const kelasIdNum = parseInt(kelas_id, 10);
+        if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'kelas_id tidak valid'
+            });
+        }
+
+        const bobotList = bobot_list || req.body;
         if (!Array.isArray(bobotList) || bobotList.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -93,7 +125,6 @@ exports.updateBobotPenilaian = async (req, res) => {
             });
         }
 
-        // Ambil tahun ajaran aktif
         const taAktif = await bobotModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(500).json({
@@ -102,15 +133,15 @@ exports.updateBobotPenilaian = async (req, res) => {
             });
         }
 
-        // Blokir saat PTS aktif
+        const semesterId = taAktif.id_tahun_ajaran;
+
         if (taAktif.status_pts === 'aktif') {
             return res.status(403).json({
                 success: false,
-                message: 'Bobot tidak dapat diubah saat periode PTS aktif.'
+                message: 'Bobot tidak dapat diubah saat periode PTS aktif.',
             });
         }
 
-        // Validasi setiap bobot
         for (const b of bobotList) {
             if (!b.komponen_id || b.bobot === undefined) {
                 return res.status(400).json({
@@ -127,7 +158,6 @@ exports.updateBobotPenilaian = async (req, res) => {
             }
         }
 
-        // Total harus 100%
         const total = bobotList.reduce((sum, b) => sum + parseFloat(b.bobot), 0);
         if (Math.abs(total - 100) > 0.01) {
             return res.status(400).json({
@@ -136,20 +166,6 @@ exports.updateBobotPenilaian = async (req, res) => {
             });
         }
 
-        // Validasi akses guru
-        const isValid = await bobotModel.validateGuruMapel(
-            userId, 
-            mapelId, 
-            taAktif.id_tahun_ajaran_induk
-        );
-        if (!isValid) {
-            return res.status(403).json({
-                success: false,
-                message: 'Akses ditolak.'
-            });
-        }
-
-        // Validasi komponen ID
         const komponenList = await bobotModel.getAllKomponenPenilaian();
         const validIds = new Set(komponenList.map(k => k.id_komponen));
         for (const b of bobotList) {
@@ -161,15 +177,24 @@ exports.updateBobotPenilaian = async (req, res) => {
             }
         }
 
-        // Update bobot (transaction)
-        await bobotModel.updateBobotPenilaian(mapelId, bobotList);
+        await bobotModel.updateBobotPenilaian(
+            mapelId,
+            semesterId,
+            bobotList,
+            kelasIdNum
+        );
 
-        // Recompute nilai rapor semua siswa
-        const recomputeResult = await bobotModel.recomputeAllNilaiRapor(mapelId, userId);
+        const recomputeResult = await bobotModel.recomputeAllNilaiRapor(
+            mapelId,
+            userId,
+            kelasIdNum
+        );
 
         res.json({
             success: true,
-            message: 'Bobot berhasil disimpan',
+            message: `Bobot untuk ${req.penugasanMapel?.nama_mapel} berhasil disimpan`,
+            mapel: req.penugasanMapel?.nama_mapel,
+            kelas_id: kelasIdNum,
             recomputed: recomputeResult
         });
 

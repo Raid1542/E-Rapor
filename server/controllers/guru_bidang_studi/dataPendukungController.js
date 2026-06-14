@@ -23,6 +23,69 @@ const getTahunAjaranAktif = async () => {
     return taRows.length > 0 ? taRows[0] : null;
 };
 
+/**
+ * TAMBAHKAN FUNGSI INI di bagian akhir file
+ */
+exports.getKelasByMapel = async (req, res) => {
+    try {
+        const { mapel_id } = req.query;
+        const userId = req.user.id;
+        const semesterId = req.idSemesterAktif;
+
+        if (!mapel_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parameter mapel_id wajib diisi'
+            });
+        }
+
+        const mapelIdNum = parseInt(mapel_id, 10);
+        if (isNaN(mapelIdNum) || mapelIdNum <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'mapel_id tidak valid'
+            });
+        }
+
+        if (!semesterId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Konteks tahun ajaran tidak ditemukan'
+            });
+        }
+
+        // Ambil kelas yang diajar guru untuk mapel ini
+        const [rows] = await db.execute(`
+            SELECT DISTINCT k.id_kelas AS kelas_id, k.nama_kelas
+            FROM pembelajaran p
+            INNER JOIN kelas k ON p.kelas_id = k.id_kelas
+            WHERE p.user_id = ? 
+            AND p.mapel_id = ?
+            AND p.tahun_ajaran_id = ?
+            ORDER BY k.nama_kelas
+        `, [userId, mapelIdNum, semesterId]);
+
+        if (rows.length === 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'Anda tidak mengajar mata pelajaran ini di kelas manapun'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: rows
+        });
+
+    } catch (err) {
+        console.error('Error getKelasByMapel:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil daftar kelas'
+        });
+    }
+};
+
 exports.getDaftarMapel = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -46,6 +109,7 @@ exports.getDaftarMapel = async (req, res) => {
             JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
             WHERE p.user_id = ? 
                 AND p.tahun_ajaran_id = ?
+                AND mp.jenis = 'pilihan'  -- ✅ HANYA MAPEL PILIHAN
             ORDER BY mp.nama_mapel
         `, [userId, tahunAjaranId]);
 

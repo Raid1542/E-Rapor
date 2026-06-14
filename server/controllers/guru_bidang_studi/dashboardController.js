@@ -67,17 +67,19 @@ exports.getDashboardData = async (req, res) => {
 
         const totalSiswaUnik = siswaUnikResult[0]?.total || 0;
 
-        // STEP 4: Ambil Mata Pelajaran yang Diajar
+        // STEP 4: Ambil Mata Pelajaran yang Diajar (HANYA JENIS PILIHAN)
         const [mapelDasar] = await db.execute(`
-            SELECT 
-                mp.id_mata_pelajaran,
-                mp.nama_mapel,
-                COUNT(DISTINCT p.kelas_id) AS total_kelas_per_mapel
-            FROM pembelajaran p
-            JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
-            WHERE p.user_id = ? 
-                AND p.tahun_ajaran_id = ?
-            GROUP BY mp.id_mata_pelajaran, mp.nama_mapel
+        SELECT 
+            mp.id_mata_pelajaran,
+            mp.nama_mapel,
+            mp.jenis,
+            COUNT(DISTINCT p.kelas_id) AS total_kelas_per_mapel
+        FROM pembelajaran p
+        JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
+        WHERE p.user_id = ? 
+            AND p.tahun_ajaran_id = ?
+            AND mp.jenis = 'pilihan'  
+        GROUP BY mp.id_mata_pelajaran, mp.nama_mapel, mp.jenis
             ORDER BY mp.nama_mapel
         `, [userId, semesterId]);
 
@@ -119,7 +121,7 @@ exports.getDashboardData = async (req, res) => {
 
             // 5b. Cek bobot
             let bobotTerconfig = false;
-            
+
             if (jenis_penilaian_aktif === 'PTS') {
                 bobotTerconfig = true;
             } else {
@@ -159,21 +161,21 @@ exports.getDashboardData = async (req, res) => {
 
         // STEP 6: Hitung Progress Overall
         const totalPenilaianDibutuhkan = totalSiswaUnik * mapelDasar.length;
-        const overallProgress = totalPenilaianDibutuhkan > 0 
-            ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100) 
+        const overallProgress = totalPenilaianDibutuhkan > 0
+            ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100)
             : 0;
 
         // STEP 7: Format Jadwal
         const jadwal = {
-            pts: ta.tanggal_pembagian_pts 
+            pts: ta.tanggal_pembagian_pts
                 ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', {
                     day: 'numeric', month: 'long', year: 'numeric'
-                    })
+                })
                 : null,
-            pas: ta.tanggal_pembagian_pas 
+            pas: ta.tanggal_pembagian_pas
                 ? new Date(ta.tanggal_pembagian_pas).toLocaleDateString('id-ID', {
                     day: 'numeric', month: 'long', year: 'numeric'
-                    })
+                })
                 : null,
         };
 

@@ -1,23 +1,24 @@
 /**
  * Nama File: penilaianKategoriController.js
- * Fungsi: Controller untuk mengelola kategori nilai akademik (tipis, logic di model)
+ * UPDATE: Fix bug indukId → semesterId, urutan parameter, dan response
  */
 
 const kategoriModel = require('../../models/guru_bidang_studi/penilaianKategoriModel');
 
 exports.getKategoriAkademik = async (req, res) => {
     try {
-        const { mapel_id } = req.query;
+        const { mapel_id, kelas_id } = req.query;
 
-        // Validasi parameter
-        if (!mapel_id) {
+        if (!mapel_id || !kelas_id) {
             return res.status(400).json({
                 success: false,
-                message: 'Parameter mapel_id wajib diisi'
+                message: 'Parameter mapel_id dan kelas_id wajib diisi'
             });
         }
 
         const mapelIdNum = parseInt(mapel_id, 10);
+        const kelasIdNum = parseInt(kelas_id, 10);
+
         if (isNaN(mapelIdNum) || mapelIdNum <= 0) {
             return res.status(400).json({
                 success: false,
@@ -25,7 +26,13 @@ exports.getKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Ambil tahun ajaran aktif
+        if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'kelas_id tidak valid'
+            });
+        }
+
         const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
@@ -36,16 +43,15 @@ exports.getKategoriAkademik = async (req, res) => {
 
         const semesterId = taAktif.id_tahun_ajaran;
 
-        // Ambil kategori
-        const kategori = await kategoriModel.getKategoriByMapel(mapelIdNum, semesterId);
-
-        // Cek coverage 0-100
-        const coverage = await kategoriModel.cekCoverage0to100(mapelIdNum, semesterId);
+        const kategori = await kategoriModel.getKategoriByMapel(mapelIdNum, semesterId, kelasIdNum);
+        const coverage = await kategoriModel.cekCoverage0to100(mapelIdNum, semesterId, kelasIdNum);
 
         res.json({
             success: true,
             data: kategori,
-            coverage: coverage
+            coverage: coverage,
+            mapel: req.penugasanMapel?.nama_mapel || 'Mata Pelajaran',
+            kelas_id: kelasIdNum
         });
 
     } catch (err) {
@@ -59,12 +65,11 @@ exports.getKategoriAkademik = async (req, res) => {
 
 exports.createKategoriAkademik = async (req, res) => {
     try {
-        let { min_nilai, max_nilai, deskripsi, mapel_id } = req.body;
+        let { min_nilai, max_nilai, deskripsi, mapel_id, kelas_id } = req.body;
 
-        // Parse dan validasi tipe data
         min_nilai = Math.floor(parseFloat(min_nilai));
         max_nilai = Math.floor(parseFloat(max_nilai));
-        
+
         if (isNaN(min_nilai) || isNaN(max_nilai)) {
             return res.status(400).json({
                 success: false,
@@ -72,7 +77,6 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Validasi range
         if (min_nilai < 0 || max_nilai > 100) {
             return res.status(400).json({
                 success: false,
@@ -87,7 +91,6 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({
                 success: false,
@@ -96,7 +99,6 @@ exports.createKategoriAkademik = async (req, res) => {
         }
         deskripsi = deskripsi.trim();
 
-        // Validasi mapel_id
         const mapelIdNum = parseInt(mapel_id, 10);
         if (isNaN(mapelIdNum) || mapelIdNum <= 0) {
             return res.status(400).json({
@@ -105,7 +107,14 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Ambil tahun ajaran aktif
+        const kelasIdNum = parseInt(kelas_id, 10);
+        if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'kelas_id tidak valid'
+            });
+        }
+
         const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
@@ -115,16 +124,15 @@ exports.createKategoriAkademik = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
-        const indukId = taAktif.id_tahun_ajaran_induk;
-
-        // Cek overlap
         const overlaps = await kategoriModel.cekRangeOverlap(
-            mapelIdNum, 
-            semesterId, 
-            min_nilai, 
-            max_nilai
+            mapelIdNum,
+            semesterId,
+            min_nilai,
+            max_nilai,
+            kelasIdNum,
+            null
         );
-        
+
         if (overlaps.length > 0) {
             return res.status(400).json({
                 success: false,
@@ -132,10 +140,9 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Validasi akses guru
         const userId = req.user.id;
-        const isValid = await kategoriModel.validateGuruMapel(userId, mapelIdNum, indukId);
-        
+        const isValid = await kategoriModel.validateGuruMapel(userId, mapelIdNum, semesterId);
+
         if (!isValid) {
             return res.status(403).json({
                 success: false,
@@ -143,19 +150,20 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Insert kategori
         const result = await kategoriModel.createKategori({
             mapel_id: mapelIdNum,
             semester_id: semesterId,
             min_nilai,
             max_nilai,
-            deskripsi
+            deskripsi,
+            kelas_id: null
         });
 
         res.json({
             success: true,
             message: 'Kategori berhasil ditambahkan',
             id: result.insertId,
+            mapel: req.penugasanMapel?.nama_mapel
         });
 
     } catch (err) {
@@ -172,7 +180,6 @@ exports.updateKategoriAkademik = async (req, res) => {
         const { id } = req.params;
         let { min_nilai, max_nilai, deskripsi, urutan, mapel_id } = req.body;
 
-        // Parse dan validasi
         min_nilai = Math.floor(parseFloat(min_nilai));
         max_nilai = Math.floor(parseFloat(max_nilai));
         urutan = parseInt(urutan) || 0;
@@ -206,7 +213,6 @@ exports.updateKategoriAkademik = async (req, res) => {
         }
         deskripsi = deskripsi.trim();
 
-        // Ambil tahun ajaran aktif
         const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
@@ -216,9 +222,7 @@ exports.updateKategoriAkademik = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
-        const indukId = taAktif.id_tahun_ajaran_induk;
 
-        // Cek kategori ada
         const existing = await kategoriModel.getKategoriById(id);
         if (!existing) {
             return res.status(404).json({
@@ -227,7 +231,6 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Cek apakah ada perubahan
         if (kategoriModel.isUnchanged(existing, { min_nilai, max_nilai, deskripsi })) {
             return res.status(400).json({
                 success: false,
@@ -235,15 +238,15 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Cek overlap (exclude diri sendiri)
         const overlaps = await kategoriModel.cekRangeOverlap(
             existing.mapel_id,
             semesterId,
             min_nilai,
             max_nilai,
+            exixting.kelas_id,
             id
         );
-        
+
         if (overlaps.length > 0) {
             return res.status(400).json({
                 success: false,
@@ -251,10 +254,9 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Validasi akses guru
         const userId = req.user.id;
-        const isValid = await kategoriModel.validateGuruMapel(userId, existing.mapel_id, indukId);
-        
+        const isValid = await kategoriModel.validateGuruMapel(userId, existing.mapel_id, semesterId);
+
         if (!isValid) {
             return res.status(403).json({
                 success: false,
@@ -262,7 +264,6 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Update kategori
         const affectedRows = await kategoriModel.updateKategori(id, {
             min_nilai,
             max_nilai,
@@ -280,6 +281,7 @@ exports.updateKategoriAkademik = async (req, res) => {
         res.json({
             success: true,
             message: 'Kategori akademik berhasil diperbarui',
+            mapel: req.penugasanMapel?.nama_mapel
         });
 
     } catch (err) {
@@ -295,7 +297,6 @@ exports.deleteKategoriAkademik = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Ambil tahun ajaran aktif
         const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
@@ -305,9 +306,7 @@ exports.deleteKategoriAkademik = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
-        const indukId = taAktif.id_tahun_ajaran_induk;
 
-        // Cek kategori ada
         const kategori = await kategoriModel.getKategoriById(id);
         if (!kategori) {
             return res.status(404).json({
@@ -316,10 +315,9 @@ exports.deleteKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Validasi akses guru
         const userId = req.user.id;
-        const isValid = await kategoriModel.validateGuruMapel(userId, kategori.mapel_id, indukId);
-        
+        const isValid = await kategoriModel.validateGuruMapel(userId, kategori.mapel_id, semesterId);
+
         if (!isValid) {
             return res.status(403).json({
                 success: false,
@@ -327,12 +325,12 @@ exports.deleteKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Cek dampak ke nilai siswa
         const affectedCount = await kategoriModel.cekNilaiSiswaInRange(
             kategori.mapel_id,
             semesterId,
             kategori.min_nilai,
-            kategori.max_nilai
+            kategori.max_nilai,
+            kategori.kelas_id
         );
 
         if (affectedCount > 0) {
@@ -342,7 +340,6 @@ exports.deleteKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Hapus kategori
         const affectedRows = await kategoriModel.deleteKategori(id);
 
         if (affectedRows === 0) {
@@ -354,7 +351,8 @@ exports.deleteKategoriAkademik = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Kategori berhasil dihapus'
+            message: 'Kategori berhasil dihapus',
+            mapel: req.penugasanMapel?.nama_mapel
         });
 
     } catch (err) {
