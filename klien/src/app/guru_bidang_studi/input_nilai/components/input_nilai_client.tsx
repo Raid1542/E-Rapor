@@ -1,7 +1,9 @@
 /**
  * Nama File: input_nilai_gbs_client.tsx
  * Fungsi: Input nilai siswa per mata pelajaran untuk guru bidang studi
- * UPDATE: Template guru kelas + dropdown mapel & kelas + filter siswa aktif
+ * UPDATE: 
+ *   - Template guru kelas + dropdown mapel & kelas + filter siswa aktif
+ *   - Hapus simpan langsung, ganti dengan popup modal konfirmasi sederhana
  * UI: Tema oranye elegan, konsisten dengan DataGuruPage
  */
 
@@ -161,6 +163,9 @@ export default function InputNilaiGBSClient() {
     const [editingSiswa, setEditingSiswa] = useState<SiswaNilai | null>(null);
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
     const [saving, setSaving] = useState(false);
+
+    // ✅ TAMBAHAN: State untuk modal konfirmasi
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     // ── FETCH DATA AWAL ─────────────────────────────────────────────────────────
 
@@ -401,101 +406,119 @@ export default function InputNilaiGBSClient() {
         }, 150);
     };
 
-    const simpanNilaiKomponen = async () => {
-    if (!editingSiswa || !selectedMapelId) return;
+    // ✅ TAMBAHAN: Validasi dan buka modal konfirmasi
+    const openConfirmSimpan = () => {
+        if (!editingSiswa || !selectedMapelId) return;
 
-    // Validasi nilai
-    for (const [idStr, nilai] of Object.entries(editingNilai)) {
-        if (nilai !== null) {
-            const nama = komponenList.find(k => k.id_komponen === Number(idStr))?.nama_komponen || idStr;
-            if (typeof nilai !== 'number' || isNaN(nilai) || nilai < 0 || nilai > 100) {
-                closeEditThenShow({
-                    type: 'warning',
-                    title: 'Nilai Tidak Valid',
-                    message: `Nilai untuk "${nama}" harus angka 0-100.`
-                });
-                return;
+        // Validasi nilai
+        for (const [idStr, nilai] of Object.entries(editingNilai)) {
+            if (nilai !== null) {
+                const nama = komponenList.find(k => k.id_komponen === Number(idStr))?.nama_komponen || idStr;
+                if (typeof nilai !== 'number' || isNaN(nilai) || nilai < 0 || nilai > 100) {
+                    closeEditThenShow({
+                        type: 'warning',
+                        title: 'Nilai Tidak Valid',
+                        message: `Nilai untuk "${nama}" harus angka 0-100.`
+                    });
+                    return;
+                }
             }
         }
-    }
 
-    // Cek perubahan
-    const hasChanged = Object.entries(editingNilai).some(([idStr, nilaiBaru]) => {
-        const nilaiLama = editingSiswa.nilai[Number(idStr)] ?? null;
-        return nilaiBaru !== nilaiLama;
-    });
-
-    if (!hasChanged) {
-        closeEditThenShow({
-            type: 'warning',
-            title: 'Tidak Ada Perubahan',
-            message: 'Data yang Anda masukkan sama dengan data sebelumnya.'
-        });
-        return;
-    }
-
-    setSaving(true);
-    try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API}/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ nilai: editingNilai }),
+        // Cek perubahan
+        const hasChanged = Object.entries(editingNilai).some(([idStr, nilaiBaru]) => {
+            const nilaiLama = editingSiswa.nilai[Number(idStr)] ?? null;
+            return nilaiBaru !== nilaiLama;
         });
 
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
-            throw new Error(err.message);
+        if (!hasChanged) {
+            closeEditThenShow({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Data yang Anda masukkan sama dengan data sebelumnya.'
+            });
+            return;
         }
 
-        const data = await res.json();
-        console.log('📥 Backend response:', data);
+        // Tutup modal edit dan buka modal konfirmasi
+        setEditClosing(true);
+        setTimeout(() => {
+            setShowEdit(false);
+            setEditClosing(false);
+            setShowConfirmModal(true);
+        }, 200);
+    };
 
-        const updatedSiswa: SiswaNilai = {
-            ...editingSiswa,
-            nilai: editingNilai,
-            nilai_rapor_pts: data.nilai_rapor_pts ?? data.nilai_rapor ?? editingSiswa.nilai_rapor_pts,
-            deskripsi_pts: data.deskripsi_pts ?? data.deskripsi ?? editingSiswa.deskripsi_pts,
-            nilai_rapor_pas: data.nilai_rapor_pas ?? editingSiswa.nilai_rapor_pas,
-            deskripsi_pas: data.deskripsi_pas ?? editingSiswa.deskripsi_pas,
-        };
+    // ✅ TAMBAHAN: Eksekusi simpan nilai (setelah konfirmasi)
+    const executeSimpanNilai = async () => {
+        if (!editingSiswa || !selectedMapelId) return;
 
-        console.log('Updated siswa:', updatedSiswa);
+        setSaving(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API}/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ nilai: editingNilai }),
+            });
 
-        setSiswaList(prevList => {
-            const newList = prevList.map(siswa => 
-                siswa.id === editingSiswa.id ? updatedSiswa : siswa
-            );
-            console.log('📋 siswaList updated, length:', newList.length);
-            return newList;
-        });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+                throw new Error(err.message);
+            }
 
-        setFilteredSiswa(prevList => {
-            const newList = prevList.map(siswa => 
-                siswa.id === editingSiswa.id ? updatedSiswa : siswa
-            );
-            console.log('📋 filteredSiswa updated, length:', newList.length);
-            return newList;
-        });
+            const data = await res.json();
+            console.log('📥 Backend response:', data);
 
-        // Tutup modal dan show success
-        closeEditThenShow({
-            type: 'success',
-            title: 'Nilai Disimpan!',
-            message: `Nilai ${editingSiswa.nama} berhasil disimpan.`
-        });
+            const updatedSiswa: SiswaNilai = {
+                ...editingSiswa,
+                nilai: editingNilai,
+                nilai_rapor_pts: data.nilai_rapor_pts ?? data.nilai_rapor ?? editingSiswa.nilai_rapor_pts,
+                deskripsi_pts: data.deskripsi_pts ?? data.deskripsi ?? editingSiswa.deskripsi_pts,
+                nilai_rapor_pas: data.nilai_rapor_pas ?? editingSiswa.nilai_rapor_pas,
+                deskripsi_pas: data.deskripsi_pas ?? editingSiswa.deskripsi_pas,
+            };
 
-    } catch (err: any) {
-        console.error('Error saving:', err);
-        closeEditThenShow({
-            type: 'error',
-            title: 'Gagal Menyimpan',
-            message: err.message || 'Gagal menyimpan nilai.'
-        });
-    } finally {
-        setSaving(false);
-    }
-};
+            console.log('Updated siswa:', updatedSiswa);
+
+            setSiswaList(prevList => {
+                const newList = prevList.map(siswa => 
+                    siswa.id === editingSiswa.id ? updatedSiswa : siswa
+                );
+                console.log('📋 siswaList updated, length:', newList.length);
+                return newList;
+            });
+
+            setFilteredSiswa(prevList => {
+                const newList = prevList.map(siswa => 
+                    siswa.id === editingSiswa.id ? updatedSiswa : siswa
+                );
+                console.log('📋 filteredSiswa updated, length:', newList.length);
+                return newList;
+            });
+
+            // Tutup modal konfirmasi dan show success
+            setShowConfirmModal(false);
+            setEditingSiswa(null);
+            showModal({
+                type: 'success',
+                title: 'Nilai Disimpan!',
+                message: `Nilai ${editingSiswa.nama} berhasil disimpan.`
+            });
+
+        } catch (err: any) {
+            console.error('Error saving:', err);
+            setShowConfirmModal(false);
+            setEditingSiswa(null);
+            showModal({
+                type: 'error',
+                title: 'Gagal Menyimpan',
+                message: err.message || 'Gagal menyimpan nilai.'
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // ── BADGE NILAI ─────────────────────────────────────────────────────────────
 
@@ -1205,7 +1228,8 @@ export default function InputNilaiGBSClient() {
 
                             <div className="flex justify-end gap-3 mt-6 pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
                                 <BtnSecondary onClick={closeEdit} disabled={saving}>Batal</BtnSecondary>
-                                <button onClick={simpanNilaiKomponen} disabled={saving}
+                                {/* ✅ UBAH: onClick={openConfirmSimpan} */}
+                                <button onClick={openConfirmSimpan} disabled={saving}
                                     className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     style={btnPrimary.style}
                                     onMouseEnter={e => { if (!saving) btnPrimary.hover(e); }}
@@ -1220,6 +1244,57 @@ export default function InputNilaiGBSClient() {
                                     )}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {showConfirmModal && editingSiswa && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi Penyimpanan Nilai
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            Apakah Anda yakin ingin menyimpan nilai {editingSiswa.nama}?
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    executeSimpanNilai();
+                                }}
+                                disabled={saving}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                {saving ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    <>Simpan</>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -2,8 +2,9 @@
  * Nama File: atur_penilaian_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian
  *         oleh guru kelas, mencakup kategori kokurikuler, akademik, dan bobot.
+ * UPDATE: 
+ *   - Hapus simpan langsung, ganti dengan popup modal konfirmasi sederhana
  * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage
- * 
  */
 
 'use client';
@@ -157,10 +158,10 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
             >Batal</button>
             <button onClick={() => { modal.onConfirm?.(); onClose(); }}
               className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
-            >Ya, Lanjutkan</button>
+            >Lanjutkan</button>
           </div>
         ) : (
-          <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+          <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
         )}
       </div>
     </div>
@@ -187,7 +188,7 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
         </button>
         <button onClick={onConfirm}
           className="flex-1 py-3 rounded-xl text-white font-semibold text-sm bg-red-500 hover:bg-red-600 transition-colors">
-          Ya, Hapus
+          Hapus
         </button>
       </div>
     </div>
@@ -297,6 +298,10 @@ export default function AturPenilaianGuruKelasClient() {
   const [isSavingBobot, setIsSavingBobot] = useState(false);
   const [isSavingKategori, setIsSavingKategori] = useState(false);
 
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'save-kategori' | 'save-bobot' | null>(null);
+
   // Modals
   const [modal, setModal] = useState<ModalConfig | null>(null);
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -336,7 +341,14 @@ export default function AturPenilaianGuruKelasClient() {
         }
         if (!mapelRes.ok) {
           const err = await parseBackendError(mapelRes);
-          throw new Error(err.message);
+
+          if (mapelRes.status === 403 && err.code === 'NOT_ASSIGNED') {
+            console.log('Guru belum ditugaskan');
+          } else if (mapelRes.status === 403) {
+            console.log('Akses dibatasi:', err.message);
+          } else {
+            throw new Error(err.message);
+          }
         }
         if (!aspekRes.ok) {
           const err = await parseBackendError(aspekRes);
@@ -362,9 +374,6 @@ export default function AturPenilaianGuruKelasClient() {
 
         setAspekList(aspekData.data || []);
 
-        if (jenisAktif && allMapel.length === 0) {
-          setIsNotAssigned(true);
-        }
       } catch (err: any) {
         showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
       } finally {
@@ -418,8 +427,40 @@ export default function AturPenilaianGuruKelasClient() {
             errorData = { message: await res.text(), code: null };
           }
 
-          if (res.status === 403 || errorData.code === 'NOT_ASSIGNED') {
+          // Jika guru belum ditugaskan
+          if (errorData.code === 'NOT_ASSIGNED') {
             setIsNotAssigned(true);
+            return;
+          }
+
+          if (errorData.code === 'PERIOD_NOT_OPEN') {
+            showModal({
+              type: 'warning',
+              title: 'Periode Belum Dibuka',
+              message: errorData.message || 'Admin belum membuka periode penilaian.\n\nAnda dapat melihat konfigurasi yang sudah ada.'
+            });
+            setKategoriList([]);
+            setKategoriLoading(false);
+            return;
+          }
+
+          // Jika periode terkunci
+          if (errorData.code === 'PERIOD_LOCKED') {
+            showModal({
+              type: 'warning',
+              title: 'Periode Terkunci',
+              message: errorData.message || 'Data sudah dikunci dan tidak dapat diubah.'
+            });
+            return;
+          }
+
+          // Error 403 lainnya
+          if (res.status === 403) {
+            showModal({
+              type: 'error',
+              title: 'Akses Ditolak',
+              message: errorData.message || 'Anda tidak memiliki akses'
+            });
             return;
           }
 
@@ -472,8 +513,37 @@ export default function AturPenilaianGuruKelasClient() {
             errorData = { message: await res.text(), code: null };
           }
 
-          if (res.status === 403 || errorData.code === 'NOT_ASSIGNED') {
+          if (errorData.code === 'NOT_ASSIGNED') {
             setIsNotAssigned(true);
+            return;
+          }
+
+          if (errorData.code === 'PERIOD_NOT_OPEN') {
+            showModal({
+              type: 'warning',
+              title: 'Periode Belum Dibuka',
+              message: errorData.message || 'Admin belum membuka periode penilaian.'
+            });
+            setBobotList([]);
+            setBobotLoading(false);
+            return;
+          }
+
+          if (errorData.code === 'PERIOD_LOCKED') {
+            showModal({
+              type: 'warning',
+              title: 'Periode Terkunci',
+              message: errorData.message || 'Data sudah dikunci.'
+            });
+            return;
+          }
+
+          if (res.status === 403) {
+            showModal({
+              type: 'error',
+              title: 'Akses Ditolak',
+              message: errorData.message || 'Anda tidak memiliki akses'
+            });
             return;
           }
 
@@ -498,7 +568,6 @@ export default function AturPenilaianGuruKelasClient() {
         setBobotList(fullBobot);
         initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
       } catch (err: any) {
-        // Jangan tampilkan error jika sudah ada modal "belum ditugaskan"
         if (err.message.includes('belum ditugaskan')) return;
 
         showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal mengambil bobot penilaian' });
@@ -560,8 +629,8 @@ export default function AturPenilaianGuruKelasClient() {
     }, 200);
   };
 
-  // ====== SAVE KATEGORI ======
-  const handleSaveKategori = async () => {
+  // ✅ TAMBAHAN: Validasi kategori
+  const validateKategori = (): boolean => {
     const ne: Record<string, string> = {};
 
     if (isNaN(editKategoriData.min_nilai) || isNaN(editKategoriData.max_nilai)) {
@@ -593,12 +662,12 @@ export default function AturPenilaianGuruKelasClient() {
       } else if (grade.length !== 1) {
         ne.grade = 'Grade harus tepat 1 karakter (A, B, C, dst).';
       }
-    } 
+    }
 
     if (Object.keys(ne).length > 0) {
       setErrors(ne);
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: Object.values(ne).join('\n') });
-      return;
+      return false;
     }
 
     const initial = initialEditKategoriDataRef.current;
@@ -612,9 +681,27 @@ export default function AturPenilaianGuruKelasClient() {
 
     if (isUnchanged) {
       showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-      return;
+      return false;
     }
 
+    return true;
+  };
+
+  // ✅ TAMBAHAN: Buka modal konfirmasi untuk save kategori
+  const openConfirmSaveKategori = () => {
+    if (!validateKategori()) return;
+    // Tutup modal edit kategori dulu
+    setEditKategoriClosing(true);
+    setTimeout(() => {
+      setShowEditKategori(false);
+      setEditKategoriClosing(false);
+      setConfirmAction('save-kategori');
+      setShowConfirmModal(true);
+    }, 200);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi save kategori (setelah konfirmasi)
+  const executeSaveKategori = async () => {
     setIsSavingKategori(true);
     try {
       const token = localStorage.getItem('token');
@@ -657,8 +744,6 @@ export default function AturPenilaianGuruKelasClient() {
       const result = await res.json();
 
       if (res.ok) {
-        setShowEditKategori(false);
-        setEditKategoriClosing(false);
         setEditKategoriId(null);
         setErrors({});
 
@@ -710,6 +795,7 @@ export default function AturPenilaianGuruKelasClient() {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
     } finally {
       setIsSavingKategori(false);
+      setShowConfirmModal(false);
     }
   };
 
@@ -774,8 +860,9 @@ export default function AturPenilaianGuruKelasClient() {
     );
   };
 
-  const handleSaveBobot = async () => {
-    if (!selectedMapelId) return;
+  // ✅ TAMBAHAN: Validasi bobot
+  const validateBobot = (): boolean => {
+    if (!selectedMapelId) return false;
 
     const isUnchanged = bobotList.every((b) => {
       const initial = initialBobotListRef.current.find((i) => i.komponen_id === b.komponen_id);
@@ -784,13 +871,13 @@ export default function AturPenilaianGuruKelasClient() {
 
     if (isUnchanged) {
       showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-      return;
+      return false;
     }
 
     const adaNegatif = bobotList.some(b => b.bobot < 0);
     if (adaNegatif) {
       showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' });
-      return;
+      return false;
     }
 
     const total = bobotList.reduce((sum, b) => sum + b.bobot, 0);
@@ -800,7 +887,7 @@ export default function AturPenilaianGuruKelasClient() {
         title: 'Total Bobot Salah',
         message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%`,
       });
-      return;
+      return false;
     }
 
     if (isPTSActive) {
@@ -809,8 +896,22 @@ export default function AturPenilaianGuruKelasClient() {
         title: 'Periode PTS Aktif',
         message: 'Bobot tidak dapat diubah saat periode PTS aktif.',
       });
-      return;
+      return false;
     }
+
+    return true;
+  };
+
+  // ✅ TAMBAHAN: Buka modal konfirmasi untuk save bobot
+  const openConfirmSaveBobot = () => {
+    if (!validateBobot()) return;
+    setConfirmAction('save-bobot');
+    setShowConfirmModal(true);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi save bobot (setelah konfirmasi)
+  const executeSaveBobot = async () => {
+    if (!selectedMapelId) return;
 
     setIsSavingBobot(true);
     try {
@@ -851,6 +952,7 @@ export default function AturPenilaianGuruKelasClient() {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan bobot.' });
     } finally {
       setIsSavingBobot(false);
+      setShowConfirmModal(false);
     }
   };
 
@@ -934,6 +1036,51 @@ export default function AturPenilaianGuruKelasClient() {
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola kategori dan bobot penilaian kelas Anda</p>
       </div>
 
+      {!jenisPenilaianAktif && mapelList.length > 0 && (
+        <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
+          style={{
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+            border: '2px solid #fcd34d',
+            boxShadow: '0 2px 8px rgba(252,211,77,0.2)'
+          }}>
+          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={20} style={{ color: '#d97706' }} />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-sm mb-1" style={{ color: '#92400e' }}>
+              Periode Penilaian Belum Dibuka
+            </h3>
+            <p className="text-xs" style={{ color: '#78350f' }}>
+              Admin belum membuka periode PTS atau PAS untuk tahun ajaran ini.
+              Anda tetap dapat melihat konfigurasi yang sudah ada,
+              namun <strong>beberapa fitur mungkin terbatas</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {mapelList.length === 0 && (
+        <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
+          style={{
+            background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+            border: '2px solid #fdba74',
+            boxShadow: '0 2px 8px rgba(253,186,116,0.2)'
+          }}>
+          <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+            <AlertCircle size={20} style={{ color: '#c2410c' }} />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-sm mb-1" style={{ color: '#9a3412' }}>
+              Mata Pelajaran Belum Diatur
+            </h3>
+            <p className="text-xs" style={{ color: '#7c2d12' }}>
+              Belum ada mata pelajaran yang dikonfigurasi untuk tahun ajaran ini.
+              Silakan hubungi <strong>Administrator</strong> untuk menambahkan mata pelajaran.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
         {/* Tabs */}
         <div className="px-6 py-3 border-b" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
@@ -973,12 +1120,33 @@ export default function AturPenilaianGuruKelasClient() {
           {/* ====== TAB: KOKURIKULER ====== */}
           {activeTab === 'kokurikuler' && (
             <div>
-              {jenisPenilaianAktif && (
-                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                  <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                    <span className="font-bold">ℹ️ Info: </span>
-                    Periode <strong>{jenisPenilaianAktif}</strong> sedang aktif.
-                  </p>
+              {jenisPenilaianAktif === 'PTS' && (
+                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
+                  style={{ background: '#fff7ed', border: '2px solid #fdba74' }}>
+                  <ShieldAlert size={20} style={{ color: '#c2410c', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: '#9a3412' }}>
+                      Periode PTS Sedang Aktif
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#7c2d12' }}>
+                      Kategori nilai tetap dapat diedit. Bobot penilaian akan otomatis dikunci.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {jenisPenilaianAktif === 'PAS' && (
+                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
+                  style={{ background: '#ecfdf5', border: '2px solid #86efac' }}>
+                  <CheckCircle2 size={20} style={{ color: '#15803d', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: '#14532d' }}>
+                      Periode PAS Sedang Aktif
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#166534' }}>
+                      Semua konfigurasi penilaian dapat diedit dengan bebas.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -1087,12 +1255,33 @@ export default function AturPenilaianGuruKelasClient() {
           {/* ====== TAB: AKADEMIK ====== */}
           {activeTab === 'akademik' && (
             <div>
-              {jenisPenilaianAktif && (
-                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                  <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                    <span className="font-bold">ℹ️ Info: </span>
-                    Periode <strong>{jenisPenilaianAktif}</strong> sedang aktif.
-                  </p>
+              {jenisPenilaianAktif === 'PTS' && (
+                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
+                  style={{ background: '#fff7ed', border: '2px solid #fdba74' }}>
+                  <ShieldAlert size={20} style={{ color: '#c2410c', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: '#9a3412' }}>
+                      Periode PTS Sedang Aktif
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#7c2d12' }}>
+                      Kategori nilai tetap dapat diedit. Bobot penilaian akan otomatis dikunci.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {jenisPenilaianAktif === 'PAS' && (
+                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
+                  style={{ background: '#ecfdf5', border: '2px solid #86efac' }}>
+                  <CheckCircle2 size={20} style={{ color: '#15803d', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: '#14532d' }}>
+                      Periode PAS Sedang Aktif
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#166534' }}>
+                      Semua konfigurasi penilaian dapat diedit dengan bebas.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -1314,8 +1503,9 @@ export default function AturPenilaianGuruKelasClient() {
 
                     {!isPTSActive && (
                       <div className="flex justify-end pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                        {/* ✅ UBAH: onClick={openConfirmSaveBobot} */}
                         <button
-                          onClick={handleSaveBobot}
+                          onClick={openConfirmSaveBobot}
                           disabled={isSavingBobot || !isBobotValid}
                           className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
                           style={btnPrimary.style}
@@ -1502,8 +1692,9 @@ export default function AturPenilaianGuruKelasClient() {
 
             <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
               <BtnSecondary onClick={closeEditKategori} disabled={isSavingKategori}>Batal</BtnSecondary>
+              {/* ✅ UBAH: onClick={openConfirmSaveKategori} */}
               <button
-                onClick={handleSaveKategori}
+                onClick={openConfirmSaveKategori}
                 disabled={isSavingKategori}
                 className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
                 style={btnPrimary.style}
@@ -1513,6 +1704,63 @@ export default function AturPenilaianGuruKelasClient() {
                 {isSavingKategori ? (
                   <>
                     <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>Simpan</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 ap-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ap-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi Penyimpanan Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'save-bobot'
+                ? 'Apakah Anda yakin ingin menyimpan bobot penilaian ini?'
+                : 'Apakah Anda yakin ingin menyimpan kategori ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmAction === 'save-bobot') {
+                    executeSaveBobot();
+                  } else {
+                    executeSaveKategori();
+                  }
+                }}
+                disabled={isSavingBobot || isSavingKategori}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                {(isSavingBobot || isSavingKategori) ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />
                     Menyimpan...
                   </>
                 ) : (

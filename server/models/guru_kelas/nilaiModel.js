@@ -41,12 +41,26 @@ const nilaiModel = {
       user_id,
     } = data;
 
+    // Cek apakah siswa terdaftar di kelas
     const [siswaCheck] = await db.execute(
       `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?`,
-      [siswa_id, kelas_id, tahun_ajaran_id]
+      [siswa_id, kelas_id, tahunAjaranId]
     );
     if (siswaCheck.length === 0) {
       throw new Error('Siswa tidak terdaftar di kelas ini');
+    }
+
+    const [statusCheck] = await db.execute(
+      `SELECT status FROM siswa WHERE id_siswa = ?`,
+      [siswa_id]
+    );
+
+    if (statusCheck.length === 0) {
+      throw new Error('Siswa tidak ditemukan');
+    }
+
+    if (statusCheck[0].status !== 'aktif') {
+      throw new Error(`Siswa tidak aktif (status: ${statusCheck[0].status}). Nilai tidak dapat disimpan.`);
     }
 
     const hasAccess = await nilaiModel.canUserInputNilai(
@@ -81,23 +95,25 @@ const nilaiModel = {
   // Mengambil nilai siswa berdasarkan kelas dan mata pelajaran
   async getNilaiByKelasMapel(kelasId, mapelId, tahunAjaranId) {
     const query = `
-      SELECT 
-          s.id_siswa,
-          s.nis,
-          s.nama_lengkap,
-          nd.komponen_id,
-          kp.nama_komponen,
-          nd.nilai,
-          nd.created_at
-      FROM siswa_kelas sk
-      JOIN siswa s ON sk.siswa_id = s.id_siswa
-      LEFT JOIN nilai_detail nd ON s.id_siswa = nd.siswa_id 
-        AND nd.mapel_id = ? 
-        AND nd.tahun_ajaran_id = ?
-      LEFT JOIN komponen_penilaian kp ON nd.komponen_id = kp.id_komponen
-      WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
-      ORDER BY s.nama_lengkap, kp.urutan
-    `;
+  SELECT 
+      s.id_siswa,
+      s.nis,
+      s.nama_lengkap,
+      nd.komponen_id,
+      kp.nama_komponen,
+      nd.nilai,
+      nd.created_at
+  FROM siswa_kelas sk
+  JOIN siswa s ON sk.siswa_id = s.id_siswa
+  LEFT JOIN nilai_detail nd ON s.id_siswa = nd.siswa_id 
+    AND nd.mapel_id = ? 
+    AND nd.tahun_ajaran_id = ?
+  LEFT JOIN komponen_penilaian kp ON nd.komponen_id = kp.id_komponen
+  WHERE sk.kelas_id = ? 
+  AND sk.id_tahun_ajaran_induk = ?
+  AND s.status = 'aktif' I
+  ORDER BY s.nama_lengkap, kp.urutan
+`;
     const [results] = await db.execute(query, [
       mapelId,
       tahunAjaranId,

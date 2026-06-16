@@ -103,7 +103,6 @@ router.get('/kelas',
 router.get('/siswa',
     authenticate,
     guruKelasOnly,
-    cekPenilaianStatus,
     cekGuruKelasDitugaskan,
     guruKelasControllers.getSiswaByKelas
 );
@@ -511,10 +510,12 @@ const adminOrGuruKelasDitugaskan = [
     authenticate,
     authorize(['admin', 'guru kelas']),
     (req, res, next) => {
+        // Skip cekPenilaianStatus untuk admin
         if (req.user.role === 'admin') {
-            return cekPenilaianStatus(false)(req, res, next);
+            return next();
         }
-        cekPenilaianStatus(true)(req, res, next);
+        // Untuk guru kelas, langsung panggil middleware
+        cekPenilaianStatus(req, res, next);
     },
     (req, res, next) => {
         if (req.user.role === 'admin') return next();

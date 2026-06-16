@@ -1,12 +1,27 @@
+/**
+ * Nama File: RaporGuruKelasClient.tsx
+ * Fungsi: Cetak rapor siswa untuk guru kelas menggunakan template Word
+ * Template: template_pts_ganjil.docx, template_pts_genap.docx, 
+ *           template_pas_ganjil.docx, template_pas_genap.docx
+ * UI: Tema oranye elegan, konsisten dengan halaman lain
+ */
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, Download, AlertCircle, CheckCircle2, WifiOff, ShieldAlert, X } from 'lucide-react';
+import {
+    FileText, Download, AlertCircle, CheckCircle2,
+    WifiOff, ShieldAlert, X, Calendar, Lock, Play, Pause
+} from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
+
+type StatusPenilaian = 'nonaktif' | 'aktif' | 'selesai';
 
 interface Siswa {
     id: number;
@@ -16,10 +31,12 @@ interface Siswa {
 }
 
 interface TahunAjaranInfo {
+    id_tahun_ajaran: number;
+    id_tahun_ajaran_induk: number;
     tahun_ajaran: string;
     semester: 'Ganjil' | 'Genap';
-    status_pts: 'nonaktif' | 'aktif' | 'selesai';
-    status_pas: 'nonaktif' | 'aktif' | 'selesai';
+    status_pts: StatusPenilaian;
+    status_pas: StatusPenilaian;
 }
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -38,10 +55,10 @@ const GlobalStyles = () => (
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -56,7 +73,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
             </div>
         </div>
     );
@@ -64,24 +81,45 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG    = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' };
-const TH_GRAD    = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 // ─── STATUS BADGE ─────────────────────────────────────────────────────────────
 
-const StatusBadge = ({ status }: { status: 'nonaktif' | 'aktif' | 'selesai' | null }) => {
+const getStatusStyle = (status: StatusPenilaian) => {
+    switch (status) {
+        case 'aktif':
+            return {
+                bg: '#dcfce7', color: '#15803d', border: '#86efac',
+                dot: '#22c55e', text: 'Aktif (Bisa Download)',
+                icon: <Play size={14} />
+            };
+        case 'selesai':
+            return {
+                bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db',
+                dot: '#9ca3af', text: 'Selesai (Terkunci)',
+                icon: <Lock size={14} />
+            };
+        case 'nonaktif':
+        default:
+            return {
+                bg: '#fef9c3', color: '#92400e', border: '#fde68a',
+                dot: '#eab308', text: 'Belum Dibuka',
+                icon: <Pause size={14} />
+            };
+    }
+};
+
+const StatusBadge = ({ status }: { status: StatusPenilaian | null }) => {
     if (!status) return null;
-    const map = {
-        aktif:    { bg: '#ecfdf5', color: '#166534', border: '#bbf7d0', label: 'Aktif' },
-        selesai:  { bg: '#f3f4f6', color: '#374151', border: '#d1d5db', label: 'Terkunci' },
-        nonaktif: { bg: '#fffbeb', color: '#92400e', border: '#fde68a', label: 'Belum Dibuka' },
-    };
-    const s = map[status];
+    const s = getStatusStyle(status);
     return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold"
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
             style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-            {s.label}
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.dot }} />
+            {s.icon}
+            {s.text}
         </span>
     );
 };
@@ -91,141 +129,207 @@ const StatusBadge = ({ status }: { status: 'nonaktif' | 'aktif' | 'selesai' | nu
 const RaporGuruKelasClient = () => {
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-    const [jenisPenilaian, setJenisPenilaian]     = useState<string>('');
-    const [siswaList, setSiswaList]               = useState<Siswa[]>([]);
-    const [loading, setLoading]                   = useState<boolean>(true);
-    const [tahunAjaranInfo, setTahunAjaranInfo]   = useState<TahunAjaranInfo | null>(null);
-    const [modal, setModal]                       = useState<ModalConfig | null>(null);
-    const [downloadingId, setDownloadingId]       = useState<number | null>(null);
+    const { showSessionExpired, handleLogout } = useSession();
+    const [tahunAjaranInfo, setTahunAjaranInfo] = useState<TahunAjaranInfo | null>(null);
+    const [selectedSemester, setSelectedSemester] = useState<'Ganjil' | 'Genap' | ''>('');
+    const [selectedJenis, setSelectedJenis] = useState<'PTS' | 'PAS' | ''>('');
+    const [siswaList, setSiswaList] = useState<Siswa[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [loadingSiswa, setLoadingSiswa] = useState<boolean>(false);
+    const [modal, setModal] = useState<ModalConfig | null>(null);
+    const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
     // === Fetch tahun ajaran aktif ===
     const fetchTahunAjaranAktif = async () => {
         try {
             const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
+            if (!token) {
+                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+                return;
+            }
 
             const res = await fetch(`${API_BASE}/guru-kelas/tahun-ajaran/aktif`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
+
             if (res.ok && data.success) {
                 const ta = data.data;
                 setTahunAjaranInfo({
+                    id_tahun_ajaran: ta.id_tahun_ajaran,
+                    id_tahun_ajaran_induk: ta.id_tahun_ajaran_induk,
                     tahun_ajaran: ta.tahun_ajaran,
                     semester: ta.semester as 'Ganjil' | 'Genap',
-                    status_pts: ta.status_pts,
-                    status_pas: ta.status_pas,
+                    status_pts: ta.status_pts as StatusPenilaian,
+                    status_pas: ta.status_pas as StatusPenilaian,
                 });
+
+                // Auto-select semester aktif
+                setSelectedSemester(ta.semester as 'Ganjil' | 'Genap');
             } else {
                 showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal mengambil tahun ajaran aktif.' });
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        } finally {
+            setLoading(false);
         }
     };
 
     // === Fetch daftar siswa ===
     const fetchSiswaList = async () => {
-        if (!tahunAjaranInfo) return;
         try {
             const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
+            if (!token) return;
 
+            setLoadingSiswa(true);
             const res = await fetch(`${API_BASE}/guru-kelas/siswa`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
+
             if (res.ok && data.success) {
-                setSiswaList(data.data);
+                setSiswaList(data.data || []);
             } else {
+                setSiswaList([]);
                 showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal memuat data siswa.' });
             }
         } catch {
+            setSiswaList([]);
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
-            setLoading(false);
+            setLoadingSiswa(false);
         }
     };
 
-    useEffect(() => { fetchTahunAjaranAktif(); }, []);
+    useEffect(() => {
+        fetchTahunAjaranAktif();
+    }, []);
 
     useEffect(() => {
-        if (jenisPenilaian && tahunAjaranInfo) {
-            setLoading(true);
+        if (selectedSemester && selectedJenis) {
             fetchSiswaList();
         } else {
             setSiswaList([]);
-            setLoading(false);
         }
-    }, [jenisPenilaian, tahunAjaranInfo]);
+    }, [selectedSemester, selectedJenis]);
 
     // === Helper: status penilaian saat ini ===
-    const getCurrentStatus = (): 'nonaktif' | 'aktif' | 'selesai' | null => {
-        if (!jenisPenilaian || !tahunAjaranInfo) return null;
-        return jenisPenilaian.startsWith('PTS') ? tahunAjaranInfo.status_pts : tahunAjaranInfo.status_pas;
+    const getCurrentStatus = (): StatusPenilaian | null => {
+        if (!selectedJenis || !tahunAjaranInfo) return null;
+        return selectedJenis === 'PTS' ? tahunAjaranInfo.status_pts : tahunAjaranInfo.status_pas;
     };
 
     // === Unduh rapor ===
-    const handleDownloadRapor = async (siswaId: number) => {
+    const handleDownloadRapor = async (siswaId: number, namaSiswa: string, nisn: string) => {
         const token = localStorage.getItem('token');
-        if (!token || !jenisPenilaian || !tahunAjaranInfo) {
-            showModal({ type: 'warning', title: 'Data Tidak Lengkap', message: 'Silakan pilih jenis penilaian terlebih dahulu.' });
+        if (!token || !selectedJenis || !selectedSemester || !tahunAjaranInfo) {
+            showModal({ type: 'warning', title: 'Data Tidak Lengkap', message: 'Silakan pilih semester dan jenis penilaian terlebih dahulu.' });
             return;
         }
-        const jenisMurni = jenisPenilaian.startsWith('PTS') ? 'PTS' : 'PAS';
+
         setDownloadingId(siswaId);
         try {
+            // Endpoint: /generate-rapor/:siswaId/:jenis/:semester/:tahunAjaranId
             const res = await fetch(
-                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${jenisMurni}/${tahunAjaranInfo.semester.toLowerCase()}`,
+                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${selectedJenis}/${selectedSemester.toLowerCase()}/${tahunAjaranInfo.id_tahun_ajaran}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
+
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Gagal mengunduh rapor');
+                throw new Error(errorData.message || `Gagal mengunduh rapor (HTTP ${res.status})`);
             }
+
             const blob = await res.blob();
+
+            // Format nama file: rapor_pts_ganjil_1234567890.docx
+            const cleanNisn = (nisn || String(siswaId)).replace(/[^0-9]/g, '');
+            const fileName = `rapor_${selectedJenis.toLowerCase()}_${selectedSemester.toLowerCase()}_${cleanNisn}.docx`;
+
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `rapor_${jenisMurni.toLowerCase()}.docx`;
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            showModal({ type: 'success', title: 'Berhasil Diunduh', message: `Rapor ${jenisMurni} berhasil diunduh.` });
+
+            showModal({
+                type: 'success',
+                title: 'Berhasil Diunduh',
+                message: `Rapor ${selectedJenis} ${selectedSemester} untuk ${namaSiswa} berhasil diunduh.\n\nFile: ${fileName}`
+            });
         } catch (err: any) {
-            showModal({ type: 'error', title: 'Gagal Mengunduh', message: err.message || 'Terjadi kesalahan. Silakan coba lagi.' });
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh',
+                message: err.message || 'Terjadi kesalahan saat mengunduh rapor.'
+            });
         } finally {
             setDownloadingId(null);
         }
     };
 
-    // === Derived state ===
-    const currentStatus     = getCurrentStatus();
-    const isDownloadAllowed = currentStatus === 'aktif';
-    const optionsJenisPenilaian = tahunAjaranInfo
-        ? [
-            { value: `PTS-${tahunAjaranInfo.semester.toLowerCase()}`, label: `Penilaian Tengah Semester (${tahunAjaranInfo.semester})` },
-            { value: `PAS-${tahunAjaranInfo.semester.toLowerCase()}`, label: `Penilaian Akhir Semester (${tahunAjaranInfo.semester})` },
-        ]
-        : [];
+    // === Download semua rapor ===
+    const handleDownloadAll = async () => {
+        if (siswaList.length === 0) {
+            showModal({ type: 'warning', title: 'Tidak Ada Data', message: 'Tidak ada siswa untuk diunduh rapornya.' });
+            return;
+        }
 
-    const jenisMurni = jenisPenilaian.startsWith('PTS') ? 'PTS' : 'PAS';
+        showModal({
+            type: 'confirm',
+            title: `Unduh ${siswaList.length} Rapor?`,
+            message: `Akan mengunduh ${siswaList.length} rapor ${selectedJenis} ${selectedSemester}.\n\nFile akan diunduh satu per satu.`,
+            onConfirm: async () => {
+                for (const siswa of siswaList) {
+                    await handleDownloadRapor(siswa.id, siswa.nama, siswa.nisn);
+                    // Delay 1 detik antar download
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        });
+    };
+
+    // === Derived state ===
+    const currentStatus = getCurrentStatus();
+    const isDownloadAllowed = currentStatus === 'aktif' || currentStatus === 'selesai';
+
+    const jenisMurni = selectedJenis as 'PTS' | 'PAS';
+
+    // ── Loading state ──────────────────────────────────────────────────────────
+    if (loading) {
+        return (
+            <div className="flex-1 min-h-screen flex items-center justify-center" style={PAGE_BG}>
+                <GlobalStyles />
+                <div className="text-center">
+                    <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
+            {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
             {/* Page Header */}
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Cetak Rapor</h1>
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    <FileText size={24} style={{ color: '#c95b08' }} />
+                    Cetak Rapor
+                </h1>
                 {tahunAjaranInfo && (
                     <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
-                        Tahun Ajaran <span className="font-semibold">{tahunAjaranInfo.tahun_ajaran}</span> — Semester <span className="font-semibold">{tahunAjaranInfo.semester}</span>
+                        Tahun Ajaran <span className="font-semibold">{tahunAjaranInfo.tahun_ajaran}</span>
                     </p>
                 )}
             </div>
@@ -236,44 +340,90 @@ const RaporGuruKelasClient = () => {
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                     <div className="flex flex-wrap items-end gap-4">
 
+                        {/* Dropdown Semester */}
                         <div className="flex items-center gap-3">
-    <span className="text-sm font-bold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-        Jenis Penilaian
-    </span>
-    <select
-        value={jenisPenilaian}
-        onChange={(e) => setJenisPenilaian(e.target.value)}
-        className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 min-w-[280px]"
-    >
-        <option value="">-- Pilih Jenis Penilaian --</option>
-        {optionsJenisPenilaian.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-    </select>
-</div>
+                            <span className="text-sm font-bold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                Semester
+                            </span>
+                            <select
+                                value={selectedSemester}
+                                onChange={(e) => {
+                                    setSelectedSemester(e.target.value as 'Ganjil' | 'Genap' | '');
+                                    setSelectedJenis('');
+                                }}
+                                className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 min-w-[180px]"
+                            >
+                                <option value="">-- Pilih Semester --</option>
+                                <option value="Ganjil">Ganjil</option>
+                                <option value="Genap">Genap</option>
+                            </select>
+                        </div>
+
+                        {/* Dropdown Jenis Penilaian */}
+                        {selectedSemester && (
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm font-bold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                    Jenis
+                                </span>
+                                <select
+                                    value={selectedJenis}
+                                    onChange={(e) => setSelectedJenis(e.target.value as 'PTS' | 'PAS' | '')}
+                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 min-w-[280px]"
+                                >
+                                    <option value="">-- Pilih Jenis Penilaian --</option>
+                                    <option value="PTS">PTS - Penilaian Tengah Semester</option>
+                                    <option value="PAS">PAS - Penilaian Akhir Semester</option>
+                                </select>
+                            </div>
+                        )}
 
                         {/* Status Badge */}
-                        {jenisPenilaian && currentStatus && (
+                        {selectedJenis && currentStatus && (
                             <div className="flex items-center gap-2 pb-0.5">
-                                <span className="text-xs font-semibold" style={{ color: '#7a3a0a' }}>
-                                    Status {jenisMurni}:
-                                </span>
                                 <StatusBadge status={currentStatus} />
                             </div>
                         )}
                     </div>
 
-                    {jenisPenilaian && (
-                        <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                            {siswaList.length > 0
-                                ? `Menampilkan ${siswaList.length} siswa`
-                                : loading ? 'Memuat data...' : 'Tidak ada data siswa'}
-                        </p>
+                    {selectedJenis && (
+                        <div className="flex items-center justify-between mt-3">
+                            <p className="text-xs" style={{ color: '#c95b08' }}>
+                                {siswaList.length > 0
+                                    ? `Menampilkan ${siswaList.length} siswa`
+                                    : loadingSiswa ? 'Memuat data...' : 'Tidak ada data siswa'}
+                            </p>
+
+                            {/* Tombol Download Semua */}
+                            {siswaList.length > 0 && isDownloadAllowed && (
+                                <button
+                                    onClick={handleDownloadAll}
+                                    disabled={downloadingId !== null}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50"
+                                    style={{
+                                        background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                        boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                                >
+                                    <Download size={14} />
+                                    Unduh Semua ({siswaList.length})
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
 
                 {/* Konten */}
-                {jenisPenilaian === '' ? (
+                {!selectedSemester ? (
+                    <div className="py-16 flex flex-col items-center justify-center gap-3">
+                        <div className="w-14 h-14 rounded-full flex items-center justify-center"
+                            style={{ background: '#fff0e5', border: '1.5px dashed #f5870a' }}>
+                            <Calendar size={26} style={{ color: '#e8690a' }} />
+                        </div>
+                        <p className="text-sm font-medium text-gray-500">Silakan pilih semester terlebih dahulu.</p>
+                    </div>
+                ) : !selectedJenis ? (
                     <div className="py-16 flex flex-col items-center justify-center gap-3">
                         <div className="w-14 h-14 rounded-full flex items-center justify-center"
                             style={{ background: '#fff0e5', border: '1.5px dashed #f5870a' }}>
@@ -281,7 +431,7 @@ const RaporGuruKelasClient = () => {
                         </div>
                         <p className="text-sm font-medium text-gray-500">Silakan pilih jenis penilaian untuk menampilkan daftar siswa.</p>
                     </div>
-                ) : loading ? (
+                ) : loadingSiswa ? (
                     <div className="py-16 flex flex-col items-center justify-center gap-3">
                         <div className="w-8 h-8 rounded-full border-2 border-orange-200 border-t-orange-600 animate-spin" />
                         <p className="text-sm text-gray-400">Memuat daftar siswa...</p>
@@ -294,10 +444,10 @@ const RaporGuruKelasClient = () => {
                     <>
                         {/* Tabel */}
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[560px] text-sm border-collapse">
+                            <table className="w-full min-w-[640px] text-sm border-collapse">
                                 <thead>
                                     <tr style={TH_GRAD}>
-                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Unduh Rapor'].map(h => (
+                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Aksi'].map(h => (
                                             <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -313,12 +463,12 @@ const RaporGuruKelasClient = () => {
                                         >
                                             <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
                                             <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
-                                            <td className="px-5 py-3.5 text-center text-gray-600">{siswa.nis}</td>
-                                            <td className="px-5 py-3.5 text-center text-gray-600">{siswa.nisn}</td>
-                                            <td className="px-5 py-3.5 text-center">
+                                            <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nis}</td>
+                                            <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nisn || '—'}</td>
+                                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
                                                 {isDownloadAllowed ? (
                                                     <button
-                                                        onClick={() => handleDownloadRapor(siswa.id)}
+                                                        onClick={() => handleDownloadRapor(siswa.id, siswa.nama, siswa.nisn)}
                                                         disabled={downloadingId === siswa.id}
                                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-60"
                                                         style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
@@ -333,14 +483,14 @@ const RaporGuruKelasClient = () => {
                                                         ) : (
                                                             <>
                                                                 <Download size={13} />
-                                                                Unduh
+                                                                Unduh Rapor
                                                             </>
                                                         )}
                                                     </button>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
                                                         style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#9ca3af' }}>
-                                                        <Download size={13} />
+                                                        <Lock size={13} />
                                                         Tidak Tersedia
                                                     </span>
                                                 )}
@@ -357,18 +507,25 @@ const RaporGuruKelasClient = () => {
                                 style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
                                 <AlertCircle size={15} className="mt-0.5 shrink-0" />
                                 <span>
-                                    Rapor <strong>{jenisMurni}</strong> belum tersedia untuk diunduh karena statusnya saat ini adalah &ldquo;{currentStatus === 'selesai' ? 'Terkunci' : 'Belum Dibuka'}&rdquo;.
+                                    Rapor <strong>{selectedJenis} {selectedSemester}</strong> belum tersedia untuk diunduh karena statusnya saat ini adalah &ldquo;{currentStatus === 'selesai' ? 'Terkunci' : 'Belum Dibuka'}&rdquo;.
                                 </span>
                             </div>
                         )}
 
-                        {/* Catatan */}
+                        {/* Info Template */}
                         <div className="mx-5 mb-5 mt-2 p-4 rounded-xl text-xs" style={{ background: '#fffaf6', border: '1px solid #fde0c8', color: '#7a3a0a' }}>
-                            <p className="font-bold mb-1.5">Catatan:</p>
-                            <ul className="list-disc pl-4 space-y-1">
+                            <p className="font-bold mb-1.5 flex items-center gap-1.5">
+                                <FileText size={14} style={{ color: '#c95b08' }} />
+                                Informasi Template Rapor
+                            </p>
+                            <ul className="list-disc pl-4 space-y-1" style={{ color: '#c95b08' }}>
+                                <li>Template yang digunakan: <strong>template_{selectedJenis?.toLowerCase()}_{selectedSemester?.toLowerCase()}.docx</strong></li>
                                 <li>Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
                                 <li>Buka dengan Microsoft Word untuk tampilan terbaik</li>
-                                <li>PAS Semester Genap mencantumkan status kenaikan kelas</li>
+                                {selectedJenis === 'PAS' && selectedSemester === 'Genap' && (
+                                    <li className="font-semibold">✓ PAS Genap mencantumkan status kenaikan kelas</li>
+                                )}
+                                <li>Nama file: <strong>rapor_{selectedJenis?.toLowerCase()}_{selectedSemester?.toLowerCase()}_[NISN].docx</strong></li>
                             </ul>
                         </div>
                     </>

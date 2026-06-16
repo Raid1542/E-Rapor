@@ -1,6 +1,6 @@
 /**
  * Nama File: cekPenilaianStatus.js
- * Fungsi: Middleware untuk memeriksa status periode penilaian aktif (PTS/PAS)
+ * UPDATE: Jangan block akses jika periode belum dibuka, cukup kirim data status
  */
 
 const db = require('../config/db');
@@ -23,6 +23,7 @@ const cekPenilaianStatus = async (req, res, next) => {
             return res.status(400).json({
                 success: false,
                 message: 'Tahun ajaran aktif belum diatur oleh admin',
+                code: 'NO_ACTIVE_YEAR'
             });
         }
 
@@ -34,24 +35,22 @@ const cekPenilaianStatus = async (req, res, next) => {
             status_pas 
         } = taRows[0];
 
+        // ✅ Set data ke request (selalu, apapun statusnya)
         req.idTahunAjaranInduk = id_tahun_ajaran_induk;
         req.idSemesterAktif = id_tahun_ajaran;
         req.tahunAjaranAktif = taRows[0];
 
-        const reqJenis = req.penilaianContext?.jenis 
-            || req.params?.jenis 
-            || req.body?.jenis_penilaian;
-
-        const reqSemester = req.penilaianContext?.semester 
-            || req.params?.semester 
-            || semester;
-
         if (!req.penilaianContext) {
             req.penilaianContext = {};
         }
-        req.penilaianContext.semester = reqSemester || semester;
+        req.penilaianContext.semester = semester;
         req.penilaianContext.status_pts = status_pts;
         req.penilaianContext.status_pas = status_pas;
+
+        // ✅ Cek jika ada parameter jenis (PTS/PAS) dari URL
+        const reqJenis = req.penilaianContext?.jenis 
+            || req.params?.jenis 
+            || req.body?.jenis_penilaian;
 
         if (reqJenis && ['PTS', 'PAS'].includes(reqJenis.toUpperCase())) {
             const jenis = reqJenis.toUpperCase();
@@ -62,46 +61,57 @@ const cekPenilaianStatus = async (req, res, next) => {
                 req.penilaianContext.jenis = jenis;
                 return next();
             } else if (status === 'selesai') {
+                // ✅ Block jika periode sudah selesai (data dikunci)
                 return res.status(403).json({
                     success: false,
                     message: `Rapor ${jenis} sudah dikunci. Data tidak dapat diubah.`,
+                    code: 'PERIOD_LOCKED'
                 });
             } else {
+                // ✅ Block jika periode belum dibuka (untuk input data spesifik)
                 return res.status(403).json({
                     success: false,
-                    message: `Rapor ${jenis} belum dibuka oleh admin.`,
+                    message: `Periode ${jenis} belum dibuka oleh admin.`,
+                    code: 'PERIOD_NOT_OPEN'
                 });
             }
         }
 
-        // Fallback otomatis
+        // ✅ FALLBACK: Tentukan jenis penilaian aktif
         if (status_pts === 'aktif' && status_pas === 'aktif') {
             return res.status(400).json({
                 success: false,
                 message: 'Kesalahan sistem: PTS dan PAS tidak boleh aktif bersamaan.',
+                code: 'SYSTEM_ERROR'
             });
-        } else if (status_pts === 'aktif') {
+        } 
+        
+        // ✅ PERIOD AKTIF - lanjutkan normal
+        if (status_pts === 'aktif') {
             req.jenis_penilaian = 'PTS';
             req.penilaianContext.jenis = 'PTS';
-        } else if (status_pas === 'aktif') {
+            return next();
+        }
+        
+        if (status_pas === 'aktif') {
             req.jenis_penilaian = 'PAS';
             req.penilaianContext.jenis = 'PAS';
-        } else {
-            const isAnyLocked = status_pts === 'selesai' || status_pas === 'selesai';
-            return res.status(403).json({
-                success: false,
-                message: isAnyLocked
-                    ? 'Semua periode penilaian telah ditutup.'
-                    : 'Belum ada periode penilaian yang dibuka oleh admin.',
-            });
+            return next();
         }
 
+        req.jenis_penilaian = null;
+        req.penilaianContext.jenis = null;
+        req.penilaianContext.info = 'Belum ada periode penilaian yang dibuka oleh admin';
+        
+        console.log('[cekPenilaianStatus] Periode belum dibuka, lanjutkan dengan jenis_penilaian = null');
         next();
+
     } catch (err) {
         console.error('Error di middleware cekPenilaianStatus:', err);
         res.status(500).json({
             success: false,
             message: 'Gagal memeriksa status penilaian',
+            code: 'SYSTEM_ERROR'
         });
     }
 };

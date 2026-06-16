@@ -2,7 +2,9 @@
  * Halaman Siswa Per Kelas
  * Path: /admin/data-kelas/[id]/siswa
  * Fungsi: Menampilkan daftar siswa dalam kelas tertentu dengan CRUD lengkap
- * Update: Field Kelas otomatis terisi & read-only (tidak bisa diubah)
+ * Update: 
+ *   - Field Kelas otomatis terisi & read-only (tidak bisa diubah)
+ *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -52,7 +54,6 @@ interface FormDataType {
     jenisKelamin: string;
     alamat: string;
     statusSiswa: string;
-    confirmData: boolean;
 }
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -185,9 +186,11 @@ export default function SiswaPerKelasPage() {
     const [editId, setEditId] = useState<number | null>(null);
     const [kelasList, setKelasList] = useState<{ id: number; nama: string; fase: string }[]>([]);
     const [kelasLoading, setKelasLoading] = useState(false);
+    
+    // ✅ HAPUS confirmData dari FormDataType
     const [formData, setFormData] = useState<FormDataType>({
         nama: '', kelas: '', nis: '', nisn: '', tempatLahir: '', tanggalLahir: '',
-        jenisKelamin: '', alamat: '', statusSiswa: 'aktif', confirmData: false,
+        jenisKelamin: '', alamat: '', statusSiswa: 'aktif',
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -198,6 +201,10 @@ export default function SiswaPerKelasPage() {
     const [showImport, setShowImport] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importClosing, setImportClosing] = useState(false);
+
+    // ✅ TAMBAHAN: State untuk modal konfirmasi
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
 
     // ── FETCH KELAS DROPDOWN ──────────────────────────────────────────────────
     const fetchKelasDropdown = useCallback(async (tahunAjaranId: number) => {
@@ -281,18 +288,17 @@ export default function SiswaPerKelasPage() {
             jenisKelamin: '',
             alamat: '',
             statusSiswa: 'aktif',
-            confirmData: false,
         });
         setErrors({});
     };
 
+    // ✅ HAPUS validasi confirmData
     const validate = (): boolean => {
         const ne: Record<string, string> = {};
         if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
         if (!formData.nis) ne.nis = 'NIS wajib diisi';
         if (!formData.nisn) ne.nisn = 'NISN wajib diisi';
         if (!formData.jenisKelamin) ne.jenisKelamin = 'Pilih jenis kelamin';
-        if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data';
 
         setErrors(ne);
         if (Object.keys(ne).length > 0) {
@@ -324,7 +330,6 @@ export default function SiswaPerKelasPage() {
             jenisKelamin: formatGender(siswa.jenis_kelamin) || '',
             alamat: siswa.alamat || '',
             statusSiswa: siswa.status || 'aktif',
-            confirmData: false,
         });
         setShowEdit(true);
     };
@@ -337,8 +342,34 @@ export default function SiswaPerKelasPage() {
         setShowTambah(true);
     };
 
-    const handleSubmitTambah = async () => {
+    // ✅ TAMBAHAN: Buka modal konfirmasi
+    const openConfirmModal = (action: 'add' | 'edit') => {
+        if (action === 'edit') {
+            const originalData = siswaList.find(s => s.id === editId);
+            if (originalData) {
+                const hasChanged =
+                    formData.nama !== (originalData.nama || '') ||
+                    formData.nis !== (originalData.nis || '') ||
+                    formData.nisn !== (originalData.nisn || '') ||
+                    formData.tempatLahir !== (originalData.tempat_lahir || '') ||
+                    formData.tanggalLahir !== formatDateInput(originalData.tanggal_lahir) ||
+                    formData.jenisKelamin !== formatGender(originalData.jenis_kelamin) ||
+                    formData.alamat !== (originalData.alamat || '') ||
+                    formData.statusSiswa !== (originalData.status || 'aktif');
+
+                if (!hasChanged) {
+                    showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+                    return;
+                }
+            }
+        }
         if (!validate()) return;
+        setConfirmAction(action);
+        setShowConfirmModal(true);
+    };
+
+    // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+    const executeTambah = async () => {
         if (!kelasInfo?.tahun_ajaran_id) {
             showModal({ type: 'warning', title: 'Error', message: 'Tahun ajaran tidak ditemukan.' });
             return;
@@ -383,29 +414,11 @@ export default function SiswaPerKelasPage() {
         }
     };
 
-    const handleSubmitEdit = async () => {
-        if (!validate()) return;
+    // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+    const executeEdit = async () => {
         if (!kelasInfo?.tahun_ajaran_id) {
             showModal({ type: 'warning', title: 'Error', message: 'Tahun ajaran tidak ditemukan.' });
             return;
-        }
-
-        const originalData = siswaList.find(s => s.id === editId);
-        if (originalData) {
-            const hasChanged =
-                formData.nama !== (originalData.nama || '') ||
-                formData.nis !== (originalData.nis || '') ||
-                formData.nisn !== (originalData.nisn || '') ||
-                formData.tempatLahir !== (originalData.tempat_lahir || '') ||
-                formData.tanggalLahir !== formatDateInput(originalData.tanggal_lahir) ||
-                formData.jenisKelamin !== formatGender(originalData.jenis_kelamin) ||
-                formData.alamat !== (originalData.alamat || '') ||
-                formData.statusSiswa !== (originalData.status || 'aktif');
-
-            if (!hasChanged) {
-                showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-                return;
-            }
         }
 
         const token = localStorage.getItem('token');
@@ -496,16 +509,13 @@ export default function SiswaPerKelasPage() {
             } else {
                 let userMessage = result.message || 'Terjadi kesalahan saat mengimpor data siswa.';
 
-                // Deteksi error kelas mismatch
                 if (result.mismatch_count && result.mismatch_count > 0) {
-                    // Pesan sudah lengkap dari backend
                     showModal({
                         type: 'error',
                         title: 'Import Dibatalkan',
                         message: userMessage
                     });
                 }
-                // Deteksi error duplikasi
                 else if (userMessage.includes('NIS') || userMessage.includes('NISN') || userMessage.includes('duplikat')) {
                     userMessage = 'Data Duplikat Ditemukan\n\n' + userMessage + '\n\nPastikan NIS dan NISN unik untuk tahun ajaran ini, atau gunakan tahun ajaran yang berbeda.';
                     showModal({ type: 'error', title: 'Import Gagal', message: userMessage });
@@ -674,7 +684,6 @@ export default function SiswaPerKelasPage() {
                             <span>{kelasInfo?.nama_kelas || '-'}</span>
                             <Lock size={14} className="text-gray-400" />
                         </div>
-                        {/* Hidden input untuk kirim kelas_id ke backend */}
                         <input type="hidden" name="kelas" value={kelasInfo ? String(kelasInfo.id_kelas) : ''} />
                         <p className="text-xs text-gray-400 mt-1">
                             ℹ️ Siswa akan otomatis ditambahkan ke kelas <strong>{kelasInfo?.nama_kelas}</strong>
@@ -734,26 +743,68 @@ export default function SiswaPerKelasPage() {
                     </div>
                 </div>
 
-                <div className="px-6 pb-4">
-                    <label className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox" name="confirmData" checked={formData.confirmData}
-                            onChange={e => setFormData(p => ({ ...p, confirmData: e.target.checked }))}
-                            className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
-                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Saya yakin data yang diisi sudah benar</span>
-                    </label>
-                    {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-                </div>
+                {/* ✅ HAPUS bagian checkbox konfirmasi */}
 
                 <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
                     <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>Batal</BtnSecondary>
                     <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
-                    <button onClick={isEdit ? handleSubmitEdit : handleSubmitTambah}
+                    <button onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
                         className={btnPrimary.base} style={btnPrimary.style}
                         onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
                         {isEdit ? 'Simpan Perubahan' : 'Simpan'}
                     </button>
                 </div>
             </div>
+
+            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {showConfirmModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 ds-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ds-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            {confirmAction === 'add'
+                                ? 'Apakah Anda yakin ingin menambahkan data siswa ini?'
+                                : 'Apakah Anda yakin ingin mengubah data siswa ini?'}
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    if (confirmAction === 'add') {
+                                        executeTambah();
+                                    } else {
+                                        executeEdit();
+                                    }
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 

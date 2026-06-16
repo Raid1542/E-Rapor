@@ -9,20 +9,27 @@ const db = require('../../config/db');
  * GET /kelas
  * Mendapatkan informasi kelas yang diampu oleh guru kelas
  */
-exports.getKelasSaya = async (req, res) => {
+const getKelasSaya = async (req, res) => {
     try {
         const userId = req.user.id;
         if (!userId) {
             return res.status(400).json({ message: 'User ID tidak ditemukan' });
         }
 
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;
-        if (!tahunAjaranIndukId) {
-            return res.status(400).json({ success: false, message: 'ID Tahun Ajaran Induk tidak ditemukan' });
+        // ✅ Gunakan infoKelasWali dari middleware
+        const infoKelas = req.infoKelasWali;
+        if (!infoKelas) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Data kelas tidak ditemukan' 
+            });
         }
 
+        const semesterId = req.idSemesterAktif;
+
         const [taSemesterRows] = await db.execute(
-            `SELECT tahun_ajaran, semester FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1`
+            `SELECT tahun_ajaran, semester FROM tahun_ajaran WHERE id_tahun_ajaran = ? LIMIT 1`,
+            [semesterId]
         );
         const { tahun_ajaran, semester } = taSemesterRows[0] || {};
 
@@ -34,13 +41,15 @@ exports.getKelasSaya = async (req, res) => {
                 ? AS semester_display
             FROM guru_kelas gk
             INNER JOIN kelas k ON gk.kelas_id = k.id_kelas
-            LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = ?
+            LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = (
+                SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?
+            )
             WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?
             GROUP BY k.id_kelas
         `;
 
         const [rows] = await db.execute(query, [
-            tahun_ajaran, semester, tahunAjaranIndukId, userId, tahunAjaranIndukId
+            tahun_ajaran, semester, semesterId, userId, semesterId
         ]);
 
         if (rows.length === 0) {
@@ -58,7 +67,7 @@ exports.getKelasSaya = async (req, res) => {
             }))
         );
     } catch (err) {
-        console.error('Error di getKelasSaya:', err);
+        console.error('❌ Error di getKelasSaya:', err);
         res.status(500).json({ message: 'Gagal mengambil data kelas' });
     }
 };
@@ -67,25 +76,32 @@ exports.getKelasSaya = async (req, res) => {
  * GET /siswa
  * Mendapatkan daftar siswa di kelas yang diampu
  */
-exports.getSiswaByKelas = async (req, res) => {
+const getSiswaByKelas = async (req, res) => {
     try {
         const userId = req.user.id;
-        
-        // ✅ PERBAIKAN: Gunakan idSemesterAktif, bukan idTahunAjaranInduk
-        const semesterId = req.idSemesterAktif; 
+        const semesterId = req.idSemesterAktif;
+
+        console.log('🔍 [getSiswaByKelas] START');
+        console.log('🔍 [getSiswaByKelas] userId:', userId);
+        console.log('🔍 [getSiswaByKelas] semesterId:', semesterId);
 
         if (!semesterId) {
-            return res.status(400).json({ success: false, message: 'ID Semester aktif tidak ditemukan' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'ID Semester aktif tidak ditemukan' 
+            });
         }
 
-        // Cari kelas guru berdasarkan SEMESTER AKTIF (ID 7)
+        // ✅ Cari kelas guru berdasarkan SEMESTER AKTIF
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas
              FROM guru_kelas gk
              JOIN kelas k ON gk.kelas_id = k.id_kelas
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`, 
-            [userId, semesterId] // Kirim semesterId (7)
+            [userId, semesterId]
         );
+
+        console.log('🔍 [getSiswaByKelas] guruKelasRows:', guruKelasRows);
 
         if (guruKelasRows.length === 0) {
             return res.status(404).json({
@@ -94,9 +110,27 @@ exports.getSiswaByKelas = async (req, res) => {
             });
         }
 
-        const { kelas_id } = guruKelasRows[0];
+        const { kelas_id, nama_kelas } = guruKelasRows[0];
 
-        // Ambil siswa berdasarkan SEMESTER AKTIF juga
+        // ✅ FIX: Fetch id_tahun_ajaran_induk dari semesterId
+        const [taInfo] = await db.execute(
+            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            [semesterId]
+        );
+
+        if (taInfo.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Tahun ajaran tidak ditemukan'
+            });
+        }
+
+        const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
+
+        console.log('🔍 [getSiswaByKelas] kelas_id:', kelas_id);
+        console.log('🔍 [getSiswaByKelas] idTahunAjaranInduk:', idTahunAjaranInduk);
+
+        // ✅ Ambil siswa menggunakan idTahunAjaranInduk yang sudah di-fetch
         const [siswaRows] = await db.execute(
             `SELECT
                 s.id_siswa AS id,
@@ -108,18 +142,26 @@ exports.getSiswaByKelas = async (req, res) => {
             JOIN kelas k ON sk.kelas_id = k.id_kelas
             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
             ORDER BY s.nama_lengkap`,
-            [kelas_id, req.idTahunAjaranInduk] // Untuk siswa_kelas tetap pakai ID Induk (4)
+            [kelas_id, idTahunAjaranInduk]
         );
+
+        console.log('🔍 [getSiswaByKelas] siswaRows:', siswaRows.length, 'siswa ditemukan');
 
         res.json({
             success: true,
+            kelas_nama: nama_kelas,
             data: siswaRows.map(row => ({
                 ...row,
                 statusSiswa: row.status || 'aktif',
             })),
         });
     } catch (err) {
-        console.error('Error di getSiswaByKelas:', err);
+        console.error('❌ Error di getSiswaByKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
     }
+};
+
+module.exports = {
+    getKelasSaya,
+    getSiswaByKelas,
 };

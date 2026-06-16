@@ -4,6 +4,7 @@
  *         mencakup fitur tambah, edit, detail, pencarian, dan pagination.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi
  */
 
 "use client";
@@ -40,13 +41,17 @@ interface FormDataType {
     no_telepon: string;
     email: string;
     statusAdmin: string;
-    confirmData: boolean;
 }
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
-type ModalType = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
+type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
+interface ModalConfig {
+    type: ModalType;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+}
 
 const GlobalStyles = () => (
     <style jsx global>{`
@@ -64,21 +69,47 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
     warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
     network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
+    const isConfirm = modal.type === 'confirm';
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 da-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 da-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                {!isConfirm && (
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                )}
                 <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} da-pulse`}>{s.icon}</div>
                 <div className="text-center">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                {isConfirm ? (
+                    <div className="flex gap-3 w-full">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
+                            style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                        >
+                            Batal
+                        </button>
+                        <button
+                            onClick={() => {
+                                modal.onConfirm?.();
+                                onClose();
+                            }}
+                            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+                        >
+                            Lanjutkan
+                        </button>
+                    </div>
+                ) : (
+                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                )}
             </div>
         </div>
     );
@@ -168,6 +199,10 @@ export default function DataAdminClient() {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
+    // ── Confirmation Modal State ───────────────────────────────────────────
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
+
     // ── Fetch ──────────────────────────────────────────────────────────────
     const fetchAdmin = useCallback(async (): Promise<void> => {
         try {
@@ -212,17 +247,17 @@ export default function DataAdminClient() {
     const [formData, setFormData] = useState<FormDataType>({
         nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '',
         jenisKelamin: '', alamat: '', no_telepon: '', email: '',
-        statusAdmin: 'aktif', confirmData: false,
+        statusAdmin: 'aktif',
     });
 
     const [originalFormData, setOriginalFormData] = useState<FormDataType>({
         nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '',
         jenisKelamin: '', alamat: '', no_telepon: '', email: '',
-        statusAdmin: 'aktif', confirmData: false,
+        statusAdmin: 'aktif',
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // ── Handlers ───────────────────────────────────────────────────────────
+    // ── Handlers ──────────────────────────────────────────────────────────
     const handleDetail = (admin: Admin): void => { setSelectedAdmin(admin); setShowDetail(true); };
 
     const handleEdit = (admin: Admin): void => {
@@ -239,7 +274,6 @@ export default function DataAdminClient() {
             no_telepon: admin.no_telepon || '',
             email: admin.email || '',
             statusAdmin: admin.statusAdmin?.toLowerCase() === 'aktif' ? 'aktif' : 'nonaktif',
-            confirmData: false,
         };
 
         setFormData(data);
@@ -280,8 +314,6 @@ export default function DataAdminClient() {
         }
         if (showEdit && (!formData.statusAdmin || formData.statusAdmin === ''))
             newErrors.statusAdmin = 'Status wajib dipilih';
-        if (!formData.confirmData)
-            newErrors.confirmData = 'Harap konfirmasi data sebelum melanjutkan';
 
         setErrors(newErrors);
         if (Object.keys(newErrors).length > 0) {
@@ -296,8 +328,25 @@ export default function DataAdminClient() {
         return true;
     };
 
-    const handleSubmitAdd = async (): Promise<void> => {
+    // ── Show Confirmation Modal ────────────────────────────────────────────
+    const openConfirmModal = (action: 'add' | 'edit') => {
         if (!validate()) return;
+
+        if (action === 'edit' && !hasChanges()) {
+            showModal({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
+            });
+            return;
+        }
+
+        setConfirmAction(action);
+        setShowConfirmModal(true);
+    };
+
+    // ── Actual Submit Handlers (called after confirmation) ─────────────────
+    const executeAdd = async (): Promise<void> => {
         const token = localStorage.getItem('token');
         if (!token) {
             showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
@@ -329,74 +378,64 @@ export default function DataAdminClient() {
         }
     };
 
-    const handleSubmitEdit = async (): Promise<void> => {
-    if (!validate()) return;
-    if (!hasChanges()) {
-        showModal({
-            type: 'warning',
-            title: 'Tidak Ada Perubahan',
-            message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
-        });
-        return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
-        return;
-    }
-    try {
-        const payload = {
-            nama_lengkap: formData.nama, email_sekolah: formData.email,
-            status: formData.statusAdmin, niy: formData.niy,
-            nuptk: formData.nuptk, tempat_lahir: formData.tempat_lahir,
-            tanggal_lahir: formData.tanggal_lahir, jenis_kelamin: formData.jenisKelamin,
-            alamat: formData.alamat, no_telepon: formData.no_telepon,
-        };
-        const res = await fetch(`http://localhost:5000/api/admin/admin/${editId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-            const storedUser = localStorage.getItem('currentUser');
-            if (storedUser) {
-                const currentUser = JSON.parse(storedUser);
-                if (currentUser.id === editId) {
-                    const updatedUser = {
-                        ...currentUser,
-                        nama_lengkap: formData.nama,
-                        email_sekolah: formData.email,
-                        niy: formData.niy,
-                        nuptk: formData.nuptk,
-                        tempat_lahir: formData.tempat_lahir,
-                        tanggal_lahir: formData.tanggal_lahir,
-                        jenis_kelamin: formData.jenisKelamin,
-                        alamat: formData.alamat,
-                        no_telepon: formData.no_telepon,
-                    };
-                    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-                    window.dispatchEvent(new Event('profileDataUpdated'));
-                }
-            }
-
-            setShowEdit(false); setEditId(null); handleReset(); await fetchAdmin();
-            showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data admin ${formData.nama} berhasil diperbarui.` });
-        } else {
-            const err = await res.json();
-            const isDuplicate = err.message && (err.message.includes('sudah terdaftar') || err.message.includes('sudah ada'));
-            showModal({ type: 'error', title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan saat memperbarui data admin.' });
+    const executeEdit = async (): Promise<void> => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+            return;
         }
-    } catch {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
-    }
-};
+        try {
+            const payload = {
+                nama_lengkap: formData.nama, email_sekolah: formData.email,
+                status: formData.statusAdmin, niy: formData.niy,
+                nuptk: formData.nuptk, tempat_lahir: formData.tempat_lahir,
+                tanggal_lahir: formData.tanggal_lahir, jenis_kelamin: formData.jenisKelamin,
+                alamat: formData.alamat, no_telepon: formData.no_telepon,
+            };
+            const res = await fetch(`http://localhost:5000/api/admin/admin/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+                const storedUser = localStorage.getItem('currentUser');
+                if (storedUser) {
+                    const currentUser = JSON.parse(storedUser);
+                    if (currentUser.id === editId) {
+                        const updatedUser = {
+                            ...currentUser,
+                            nama_lengkap: formData.nama,
+                            email_sekolah: formData.email,
+                            niy: formData.niy,
+                            nuptk: formData.nuptk,
+                            tempat_lahir: formData.tempat_lahir,
+                            tanggal_lahir: formData.tanggal_lahir,
+                            jenis_kelamin: formData.jenisKelamin,
+                            alamat: formData.alamat,
+                            no_telepon: formData.no_telepon,
+                        };
+                        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                        window.dispatchEvent(new Event('profileDataUpdated'));
+                    }
+                }
+
+                setShowEdit(false); setEditId(null); handleReset(); await fetchAdmin();
+                showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data admin ${formData.nama} berhasil diperbarui.` });
+            } else {
+                const err = await res.json();
+                const isDuplicate = err.message && (err.message.includes('sudah terdaftar') || err.message.includes('sudah ada'));
+                showModal({ type: 'error', title: isDuplicate ? 'Data Sudah Ada' : 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan saat memperbarui data admin.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+        }
+    };
 
     const handleReset = (): void => {
         setFormData({
             nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '',
             jenisKelamin: '', alamat: '', no_telepon: '', email: '',
-            statusAdmin: 'aktif', confirmData: false,
+            statusAdmin: 'aktif',
         });
         setErrors({});
     };
@@ -614,19 +653,6 @@ export default function DataAdminClient() {
                     )}
                 </div>
 
-                {/* Konfirmasi */}
-                <div className="px-6 pb-4">
-                    <label className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox" name="confirmData" checked={formData.confirmData}
-                            onChange={e => setFormData(p => ({ ...p, confirmData: e.target.checked }))}
-                            className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
-                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                            Saya yakin sudah mengisi dengan benar
-                        </span>
-                    </label>
-                    {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-                </div>
-
                 {/* Form footer */}
                 <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
                     <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>
@@ -634,7 +660,7 @@ export default function DataAdminClient() {
                     </BtnSecondary>
                     <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
                     <button
-                        onClick={isEdit ? handleSubmitEdit : handleSubmitAdd}
+                        onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
                         className={btnPrimary.base}
                         style={btnPrimary.style}
                         onMouseEnter={btnPrimary.hover}
@@ -644,6 +670,57 @@ export default function DataAdminClient() {
                     </button>
                 </div>
             </div>
+
+            {/* Confirmation Modal */}
+            {showConfirmModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 da-scaleIn">
+
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            {confirmAction === 'add'
+                                ? 'Apakah Anda yakin ingin menambahkan data admin ini?'
+                                : 'Apakah Anda yakin ingin mengubah data admin ini?'}
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    if (confirmAction === 'add') {
+                                        executeAdd();
+                                    } else {
+                                        executeEdit();
+                                    }
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 

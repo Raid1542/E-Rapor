@@ -5,7 +5,7 @@
  *         pencarian, dan pagination.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan DataTahunAjaranPage
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -62,21 +62,14 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-// Input field — sama persis dengan DataTahunAjaranPage
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-// Card & page background
 const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-
-// Modal header gradient (form cards, modal headers)
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-
-// Table header gradient
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
-// Button primary (Tambah / Simpan)
 const btnPrimary = {
   base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
   style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
@@ -84,7 +77,6 @@ const btnPrimary = {
   leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-// Label style
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
@@ -99,7 +91,7 @@ interface Guru {
 interface FormDataType {
   nama: string; niy: string; nuptk: string; tempatLahir: string; tanggalLahir: string;
   jenisKelamin: string; alamat: string; no_telepon: string; email: string;
-  roles: string[]; statusGuru: string; confirmData: boolean;
+  roles: string[]; statusGuru: string;
 }
 
 const formatTanggalIndonesia = (dateStr?: string | null): string => {
@@ -143,6 +135,10 @@ export default function DataGuruClient() {
   const [filterValues, setFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
   const [tempFilterValues, setTempFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
 
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
+
   const [modal, setModal] = useState<ModalConfig | null>(null);
   const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
@@ -183,7 +179,7 @@ export default function DataGuruClient() {
 
   const [formData, setFormData] = useState<FormDataType>({
     nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '',
-    jenisKelamin: '', alamat: '', no_telepon: '', email: '', roles: [], statusGuru: 'aktif', confirmData: false,
+    jenisKelamin: '', alamat: '', no_telepon: '', email: '', roles: [], statusGuru: 'aktif',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -196,7 +192,7 @@ export default function DataGuruClient() {
       tempatLahir: guru.tempat_lahir || '', tanggalLahir: guru.tanggal_lahir || '',
       jenisKelamin: guru.jenisKelamin || '', alamat: guru.alamat || '', no_telepon: guru.no_telepon || '',
       roles: Array.isArray(guru.roles) ? guru.roles : [],
-      statusGuru: guru.statusGuru === 'aktif' ? 'aktif' : 'nonaktif', confirmData: false,
+      statusGuru: guru.statusGuru === 'aktif' ? 'aktif' : 'nonaktif',
     });
     setShowEdit(true);
   };
@@ -227,7 +223,7 @@ export default function DataGuruClient() {
       }
     }
     if (isEdit && (!formData.statusGuru || formData.statusGuru === '')) ne.statusGuru = 'Status wajib dipilih';
-    if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data sebelum melanjutkan';
+    // ✅ HAPUS validasi confirmData
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah sebelum melanjutkan.' });
@@ -236,8 +232,32 @@ export default function DataGuruClient() {
     return true;
   };
 
-  const handleSubmitTambah = async () => {
-    if (!validate(false)) return;
+  // ✅ TAMBAHAN: Buka modal konfirmasi
+  const openConfirmModal = (action: 'add' | 'edit') => {
+    if (action === 'edit') {
+      const originalData = guruList.find(g => g.id === editId);
+      if (!originalData) return;
+      const normalize = (str?: string | null) => (str || '').trim().toLowerCase();
+      const hasChanged =
+        formData.nama !== (originalData.nama || '') || formData.email !== (originalData.email || '') ||
+        formData.niy !== (originalData.niy || '') || formData.nuptk !== (originalData.nuptk || '') ||
+        formData.tempatLahir !== (originalData.tempat_lahir || '') || formData.tanggalLahir !== (originalData.tanggal_lahir || '') ||
+        normalize(formData.jenisKelamin) !== normalize(originalData.jenisKelamin) ||
+        formData.alamat !== (originalData.alamat || '') || formData.no_telepon !== (originalData.no_telepon || '') ||
+        formData.statusGuru !== (originalData.statusGuru || 'aktif') ||
+        JSON.stringify(formData.roles.sort()) !== JSON.stringify((originalData.roles || []).sort());
+      if (!hasChanged) {
+        showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+        return;
+      }
+    }
+    if (!validate(action === 'edit')) return;
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+  const executeTambah = async () => {
     const token = localStorage.getItem('token');
     if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
     try {
@@ -262,20 +282,8 @@ export default function DataGuruClient() {
     } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' }); }
   };
 
-  const handleSubmitEdit = async () => {
-    const originalData = guruList.find(g => g.id === editId);
-    if (!originalData) return;
-    const normalize = (str?: string | null) => (str || '').trim().toLowerCase();
-    const hasChanged =
-      formData.nama !== (originalData.nama || '') || formData.email !== (originalData.email || '') ||
-      formData.niy !== (originalData.niy || '') || formData.nuptk !== (originalData.nuptk || '') ||
-      formData.tempatLahir !== (originalData.tempat_lahir || '') || formData.tanggalLahir !== (originalData.tanggal_lahir || '') ||
-      normalize(formData.jenisKelamin) !== normalize(originalData.jenisKelamin) ||
-      formData.alamat !== (originalData.alamat || '') || formData.no_telepon !== (originalData.no_telepon || '') ||
-      formData.statusGuru !== (originalData.statusGuru || 'aktif') ||
-      JSON.stringify(formData.roles.sort()) !== JSON.stringify((originalData.roles || []).sort());
-    if (!hasChanged) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' }); return; }
-    if (!validate(true)) return;
+  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+  const executeEdit = async () => {
     const token = localStorage.getItem('token');
     if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
     try {
@@ -301,7 +309,7 @@ export default function DataGuruClient() {
   };
 
   const handleReset = () => {
-    setFormData({ nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '', jenisKelamin: '', alamat: '', no_telepon: '', email: '', roles: [], statusGuru: 'aktif', confirmData: false });
+    setFormData({ nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '', jenisKelamin: '', alamat: '', no_telepon: '', email: '', roles: [], statusGuru: 'aktif' });
     setErrors({});
   };
 
@@ -414,7 +422,6 @@ export default function DataGuruClient() {
         <SessionExpiredModal onConfirm={handleLogout} />
       )}
 
-
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Guru</h1>
@@ -424,7 +431,7 @@ export default function DataGuruClient() {
       {/* Form card */}
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-        {/* Card header — gradasi oranye */}
+        {/* Card header */}
         <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
           <h2 className="text-base font-bold text-white">{isEdit ? 'Edit Data Guru' : 'Tambah Data Guru'}</h2>
           <button onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
@@ -546,23 +553,14 @@ export default function DataGuruClient() {
           </div>
         </div>
 
-        {/* Konfirmasi */}
-        <div className="px-6 pb-4">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" name="confirmData" checked={formData.confirmData}
-              onChange={e => setFormData(p => ({ ...p, confirmData: e.target.checked }))}
-              className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
-            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Saya yakin data yang diisi sudah benar</span>
-          </label>
-          {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-        </div>
+        {/* ✅ HAPUS bagian checkbox konfirmasi */}
 
         {/* Form footer */}
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
           <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>Batal</BtnSecondary>
           <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
           <button
-            onClick={isEdit ? handleSubmitEdit : handleSubmitTambah}
+            onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
             className={btnPrimary.base}
             style={btnPrimary.style}
             onMouseEnter={btnPrimary.hover}
@@ -572,6 +570,56 @@ export default function DataGuruClient() {
           </button>
         </div>
       </div>
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add'
+                ? 'Apakah Anda yakin ingin menambahkan data guru ini?'
+                : 'Apakah Anda yakin ingin mengubah data guru ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add') {
+                    executeTambah();
+                  } else {
+                    executeEdit();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -722,7 +770,6 @@ export default function DataGuruClient() {
                   </td>
                   <td className="px-5 py-3.5 text-center whitespace-nowrap">
                     <div className="flex justify-center gap-2">
-                      {/* Detail */}
                       <button onClick={() => handleDetail(guru)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                         style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
@@ -731,7 +778,6 @@ export default function DataGuruClient() {
                       >
                         <Eye size={13} /> Detail
                       </button>
-                      {/* Edit */}
                       <button onClick={() => handleEdit(guru)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                         style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
@@ -765,7 +811,6 @@ export default function DataGuruClient() {
           <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
             style={CARD_STYLE}>
 
-            {/* Header */}
             <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
               <h2 className="text-base font-bold text-white">Detail Guru</h2>
               <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -775,7 +820,6 @@ export default function DataGuruClient() {
             </div>
 
             <div className="p-6">
-              {/* Avatar */}
               <div className="flex flex-col items-center mb-6">
                 <div className="w-24 h-24 rounded-full overflow-hidden mb-3 flex items-center justify-center"
                   style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)' }}>
@@ -792,7 +836,6 @@ export default function DataGuruClient() {
                 <h3 className="text-lg font-bold text-gray-800">{selectedGuru.nama}</h3>
               </div>
 
-              {/* Info rows */}
               <div className="space-y-2.5">
                 {[
                   {
@@ -826,7 +869,6 @@ export default function DataGuruClient() {
                 ))}
               </div>
 
-              {/* Footer buttons */}
               <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                 <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
                 <button onClick={() => { handleEdit(selectedGuru); closeDetail(); }}
@@ -848,7 +890,6 @@ export default function DataGuruClient() {
           <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-200 ${importClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
             style={CARD_STYLE}>
 
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
               <h2 className="text-base font-bold text-white">Import Data Guru</h2>
               <button onClick={closeImport} className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -869,7 +910,6 @@ export default function DataGuruClient() {
                 <p className="text-xs text-gray-400 mt-1">Isi sesuai contoh, lalu simpan sebagai <strong>.xlsx</strong></p>
               </div>
 
-              {/* Drop zone */}
               <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl cursor-pointer transition-colors"
                 style={{ border: '2px dashed #fde0c8', background: '#fffaf6' }}
                 onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
@@ -905,7 +945,6 @@ export default function DataGuruClient() {
           <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-sm transform transition-all duration-200 ${filterClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
             style={CARD_STYLE}>
 
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
               <h2 className="text-base font-bold text-white">Filter Guru</h2>
               <button onClick={closeFilterModal} className="w-8 h-8 rounded-lg flex items-center justify-center"

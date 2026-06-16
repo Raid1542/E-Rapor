@@ -4,6 +4,7 @@
  *   - Dropdown Semester (TA → Semester → Kelas)
  *   - Kirim semester_id ke semua endpoint
  *   - Tombol Tambah selalu muncul (modal handle jika kosong)
+ *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -180,10 +181,10 @@ interface DropdownItem {
   nama: string;
 }
 
+// ✅ HAPUS confirmData dari FormDataPilihan
 interface FormDataPilihan {
   user_id: string;
   mapel_id: string;
-  confirmData: boolean;
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -205,7 +206,7 @@ export default function DataPembelajaranPage() {
   // State untuk MODAL TAMBAH MAPEL PILIHAN
   const [showModalPilihan, setShowModalPilihan] = useState(false);
   const [formDataPilihan, setFormDataPilihan] = useState<FormDataPilihan>({
-    user_id: '', mapel_id: '', confirmData: false,
+    user_id: '', mapel_id: ''
   });
   const [errorsPilihan, setErrorsPilihan] = useState<Record<string, string>>({});
   const [submittingPilihan, setSubmittingPilihan] = useState(false);
@@ -226,6 +227,10 @@ export default function DataPembelajaranPage() {
   const [dropdownLoading, setDropdownLoading] = useState(false);
 
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add-pilihan' | 'edit-pilihan' | 'add-wajib' | null>(null);
 
   const [modal, setModal] = useState<ModalConfig | null>(null);
   const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
@@ -484,12 +489,8 @@ export default function DataPembelajaranPage() {
     }
   };
 
-  const handleSubmitMapelWajib = async () => {
-    if (selectedMapelWajibIds.length === 0) {
-      showModal({ type: 'warning', title: 'Belum Ada Mapel Dipilih', message: 'Pilih minimal 1 mata pelajaran wajib.' });
-      return;
-    }
-
+  // ✅ TAMBAHAN: Eksekusi tambah mapel wajib (setelah konfirmasi)
+  const executeTambahWajib = async () => {
     const token = getToken();
     if (!token || !selectedKelasId || !selectedSemesterId) return;
 
@@ -522,23 +523,28 @@ export default function DataPembelajaranPage() {
     }
   };
 
+  // ✅ TAMBAHAN: Buka modal konfirmasi untuk tambah wajib
+  const openConfirmWajib = () => {
+    if (selectedMapelWajibIds.length === 0) {
+      showModal({ type: 'warning', title: 'Belum Ada Mapel Dipilih', message: 'Pilih minimal 1 mata pelajaran wajib.' });
+      return;
+    }
+    setConfirmAction('add-wajib');
+    setShowConfirmModal(true);
+  };
+
   // ── Handler: TAMBAH MAPEL PILIHAN ──────────────────────────────────────────
   const handlePilihanChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormDataPilihan(prev => ({ ...prev, [name]: checked }));
-    } else {
-      setFormDataPilihan(prev => ({ ...prev, [name]: value }));
-    }
+    const { name, value } = e.target;
+    setFormDataPilihan(prev => ({ ...prev, [name]: value }));
     if (errorsPilihan[name]) setErrorsPilihan(prev => ({ ...prev, [name]: '' }));
   };
 
+  // ✅ HAPUS validasi confirmData
   const validateFormPilihan = (): boolean => {
     const ne: Record<string, string> = {};
     if (!formDataPilihan.mapel_id) ne.mapel_id = 'Pilih mata pelajaran';
     if (!formDataPilihan.user_id) ne.user_id = 'Pilih guru pengampu';
-    if (!formDataPilihan.confirmData) ne.confirmData = 'Harap konfirmasi data';
     setErrorsPilihan(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap lengkapi semua field.' });
@@ -547,9 +553,8 @@ export default function DataPembelajaranPage() {
     return true;
   };
 
-  const handleSubmitMapelPilihan = async () => {
-    if (!validateFormPilihan()) return;
-
+  // ✅ TAMBAHAN: Eksekusi tambah mapel pilihan (setelah konfirmasi)
+  const executeTambahPilihan = async () => {
     const token = getToken();
     if (!token || !selectedKelasId || !selectedSemesterId) return;
 
@@ -570,7 +575,7 @@ export default function DataPembelajaranPage() {
 
       if (res.ok && result.success) {
         setShowModalPilihan(false);
-        setFormDataPilihan({ user_id: '', mapel_id: '', confirmData: false });
+        setFormDataPilihan({ user_id: '', mapel_id: '' });
         setErrorsPilihan({});
         await fetchDataPerKelas(selectedKelasId);
         showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: result.message });
@@ -584,31 +589,14 @@ export default function DataPembelajaranPage() {
     }
   };
 
-  // ── Handler: EDIT MAPEL PILIHAN ────────────────────────────────────────────
-  const openFormEdit = (mp: Pembelajaran) => {
-    setEditId(mp.id);
-    setEditData(mp);
-    setFormDataPilihan({
-      user_id: String(mp.user_id),
-      mapel_id: String(mp.mapel_id),
-      confirmData: false,
-    });
-    setErrorsPilihan({});
-    setShowFormEdit(true);
-  };
-
-  const handleSubmitEdit = async () => {
+  // ✅ TAMBAHAN: Eksekusi edit mapel pilihan (setelah konfirmasi)
+  const executeEditPilihan = async () => {
     if (!editId || !selectedKelasId || !selectedSemesterId) return;
 
     const token = getToken();
     if (!token) return;
 
-    const hasChanged = editData?.user_id !== Number(formDataPilihan.user_id);
-    if (!hasChanged) {
-      showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-      return;
-    }
-
+    setSubmittingPilihan(true);
     try {
       const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${editId}`, {
         method: 'PUT',
@@ -627,7 +615,7 @@ export default function DataPembelajaranPage() {
         setShowFormEdit(false);
         setEditId(null);
         setEditData(null);
-        setFormDataPilihan({ user_id: '', mapel_id: '', confirmData: false });
+        setFormDataPilihan({ user_id: '', mapel_id: '' });
         await fetchDataPerKelas(selectedKelasId);
         showModal({ type: 'success', title: 'Berhasil Diperbarui!', message: result.message });
       } else {
@@ -635,7 +623,37 @@ export default function DataPembelajaranPage() {
       }
     } catch {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+    } finally {
+      setSubmittingPilihan(false);
     }
+  };
+
+  // ✅ TAMBAHAN: Buka modal konfirmasi untuk tambah/edit pilihan
+  const openConfirmPilihan = (action: 'add-pilihan' | 'edit-pilihan') => {
+    if (!validateFormPilihan()) return;
+
+    if (action === 'edit-pilihan' && editData) {
+      const hasChanged = editData.user_id !== Number(formDataPilihan.user_id);
+      if (!hasChanged) {
+        showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+        return;
+      }
+    }
+
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // ── Handler: EDIT MAPEL PILIHAN ────────────────────────────────────────────
+  const openFormEdit = (mp: Pembelajaran) => {
+    setEditId(mp.id);
+    setEditData(mp);
+    setFormDataPilihan({
+      user_id: String(mp.user_id),
+      mapel_id: String(mp.mapel_id),
+    });
+    setErrorsPilihan({});
+    setShowFormEdit(true);
   };
 
   const handleDelete = (id: number, namaMapel: string, namaGuru: string) => {
@@ -744,27 +762,13 @@ export default function DataPembelajaranPage() {
               {errorsPilihan.user_id && <p className="text-red-500 text-xs">{errorsPilihan.user_id}</p>}
             </div>
 
-            <div className="pt-1">
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="confirmData"
-                  checked={formDataPilihan.confirmData}
-                  onChange={handlePilihanChange}
-                  className="mt-0.5 w-4 h-4 rounded accent-orange-500"
-                />
-                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                  Saya yakin data yang diisi sudah benar
-                </span>
-              </label>
-              {errorsPilihan.confirmData && <p className="text-red-500 text-xs mt-1">{errorsPilihan.confirmData}</p>}
-            </div>
+            {/* ✅ HAPUS bagian checkbox konfirmasi */}
           </div>
 
           <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
             <BtnSecondary onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}>Batal</BtnSecondary>
             <button
-              onClick={handleSubmitEdit}
+              onClick={() => openConfirmPilihan('edit-pilihan')}
               className={btnPrimary.base}
               style={btnPrimary.style}
               onMouseEnter={btnPrimary.hover}
@@ -774,6 +778,50 @@ export default function DataPembelajaranPage() {
             </button>
           </div>
         </div>
+
+        {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana untuk Edit */}
+        {showConfirmModal && confirmAction === 'edit-pilihan' && (
+          <div
+            className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dp-fadeIn"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dp-scaleIn">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                  <ShieldAlert size={24} className="text-orange-500" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                  Konfirmasi Perubahan Data
+                </h3>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                Apakah Anda yakin ingin mengubah guru pengampu ini?
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                  style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    executeEditPilihan();
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                  style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                >
+                  Simpan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -879,7 +927,7 @@ export default function DataPembelajaranPage() {
             <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
               <BtnSecondary onClick={() => setShowModalWajib(false)} disabled={submittingWajib}>Batal</BtnSecondary>
               <button
-                onClick={handleSubmitMapelWajib}
+                onClick={openConfirmWajib}
                 disabled={selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0}
                 className={`${btnPrimary.base} ${(selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={btnPrimary.style}
@@ -973,21 +1021,7 @@ export default function DataPembelajaranPage() {
                     {errorsPilihan.user_id && <p className="text-red-500 text-xs">{errorsPilihan.user_id}</p>}
                   </div>
 
-                  <div className="pt-1">
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="confirmData"
-                        checked={formDataPilihan.confirmData}
-                        onChange={handlePilihanChange}
-                        className="mt-0.5 w-4 h-4 rounded accent-orange-500"
-                      />
-                      <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                        Saya yakin data yang diisi sudah benar
-                      </span>
-                    </label>
-                    {errorsPilihan.confirmData && <p className="text-red-500 text-xs mt-1">{errorsPilihan.confirmData}</p>}
-                  </div>
+                  {/* ✅ HAPUS bagian checkbox konfirmasi */}
                 </>
               )}
             </div>
@@ -995,7 +1029,7 @@ export default function DataPembelajaranPage() {
             <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
               <BtnSecondary onClick={() => setShowModalPilihan(false)} disabled={submittingPilihan}>Batal</BtnSecondary>
               <button
-                onClick={handleSubmitMapelPilihan}
+                onClick={() => openConfirmPilihan('add-pilihan')}
                 disabled={dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan}
                 className={`${btnPrimary.base} ${(dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={btnPrimary.style}
@@ -1012,6 +1046,56 @@ export default function DataPembelajaranPage() {
                     Simpan
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana untuk Tambah Wajib/Pilihan */}
+      {showConfirmModal && (confirmAction === 'add-wajib' || confirmAction === 'add-pilihan') && (
+        <div
+          className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dp-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dp-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi Penambahan Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add-wajib'
+                ? `Apakah Anda yakin ingin menambahkan ${selectedMapelWajibIds.length} mapel wajib ini?`
+                : 'Apakah Anda yakin ingin menambahkan mapel pilihan ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add-wajib') {
+                    executeTambahWajib();
+                  } else {
+                    executeTambahPilihan();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
               </button>
             </div>
           </div>
@@ -1259,7 +1343,7 @@ export default function DataPembelajaranPage() {
                             {isSemesterActive && (
                               <button
                                 onClick={() => {
-                                  setFormDataPilihan({ user_id: '', mapel_id: '', confirmData: false });
+                                  setFormDataPilihan({ user_id: '', mapel_id: '' });
                                   setErrorsPilihan({});
                                   setShowModalPilihan(true);
                                 }}
