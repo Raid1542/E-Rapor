@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import {
-    ChevronRight, Users, UserCircle, Award, School, Book,
-    CheckCircle2, AlertCircle, Plus, Pencil,
-    GraduationCap
+    ChevronRight, Users, Award, School, Book,
+    Plus, GraduationCap, TrendingUp,
+    BookOpen, Settings,
+    ArrowRight, Sparkles, Target
 } from 'lucide-react';
 import { UserData } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -13,7 +14,7 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // Import Recharts
 import {
-    PieChart, Pie, Cell, ResponsiveContainer, Tooltip
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
@@ -36,12 +37,29 @@ interface KelasWithSiswa {
     jumlah_siswa: number;
 }
 
+// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes db-fadeUp { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        @keyframes db-slideRight { 
+            from { opacity: 0; transform: translateX(-20px); } 
+            to { opacity: 1; transform: translateX(0); } 
+        }
+        .db-fadeUp { animation: db-fadeUp 0.5s ease-out forwards; }
+        .db-slideRight { animation: db-slideRight 0.4s ease-out forwards; }
+    `}</style>
+);
+
 // ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
     <div
         className={`bg-white rounded-2xl ${className}`}
-        style={{ border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' }}
+        style={{ border: '1px solid #fde0c8', boxShadow: '0 4px 20px rgba(200,80,10,0.06)' }}
     >
         {children}
     </div>
@@ -49,10 +67,7 @@ const Card = ({ children, className = '' }: { children: React.ReactNode; classNa
 
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 
-const PIE_COLORS = [
-    '#c95b08', '#e8690a', '#f5870a', '#f5a623', '#f97316',
-    '#fb923c', '#fdba74', '#ea580c', '#dc2626', '#ef4444'
-];
+const BAR_COLORS = ['#c95b08', '#e8690a', '#f5870a', '#f5a623', '#f97316', '#fb923c', '#fdba74', '#ea580c'];
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
@@ -95,8 +110,6 @@ export default function DashboardClient() {
                 const resultStats = await resStats.json();
                 if (resStats.ok && resultStats.success) {
                     setStats(resultStats.data);
-
-                    // Fetch kelas data jika ada id_detail
                     if (resultStats.data.id_detail) {
                         fetchKelasWithSiswa(resultStats.data.id_detail, token);
                     }
@@ -111,30 +124,18 @@ export default function DashboardClient() {
         const fetchKelasWithSiswa = async (tahunAjaranId: number, token: string) => {
             setKelasLoading(true);
             try {
-                console.log('🔍 [Dashboard] Fetching kelas untuk TA ID:', tahunAjaranId);
-
                 const resKelas = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${tahunAjaranId}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const dataKelas = await resKelas.json();
-
-                console.log('📚 [Dashboard] Response kelas:', dataKelas);
-                console.log('📚 [Dashboard] Jumlah kelas:', dataKelas.data?.length || 0);
 
                 if (resKelas.ok && dataKelas.success) {
                     const kelasData: KelasWithSiswa[] = [];
 
                     await Promise.all(
                         dataKelas.data.map(async (kelas: any) => {
-                            // Coba gunakan 'id' atau 'id_kelas'
                             const kelasId = kelas.id_kelas || kelas.id;
-
-                            console.log(`👥 [Dashboard] Fetching siswa untuk kelas ${kelas.nama_kelas} (ID: ${kelasId})...`);
-
-                            if (!kelasId) {
-                                console.error('❌ Kelas ID tidak ada!', kelas);
-                                return;
-                            }
+                            if (!kelasId) return;
 
                             try {
                                 const resSiswa = await fetch(
@@ -143,7 +144,7 @@ export default function DashboardClient() {
                                 );
                                 const dataSiswa = await resSiswa.json();
 
-                                if (dataSiswa.success && dataSiswa.data.length > 0) {
+                                if (dataSiswa.success) {
                                     kelasData.push({
                                         id_kelas: kelasId,
                                         nama_kelas: kelas.nama_kelas || kelas.nama,
@@ -151,20 +152,15 @@ export default function DashboardClient() {
                                     });
                                 }
                             } catch (err) {
-                                console.error(`   ❌ Error:`, err);
+                                console.error(`Error fetching siswa for kelas ${kelasId}:`, err);
                             }
                         })
                     );
 
-                    console.log('✅ [Dashboard] Total kelas dengan siswa:', kelasData);
-                    console.log('✅ [Dashboard] Total siswa:', kelasData.reduce((sum, k) => sum + k.jumlah_siswa, 0));
-
                     setKelasList(kelasData.sort((a, b) => b.jumlah_siswa - a.jumlah_siswa));
-                } else {
-                    console.error('❌ [Dashboard] Gagal fetch kelas:', dataKelas);
                 }
             } catch (err) {
-                console.error('❌ [Dashboard] Error fetch kelas:', err);
+                console.error('Error fetch kelas:', err);
             } finally {
                 setKelasLoading(false);
             }
@@ -178,7 +174,7 @@ export default function DashboardClient() {
             <div className="flex items-center justify-center min-h-screen" style={{ background: '#fdf6f0' }}>
                 <div className="text-center">
                     <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin mx-auto" />
-                    <p className="mt-4 text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
+                    <p className="mt-4 text-sm font-medium" style={{ color: '#c95b08' }}>Memuat dashboard...</p>
                 </div>
             </div>
         );
@@ -186,24 +182,51 @@ export default function DashboardClient() {
 
     if (!user) return null;
 
-    // ── Stat cards config ─────────────────────────────────────────────────────
+    // ── Stat cards config (4 cards utama) ─────────────────────────────────────
 
     const statCards = [
-        { label: 'Data Guru', value: stats.guru, icon: <Users className="w-5 h-5" />, path: '/admin/data_guru' },
-        { label: 'Data Admin', value: stats.admin, icon: <UserCircle className="w-5 h-5" />, path: '/admin/data_admin' },
-        { label: 'Ekstrakurikuler', value: stats.ekstrakurikuler, icon: <Award className="w-5 h-5" />, path: '/admin/ekstrakurikuler' },
-        { label: 'Data Kelas', value: stats.kelas, icon: <School className="w-5 h-5" />, path: '/admin/data_kelas_siswa' },
-        { label: 'Mata Pelajaran', value: stats.mata_pelajaran, icon: <Book className="w-5 h-5" />, path: '/admin/data_mata_pelajaran' },
+        {
+            label: 'Total Siswa',
+            value: stats.siswa,
+            icon: <GraduationCap className="w-7 h-7" />,
+            path: '/admin/data_siswa',
+            gradient: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
+            lightBg: '#fff0e5',
+            desc: 'Siswa terdaftar'
+        },
+        {
+            label: 'Total Guru',
+            value: stats.guru,
+            icon: <Users className="w-7 h-7" />,
+            path: '/admin/data_guru',
+            gradient: 'linear-gradient(135deg, #e8690a 0%, #f5870a 100%)',
+            lightBg: '#fff5eb',
+            desc: 'Tenaga pengajar'
+        },
+        {
+            label: 'Total Kelas',
+            value: stats.kelas,
+            icon: <School className="w-7 h-7" />,
+            path: '/admin/data_kelas_siswa',
+            gradient: 'linear-gradient(135deg, #f5870a 0%, #f5a623 100%)',
+            lightBg: '#fffaf0',
+            desc: 'Kelas aktif'
+        },
+        {
+            label: 'Mata Pelajaran',
+            value: stats.mata_pelajaran,
+            icon: <Book className="w-7 h-7" />,
+            path: '/admin/data_mata_pelajaran',
+            gradient: 'linear-gradient(135deg, #f5a623 0%, #f97316 100%)',
+            lightBg: '#fffbf0',
+            desc: 'Kurikulum aktif'
+        },
     ];
 
-    // ── Format semester display ───────────────────────────────────────────────
-    const semesterDisplay = stats.semester === 'Ganjil' ? 'Ganjil' :
-        stats.semester === 'Genap' ? 'Genap' : '-';
-
-    // ── Data untuk Pie Chart ──────────────────────────────────────────────────
-    const pieData = kelasList.map(k => ({
+    // ── Data untuk Bar Chart ──────────────────────────────────────────────────
+    const barData = kelasList.map(k => ({
         name: k.nama_kelas,
-        value: k.jumlah_siswa,
+        siswa: k.jumlah_siswa,
         id_kelas: k.id_kelas
     }));
 
@@ -211,15 +234,21 @@ export default function DashboardClient() {
     const CustomTooltip = ({ active, payload }: any) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
-            const percentage = stats.siswa > 0
-                ? ((data.value / stats.siswa) * 100).toFixed(1)
-                : 0;
+            const total = stats.siswa || 1;
+            const percentage = ((data.siswa / total) * 100).toFixed(1);
             return (
-                <div className="bg-white rounded-xl shadow-xl p-3" style={{ border: '2px solid #fde0c8' }}>
-                    <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{data.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-lg font-bold" style={{ color: '#c95b08' }}>{data.value}</span>
-                        <span className="text-xs text-gray-500">siswa ({percentage}%)</span>
+                <div className="bg-white rounded-xl shadow-2xl p-4" style={{ border: '2px solid #fde0c8' }}>
+                    <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#c95b08' }}>
+                        Kelas {data.name}
+                    </p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black" style={{ color: '#7a3a0a' }}>{data.siswa}</span>
+                        <span className="text-sm text-gray-500 font-semibold">siswa</span>
+                    </div>
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid #fde0c8' }}>
+                        <span className="text-xs font-bold" style={{ color: '#e8690a' }}>
+                            {percentage}% dari total siswa
+                        </span>
                     </div>
                 </div>
             );
@@ -231,221 +260,235 @@ export default function DashboardClient() {
 
     return (
         <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
+            <GlobalStyles />
 
             {showSessionExpired && (
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* ── Welcome card ── */}
-            <div
-                className="rounded-2xl p-6 mb-6 text-white"
-                style={{
-                    background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
-                    boxShadow: '0 4px 15px rgba(200,80,10,0.2)',
-                }}
-            >
-                <div>
-                    <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-2">
-                        Panel Administrator
-                    </p>
-                    <h2 className="text-2xl font-bold text-white mb-2">
-                        Selamat Datang, {user.nama || user.name || user.nama_lengkap || 'Admin'}! 👋
-                    </h2>
-                    <p className="text-white/80 text-sm">
-                        Kelola sistem E-Rapor dengan mudah dari dashboard ini.
+            {/* ═══════════════════════════════════════════════════════════════════
+                WELCOME BANNER
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="mb-6 db-fadeUp">
+                <div className="flex items-center gap-3 mb-1">
+                    <Sparkles className="w-5 h-5" style={{ color: '#e8690a' }} />
+                    <p className="text-sm font-bold uppercase tracking-wider" style={{ color: '#c95b08' }}>
+                        Dashboard
                     </p>
                 </div>
+                <h1 className="text-3xl font-black text-gray-900">
+                    Selamat Datang, {user.nama || user.name || user.nama_lengkap || 'Admin'} 👋
+                </h1>
+                <p className="text-sm text-gray-600 mt-1">
+                    Ringkasan data sistem E-Rapor SDIT Ulil Albab
+                </p>
             </div>
 
-            {/* ── CARD: TAHUN AJARAN AKTIF ───────────────────────────────────── */}
-            <div className="mb-6">
-                <div
-                    className="rounded-2xl p-6 relative overflow-hidden"
-                    style={{
-                        background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 50%, #f5870a 100%)',
-                        boxShadow: '0 4px 20px rgba(200,80,10,0.25)',
-                    }}
-                >
-                    <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full"
-                        style={{ background: 'rgba(255,255,255,0.08)' }} />
-                    <div className="absolute -bottom-8 right-20 w-40 h-40 rounded-full"
-                        style={{ background: 'rgba(255,255,255,0.05)' }} />
-
-                    <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center gap-4">
+            {/* ═══════════════════════════════════════════════════════════════════
+                STAT CARDS - 4 Cards Utama
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {statCards.map((card, index) => (
+                    <Card
+                        key={card.label}
+                        className="hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 cursor-pointer group overflow-hidden db-fadeUp"
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                    >
+                        <div
+                            className="p-6 h-full relative"
+                            onClick={() => router.push(card.path)}
+                        >
+                            {/* Background decoration */}
                             <div
-                                className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg"
-                                style={{
-                                    background: 'rgba(255,255,255,0.2)',
-                                    backdropFilter: 'blur(10px)',
-                                    border: '1px solid rgba(255,255,255,0.3)',
-                                }}
-                            >
-                                {stats.tahun_ajaran ? (
-                                    <CheckCircle2 className="w-7 h-7 text-white" />
-                                ) : (
-                                    <AlertCircle className="w-7 h-7 text-white" />
-                                )}
-                            </div>
+                                className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-150"
+                                style={{ background: card.gradient }}
+                            />
 
-                            <div>
-                                <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">
-                                    Tahun Ajaran Aktif
+                            <div className="relative z-10">
+                                {/* Icon */}
+                                <div
+                                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6"
+                                    style={{
+                                        background: card.gradient,
+                                        boxShadow: '0 8px 20px rgba(232,105,10,0.3)',
+                                    }}
+                                >
+                                    {card.icon}
+                                </div>
+
+                                {/* Value - Super Big */}
+                                <p className="text-5xl font-black mb-2" style={{ color: '#c95b08' }}>
+                                    {card.value}
                                 </p>
-                                {stats.tahun_ajaran ? (
-                                    <div>
-                                        <p className="text-2xl font-bold text-white mb-0.5">
-                                            {stats.tahun_ajaran}
-                                        </p>
-                                        <p className="text-sm text-white/90 font-medium">
-                                            Semester {semesterDisplay}
-                                        </p>
+
+                                {/* Label */}
+                                <p className="text-base font-bold text-gray-800 mb-1">{card.label}</p>
+                                <p className="text-xs text-gray-500">{card.desc}</p>
+
+                                {/* Footer */}
+                                <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTop: '1px solid #fde0c8' }}>
+                                    <span className="text-xs font-bold" style={{ color: '#c95b08' }}>
+                                        Lihat Detail
+                                    </span>
+                                    <div
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:translate-x-2"
+                                        style={{ background: card.lightBg }}
+                                    >
+                                        <ArrowRight className="w-4 h-4" style={{ color: '#c95b08' }} />
                                     </div>
-                                ) : (
-                                    <p className="text-lg font-bold text-white">
-                                        Belum Ada Tahun Ajaran Aktif
-                                    </p>
-                                )}
+                                </div>
                             </div>
                         </div>
-
-                        <button
-                            onClick={() => router.push('/admin/data_tahun_ajaran')}
-                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg"
-                            style={{
-                                background: stats.tahun_ajaran ? 'rgba(255,255,255,0.95)' : 'linear-gradient(135deg, #9a3a08, #c95b08)',
-                                color: stats.tahun_ajaran ? '#c95b08' : '#ffffff',
-                                border: '1px solid rgba(255,255,255,0.5)',
-                            }}
-                            onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = '#ffffff';
-                                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
-                            }}
-                            onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLButtonElement).style.background = stats.tahun_ajaran ? 'rgba(255,255,255,0.95)' : 'linear-gradient(135deg, #9a3a08, #c95b08)';
-                                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-                            }}
-                        >
-                            {stats.tahun_ajaran ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                            {stats.tahun_ajaran ? 'Ubah' : 'Tambah'}
-                        </button>
-                    </div>
-                </div>
+                    </Card>
+                ))}
             </div>
 
-            {/* ── CARD: TOTAL SISWA DENGAN DONUT CHART ───────────────────────── */}
-            <div className="mb-6">
+            {/* ═══════════════════════════════════════════════════════════════════
+                BAR CHART - Distribusi Siswa per Kelas
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="mb-6 db-fadeUp" style={{ animationDelay: '0.4s' }}>
                 <Card className="overflow-hidden">
                     {/* Header */}
                     <div
-                        className="px-6 py-4 flex items-center justify-between"
+                        className="px-6 py-5 flex items-center justify-between"
                         style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)' }}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                                <GraduationCap className="w-5 h-5 text-white" />
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                <TrendingUp className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <h3 className="text-base font-bold text-white">Total Siswa Aktif</h3>
-                                <p className="text-xs text-white/80">
-                                    Semester {semesterDisplay} • TA {stats.tahun_ajaran || '-'}
+                                <h3 className="text-lg font-bold text-white">Distribusi Siswa per Kelas</h3>
+                                <p className="text-xs text-white/80 mt-0.5">
+                                    Perbandingan jumlah siswa di setiap kelas
                                 </p>
                             </div>
                         </div>
                         <button
-                            onClick={() => router.push('/admin/data_siswa')}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                            onClick={() => router.push('/admin/data_kelas_siswa')}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all backdrop-blur-sm"
                             style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}
-                            onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.3)'}
-                            onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.2)'}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
                         >
-                            Lihat Detail <ChevronRight className="w-3.5 h-3.5" />
+                            Semua Kelas <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
 
-                    {/* Content: Chart + Legend */}
+                    {/* Content */}
                     <div className="p-6">
                         {kelasLoading ? (
-                            <div className="flex items-center justify-center py-16">
+                            <div className="flex items-center justify-center py-20">
                                 <div className="w-10 h-10 rounded-full border-2 border-orange-200 border-t-orange-500 animate-spin" />
-                                <span className="ml-3 text-sm" style={{ color: '#c95b08' }}>Memuat data siswa...</span>
+                                <span className="ml-3 text-sm font-semibold" style={{ color: '#c95b08' }}>Memuat data...</span>
                             </div>
-                        ) : stats.siswa === 0 || kelasList.length === 0 ? (
-                            <div className="text-center py-16">
-                                <div className="w-20 h-20 rounded-full bg-orange-50 flex items-center justify-center mx-auto mb-4">
-                                    <Users className="w-10 h-10 text-orange-300" />
+                        ) : kelasList.length === 0 ? (
+                            <div className="text-center py-20">
+                                <div
+                                    className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5"
+                                    style={{ background: '#fff0e5' }}
+                                >
+                                    <School className="w-12 h-12" style={{ color: '#e8690a' }} />
                                 </div>
-                                <p className="text-sm font-medium text-gray-600 mb-2">
-                                    {stats.siswa > 0 && kelasList.length === 0
-                                        ? `${stats.siswa} siswa belum memiliki kelas`
-                                        : 'Belum ada data siswa aktif'}
+                                <p className="text-lg font-bold text-gray-800 mb-2">
+                                    Belum ada data kelas
                                 </p>
-                                <p className="text-xs text-gray-400 mb-4">
-                                    {stats.siswa > 0 && kelasList.length === 0
-                                        ? 'Silakan tambahkan siswa ke kelas untuk melihat distribusi'
-                                        : 'Data akan muncul setelah siswa terdaftar di kelas'}
+                                <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                                    Silakan buat kelas terlebih dahulu untuk melihat distribusi siswa
                                 </p>
-                                {stats.siswa > 0 && kelasList.length === 0 && (
-                                    <button
-                                        onClick={() => router.push('/admin/data_kelas_siswa')}
-                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
-                                        style={{ background: 'linear-gradient(135deg, #c95b08, #e8690a)' }}
-                                    >
-                                        <School className="w-4 h-4" />
-                                        Kelola Kelas
-                                    </button>
-                                )}
+                                <button
+                                    onClick={() => router.push('/admin/data_kelas_siswa')}
+                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #e8690a, #f5a623)',
+                                        boxShadow: '0 4px 15px rgba(232,105,10,0.3)'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg, #c95b08, #e8690a)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg, #e8690a, #f5a623)')}
+                                >
+                                    <Plus className="w-5 h-5" />
+                                    Buat Kelas Pertama
+                                </button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
-                                {/* Donut Chart */}
-                                <div className="lg:col-span-3 relative">
-                                    <div className="h-80">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={pieData}
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    innerRadius={80}
-                                                    outerRadius={130}
-                                                    paddingAngle={2}
-                                                    dataKey="value"
-                                                    stroke="#fff"
-                                                    strokeWidth={2}
-                                                >
-                                                    {pieData.map((entry, index) => (
-                                                        <Cell
-                                                            key={`cell-${index}`}
-                                                            fill={PIE_COLORS[index % PIE_COLORS.length]}
-                                                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                                                            onClick={() => router.push(`/admin/data_kelas_siswa/${entry.id_kelas}`)}
-                                                        />
-                                                    ))}
-                                                </Pie>
-                                                <Tooltip content={<CustomTooltip />} />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    </div>
-
-                                    {/* Center Label */}
-                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <div className="text-center">
-                                            <p className="text-5xl font-black" style={{ color: '#c95b08' }}>
-                                                {stats.siswa}
-                                            </p>
-                                            <p className="text-sm text-gray-500 font-semibold mt-1">Total Siswa</p>
+                            <div>
+                                {/* Summary Stats */}
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="p-4 rounded-2xl" style={{ background: '#fff0e5', border: '2px solid #fde0c8' }}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <School className="w-5 h-5" style={{ color: '#c95b08' }} />
+                                            <p className="text-xs font-bold uppercase" style={{ color: '#c95b08' }}>Total Kelas</p>
                                         </div>
+                                        <p className="text-3xl font-black" style={{ color: '#7a3a0a' }}>{kelasList.length}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl" style={{ background: '#fff5eb', border: '2px solid #fde0c8' }}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Users className="w-5 h-5" style={{ color: '#e8690a' }} />
+                                            <p className="text-xs font-bold uppercase" style={{ color: '#e8690a' }}>Total Siswa</p>
+                                        </div>
+                                        <p className="text-3xl font-black" style={{ color: '#7a3a0a' }}>{stats.siswa}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl" style={{ background: '#fffaf0', border: '2px solid #fde0c8' }}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Target className="w-5 h-5" style={{ color: '#f5870a' }} />
+                                            <p className="text-xs font-bold uppercase" style={{ color: '#f5870a' }}>Rata-rata</p>
+                                        </div>
+                                        <p className="text-3xl font-black" style={{ color: '#7a3a0a' }}>
+                                            {kelasList.length > 0 ? Math.round(stats.siswa / kelasList.length) : 0}
+                                        </p>
                                     </div>
                                 </div>
 
-                                {/* Legend / Daftar Kelas */}
-                                <div className="lg:col-span-2">
-                                    <h4 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
-                                        <School className="w-4 h-4" />
-                                        Distribusi per Kelas ({kelasList.length})
+                                {/* Horizontal Bar Chart */}
+                                <div style={{ height: `${Math.max(300, kelasList.length * 60)}px` }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart
+                                            data={barData}
+                                            layout="vertical"
+                                            margin={{ top: 20, right: 40, left: 0, bottom: 20 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#fde0c8" horizontal={false} />
+                                            <XAxis
+                                                type="number"
+                                                stroke="#7a3a0a"
+                                                fontSize={11}
+                                                fontWeight={600}
+                                                tick={{ fill: '#7a3a0a' }}
+                                            />
+                                            <YAxis
+                                                type="category"
+                                                dataKey="name"
+                                                stroke="#7a3a0a"
+                                                fontSize={12}
+                                                fontWeight={700}
+                                                width={60}
+                                                tick={{ fill: '#7a3a0a' }}
+                                            />
+                                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(232,105,10,0.05)' }} />
+                                            <Bar
+                                                dataKey="siswa"
+                                                radius={[0, 12, 12, 0]}
+                                                maxBarSize={45}
+                                                barSize={30}
+                                            >
+                                                {barData.map((entry, index) => (
+                                                    <Cell
+                                                        key={`cell-${index}`}
+                                                        fill={BAR_COLORS[index % BAR_COLORS.length]}
+                                                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                                                    />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* Class List */}
+                                <div className="mt-6 pt-6 border-t" style={{ borderColor: '#fde0c8' }}>
+                                    <h4 className="text-sm font-bold mb-3" style={{ color: '#7a3a0a' }}>
+                                        Detail Kelas ({kelasList.length})
                                     </h4>
-                                    <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                         {kelasList.map((kelas, index) => {
                                             const percentage = stats.siswa > 0
                                                 ? ((kelas.jumlah_siswa / stats.siswa) * 100).toFixed(1)
@@ -454,39 +497,30 @@ export default function DashboardClient() {
                                             return (
                                                 <div
                                                     key={kelas.id_kelas}
-                                                    className="flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all hover:shadow-md"
+                                                    className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all hover:shadow-md"
                                                     style={{
-                                                        background: index % 2 === 0 ? '#fffaf6' : '#ffffff',
+                                                        background: '#fffaf6',
                                                         border: '1px solid #fde0c8'
                                                     }}
                                                     onClick={() => router.push(`/admin/data_kelas_siswa/${kelas.id_kelas}`)}
-                                                    onMouseEnter={(e) => {
-                                                        (e.currentTarget as HTMLElement).style.background = '#fff0e5';
-                                                        (e.currentTarget as HTMLElement).style.borderColor = '#f5a623';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        (e.currentTarget as HTMLElement).style.background = index % 2 === 0 ? '#fffaf6' : '#ffffff';
-                                                        (e.currentTarget as HTMLElement).style.borderColor = '#fde0c8';
-                                                    }}
                                                 >
-                                                    <div className="flex items-center gap-2.5">
+                                                    <div className="flex items-center gap-3">
                                                         <div
-                                                            className="w-3 h-3 rounded-full flex-shrink-0"
-                                                            style={{ background: PIE_COLORS[index % PIE_COLORS.length] }}
-                                                        />
-                                                        <span className="text-sm font-semibold text-gray-700">
-                                                            {kelas.nama_kelas}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-gray-500">{percentage}%</span>
-                                                        <div
-                                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
-                                                            style={{ background: '#eaf7ef', color: '#16a34a' }}
+                                                            className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+                                                            style={{ background: BAR_COLORS[index % BAR_COLORS.length] }}
                                                         >
-                                                            <Users className="w-3 h-3" />
-                                                            {kelas.jumlah_siswa}
+                                                            {kelas.nama_kelas}
                                                         </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-800">Kelas {kelas.nama_kelas}</p>
+                                                            <p className="text-xs text-gray-500">{percentage}% dari total</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xl font-black" style={{ color: '#c95b08' }}>
+                                                            {kelas.jumlah_siswa}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">siswa</p>
                                                     </div>
                                                 </div>
                                             );
@@ -497,46 +531,6 @@ export default function DashboardClient() {
                         )}
                     </div>
                 </Card>
-            </div>
-
-            {/* ── Stat cards lainnya ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {statCards.map((card) => (
-                    <Card key={card.label} className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group">
-                        <div
-                            className="p-5 h-full"
-                            onClick={() => router.push(card.path)}
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <div
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0 transition-transform group-hover:scale-110"
-                                    style={{
-                                        background: 'linear-gradient(135deg, #c95b08, #e8690a)',
-                                        boxShadow: '0 3px 10px rgba(232,105,10,0.3)',
-                                    }}
-                                >
-                                    {card.icon}
-                                </div>
-                                <span
-                                    className="text-3xl font-bold transition-transform group-hover:scale-110"
-                                    style={{ color: '#c95b08' }}
-                                >
-                                    {card.value}
-                                </span>
-                            </div>
-                            <p className="text-sm font-semibold text-gray-700 mb-3">{card.label}</p>
-                            <div className="pt-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <div
-                                    className="flex items-center gap-1 text-xs font-semibold transition-colors"
-                                    style={{ color: '#e8690a' }}
-                                >
-                                    Lihat detail
-                                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-                ))}
             </div>
         </div>
     );

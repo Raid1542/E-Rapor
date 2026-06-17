@@ -1,14 +1,16 @@
 /**
  * Nama File: Header.tsx
  * Fungsi: Komponen header untuk layout guru bidang studi.
- * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * Update: Redesign mengikuti tema header guru kelas (oranye gradasi)
+ *         Menampilkan:
+ *         - Judul statis dengan info Tahun Ajaran & Semester Aktif
+ *         - Dropdown profil pengguna
+ *         - Menu: Profil, Ubah Kata Sandi, Logout
+ * Update: Mengikuti format header Admin (static title + TA info)
  */
 
 'use client';
 
-import { LogOut, ChevronDown, User, Lock, X } from 'lucide-react';
+import { LogOut, ChevronDown, User, Lock, X, Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 
@@ -18,6 +20,12 @@ interface UserData {
     email_sekolah: string;
     role: string;
     profileImage?: string;
+}
+
+interface TahunAjaranInfo {
+    tahun_ajaran: string;
+    semester: string;
+    is_aktif: boolean;
 }
 
 const getInitials = (name: string): string => {
@@ -35,9 +43,15 @@ const GlobalStyles = () => (
         @keyframes gbs-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes gbs-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes gbs-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes gbs-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         .gbs-fadeIn  { animation: gbs-fadeIn  0.2s ease; }
         .gbs-scaleIn { animation: gbs-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .gbs-pulse   { animation: gbs-pulse   0.6s ease 0.15s; }
+        .gbs-shimmer { 
+            background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.2) 100%);
+            background-size: 200% 100%;
+            animation: gbs-shimmer 1.5s infinite;
+        }
     `}</style>
 );
 
@@ -112,6 +126,10 @@ export default function Header() {
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
+    // State untuk Tahun Ajaran Aktif
+    const [tahunAjaranInfo, setTahunAjaranInfo] = useState<TahunAjaranInfo | null>(null);
+    const [taLoading, setTaLoading] = useState(true);
+
     // ── Load user data ──────────────────────────────────────────────────────
     useEffect(() => {
         const loadUserData = () => {
@@ -154,6 +172,55 @@ export default function Header() {
         };
     }, []);
 
+    // ── Load Tahun Ajaran Aktif ─────────────────────────────────────────────
+    useEffect(() => {
+        const fetchTahunAjaran = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    setTaLoading(false);
+                    return;
+                }
+
+                const res = await fetch('http://localhost:5000/api/guru-bidang-studi/tahun-ajaran/aktif', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success && data.data) {
+                    const taData = data.data;
+
+                    // Sesuaikan dengan struktur response dari controller
+                    setTahunAjaranInfo({
+                        tahun_ajaran: taData.tahun_ajaran || taData.tahun_ajaran_induk || '-',
+                        semester: taData.semester || '-',
+                        is_aktif: true
+                    });
+                } else {
+                    console.warn('Tidak ada TA aktif atau response tidak valid:', data);
+                    setTahunAjaranInfo(null);
+                }
+            } catch (err) {
+                console.error('Error fetch tahun ajaran:', err);
+                setTahunAjaranInfo(null);
+            } finally {
+                setTaLoading(false);
+            }
+        };
+
+        fetchTahunAjaran();
+
+        const interval = setInterval(fetchTahunAjaran, 5 * 60 * 1000);
+        const handleRefresh = () => fetchTahunAjaran();
+        window.addEventListener('tahunAjaranUpdated', handleRefresh);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('tahunAjaranUpdated', handleRefresh);
+        };
+    }, []);
+
     // ── Tutup dropdown saat klik di luar ───────────────────────────────────
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -165,7 +232,7 @@ export default function Header() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // ── Handlers ───────────────────────────────────────────────────────────
+    // ── Handlers ──────────────────────────────────────────────────────────
     const handleLogoutClick = () => { setDropdownOpen(false); setShowLogoutConfirm(true); };
     const handleLogoutConfirm = () => {
         setShowLogoutConfirm(false);
@@ -178,13 +245,18 @@ export default function Header() {
     const handleProfile = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/profil'); };
     const handleUbahPassword = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/ubah_password'); };
 
+    // Build static header title
+    const headerTitle = tahunAjaranInfo
+        ? `E-Rapor SDIT Ulil Albab | ${tahunAjaranInfo.tahun_ajaran} - ${tahunAjaranInfo.semester}`
+        : 'E-Rapor SDIT Ulil Albab';
+
     // ── Skeleton ───────────────────────────────────────────────────────────
     if (!user) {
         return (
             <header className="border-b" style={{ borderColor: '#fde0c8' }}>
                 <div className="px-6 py-3 flex justify-between items-center">
-                    <div className="h-6 w-48 rounded-lg bg-orange-100 animate-pulse" />
-                    <div className="h-10 w-44 rounded-xl bg-orange-100 animate-pulse" />
+                    <div className="h-6 w-64 rounded-lg gbs-shimmer" />
+                    <div className="h-10 w-44 rounded-xl gbs-shimmer" />
                 </div>
             </header>
         );
@@ -192,8 +264,8 @@ export default function Header() {
 
     // ── Avatar ─────────────────────────────────────────────────────────────
     const Avatar = ({ size = 'sm' }: { size?: 'sm' | 'md' }) => {
-        const dim  = size === 'md' ? 'w-11 h-11' : 'w-8 h-8';
-        const text = size === 'md' ? 'text-sm'   : 'text-xs';
+        const dim = size === 'md' ? 'w-11 h-11' : 'w-8 h-8';
+        const text = size === 'md' ? 'text-sm' : 'text-xs';
         return (
             <div
                 className={`${dim} rounded-full flex items-center justify-center overflow-hidden flex-shrink-0`}
@@ -218,21 +290,37 @@ export default function Header() {
             )}
 
             <header
-                className="border-b"
+                className="border-b sticky top-0 z-40"
                 style={{
                     background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)',
                     borderColor: 'rgba(255,255,255,0.15)',
                 }}
             >
-                <div className="px-6 py-3 flex justify-between items-center">
+                <div className="px-6 py-3 flex justify-between items-center gap-3">
 
-                    {/* ── Judul halaman ── */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-1 h-7 rounded-full" style={{ background: 'rgba(255,255,255,0.5)' }} />
-                        <h1 className="text-lg font-bold text-white tracking-tight">Dashboard Guru Bidang Studi</h1>
+                    {/* ── KIRI: Static Title ── */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <h1 className="text-base md:text-lg font-bold text-white tracking-tight truncate">
+                            {headerTitle}
+                        </h1>
+
+                        {/* Indikator jika TA belum aktif */}
+                        {!taLoading && !tahunAjaranInfo && (
+                            <span
+                                className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold"
+                                style={{
+                                    background: 'rgba(239,68,68,0.3)',
+                                    color: '#fff',
+                                    border: '1px solid rgba(239,68,68,0.5)'
+                                }}
+                            >
+                                <AlertCircle className="w-3 h-3" />
+                                TA Belum Aktif
+                            </span>
+                        )}
                     </div>
 
-                    {/* ── Profil dropdown ── */}
+                    {/* ── KANAN: Profil dropdown ── */}
                     <div className="relative" ref={dropdownRef}>
                         <button
                             onClick={() => setDropdownOpen(v => !v)}
@@ -246,7 +334,7 @@ export default function Header() {
                         >
                             <Avatar size="sm" />
                             <div className="text-left hidden sm:block">
-                                <p className="text-xs font-bold text-white leading-tight drop-shadow-sm">{user.nama_lengkap}</p>
+                                <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">{user.nama_lengkap}</p>
                                 <p className="text-[10px] text-white/90 leading-tight font-medium capitalize">{user.role}</p>
                             </div>
                             <ChevronDown
@@ -258,7 +346,7 @@ export default function Header() {
                         {/* Dropdown panel */}
                         {dropdownOpen && (
                             <div
-                                className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden"
+                                className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gbs-scaleIn"
                                 style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
                             >
                                 {/* Info user */}

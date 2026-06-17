@@ -1,17 +1,11 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Komponen sidebar navigasi untuk panel admin.
- *         Menampilkan menu utama dan submenu berdasarkan hak akses pengguna,
- *         serta menampilkan logo dan nama sekolah yang diambil dari API.
- *         Mendukung mode collapsed/expanded dan menyimpan state dropdown terbuka.
- *         Terdapat section "Saya" dengan menu Profil.
- * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan dengan gradasi
- * Update: - Data Pembina Ekstrakurikuler dipindah ke submenu Administrasi
- *         - Urutan submenu Pengguna: Data Admin -> Data Guru
- *         - Style active item diubah menjadi solid putih (seperti sidebar guru kelas)
- *         - Teks item tidak aktif diubah menjadi putih penuh (solid white)
+ *         Struktur dibagi menjadi:
+ *         - Master Data: Data inti yang tidak berubah per TA
+ *         - Tahun Ajaran: Menu langsung (tanpa submenu)
+ *         - Akademik: Data operasional yang berubah per TA (TERKUNCI jika TA tidak aktif)
+ *         - Sistem: Backup & Restore
  */
 
 'use client';
@@ -23,36 +17,43 @@ import {
   FileText,
   BookOpen,
   Award,
-  Menu,
   ChevronDown,
   ChevronRight,
   Calendar,
   UserCircle,
   Database,
   X,
+  School,
+  GraduationCap,
+  BookMarked,
+  Archive,
+  Settings,
+  ShieldCheck,
+  UserCog,
+  Layers,
+  Lock,
+  AlertCircle,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
-interface SidebarProps {
-  user: {
-    id: number;
-    nama_lengkap: string;
-    email_sekolah: string;
-    role: string;
-  };
+interface TahunAjaranAktif {
+  tahun_ajaran: string;
+  semester: string;
 }
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [isExpanded, setIsExpanded] = useState(true);
   const [openDropdowns, setOpenDropdowns] = useState({
-    pengguna: false,
-    administrasi: false,
+    masterData: false,
+    akademik: false,
   });
 
   const [logoUrl, setLogoUrl] = useState<string>('/images/LogoUA.jpg');
   const [schoolName, setSchoolName] = useState<string>('SDIT Ulil Albab');
+  const [taAktif, setTaAktif] = useState<TahunAjaranAktif | null>(null);
+  const [taLoading, setTaLoading] = useState(true);
 
   // ── Fetch data sekolah (logo + nama) ──────────────────────────────────────
   const fetchSchoolData = async () => {
@@ -74,71 +75,145 @@ export default function Sidebar({ user }: SidebarProps) {
     }
   };
 
+  // ── Fetch Tahun Ajaran Aktif ──────────────────────────────────────────────
+  const fetchTahunAjaranAktif = async () => {
+    try {
+      setTaLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setTaLoading(false);
+        return;
+      }
+
+      const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success && Array.isArray(data.data)) {
+        const aktif = data.data.find((s: any) => s.is_aktif);
+        if (aktif) {
+          setTaAktif({
+            tahun_ajaran: aktif.tahun_ajaran || aktif.tahun_ajaran_induk || '-',
+            semester: aktif.semester || '-',
+          });
+        } else {
+          setTaAktif(null);
+        }
+      }
+    } catch (err) {
+      console.error('Gagal fetch TA aktif:', err);
+    } finally {
+      setTaLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchSchoolData();
+    fetchTahunAjaranAktif();
+
     const handleLogoUpdate = (e: Event) => {
       const customEvent = e as CustomEvent;
       const logoPath = customEvent.detail?.logoPath;
       if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
       else fetchSchoolData();
     };
+
+    const handleTAUpdate = () => fetchTahunAjaranAktif();
+
     window.addEventListener('logoUpdated', handleLogoUpdate);
     window.addEventListener('schoolUpdated', fetchSchoolData);
+    window.addEventListener('tahunAjaranUpdated', handleTAUpdate);
+
     return () => {
       window.removeEventListener('logoUpdated', handleLogoUpdate);
       window.removeEventListener('schoolUpdated', fetchSchoolData);
+      window.removeEventListener('tahunAjaranUpdated', handleTAUpdate);
     };
   }, []);
 
   // ── Submenu data ───────────────────────────────────────────────────────────
-  const penggunaSubmenu = [
-    { name: 'Data Admin', url: '/admin/data_admin' },
-    { name: 'Data Guru',  url: '/admin/data_guru'  },
+
+  // MASTER DATA - Data inti yang tidak berubah per TA
+  const masterDataSubmenu = [
+    { name: 'Data Sekolah', url: '/admin/data_sekolah', icon: <School className="w-4 h-4" /> },
+    { name: 'Data Admin', url: '/admin/data_admin', icon: <ShieldCheck className="w-4 h-4" /> },
+    { name: 'Data Guru', url: '/admin/data_guru', icon: <Users className="w-4 h-4" /> },
+    { name: 'Data Siswa', url: '/admin/data_siswa', icon: <GraduationCap className="w-4 h-4" /> },
+    { name: 'Data Pembina Ekstrakurikuler', url: '/admin/data_pembina_ekstrakurikuler', icon: <UserCog className="w-4 h-4" /> },
   ];
 
-  const administrasiSubmenu = [
-    { name: 'Data Sekolah',                      url: '/admin/data_sekolah' },
-    { name: 'Data Kelas & Siswa',                url: '/admin/data_kelas_siswa' },
-    { name: 'Data Mata Pelajaran',               url: '/admin/data_mata_pelajaran' },
-    { name: 'Data Pembelajaran',                 url: '/admin/data_pembelajaran' },
-    { name: 'Data Pembina Ekstrakurikuler',      url: '/admin/data_pembina_ekstrakurikuler' },
-    { name: 'Data Ekstrakurikuler',              url: '/admin/ekstrakurikuler' },
+  // AKADEMIK - Data operasional yang berubah per TA
+  const akademikSubmenu = [
+    { name: 'Data Kelas', url: '/admin/data_kelas_siswa', icon: <Layers className="w-4 h-4" /> },
+    { name: 'Data Mata Pelajaran', url: '/admin/data_mata_pelajaran', icon: <BookMarked className="w-4 h-4" /> },
+    { name: 'Data Pembelajaran', url: '/admin/data_pembelajaran', icon: <BookOpen className="w-4 h-4" /> },
+    { name: 'Data Ekstrakurikuler', url: '/admin/ekstrakurikuler', icon: <Award className="w-4 h-4" /> },
+    { name: 'Arsip Rapor', url: '/admin/arsip_rapor', icon: <Archive className="w-4 h-4" /> },
   ];
 
   // ── Active state ───────────────────────────────────────────────────────────
-  const isDashboardActive     = pathname === '/admin/dashboard';
-  const isTahunAjaranActive   = pathname === '/admin/data_tahun_ajaran';
-  const isRaporActive         = pathname === '/admin/arsip_rapor';
+  const isDashboardActive = pathname === '/admin/dashboard';
+  const isTahunAjaranActive = pathname === '/admin/data_tahun_ajaran';
   const isBackupRestoreActive = pathname === '/admin/backup_restore';
-  const isProfilActive        = pathname === '/admin/profil';
-  const isPenggunaActive      = penggunaSubmenu.some((item) => item.url === pathname);
-  const isAdministrasiActive  = administrasiSubmenu.some((item) => item.url === pathname);
+  const isProfilActive = pathname === '/admin/profil';
+  const isMasterDataActive = masterDataSubmenu.some((item) => item.url === pathname);
+  const isAkademikActive = akademikSubmenu.some((item) => item.url === pathname);
+
+  // ── Auto redirect jika user langsung akses halaman Akademik tanpa TA aktif ──
+  useEffect(() => {
+    if (!taLoading && !taAktif && isAkademikActive) {
+      setTimeout(() => {
+        alert('⚠️ Tahun Ajaran aktif belum diatur!\n\nAnda akan diarahkan ke halaman Tahun Ajaran untuk mengaktifkan TA terlebih dahulu.');
+        router.push('/admin/data_tahun_ajaran');
+      }, 500);
+    }
+  }, [taLoading, taAktif, isAkademikActive, router]);
 
   useEffect(() => {
-    if (isPenggunaActive)     setOpenDropdowns((prev) => ({ ...prev, pengguna: true }));
-    if (isAdministrasiActive) setOpenDropdowns((prev) => ({ ...prev, administrasi: true }));
-  }, [isPenggunaActive, isAdministrasiActive]);
+    if (isMasterDataActive) setOpenDropdowns((prev) => ({ ...prev, masterData: true }));
+    if (isAkademikActive && taAktif) setOpenDropdowns((prev) => ({ ...prev, akademik: true }));
+  }, [isMasterDataActive, isAkademikActive, taAktif]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const toggleSidebar = () => {
     setIsExpanded(!isExpanded);
-    if (isExpanded) setOpenDropdowns({ pengguna: false, administrasi: false });
+    if (isExpanded) setOpenDropdowns({ masterData: false, akademik: false });
   };
 
   const toggleDropdown = (menu: string) => {
     if (!isExpanded) setIsExpanded(true);
+
+    // Jika klik dropdown Akademik dan TA tidak aktif
+    if (menu === 'akademik' && !taAktif) {
+      alert('⚠️ Tahun Ajaran aktif belum diatur!\n\nSilakan aktifkan Tahun Ajaran terlebih dahulu di menu "Tahun Ajaran".');
+      router.push('/admin/data_tahun_ajaran');
+      return;
+    }
+
     setOpenDropdowns((prev) => ({
-      pengguna:     menu === 'pengguna'     ? !prev.pengguna     : false,
-      administrasi: menu === 'administrasi' ? !prev.administrasi : false,
+      masterData: menu === 'masterData' ? !prev.masterData : false,
+      akademik: menu === 'akademik' ? !prev.akademik : false,
     }));
   };
 
   const handleNavigation = (url: string) => {
     setOpenDropdowns({
-      pengguna:     penggunaSubmenu.some((item) => item.url === url),
-      administrasi: administrasiSubmenu.some((item) => item.url === url),
+      masterData: masterDataSubmenu.some((item) => item.url === url),
+      akademik: akademikSubmenu.some((item) => item.url === url),
     });
     router.push(url);
+  };
+
+  // Handler khusus untuk menu Akademik - cek TA aktif
+  const handleAkademikClick = (url: string) => {
+    if (!taAktif) {
+      alert('⚠️ Tahun Ajaran aktif belum diatur!\n\nSilakan aktifkan Tahun Ajaran terlebih dahulu di menu "Tahun Ajaran".');
+      router.push('/admin/data_tahun_ajaran');
+      return;
+    }
+    handleNavigation(url);
   };
 
   // ── Reusable nav item styles ───────────────────────────────────────────────
@@ -146,21 +221,20 @@ export default function Sidebar({ user }: SidebarProps) {
     'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
   const navActive =
     'bg-white text-orange-600 shadow-sm font-semibold';
-  // [PERUBAHAN] text-white/80 → text-white (solid putih, tanpa opacity)
   const navInactive =
     'text-white hover:bg-white/15 hover:text-white';
+  const navDisabled =
+    'text-white/40 cursor-not-allowed opacity-60';
 
   const subItemBase =
-    'w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150';
-  const subItemActive  = 'bg-white text-orange-600 font-semibold shadow-sm';
-  // [PERUBAHAN] text-white/70 → text-white (solid putih, tanpa opacity)
+    'w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 flex items-center gap-2';
+  const subItemActive = 'bg-white text-orange-600 font-semibold shadow-sm';
   const subItemInactive = 'text-white hover:bg-white/10 hover:text-white';
 
   return (
     <div
-      className={`flex flex-col h-screen transition-all duration-300 ${
-        isExpanded ? 'w-64' : 'w-[72px]'
-      }`}
+      className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[72px]'
+        }`}
       style={{
         background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
       }}
@@ -173,7 +247,6 @@ export default function Sidebar({ user }: SidebarProps) {
         {isExpanded ? (
           <>
             <div className="flex items-center gap-3 min-w-0">
-              {/* Logo */}
               <div
                 className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden"
                 style={{ background: 'rgba(255,255,255,0.18)' }}
@@ -214,7 +287,7 @@ export default function Sidebar({ user }: SidebarProps) {
         )}
       </div>
 
-      {/* ── Navigation ──────────────────────────────────────────────────── */}
+      {/* ── Navigation ────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-none">
 
         {/* Dashboard */}
@@ -234,7 +307,7 @@ export default function Sidebar({ user }: SidebarProps) {
         )}
         {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
 
-        {/* Tahun Ajaran */}
+        {/* Tahun Ajaran - Langsung muncul (tanpa submenu) */}
         <button
           onClick={() => handleNavigation('/admin/data_tahun_ajaran')}
           className={`${navBase} ${isTahunAjaranActive ? navActive : navInactive}`}
@@ -243,90 +316,157 @@ export default function Sidebar({ user }: SidebarProps) {
           {isExpanded && <span>Tahun Ajaran</span>}
         </button>
 
-        {/* Pengguna (dropdown) */}
+        {/* Master Data (dropdown) */}
         <div className="mb-1">
           <button
-            onClick={() => toggleDropdown('pengguna')}
-            className={`${navBase} mb-0 ${isPenggunaActive ? navActive : navInactive} justify-between`}
+            onClick={() => toggleDropdown('masterData')}
+            className={`${navBase} mb-0 ${isMasterDataActive ? navActive : navInactive} justify-between`}
           >
             <div className="flex items-center gap-3">
-              <Users className="w-5 h-5 flex-shrink-0" />
-              {isExpanded && <span>Pengguna</span>}
+              <Database className="w-5 h-5 flex-shrink-0" />
+              {isExpanded && <span>Data Master</span>}
             </div>
             {isExpanded && (
-              openDropdowns.pengguna
+              openDropdowns.masterData
                 ? <ChevronDown className="w-4 h-4 opacity-70" />
                 : <ChevronRight className="w-4 h-4 opacity-70" />
             )}
           </button>
-          {isExpanded && openDropdowns.pengguna && (
+          {isExpanded && openDropdowns.masterData && (
             <div
               className="ml-4 mt-1 pl-3 py-1 space-y-0.5"
               style={{ borderLeft: '2px solid rgba(255,255,255,0.25)' }}
             >
-              {penggunaSubmenu.map((item, idx) => (
+              {masterDataSubmenu.map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleNavigation(item.url)}
                   className={`${subItemBase} ${item.url === pathname ? subItemActive : subItemInactive}`}
                 >
-                  {item.name}
+                  {item.icon}
+                  <span>{item.name}</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Administrasi (dropdown) */}
+        {/* ── AKADEMIK label (dengan badge TA Aktif) ── */}
+        {isExpanded && (
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase">
+              Akademik
+            </p>
+            {taLoading ? (
+              <div className="w-16 h-5 rounded-full bg-white/20 animate-pulse" />
+            ) : taAktif ? (
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-bold"
+                style={{
+                  background: 'rgba(255,255,255,0.25)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.3)'
+                }}
+                title={`${taAktif.tahun_ajaran} - Semester ${taAktif.semester}`}
+              >
+                {taAktif.tahun_ajaran.split('/')[0]?.slice(-2)}/{taAktif.tahun_ajaran.split('/')[1]?.slice(-2)} {taAktif.semester === 'Ganjil' ? 'Gjl' : 'Gnp'}
+              </span>
+            ) : (
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 animate-pulse"
+                style={{
+                  background: 'rgba(239,68,68,0.4)',
+                  color: '#fff',
+                  border: '1px solid rgba(239,68,68,0.6)'
+                }}
+                title="Belum ada Tahun Ajaran aktif"
+              >
+                <AlertCircle className="w-3 h-3" />
+                Nonaktif
+              </span>
+            )}
+          </div>
+        )}
+        {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
+
+        {/* Akademik (dropdown) - dengan kondisi disabled jika TA belum aktif */}
         <div className="mb-1">
           <button
-            onClick={() => toggleDropdown('administrasi')}
-            className={`${navBase} mb-0 ${isAdministrasiActive ? navActive : navInactive} justify-between`}
+            onClick={() => toggleDropdown('akademik')}
+            className={`${navBase} mb-0 justify-between ${!taAktif
+                ? navDisabled
+                : isAkademikActive
+                  ? navActive
+                  : navInactive
+              }`}
+            title={!taAktif ? 'Aktifkan Tahun Ajaran terlebih dahulu' : ''}
           >
             <div className="flex items-center gap-3">
-              <FileText className="w-5 h-5 flex-shrink-0" />
-              {isExpanded && <span>Administrasi</span>}
+              {!taAktif ? (
+                <Lock className="w-5 h-5 flex-shrink-0" />
+              ) : (
+                <FileText className="w-5 h-5 flex-shrink-0" />
+              )}
+              {isExpanded && <span>Operasional</span>}
             </div>
-            {isExpanded && (
-              openDropdowns.administrasi
+            {isExpanded && taAktif && (
+              openDropdowns.akademik
                 ? <ChevronDown className="w-4 h-4 opacity-70" />
                 : <ChevronRight className="w-4 h-4 opacity-70" />
             )}
           </button>
-          {isExpanded && openDropdowns.administrasi && (
+
+          {/* Submenu Akademik - hanya tampil jika TA aktif */}
+          {isExpanded && openDropdowns.akademik && taAktif && (
             <div
               className="ml-4 mt-1 pl-3 py-1 space-y-0.5"
               style={{ borderLeft: '2px solid rgba(255,255,255,0.25)' }}
             >
-              {administrasiSubmenu.map((item, idx) => (
+              {akademikSubmenu.map((item, idx) => (
                 <button
                   key={idx}
-                  onClick={() => handleNavigation(item.url)}
+                  onClick={() => handleAkademikClick(item.url)}
                   className={`${subItemBase} ${item.url === pathname ? subItemActive : subItemInactive}`}
                 >
-                  {item.name}
+                  {item.icon}
+                  <span>{item.name}</span>
                 </button>
               ))}
             </div>
           )}
+
+          {/* Pesan jika TA belum aktif */}
+          {isExpanded && !taAktif && !taLoading && (
+            <div
+              className="ml-4 mt-2 px-3 py-2 rounded-lg text-[10px] text-white/80"
+              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}
+            >
+              <p className="font-semibold mb-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                TA Belum Aktif
+              </p>
+              <p className="leading-tight">
+                Aktifkan Tahun Ajaran di menu <strong>Tahun Ajaran</strong> untuk mengakses fitur Akademik.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Arsip Rapor */}
-        <button
-          onClick={() => handleNavigation('/admin/arsip_rapor')}
-          className={`${navBase} ${isRaporActive ? navActive : navInactive}`}
-        >
-          <BookOpen className="w-5 h-5 flex-shrink-0" />
-          {isExpanded && <span>Arsip Rapor</span>}
-        </button>
+        {/* ── SISTEM label ── */}
+        {isExpanded && (
+          <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+            Sistem
+          </p>
+        )}
+        {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
 
         {/* Backup & Restore */}
         <button
           onClick={() => handleNavigation('/admin/backup_restore')}
           className={`${navBase} ${isBackupRestoreActive ? navActive : navInactive}`}
         >
-          <Database className="w-5 h-5 flex-shrink-0" />
-          {isExpanded && <span>Backup &amp; Restore</span>}
+          <Settings className="w-5 h-5 flex-shrink-0" />
+          {isExpanded && <span>Backup & Restore</span>}
         </button>
 
         {/* ── SAYA label ── */}
@@ -345,36 +485,6 @@ export default function Sidebar({ user }: SidebarProps) {
           <UserCircle className="w-5 h-5 flex-shrink-0" />
           {isExpanded && <span>Profil</span>}
         </button>
-
-      </div>
-
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <div
-        className="px-4 py-3"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}
-      >
-        {isExpanded ? (
-          <div className="flex items-center gap-3">
-            {/* Avatar inisial */}
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
-              style={{ background: 'rgba(255,255,255,0.2)' }}
-            >
-              {user.nama_lengkap?.charAt(0)?.toUpperCase() ?? 'A'}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-white leading-tight truncate">{user.nama_lengkap}</p>
-              <p className="text-[10px] text-white/55 leading-tight capitalize">{user.role}</p>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center mx-auto text-xs font-bold text-white"
-            style={{ background: 'rgba(255,255,255,0.2)' }}
-          >
-            {user.nama_lengkap?.charAt(0)?.toUpperCase() ?? 'A'}
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Komponen sidebar navigasi untuk guru bidang studi.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401016
- * Tanggal: 15 September 2025
- * Update: Redesign mengikuti tema sidebar guru kelas (oranye gradasi)
+ *         Struktur:
+ *         - Dashboard
+ *         - Menu Utama: Atur Penilaian, Input Nilai
+ *         - Saya: Profil
  */
 
 'use client';
@@ -18,16 +19,7 @@ import {
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
-interface SidebarProps {
-    user: {
-        id: number;
-        nama_lengkap: string;
-        email_sekolah: string;
-        role: string;
-    };
-}
-
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar() {
     const router = useRouter();
     const pathname = usePathname();
     const [isExpanded, setIsExpanded] = useState(true);
@@ -56,14 +48,17 @@ export default function Sidebar({ user }: SidebarProps) {
 
     useEffect(() => {
         fetchSchoolData();
+        
         const handleLogoUpdate = (e: Event) => {
             const customEvent = e as CustomEvent;
             const logoPath = customEvent.detail?.logoPath;
             if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
             else fetchSchoolData();
         };
+
         window.addEventListener('logoUpdated', handleLogoUpdate);
         window.addEventListener('schoolUpdated', fetchSchoolData);
+
         return () => {
             window.removeEventListener('logoUpdated', handleLogoUpdate);
             window.removeEventListener('schoolUpdated', fetchSchoolData);
@@ -75,14 +70,12 @@ export default function Sidebar({ user }: SidebarProps) {
 
     const navBase =
         'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
-    const navActive   = 'bg-white text-orange-600 font-semibold shadow-sm';
+    const navActive = 'bg-white text-orange-600 font-semibold shadow-sm';
     const navInactive = 'text-white hover:bg-white/15 hover:text-white';
 
     return (
         <div
-            className={`flex flex-col h-screen transition-all duration-300 ${
-                isExpanded ? 'w-64' : 'w-[72px]'
-            }`}
+            className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[72px]'}`}
             style={{
                 background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
             }}
@@ -189,11 +182,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     <UserCircle className="w-5 h-5 flex-shrink-0" />
                     {isExpanded && <span>Profil</span>}
                 </button>
-
             </div>
-
-            {/* ── Footer sidebar kosong ── */}
-
         </div>
     );
 }
