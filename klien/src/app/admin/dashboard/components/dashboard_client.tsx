@@ -49,8 +49,12 @@ const GlobalStyles = () => (
             from { opacity: 0; transform: translateX(-20px); } 
             to { opacity: 1; transform: translateX(0); } 
         }
+        @keyframes db-growWidth {
+            from { width: 0%; }
+        }
         .db-fadeUp { animation: db-fadeUp 0.5s ease-out forwards; }
         .db-slideRight { animation: db-slideRight 0.4s ease-out forwards; }
+        .db-bar-grow { animation: db-growWidth 0.6s ease-out forwards; }
     `}</style>
 );
 
@@ -59,12 +63,14 @@ const GlobalStyles = () => (
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
     <div
         className={`bg-white rounded-2xl ${className}`}
-        style={{ border: '1px solid #fde0c8', boxShadow: '0 4px 20px rgba(200,80,10,0.06)' }}
+        style={{
+            border: '1px solid #fde0c8',
+            boxShadow: '0 2px 10px rgba(200,80,10,0.05)'
+        }}
     >
         {children}
     </div>
 );
-
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 
 const BAR_COLORS = ['#c95b08', '#e8690a', '#f5870a', '#f5a623', '#f97316', '#fb923c', '#fdba74', '#ea580c'];
@@ -188,7 +194,7 @@ export default function DashboardClient() {
         {
             label: 'Total Siswa',
             value: stats.siswa,
-            icon: <GraduationCap className="w-7 h-7" />,
+            icon: <GraduationCap className="w-6 h-6" />,
             path: '/admin/data_siswa',
             gradient: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
             lightBg: '#fff0e5',
@@ -197,7 +203,7 @@ export default function DashboardClient() {
         {
             label: 'Total Guru',
             value: stats.guru,
-            icon: <Users className="w-7 h-7" />,
+            icon: <Users className="w-6 h-6" />,
             path: '/admin/data_guru',
             gradient: 'linear-gradient(135deg, #e8690a 0%, #f5870a 100%)',
             lightBg: '#fff5eb',
@@ -206,7 +212,7 @@ export default function DashboardClient() {
         {
             label: 'Total Kelas',
             value: stats.kelas,
-            icon: <School className="w-7 h-7" />,
+            icon: <School className="w-6 h-6" />,
             path: '/admin/data_kelas_siswa',
             gradient: 'linear-gradient(135deg, #f5870a 0%, #f5a623 100%)',
             lightBg: '#fffaf0',
@@ -269,14 +275,14 @@ export default function DashboardClient() {
             {/* ═══════════════════════════════════════════════════════════════════
                 WELCOME BANNER
             ═══════════════════════════════════════════════════════════════════ */}
-            <div className="mb-6 db-fadeUp">
+            <div className="mb-8 db-fadeUp">
                 <div className="flex items-center gap-3 mb-1">
                     <Sparkles className="w-5 h-5" style={{ color: '#e8690a' }} />
                     <p className="text-sm font-bold uppercase tracking-wider" style={{ color: '#c95b08' }}>
                         Dashboard
                     </p>
                 </div>
-                <h1 className="text-3xl font-black text-gray-900">
+                <h1 className="text-2xl font-bold text-gray-900">
                     Selamat Datang, {user.nama || user.name || user.nama_lengkap || 'Admin'} 👋
                 </h1>
                 <p className="text-sm text-gray-600 mt-1">
@@ -291,7 +297,7 @@ export default function DashboardClient() {
                 {statCards.map((card, index) => (
                     <Card
                         key={card.label}
-                        className="hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 cursor-pointer group overflow-hidden db-fadeUp"
+                        className="hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group overflow-hidden db-fadeUp"
                         style={{ animationDelay: `${index * 0.1}s` }}
                     >
                         <div
@@ -299,10 +305,7 @@ export default function DashboardClient() {
                             onClick={() => router.push(card.path)}
                         >
                             {/* Background decoration */}
-                            <div
-                                className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-150"
-                                style={{ background: card.gradient }}
-                            />
+                            
 
                             <div className="relative z-10">
                                 {/* Icon */}
@@ -317,7 +320,7 @@ export default function DashboardClient() {
                                 </div>
 
                                 {/* Value - Super Big */}
-                                <p className="text-5xl font-black mb-2" style={{ color: '#c95b08' }}>
+                                <p className="text-4xl font-bold mb-2" style={{ color: '#c95b08' }}>
                                     {card.value}
                                 </p>
 
@@ -326,7 +329,7 @@ export default function DashboardClient() {
                                 <p className="text-xs text-gray-500">{card.desc}</p>
 
                                 {/* Footer */}
-                                <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTop: '1px solid #fde0c8' }}>
+                                <div className="mt-4 pt-3 flex items-center justify-between" style={{ borderTop: '1px solid #fde0c8' }}>
                                     <span className="text-xs font-bold" style={{ color: '#c95b08' }}>
                                         Lihat Detail
                                     </span>
@@ -354,8 +357,8 @@ export default function DashboardClient() {
                         style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)' }}
                     >
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                                <TrendingUp className="w-6 h-6 text-white" />
+                            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                <TrendingUp className="w-5 h-5 text-white" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-white">Distribusi Siswa per Kelas</h3>

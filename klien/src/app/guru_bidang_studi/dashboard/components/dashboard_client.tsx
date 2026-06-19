@@ -436,7 +436,7 @@ export default function DashboardClient() {
             {/* ═══════════════════════════════════════════════════════════════════
                 WELCOME BANNER
             ═══════════════════════════════════════════════════════════════════ */}
-            <div className="mb-6 db-fadeUp">
+            <div className="mb-8 db-fadeUp">
                 <div className="flex items-center gap-3 mb-1">
                     <Sparkles className="w-5 h-5" style={{ color: '#e8690a' }} />
                     <p className="text-sm font-bold uppercase tracking-wider" style={{ color: '#c95b08' }}>

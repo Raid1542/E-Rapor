@@ -437,7 +437,7 @@ export default function Header() {
                       onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fef2f2' }}>
+                      <div className=" rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fef2f2' }}>
                         <LogOut className="w-3.5 h-3.5 text-red-500" />
                       </div>
                       Logout

@@ -9,17 +9,18 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const db = require('../config/db'); // ← TAMBAHAN BARU
+const db = require('../config/db');
 
 // ─── MIDDLEWARE ──────────────────────────────────────────────────────────────
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 const cekPenilaianStatus = require('../middleware/cekPenilaianStatus');
 const cekGuruKelasDitugaskan = require('../middleware/cekGuruKelasDitugaskan');
-const cekStatusPAS = require ('../middleware/cekStatusPAS');
+const cekStatusPAS = require('../middleware/cekStatusPAS');
 
 // ─── CONTROLLERS ──────────────────────────────────────
 const guruKelasControllers = require('../controllers/guru_kelas');
+const batchPenilaianController = require('../controllers/guru_kelas/batchPenilaianController');
 
 // ─── SETUP UPLOAD FOTO ───────────────────────────────────────────────────────
 const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
@@ -91,9 +92,6 @@ const validateIdParam = (paramName) => (req, res, next) => {
     next();
 };
 
-// ← TAMBAHAN BARU: middleware ringan khusus route /kelas dan /progress-penilaian
-// Tugasnya sama seperti cekPenilaianStatus tapi TANPA cek status PTS/PAS
-// karena dashboard hanya butuh info tahun ajaran, tidak butuh tahu periode aktif
 const cekTahunAjaranAktif = async (req, res, next) => {
     try {
         const [taRows] = await db.execute(`
@@ -118,29 +116,43 @@ const cekTahunAjaranAktif = async (req, res, next) => {
     }
 };
 
+// ─── SAFE ROUTE HANDLER (menghindari error jika function tidak ada) ──────────
+const safeHandler = (fn) => {
+    if (typeof fn !== 'function') {
+        return (req, res) => {
+            res.status(501).json({
+                success: false,
+                message: 'Endpoint belum tersedia (handler tidak ditemukan)'
+            });
+        };
+    }
+    return fn;
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. DATA KELAS & SISWA
 // ═════════════════════════════════════════════════════════════════════════════
 router.get('/kelas',
     authenticate,
     guruKelasOnly,
-    cekTahunAjaranAktif,        // ← DIUBAH: dari cekPenilaianStatus ke cekTahunAjaranAktif
-    guruKelasControllers.getKelasSaya
+    cekTahunAjaranAktif,
+    safeHandler(guruKelasControllers.getKelasSaya)
 );
 
 router.get('/siswa',
     authenticate,
     guruKelasOnly,
+    cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getSiswaByKelas
+    safeHandler(guruKelasControllers.getSiswaByKelas)
 );
 
 router.get('/progress-penilaian',
     authenticate,
     guruKelasOnly,
-    cekTahunAjaranAktif,        // ← DIUBAH: dari cekPenilaianStatus ke cekTahunAjaranAktif
+    cekTahunAjaranAktif,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getProgressPenilaian
+    safeHandler(guruKelasControllers.getProgressPenilaian)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -149,20 +161,20 @@ router.get('/progress-penilaian',
 router.put('/profil',
     authenticate,
     guruKelasOnly,
-    guruKelasControllers.editProfil
+    safeHandler(guruKelasControllers.editProfil)
 );
 
 router.put('/ganti-password',
     authenticate,
     guruKelasOnly,
-    guruKelasControllers.gantiPassword
+    safeHandler(guruKelasControllers.gantiPassword)
 );
 
 router.put('/upload_foto',
     authenticate,
     guruKelasOnly,
     uploadFoto.single('foto'),
-    guruKelasControllers.uploadFotoProfil
+    safeHandler(guruKelasControllers.uploadFotoProfil)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -174,16 +186,15 @@ router.get('/absensi/:jenis/:semester',
     validateJenisSemester,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getAbsensiSiswa
+    safeHandler(guruKelasControllers.getAbsensiSiswa)
 );
 
-router.post('/absensi/:jenis/:semester',
+router.post('/absensi',
     authenticate,
     guruKelasOnly,
-    validateJenisSemester,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.upsertAbsensi
+    safeHandler(guruKelasControllers.upsertAbsensi)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -195,7 +206,7 @@ router.get('/catatan-wali-kelas/:jenis/:semester',
     validateJenisSemester,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getCatatanWaliKelas
+    safeHandler(guruKelasControllers.getCatatanWaliKelas)
 );
 
 router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester',
@@ -204,7 +215,7 @@ router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester',
     validateJenisSemester,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateCatatanWaliKelas
+    safeHandler(guruKelasControllers.updateCatatanWaliKelas)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -213,29 +224,29 @@ router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester',
 router.get('/ekskul',
     authenticate,
     guruKelasOnly,
-    cekStatusPAS,
+    cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getEkskulSiswa
+    safeHandler(guruKelasControllers.getEkskulSiswa)
 );
 
 router.put('/ekskul/:siswaId',
     authenticate,
     guruKelasOnly,
     validateIdParam('siswaId'),
-    cekStatusPAS,
+    cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateEkskulSiswa
+    safeHandler(guruKelasControllers.updateEkskulSiswa)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 6. KOKURIKULER
+// 6. KOKURIKULER (PRIORITAS UTAMA)
 // ═════════════════════════════════════════════════════════════════════════════
 router.get('/kokurikuler',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getNilaiKokurikuler
+    safeHandler(guruKelasControllers.getNilaiKokurikuler)
 );
 
 router.get('/kokurikuler/:siswaId',
@@ -244,7 +255,7 @@ router.get('/kokurikuler/:siswaId',
     validateIdParam('siswaId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getNilaiKokurikulerBySiswa
+    safeHandler(guruKelasControllers.getNilaiKokurikulerBySiswa)
 );
 
 router.put('/kokurikuler/:siswaId',
@@ -253,7 +264,7 @@ router.put('/kokurikuler/:siswaId',
     validateIdParam('siswaId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateNilaiKokurikuler
+    safeHandler(guruKelasControllers.updateNilaiKokurikuler)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -263,7 +274,7 @@ router.get('/mapel',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
-    guruKelasControllers.getMapelForGuruKelas
+    safeHandler(guruKelasControllers.getMapelForGuruKelas)
 );
 
 router.get('/nilai/:mapelId',
@@ -272,7 +283,7 @@ router.get('/nilai/:mapelId',
     validateIdParam('mapelId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getNilaiByMapel
+    safeHandler(guruKelasControllers.getNilaiByMapel)
 );
 
 router.put('/nilai-komponen/:mapelId/:siswaId',
@@ -287,7 +298,7 @@ router.put('/nilai-komponen/:mapelId/:siswaId',
     },
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateNilaiKomponen
+    safeHandler(guruKelasControllers.updateNilaiKomponen)
 );
 
 router.put('/nilai-rapor/:mapelId/:siswaId',
@@ -297,7 +308,7 @@ router.put('/nilai-rapor/:mapelId/:siswaId',
     validateIdParam('siswaId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateNilaiRapor
+    safeHandler(guruKelasControllers.updateNilaiRapor)
 );
 
 router.get('/nilai-ekspor/:mapelId',
@@ -306,7 +317,7 @@ router.get('/nilai-ekspor/:mapelId',
     validateIdParam('mapelId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.eksporNilaiExcel
+    safeHandler(guruKelasControllers.eksporNilaiExcel)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -315,19 +326,19 @@ router.get('/nilai-ekspor/:mapelId',
 router.get('/atur-penilaian/aspek-kokurikuler',
     authenticate,
     guruKelasOnly,
-    guruKelasControllers.getAspekKokurikuler
+    safeHandler(guruKelasControllers.getAspekKokurikuler)
 );
 
 router.post('/atur-penilaian/aspek-kokurikuler',
     authenticate,
     guruKelasOnly,
-    guruKelasControllers.createAspekKokurikuler
+    safeHandler(guruKelasControllers.createAspekKokurikuler)
 );
 
 router.get('/atur-penilaian/komponen',
     authenticate,
     guruKelasOnly,
-    guruKelasControllers.getKomponenPenilaian
+    safeHandler(guruKelasControllers.getKomponenPenilaian)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -349,7 +360,7 @@ router.get('/atur-penilaian/kategori-akademik',
     },
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getKategoriNilaiAkademik
+    safeHandler(guruKelasControllers.getKategoriNilaiAkademik)
 );
 
 router.post('/atur-penilaian/kategori-akademik',
@@ -357,7 +368,7 @@ router.post('/atur-penilaian/kategori-akademik',
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.createKategoriNilaiAkademik
+    safeHandler(guruKelasControllers.createKategoriNilaiAkademik)
 );
 
 router.put('/atur-penilaian/kategori-akademik/:id',
@@ -366,7 +377,7 @@ router.put('/atur-penilaian/kategori-akademik/:id',
     validateIdParam('id'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateKategoriNilaiAkademik
+    safeHandler(guruKelasControllers.updateKategoriNilaiAkademik)
 );
 
 router.delete('/atur-penilaian/kategori-akademik/:id',
@@ -375,7 +386,7 @@ router.delete('/atur-penilaian/kategori-akademik/:id',
     validateIdParam('id'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.deleteKategoriNilaiAkademik
+    safeHandler(guruKelasControllers.deleteKategoriNilaiAkademik)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -386,7 +397,7 @@ router.get('/atur-penilaian/kategori-kokurikuler',
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getKategoriNilaiKokurikuler
+    safeHandler(guruKelasControllers.getKategoriNilaiKokurikuler)
 );
 
 router.post('/atur-penilaian/kategori-kokurikuler',
@@ -394,7 +405,7 @@ router.post('/atur-penilaian/kategori-kokurikuler',
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.createKategoriNilaiKokurikuler
+    safeHandler(guruKelasControllers.createKategoriNilaiKokurikuler)
 );
 
 router.put('/atur-penilaian/kategori-kokurikuler/:id',
@@ -403,7 +414,7 @@ router.put('/atur-penilaian/kategori-kokurikuler/:id',
     validateIdParam('id'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateKategoriNilaiKokurikuler
+    safeHandler(guruKelasControllers.updateKategoriNilaiKokurikuler)
 );
 
 router.delete('/atur-penilaian/kategori-kokurikuler/:id',
@@ -412,7 +423,7 @@ router.delete('/atur-penilaian/kategori-kokurikuler/:id',
     validateIdParam('id'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.deleteKategoriNilaiKokurikuler
+    safeHandler(guruKelasControllers.deleteKategoriNilaiKokurikuler)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -424,7 +435,7 @@ router.get('/atur-penilaian/bobot-akademik/:mapelId',
     validateIdParam('mapelId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getBobotAkademikByMapel
+    safeHandler(guruKelasControllers.getBobotAkademikByMapel)
 );
 
 router.put('/atur-penilaian/bobot-akademik/:mapelId',
@@ -433,49 +444,43 @@ router.put('/atur-penilaian/bobot-akademik/:mapelId',
     validateIdParam('mapelId'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.updateBobotAkademikByMapel
+    safeHandler(guruKelasControllers.updateBobotAkademikByMapel)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 11.1 ATUR PENILAIAN: BATCH SAVE & COPY DARI TA SEBELUMNYA
 // ═════════════════════════════════════════════════════════════════════════════
-
-// 1. Batch save kategori kokurikuler (simpan multiple grade sekaligus)
 router.post('/atur-penilaian/kategori-kokurikuler-batch',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    batchPenilaianController.saveBatchKategoriKokurikuler
+    safeHandler(batchPenilaianController.saveBatchKategoriKokurikuler)
 );
 
-// 2. Copy kategori kokurikuler dari TA sebelumnya
 router.post('/atur-penilaian/copy-kokurikuler',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    batchPenilaianController.copyKokurikulerDariTASebelumnya
+    safeHandler(batchPenilaianController.copyKokurikulerDariTASebelumnya)
 );
 
-// 3. Copy kategori akademik dari TA sebelumnya
 router.post('/atur-penilaian/copy-akademik',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    batchPenilaianController.copyAkademikDariTASebelumnya
+    safeHandler(batchPenilaianController.copyAkademikDariTASebelumnya)
 );
 
-// 4. Copy bobot akademik dari TA sebelumnya
 router.post('/atur-penilaian/copy-bobot',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    batchPenilaianController.copyBobotDariTASebelumnya
+    safeHandler(batchPenilaianController.copyBobotDariTASebelumnya)
 );
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 12. REKAPAN NILAI
@@ -485,7 +490,7 @@ router.get('/rekapan-nilai',
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.getRekapanNilai
+    safeHandler(guruKelasControllers.getRekapanNilai)
 );
 
 router.get('/rekapan-nilai/export-excel',
@@ -493,7 +498,7 @@ router.get('/rekapan-nilai/export-excel',
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    guruKelasControllers.exportRekapanNilaiExcel
+    safeHandler(guruKelasControllers.exportRekapanNilaiExcel)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -502,8 +507,7 @@ router.get('/rekapan-nilai/export-excel',
 router.get('/tahun-ajaran/aktif',
     authenticate,
     guruKelasOnly,
-    cekGuruKelasDitugaskan,
-    guruKelasControllers.getTahunAjaranAktif
+    safeHandler(guruKelasControllers.getTahunAjaranAktif)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -595,12 +599,10 @@ const adminOrGuruKelasDitugaskan = [
     authenticate,
     authorize(['admin', 'guru kelas']),
     (req, res, next) => {
-        // Skip cekPenilaianStatus untuk admin
         if (req.user.role === 'admin') {
-            return next();
+            return cekPenilaianStatus(false)(req, res, next);
         }
-        // Untuk guru kelas, langsung panggil middleware
-        cekPenilaianStatus(req, res, next);
+        cekPenilaianStatus(true)(req, res, next);
     },
     (req, res, next) => {
         if (req.user.role === 'admin') return next();
@@ -611,13 +613,13 @@ const adminOrGuruKelasDitugaskan = [
 router.get('/generate-rapor/:siswaId/:jenis/:semester',
     ...adminOrGuruKelasDitugaskan,
     validateRaporParams,
-    guruKelasControllers.generateRaporPDF
+    safeHandler(guruKelasControllers.generateRaporPDF)
 );
 
 router.get('/generate-rapor/:siswaId/:jenis/:semester/:tahunAjaranId',
     ...adminOrGuruKelasDitugaskan,
     validateRaporParamsWithTA,
-    guruKelasControllers.generateRaporPDF
+    safeHandler(guruKelasControllers.generateRaporPDF)
 );
 
 module.exports = router;
