@@ -2,20 +2,18 @@
  * Nama File: input_nilai_client.tsx
  * Fungsi: Input nilai siswa per mata pelajaran untuk guru kelas
  * UPDATE: 
- *   - Fix error handling di fetch data awal
- *   - Fix error handling di fetch nilai (check code NOT_ASSIGNED)
- *   - Tambah handling "Belum Ada Mata Pelajaran"
- *   - Tambah warning "Periode Belum Dibuka" di level halaman
- *   - Fix flow modal konfirmasi (langsung muncul, tanpa delay)
- *   - Improve state management
- * UI: Tema oranye elegan, konsisten dengan DataGuruPage
- * Fitur: Rapor PTS & Rapor PAS terpisah di header tabel
+ *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
+ *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif/selesai
+ *   - Banner warning status periode
+ *   - Tombol Edit disabled dengan icon 🔒 jika read-only
+ *   - Modal warning saat klik tombol di mode read-only
+ *   - Semester otomatis dari tahun ajaran aktif
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut } from 'lucide-react';
+import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -123,9 +121,16 @@ const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; ch
 export default function InputNilaiClient() {
     const { showSessionExpired, handleLogout } = useSession();
 
+    // ✅ STATE BARU: Kondisi akses
+    const [isNotAssigned, setIsNotAssigned] = useState(false);
+    const [isReadOnly, setIsReadOnly] = useState(false);
+    const [readOnlyReason, setReadOnlyReason] = useState<'not_open' | 'locked' | null>(null);
+    const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+    const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+    const [semesterAktif, setSemesterAktif] = useState<string>('Ganjil');
+
     const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isNotAssigned, setIsNotAssigned] = useState(false);
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
     const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
     const [selectedMapelId, setSelectedMapelId] = useState<number | null>(null);
@@ -155,7 +160,7 @@ export default function InputNilaiClient() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
 
-    // ── FETCH DATA AWAL ─────────────────────────────────────────────────────────
+    // ── FETCH TAHUN AJARAN AKTIF ──────────────────────────────────────────────
 
     useEffect(() => {
         const fetchData = async () => {
@@ -168,59 +173,91 @@ export default function InputNilaiClient() {
                 }
                 const headers = { Authorization: `Bearer ${token}` };
 
-                // ✅ FIX: Fetch semua data dulu
-                const [taRes, mapelRes, komponenRes] = await Promise.all([
-                    fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers }),
+                // 1. Fetch tahun ajaran aktif dulu
+                const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
+                
+                if (!taRes.ok) {
+                    const errData = await taRes.json().catch(() => ({ code: 'UNKNOWN' }));
+                    if (errData.code === 'NOT_ASSIGNED') {
+                        setIsNotAssigned(true);
+                        return;
+                    }
+                    throw new Error('Gagal memuat tahun ajaran');
+                }
+
+                const taData = await taRes.json();
+                if (!taData.success) {
+                    throw new Error(taData.message || 'Gagal memuat tahun ajaran');
+                }
+
+                const { status_pts, status_pas, semester } = taData.data;
+                
+                setStatusPTS(status_pts || 'nonaktif');
+                setStatusPAS(status_pas || 'nonaktif');
+                setSemesterAktif(semester || 'Ganjil');
+
+                // Tentukan jenis penilaian aktif & status read-only
+                if (status_pts === 'aktif') {
+                    setJenisPenilaianAktif('PTS');
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else if (status_pas === 'aktif') {
+                    setJenisPenilaianAktif('PAS');
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else if (status_pts === 'selesai' || status_pas === 'selesai') {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('locked');
+                    setJenisPenilaianAktif(status_pts === 'selesai' ? 'PTS' : 'PAS');
+                    setTimeout(() => {
+                        showModal({
+                            type: 'warning',
+                            title: '🔒 Periode Penilaian Selesai',
+                            message: 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda dapat melihat nilai siswa dalam mode baca-saja (read-only), tetapi tidak dapat mengedit.'
+                        });
+                    }, 500);
+                } else {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('not_open');
+                    setJenisPenilaianAktif(null);
+                    setTimeout(() => {
+                        showModal({
+                            type: 'warning',
+                            title: '⏳ Periode Penilaian Belum Aktif',
+                            message: 'Baik PTS maupun PAS belum dibuka oleh admin.\n\nAnda dapat melihat nilai siswa dalam mode baca-saja (read-only), tetapi belum dapat menginput nilai.\n\nSilakan hubungi admin untuk membuka periode penilaian.'
+                        });
+                    }, 500);
+                }
+
+                // 2. Fetch mapel & komponen
+                const [mapelRes, komponenRes] = await Promise.all([
                     fetch('http://localhost:5000/api/guru-kelas/mapel', { headers }),
                     fetch('http://localhost:5000/api/guru-kelas/atur-penilaian/komponen', { headers }),
                 ]);
 
-                // ✅ FIX: Check error per endpoint
-                // 1. Check tahun ajaran
-                if (!taRes.ok) {
-                    throw new Error('Gagal memuat tahun ajaran');
-                }
-
-                // 2. Check mapel - ini yang penting untuk cek apakah guru ditugaskan
                 if (!mapelRes.ok) {
                     const errData = await mapelRes.json().catch(() => ({}));
-
-                    // ✅ HANYA set isNotAssigned jika code = 'NOT_ASSIGNED'
                     if (mapelRes.status === 403 && errData.code === 'NOT_ASSIGNED') {
                         setIsNotAssigned(true);
                         return;
                     }
-
-                    // Error 403 lainnya (periode belum dibuka, dll)
-                    if (mapelRes.status === 403) {
-                        console.log('⚠️ Akses ditolak:', errData.message);
-                        // Jangan set isNotAssigned, biarkan halaman tetap muncul
-                    } else {
+                    if (mapelRes.status !== 403) {
                         throw new Error(errData.message || 'Gagal memuat mata pelajaran');
                     }
                 }
 
-                // 3. Check komponen
                 if (!komponenRes.ok) {
                     throw new Error('Gagal memuat komponen penilaian');
                 }
 
-                // ✅ Parse data
-                const [taData, mapelData, komponenData] = await Promise.all([
-                    taRes.json(),
+                const [mapelData, komponenData] = await Promise.all([
                     mapelRes.json().catch(() => ({ wajib: [], pilihan: [] })),
                     komponenRes.json()
                 ]);
 
-                const { status_pts, status_pas } = taData.data;
-                const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
-                setJenisPenilaianAktif(jenisAktif);
-
                 const wajib = mapelData.wajib || [];
                 const pilihan = mapelData.pilihan || [];
-                const allMapel = [...wajib, ...pilihan];
-
-                setMapelList(allMapel);
+                setMapelList([...wajib, ...pilihan]);
                 setKomponenList(komponenData.data || []);
             } catch (err: any) {
                 showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
@@ -234,15 +271,7 @@ export default function InputNilaiClient() {
     // ── FETCH NILAI SAAT MAPEL DIPILIH ──────────────────────────────────────────
 
     useEffect(() => {
-        if (mapelList.length === 0) {
-            setSiswaList([]);
-            setFilteredSiswa([]);
-            setCurrentMapel(null);
-            setKelasNama('');
-            return;
-        }
-
-        if (selectedMapelId === null) {
+        if (mapelList.length === 0 || selectedMapelId === null) {
             setSiswaList([]);
             setFilteredSiswa([]);
             setCurrentMapel(null);
@@ -260,14 +289,10 @@ export default function InputNilaiClient() {
 
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({ message: 'Gagal memuat' }));
-
-                    // ✅ FIX: HANYA set isNotAssigned jika code = 'NOT_ASSIGNED'
                     if (res.status === 403 && err.code === 'NOT_ASSIGNED') {
                         setIsNotAssigned(true);
                         return;
                     }
-
-                    // Error 403 lainnya - tampilkan error message
                     if (res.status === 403) {
                         showModal({
                             type: 'error',
@@ -276,7 +301,6 @@ export default function InputNilaiClient() {
                         });
                         return;
                     }
-
                     throw new Error(err.message || 'Gagal memuat data');
                 }
 
@@ -368,30 +392,35 @@ export default function InputNilaiClient() {
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
-    const canInputNilai = (): boolean => {
-        if (!jenisPenilaianAktif) {
-            showModal({
-                type: 'warning',
-                title: 'Periode Belum Dibuka',
-                message: 'Admin belum membuka periode penilaian (PTS/PAS).\n\nSilakan tunggu hingga periode dibuka.'
-            });
-            return false;
+    // ✅ PERBAIKAN: Cek read-only sebelum buka modal edit
+    const handleEdit = (siswa: SiswaNilai) => {
+        // Cek 1: Read-only mode (periode belum aktif/selesai)
+        if (isReadOnly) {
+            if (readOnlyReason === 'locked') {
+                showModal({
+                    type: 'warning',
+                    title: '🔒 Mode Baca-Saja',
+                    message: 'Periode penilaian sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengedit nilai siswa.'
+                });
+            } else {
+                showModal({
+                    type: 'warning',
+                    title: '⏳ Mode Baca-Saja',
+                    message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengedit nilai siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
+                });
+            }
+            return;
         }
 
+        // Cek 2: Mapel tidak bisa input
         if (!currentMapel?.bisa_input) {
             showModal({
                 type: 'warning',
                 title: 'Tidak Dapat Input',
-                message: 'Mata pelajaran ini tidak dapat diinput nilainya.\n\nSilakan hubungi Administrator.'
+                message: 'Mata pelajaran ini tidak dapat diinput nilainya oleh Anda.\n\nSilakan hubungi Administrator.'
             });
-            return false;
+            return;
         }
-
-        return true;
-    };
-
-    const handleEdit = (siswa: SiswaNilai) => {
-        if (!canInputNilai()) return;
 
         setEditingSiswa(siswa);
         setEditingNilai({ ...siswa.nilai });
@@ -523,6 +552,7 @@ export default function InputNilaiClient() {
         );
     }
 
+    // ✅ KONDISI 1: Belum Ditugaskan → Blokir Total
     if (isNotAssigned) {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
@@ -563,36 +593,38 @@ export default function InputNilaiClient() {
 
     const minTableWidth = 400 + (komponenList.length * 100) + 240;
 
+    // ✅ Helper: Apakah tombol Edit harus aktif?
+    const canEditNilai = currentMapel?.bisa_input && !isReadOnly;
+
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {!jenisPenilaianAktif && mapelList.length > 0 && (
-                <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
+            {/* ✅ BANNER READ-ONLY (KONDISI 2) */}
+            {isReadOnly && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
                     style={{
-                        background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-                        border: '2px solid #fcd34d',
-                        boxShadow: '0 2px 8px rgba(252,211,77,0.2)'
+                        background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7',
+                        border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}`
                     }}>
-                    <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                        <AlertCircle size={20} style={{ color: '#d97706' }} />
-                    </div>
+                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
                     <div className="flex-1">
-                        <h3 className="font-bold text-sm mb-1" style={{ color: '#92400e' }}>
-                            Periode Penilaian Belum Dibuka
-                        </h3>
-                        <p className="text-xs" style={{ color: '#78350f' }}>
-                            Admin belum membuka periode PTS atau PAS untuk tahun ajaran ini.
-                            Anda tetap dapat melihat nilai yang sudah ada,
-                            namun <strong>tidak dapat menginput atau mengubah nilai siswa</strong>.
+                        <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
+                            🔒 Mode Baca-Saja (Read-Only)
+                        </p>
+                        <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
+                            {readOnlyReason === 'locked'
+                                ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat nilai siswa, tetapi tidak dapat mengedit.'
+                                : 'Periode penilaian belum aktif. Anda dapat melihat nilai siswa, tetapi belum dapat menginput nilai. Silakan hubungi admin untuk membuka periode penilaian.'}
                         </p>
                     </div>
                 </div>
             )}
 
-            {mapelList.length === 0 && (
+            {/* Banner: Mata pelajaran belum diatur */}
+            {mapelList.length === 0 && !isReadOnly && (
                 <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
                     style={{
                         background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
@@ -675,7 +707,7 @@ export default function InputNilaiClient() {
                                     <AlertCircle size={11} /> Hanya Lihat
                                 </span>
                             )}
-                            {jenisPenilaianAktif && (
+                            {jenisPenilaianAktif && !isReadOnly && (
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
                                     style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
                                     Periode Aktif: <strong className="ml-1">{jenisPenilaianAktif}</strong>
@@ -692,16 +724,6 @@ export default function InputNilaiClient() {
                                 </select>
                                 <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                             </div>
-                        </div>
-                    )}
-
-                    {!jenisPenilaianAktif && selectedMapelId && (
-                        <div className="mt-3 p-3 rounded-xl text-xs font-medium flex items-start gap-2"
-                            style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
-                            <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                            <span>
-                                <strong>Periode penilaian belum dibuka.</strong> Anda hanya dapat melihat nilai, belum dapat menginput atau mengubah nilai siswa.
-                            </span>
                         </div>
                     )}
 
@@ -774,15 +796,37 @@ export default function InputNilaiClient() {
                                                             onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}>
                                                             <Eye size={13} /> Detail
                                                         </button>
-                                                        {currentMapel?.bisa_input && jenisPenilaianAktif && (
-                                                            <button onClick={() => handleEdit(siswa)}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                                style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                                                onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                                                onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}>
-                                                                <Pencil size={13} /> Edit
-                                                            </button>
-                                                        )}
+                                                        {/* ✅ TOMBOL EDIT: Disabled jika read-only atau mapel tidak bisa input */}
+                                                        <button
+                                                            onClick={() => handleEdit(siswa)}
+                                                            disabled={!canEditNilai}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            style={{
+                                                                background: canEditNilai ? '#fff0e5' : '#e5e7eb',
+                                                                border: canEditNilai ? '1px solid #f5a623' : '1px solid #d1d5db',
+                                                                color: canEditNilai ? '#b35a08' : '#6b7280'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                if (canEditNilai) {
+                                                                    e.currentTarget.style.background = '#ffe4c8';
+                                                                }
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                if (canEditNilai) {
+                                                                    e.currentTarget.style.background = '#fff0e5';
+                                                                }
+                                                            }}
+                                                        >
+                                                            {canEditNilai ? (
+                                                                <>
+                                                                    <Pencil size={13} /> Edit
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Lock size={13} /> Terkunci
+                                                                </>
+                                                            )}
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -847,10 +891,6 @@ export default function InputNilaiClient() {
                                         background: selectedSiswa.nilai_rapor_pts !== null && selectedSiswa.nilai_rapor_pts !== undefined ? '#fff7ed' : '#f9fafb',
                                         borderColor: selectedSiswa.nilai_rapor_pts !== null && selectedSiswa.nilai_rapor_pts !== undefined ? '#fdba74' : '#e5e7eb'
                                     }}>
-                                    {selectedSiswa.nilai_rapor_pts !== null && selectedSiswa.nilai_rapor_pts !== undefined && (
-                                        <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-10"
-                                            style={{ background: '#e8690a', transform: 'translate(30%, -30%)' }}></div>
-                                    )}
                                     <div className="relative">
                                         <div className="flex items-center justify-between mb-3">
                                             <div className="flex items-center gap-2">
@@ -865,10 +905,10 @@ export default function InputNilaiClient() {
                                             </div>
                                             <span className="px-2 py-0.5 rounded-full text-xs font-bold"
                                                 style={{
-                                                    background: jenisPenilaianAktif === 'PTS' ? '#fed7aa' : '#e5e7eb',
-                                                    color: jenisPenilaianAktif === 'PTS' ? '#c2410c' : '#6b7280'
+                                                    background: statusPTS === 'aktif' ? '#fed7aa' : statusPTS === 'selesai' ? '#e5e7eb' : '#fef3c7',
+                                                    color: statusPTS === 'aktif' ? '#c2410c' : statusPTS === 'selesai' ? '#6b7280' : '#92400e'
                                                 }}>
-                                                {jenisPenilaianAktif === 'PTS' ? 'Aktif' : 'Selesai'}
+                                                {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
                                             </span>
                                         </div>
                                         <div className="text-center">
@@ -887,10 +927,6 @@ export default function InputNilaiClient() {
                                         background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f9fafb',
                                         borderColor: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb'
                                     }}>
-                                    {selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 && (
-                                        <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-10"
-                                            style={{ background: '#e8690a', transform: 'translate(30%, -30%)' }}></div>
-                                    )}
                                     <div className="relative">
                                         <div className="flex items-center justify-between mb-3">
                                             <div className="flex items-center gap-2">
@@ -905,10 +941,10 @@ export default function InputNilaiClient() {
                                             </div>
                                             <span className="px-2 py-0.5 rounded-full text-xs font-bold"
                                                 style={{
-                                                    background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? (jenisPenilaianAktif === 'PAS' ? '#fed7aa' : '#e5e7eb') : '#e5e7eb',
-                                                    color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? (jenisPenilaianAktif === 'PAS' ? '#c2410c' : '#6b7280') : '#6b7280'
+                                                    background: statusPAS === 'aktif' ? '#fed7aa' : statusPAS === 'selesai' ? '#e5e7eb' : '#fef3c7',
+                                                    color: statusPAS === 'aktif' ? '#c2410c' : statusPAS === 'selesai' ? '#6b7280' : '#92400e'
                                                 }}>
-                                                {selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? (jenisPenilaianAktif === 'PAS' ? 'Aktif' : 'Selesai') : 'Belum'}
+                                                {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
                                             </span>
                                         </div>
                                         <div className="text-center">
@@ -991,8 +1027,6 @@ export default function InputNilaiClient() {
                                                         borderColor: '#fdba74',
                                                         boxShadow: '0 2px 8px rgba(232,105,10,0.1)'
                                                     }}>
-                                                    <div className="absolute top-0 right-0 w-16 h-16 rounded-full opacity-10"
-                                                        style={{ background: '#e8690a', transform: 'translate(30%, -30%)' }}></div>
                                                     <div className="relative">
                                                         <div className="flex items-center justify-center gap-2 mb-2">
                                                             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: '#fed7aa' }}>
@@ -1021,7 +1055,7 @@ export default function InputNilaiClient() {
 
                             <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
                                 <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
-                                {currentMapel?.bisa_input && jenisPenilaianAktif && (
+                                {canEditNilai && (
                                     <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
                                         className={btnPrimary.base} style={btnPrimary.style}
                                         onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
@@ -1241,7 +1275,7 @@ export default function InputNilaiClient() {
                 </div>
             )}
 
-            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {/* ── MODAL KONFIRMASI ─────────────────────────────────────────────── */}
             {showConfirmModal && (
                 <div
                     className="fixed inset-0 z-[110] flex items-center justify-center p-4 dg-fadeIn"

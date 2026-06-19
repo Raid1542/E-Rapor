@@ -3,14 +3,15 @@
  * Fungsi: Komponen header untuk layout guru bidang studi.
  *         Menampilkan:
  *         - Judul statis dengan info Tahun Ajaran & Semester Aktif
+ *         - Status jenis penilaian aktif (PTS/PAS)
  *         - Dropdown profil pengguna
  *         - Menu: Profil, Ubah Kata Sandi, Logout
- * Update: Mengikuti format header Admin (static title + TA info)
+ * Update: Responsive layout + status penilaian aktif
  */
 
 'use client';
 
-import { LogOut, ChevronDown, User, Lock, X, Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
+import { LogOut, ChevronDown, User, Lock, X, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 
@@ -25,7 +26,8 @@ interface UserData {
 interface TahunAjaranInfo {
     tahun_ajaran: string;
     semester: string;
-    is_aktif: boolean;
+    status_pts: 'nonaktif' | 'aktif' | 'selesai';
+    status_pas: 'nonaktif' | 'aktif' | 'selesai';
 }
 
 const getInitials = (name: string): string => {
@@ -54,6 +56,68 @@ const GlobalStyles = () => (
         }
     `}</style>
 );
+
+// ─── STATUS BADGE ──────────────────────────────────────────────────────────
+
+const StatusBadge = ({ jenis, status }: { jenis: string; status: string }) => {
+    const isActive = status === 'aktif';
+    const isSelesai = status === 'selesai';
+    const isNonaktif = status === 'nonaktif';
+
+    // Style untuk belum aktif (warning)
+    if (isNonaktif) {
+        return (
+            <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
+                style={{
+                    background: 'rgba(253, 230, 138, 0.95)',
+                    color: '#92400e',
+                    border: '1.5px solid rgba(252, 211, 77, 0.5)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }}
+            >
+                <FileText size={11} />
+                <span className="hidden sm:inline">{jenis} (Belum Aktif)</span>
+                <span className="sm:hidden">Menunggu</span>
+            </span>
+        );
+    }
+
+    // Style untuk aktif
+    if (isActive) {
+        return (
+            <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
+                style={{
+                    background: 'rgba(255,255,255,0.95)',
+                    color: '#c95b08',
+                    border: '1.5px solid rgba(201,91,8,0.3)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+            >
+                <FileText size={11} />
+                <span className="hidden sm:inline">{jenis} (Aktif)</span>
+                <span className="sm:hidden">{jenis}</span>
+            </span>
+        );
+    }
+
+    // Style untuk selesai
+    return (
+        <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
+            style={{
+                background: 'rgba(255,255,255,0.4)',
+                color: 'rgba(255,255,255,0.7)',
+                border: '1px solid rgba(255,255,255,0.3)',
+            }}
+        >
+            <FileText size={11} />
+            <span className="hidden sm:inline">{jenis} (Selesai)</span>
+            <span className="sm:hidden">{jenis}</span>
+        </span>
+    );
+};
 
 // ─── CONFIRM LOGOUT MODAL ───────────────────────────────────────────────────
 
@@ -195,7 +259,8 @@ export default function Header() {
                     setTahunAjaranInfo({
                         tahun_ajaran: taData.tahun_ajaran || taData.tahun_ajaran_induk || '-',
                         semester: taData.semester || '-',
-                        is_aktif: true
+                        status_pts: taData.status_pts || 'nonaktif',
+                        status_pas: taData.status_pas || 'nonaktif'
                     });
                 } else {
                     console.warn('Tidak ada TA aktif atau response tidak valid:', data);
@@ -232,7 +297,7 @@ export default function Header() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // ── Handlers ──────────────────────────────────────────────────────────
+    // ── Handlers ─────────────────────────────────────────────────────────
     const handleLogoutClick = () => { setDropdownOpen(false); setShowLogoutConfirm(true); };
     const handleLogoutConfirm = () => {
         setShowLogoutConfirm(false);
@@ -245,10 +310,29 @@ export default function Header() {
     const handleProfile = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/profil'); };
     const handleUbahPassword = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/ubah_password'); };
 
-    // Build static header title
-    const headerTitle = tahunAjaranInfo
-        ? `E-Rapor SDIT Ulil Albab | ${tahunAjaranInfo.tahun_ajaran} - ${tahunAjaranInfo.semester}`
-        : 'E-Rapor SDIT Ulil Albab';
+    // Tentukan jenis penilaian yang aktif
+    const getActiveJenisPenilaian = (): { jenis: string; status: string } | null => {
+        if (!tahunAjaranInfo) return null;
+
+        // Prioritas: Aktif > Selesai > Nonaktif
+        if (tahunAjaranInfo.status_pts === 'aktif') {
+            return { jenis: 'PTS', status: 'aktif' };
+        }
+        if (tahunAjaranInfo.status_pas === 'aktif') {
+            return { jenis: 'PAS', status: 'aktif' };
+        }
+        if (tahunAjaranInfo.status_pts === 'selesai') {
+            return { jenis: 'PTS', status: 'selesai' };
+        }
+        if (tahunAjaranInfo.status_pas === 'selesai') {
+            return { jenis: 'PAS', status: 'selesai' };
+        }
+
+        // Jika keduanya nonaktif, tampilkan PTS dengan status nonaktif
+        return { jenis: 'PTS', status: 'nonaktif' };
+    };
+
+    const activeJenisInfo = getActiveJenisPenilaian();
 
     // ── Skeleton ───────────────────────────────────────────────────────────
     if (!user) {
@@ -296,133 +380,174 @@ export default function Header() {
                     borderColor: 'rgba(255,255,255,0.15)',
                 }}
             >
-                <div className="px-6 py-3 flex justify-between items-center gap-3">
+                <div className="px-4 sm:px-6 py-3">
+                    {/* ── BARIS 1: Title + Info (Desktop: Inline) ── */}
+                    <div className="flex items-center justify-between gap-4">
 
-                    {/* ── KIRI: Static Title ── */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <h1 className="text-base md:text-lg font-bold text-white tracking-tight truncate">
-                            {headerTitle}
-                        </h1>
+                        {/* KIRI: Title + Info */}
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {/* Title */}
+                            <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight flex-shrink-0">
+                                E-Rapor SDIT Ulil Albab
+                            </h1>
 
-                        {/* Indikator jika TA belum aktif */}
-                        {!taLoading && !tahunAjaranInfo && (
-                            <span
-                                className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold"
-                                style={{
-                                    background: 'rgba(239,68,68,0.3)',
-                                    color: '#fff',
-                                    border: '1px solid rgba(239,68,68,0.5)'
-                                }}
-                            >
-                                <AlertCircle className="w-3 h-3" />
-                                TA Belum Aktif
-                            </span>
-                        )}
-                    </div>
+                            {/* Info (Desktop: Inline) - Hidden on mobile */}
+                            <div className="hidden lg:flex items-center gap-2 lg:gap-3 ml-2 lg:ml-4">
+                                {tahunAjaranInfo && (
+                                    <>
+                                        {/* Tahun Ajaran & Semester */}
+                                        <span className="text-xs lg:text-sm font-semibold text-white whitespace-nowrap">
+                                            {tahunAjaranInfo.tahun_ajaran} - {tahunAjaranInfo.semester}
+                                        </span>
 
-                    {/* ── KANAN: Profil dropdown ── */}
-                    <div className="relative" ref={dropdownRef}>
-                        <button
-                            onClick={() => setDropdownOpen(v => !v)}
-                            className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl transition-all duration-150"
-                            style={{
-                                background: dropdownOpen ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.30)',
-                                border: '1.5px solid rgba(255,255,255,0.6)',
-                            }}
-                            onMouseEnter={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.40)'; }}
-                            onMouseLeave={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.30)'; }}
-                        >
-                            <Avatar size="sm" />
-                            <div className="text-left hidden sm:block">
-                                <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">{user.nama_lengkap}</p>
-                                <p className="text-[10px] text-white/90 leading-tight font-medium capitalize">{user.role}</p>
+                                        {/* Separator */}
+                                        <span style={{ color: 'rgba(255,255,255,0.5)' }}>•</span>
+
+                                        {/* Badge Status */}
+                                        {activeJenisInfo && (
+                                            <StatusBadge
+                                                jenis={activeJenisInfo.jenis}
+                                                status={activeJenisInfo.status}
+                                            />
+                                        )}
+                                    </>
+                                )}
+                                {taLoading && (
+                                    <span className="text-xs text-white/70">Memuat...</span>
+                                )}
                             </div>
-                            <ChevronDown
-                                className="w-3.5 h-3.5 text-white transition-transform duration-200"
-                                style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                            />
-                        </button>
+                        </div>
 
-                        {/* Dropdown panel */}
-                        {dropdownOpen && (
-                            <div
-                                className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gbs-scaleIn"
-                                style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
+                        {/* KANAN: Profil dropdown (Tetap di pojok kanan) */}
+                        <div className="relative flex-shrink-0" ref={dropdownRef}>
+                            <button
+                                onClick={() => setDropdownOpen(v => !v)}
+                                className="flex items-center gap-1.5 sm:gap-2.5 pl-1.5 sm:pl-2 pr-2 sm:pr-3 py-1.5 rounded-xl transition-all duration-150"
+                                style={{
+                                    background: dropdownOpen ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.30)',
+                                    border: '1.5px solid rgba(255,255,255,0.6)',
+                                }}
+                                onMouseEnter={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.40)'; }}
+                                onMouseLeave={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.30)'; }}
                             >
-                                {/* Info user */}
-                                <div className="p-4" style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
-                                            style={{ background: 'rgba(255,255,255,0.22)', border: '2px solid rgba(255,255,255,0.4)' }}
-                                        >
-                                            {profileImage ? (
-                                                <img src={profileImage} alt="Foto Profil" className="w-full h-full object-cover"
-                                                    onError={() => setProfileImage(null)} />
-                                            ) : (
-                                                <span className="text-white text-sm font-bold">{getInitials(user.nama_lengkap)}</span>
-                                            )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-bold text-sm text-white truncate leading-tight">{user.nama_lengkap}</p>
-                                            <p className="text-[11px] text-white/65 truncate mt-0.5">{user.email_sekolah}</p>
-                                            <span
-                                                className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wide"
-                                                style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
+                                <Avatar size="sm" />
+                                <div className="text-left hidden md:block">
+                                    <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">{user.nama_lengkap}</p>
+                                    <p className="text-[10px] text-white/90 leading-tight font-medium capitalize">{user.role}</p>
+                                </div>
+                                <ChevronDown
+                                    className="w-3.5 h-3.5 text-white transition-transform duration-200 hidden md:block"
+                                    style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                                />
+                            </button>
+
+                            {/* Dropdown panel */}
+                            {dropdownOpen && (
+                                <div
+                                    className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gbs-scaleIn"
+                                    style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
+                                >
+                                    {/* Info user */}
+                                    <div className="p-4" style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                                                style={{ background: 'rgba(255,255,255,0.22)', border: '2px solid rgba(255,255,255,0.4)' }}
                                             >
-                                                {user.role}
-                                            </span>
+                                                {profileImage ? (
+                                                    <img src={profileImage} alt="Foto Profil" className="w-full h-full object-cover"
+                                                        onError={() => setProfileImage(null)} />
+                                                ) : (
+                                                    <span className="text-white text-sm font-bold">{getInitials(user.nama_lengkap)}</span>
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-bold text-sm text-white truncate leading-tight">{user.nama_lengkap}</p>
+                                                <p className="text-[11px] text-white/65 truncate mt-0.5">{user.email_sekolah}</p>
+                                                <span
+                                                    className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wide"
+                                                    style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
+                                                >
+                                                    {user.role}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* Menu items */}
+                                    <div className="p-2">
+                                        {/* Profil */}
+                                        <button
+                                            onClick={handleProfile}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+                                            style={{ color: '#7a3a0a' }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = '#fff0e5'; e.currentTarget.style.color = '#c95b08'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#7a3a0a'; }}
+                                        >
+                                            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+                                                <User className="w-3.5 h-3.5" style={{ color: '#e8690a' }} />
+                                            </div>
+                                            Profil Saya
+                                        </button>
+
+                                        {/* Ubah Password */}
+                                        <button
+                                            onClick={handleUbahPassword}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+                                            style={{ color: '#7a3a0a' }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = '#fff0e5'; e.currentTarget.style.color = '#c95b08'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#7a3a0a'; }}
+                                        >
+                                            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+                                                <Lock className="w-3.5 h-3.5" style={{ color: '#e8690a' }} />
+                                            </div>
+                                            Ubah Kata Sandi
+                                        </button>
+
+                                        <div className="my-1.5 border-t" style={{ borderColor: '#fde0c8' }} />
+
+                                        {/* Logout */}
+                                        <button
+                                            onClick={handleLogoutClick}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+                                            style={{ color: '#dc2626' }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                        >
+                                            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fef2f2' }}>
+                                                <LogOut className="w-3.5 h-3.5 text-red-500" />
+                                            </div>
+                                            Logout
+                                        </button>
+                                    </div>
                                 </div>
+                            )}
+                        </div>
+                    </div>
 
-                                {/* Menu items */}
-                                <div className="p-2">
-                                    {/* Profil */}
-                                    <button
-                                        onClick={handleProfile}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-                                        style={{ color: '#7a3a0a' }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = '#fff0e5'; e.currentTarget.style.color = '#c95b08'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#7a3a0a'; }}
-                                    >
-                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
-                                            <User className="w-3.5 h-3.5" style={{ color: '#e8690a' }} />
-                                        </div>
-                                        Profil Saya
-                                    </button>
+                    {/* ── BARIS 2: Info (Mobile: Pindah ke bawah) ── */}
+                    <div className="lg:hidden flex items-center gap-2 mt-2">
+                        {tahunAjaranInfo && (
+                            <>
+                                {/* Tahun Ajaran & Semester */}
+                                <span className="text-xs font-semibold text-white whitespace-nowrap">
+                                    {tahunAjaranInfo.tahun_ajaran} - {tahunAjaranInfo.semester}
+                                </span>
 
-                                    {/* Ubah Password */}
-                                    <button
-                                        onClick={handleUbahPassword}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-                                        style={{ color: '#7a3a0a' }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = '#fff0e5'; e.currentTarget.style.color = '#c95b08'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#7a3a0a'; }}
-                                    >
-                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
-                                            <Lock className="w-3.5 h-3.5" style={{ color: '#e8690a' }} />
-                                        </div>
-                                        Ubah Kata Sandi
-                                    </button>
+                                {/* Separator */}
+                                <span style={{ color: 'rgba(255,255,255,0.5)' }}>•</span>
 
-                                    <div className="my-1.5 border-t" style={{ borderColor: '#fde0c8' }} />
-
-                                    {/* Logout */}
-                                    <button
-                                        onClick={handleLogoutClick}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-                                        style={{ color: '#dc2626' }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                    >
-                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fef2f2' }}>
-                                            <LogOut className="w-3.5 h-3.5 text-red-500" />
-                                        </div>
-                                        Logout
-                                    </button>
-                                </div>
-                            </div>
+                                {/* Badge Status */}
+                                {activeJenisInfo && (
+                                    <StatusBadge
+                                        jenis={activeJenisInfo.jenis}
+                                        status={activeJenisInfo.status}
+                                    />
+                                )}
+                            </>
+                        )}
+                        {taLoading && (
+                            <span className="text-xs text-white/70">Memuat...</span>
                         )}
                     </div>
                 </div>

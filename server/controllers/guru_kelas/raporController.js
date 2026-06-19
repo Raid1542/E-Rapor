@@ -381,18 +381,24 @@ exports.generateRaporPDF = async (req, res) => {
 
         const namaproyek = nk?.nama_judul_proyek || '–';
 
-        // QUERY ABSENSI (PAKAI ID SEMESTER)
+        // QUERY ABSENSI - sesuai struktur tabel baru (PTS vs Total)
         const [abs] = await db.execute(
-            `SELECT sakit, izin, alpha 
-                FROM absensi 
-                WHERE siswa_id = ? AND tahun_ajaran_id = ? 
-                AND semester = ? AND jenis_penilaian = ?`,
-            [siswaId, semesterId, semesterNorm, jenisNorm]
+            `SELECT sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total 
+            FROM absensi 
+            WHERE siswa_id = ? AND id_tahun_ajaran = ?`,
+            [siswaId, semesterId]
         );
 
-        const s = abs[0]?.sakit || 0;
-        const i = abs[0]?.izin || 0;
-        const a = abs[0]?.alpha || 0;
+        let s, i, a;
+        if (jenisNorm === 'PTS') {
+            s = abs[0]?.sakit_pts || 0;
+            i = abs[0]?.izin_pts || 0;
+            a = abs[0]?.alpha_pts || 0;
+        } else {
+            s = abs[0]?.sakit_total || 0;
+            i = abs[0]?.izin_total || 0;
+            a = abs[0]?.alpha_total || 0;
+        }
 
         // QUERY EKSKUL (PAKAI ID SEMESTER)
         const [ekskulRows] = await db.execute(

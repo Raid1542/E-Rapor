@@ -1,22 +1,19 @@
 /**
  * Nama File: dashboard_client.tsx
- * Fungsi: Dashboard guru bidang studi - Clean & Informatif
  * UPDATE: 
- * - Hapus Tahun Ajaran (sudah di header)
- * - Hapus Akses Cepat
- * - Ganti Bar Chart dengan Progress Bar Cards
- * Tema: Oranye elegan, konsisten dengan dashboard admin
+ *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
+ *   - Kondisi 2: Banner warning jika periode belum aktif/selesai
+ *   - Update status badge di Jadwal PTS/PAS
  */
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
-    ChevronRight, Users, Award, Book, Calendar,
-    GraduationCap, TrendingUp,
-    BookOpen, Settings,
+    ChevronRight, Users, Award, Book,
+    TrendingUp, BookOpen, Settings,
     ArrowRight, Sparkles, Target, AlertTriangle,
-    CheckCircle2, AlertCircle, CalendarDays
+    CheckCircle2, AlertCircle, CalendarDays, LogOut, X
 } from 'lucide-react';
 import { UserData } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -24,6 +21,9 @@ import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
+
+type ModalType = 'success' | 'error' | 'warning' | 'network';
+interface ModalConfig { type: ModalType; title: string; message: string; }
 
 interface KonfigurasiStatus {
     bobot: boolean;
@@ -51,9 +51,12 @@ interface Warning {
     masalah: string;
 }
 
+// ✅ TAMBAH: status_pts dan status_pas
 interface DashboardData {
     tahun_ajaran: string;
     semester: string;
+    status_pts: 'aktif' | 'nonaktif' | 'selesai';  // ✅ BARU
+    status_pas: 'aktif' | 'nonaktif' | 'selesai';  // ✅ BARU
     jenis_penilaian_aktif: 'PTS' | 'PAS' | null;
     jadwal: Jadwal;
     total_kelas: number;
@@ -70,18 +73,46 @@ interface DashboardData {
 
 const GlobalStyles = () => (
     <style jsx global>{`
+        @keyframes db-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes db-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes db-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         @keyframes db-fadeUp { 
             from { opacity: 0; transform: translateY(20px); } 
             to { opacity: 1; transform: translateY(0); } 
         }
-        @keyframes db-scaleIn { 
-            from { opacity: 0; transform: scale(0.9); } 
-            to { opacity: 1; transform: scale(1); } 
-        }
+        .db-fadeIn  { animation: db-fadeIn  0.2s ease; }
+        .db-scaleIn { animation: db-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .db-pulse   { animation: db-pulse   0.6s ease 0.15s; }
         .db-fadeUp { animation: db-fadeUp 0.5s ease-out forwards; }
-        .db-scaleIn { animation: db-scaleIn 0.4s ease-out forwards; }
     `}</style>
 );
+
+// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
+
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <AlertTriangle size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <AlertCircle size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+};
+
+const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+    const s = MODAL_STYLES[modal.type];
+    return (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 db-fadeIn">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 db-scaleIn">
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} db-pulse`}>{s.icon}</div>
+                <div className="text-center">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+                </div>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+            </div>
+        </div>
+    );
+};
 
 // ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
 
@@ -100,7 +131,7 @@ const MapelProgressCard = ({ mapel, index, onClick }: { mapel: MapelItem; index:
     const percentage = mapel.total_siswa > 0
         ? Math.round((mapel.sudah_dinilai / mapel.total_siswa) * 100)
         : 0;
-    
+
     const isComplete = percentage === 100;
     const isHighProgress = percentage >= 60;
 
@@ -114,7 +145,6 @@ const MapelProgressCard = ({ mapel, index, onClick }: { mapel: MapelItem; index:
                 animationDelay: `${index * 0.1}s`
             }}
         >
-            {/* Header */}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                     <div
@@ -142,7 +172,6 @@ const MapelProgressCard = ({ mapel, index, onClick }: { mapel: MapelItem; index:
                 </div>
             </div>
 
-            {/* Progress Bar */}
             <div className="mb-2">
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: '#fde0c8' }}>
                     <div
@@ -157,7 +186,6 @@ const MapelProgressCard = ({ mapel, index, onClick }: { mapel: MapelItem; index:
                 </div>
             </div>
 
-            {/* Footer Info */}
             <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">
                     {mapel.sudah_dinilai} / {mapel.total_siswa} dinilai
@@ -183,8 +211,17 @@ export default function DashboardClient() {
     const [dashboard, setDashboard] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
 
+    const [isNotAssigned, setIsNotAssigned] = useState(false);
+    const [modal, setModal] = useState<ModalConfig | null>(null);
+
+    const [showPeriodModal, setShowPeriodModal] = useState(false);
+    const [periodModalShown, setPeriodModalShown] = useState(false);
+
     const router = useRouter();
     const { showSessionExpired, handleLogout } = useSession();
+
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const closeModal = useCallback(() => setModal(null), []);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -216,14 +253,34 @@ export default function DashboardClient() {
                         return;
                     }
 
+                    // ✅ Handle 403 - Belum ditugaskan
+                    if (res.status === 403) {
+                        const errData = await res.json().catch(() => ({}));
+                        if (errData.code === 'NOT_ASSIGNED') {
+                            setIsNotAssigned(true);
+                            setLoading(false);
+                            return;
+                        }
+                    }
+
                     if (res.ok) {
                         const result = await res.json();
                         if (result.success && result.data) {
                             setDashboard(result.data);
+
+                            // ✅ Cek jika tidak ada mapel yang diajar
+                            if (result.data.total_mapel === 0) {
+                                setIsNotAssigned(true);
+                            }
                         }
                     }
                 } catch (err) {
                     console.error('Error koneksi:', err);
+                    showModal({
+                        type: 'network',
+                        title: 'Koneksi Gagal',
+                        message: 'Tidak dapat terhubung ke server.'
+                    });
                 } finally {
                     setLoading(false);
                 }
@@ -234,11 +291,25 @@ export default function DashboardClient() {
             console.error('Error parsing user:', e);
             router.push('/login');
         }
-    }, [router]);
+    }, [router, showModal]);
+
+    // ====== SHOW MODAL NOTIFIKASI PERIODE ======
+    useEffect(() => {
+        if (loading || isNotAssigned || !dashboard) return;
+
+        const isPeriodNotActive = dashboard.status_pts !== 'aktif' && dashboard.status_pas !== 'aktif';
+        const isPeriodLocked = dashboard.status_pts === 'selesai' && dashboard.status_pas === 'selesai';
+
+        if ((isPeriodNotActive || isPeriodLocked) && !periodModalShown) {
+            setShowPeriodModal(true);
+            setPeriodModalShown(true);
+        }
+    }, [dashboard, loading, isNotAssigned, periodModalShown]);
 
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen" style={{ background: '#fdf6f0' }}>
+                <GlobalStyles />
                 <div className="text-center">
                     <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin mx-auto" />
                     <p className="mt-4 text-sm font-medium" style={{ color: '#c95b08' }}>Memuat dashboard...</p>
@@ -247,9 +318,51 @@ export default function DashboardClient() {
         );
     }
 
+    // ✅ KONDISI 1: Belum Ditugaskan → Modal Akses Ditolak
+    if (isNotAssigned) {
+        return (
+            <div className="flex-1 min-h-screen p-6 flex items-center justify-center" style={{ background: '#fdf6f0' }}>
+                <GlobalStyles />
+                {modal && <NotifModal modal={modal} onClose={closeModal} />}
+                {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 db-fadeIn">
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 db-scaleIn">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 db-pulse">
+                            <AlertCircle size={48} className="text-red-500" />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                                Anda belum ditugaskan mengajar mata pelajaran apapun di semester ini.
+                                <br />
+                                Silakan hubungi Administrator untuk penugasan mata pelajaran.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
+                            }}
+                        >
+                            <LogOut size={18} /> Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (!user || !dashboard) return null;
 
-    // ── Stat cards config (4 cards utama) ─────────────────────────────────────
+    // ✅ Banner warning jika periode belum aktif / sudah selesai
+    const isPeriodNotActive = dashboard.status_pts !== 'aktif' && dashboard.status_pas !== 'aktif';
+    const isPeriodLocked = dashboard.status_pts === 'selesai' && dashboard.status_pas === 'selesai';
+
+    // ── Stat cards config ─────────────────────────────────────────────────────
 
     const statCards = [
         {
@@ -296,8 +409,28 @@ export default function DashboardClient() {
         <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
             <GlobalStyles />
 
-            {showSessionExpired && (
-                <SessionExpiredModal onConfirm={handleLogout} />
+            {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+            {/* ✅ BANNER: Periode Belum Aktif / Sudah Selesai */}
+            {(isPeriodNotActive || isPeriodLocked) && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl db-fadeUp"
+                    style={{
+                        background: isPeriodLocked ? '#fef2f2' : '#fef3c7',
+                        border: `1px solid ${isPeriodLocked ? '#fca5a5' : '#fcd34d'}`
+                    }}>
+                    <AlertTriangle className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isPeriodLocked ? 'text-red-600' : 'text-yellow-600'}`} />
+                    <div className="flex-1">
+                        <p className={`text-sm font-bold mb-1 ${isPeriodLocked ? 'text-red-900' : 'text-yellow-900'}`}>
+                            {isPeriodLocked ? '🔒 Periode Penilaian Selesai' : '⏳ Periode Penilaian Belum Aktif'}
+                        </p>
+                        <p className={`text-xs ${isPeriodLocked ? 'text-red-800' : 'text-yellow-800'}`}>
+                            {isPeriodLocked
+                                ? 'Baik PTS maupun PAS telah selesai. Data sudah dikunci dan tidak dapat diubah. Anda hanya dapat melihat nilai yang sudah ada.'
+                                : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data, tetapi belum dapat menginput nilai siswa.'}
+                        </p>
+                    </div>
+                </div>
             )}
 
             {/* ═══════════════════════════════════════════════════════════════════
@@ -332,14 +465,12 @@ export default function DashboardClient() {
                             className="p-6 h-full relative"
                             onClick={() => router.push(card.path)}
                         >
-                            {/* Background decoration */}
                             <div
                                 className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-150"
                                 style={{ background: card.gradient }}
                             />
 
                             <div className="relative z-10">
-                                {/* Icon */}
                                 <div
                                     className="w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6"
                                     style={{
@@ -350,16 +481,13 @@ export default function DashboardClient() {
                                     {card.icon}
                                 </div>
 
-                                {/* Value - Super Big */}
                                 <p className="text-5xl font-black mb-2" style={{ color: '#c95b08' }}>
                                     {card.value}
                                 </p>
 
-                                {/* Label */}
                                 <p className="text-base font-bold text-gray-800 mb-1">{card.label}</p>
                                 <p className="text-xs text-gray-500">{card.desc}</p>
 
-                                {/* Footer */}
                                 <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTop: '1px solid #fde0c8' }}>
                                     <span className="text-xs font-bold" style={{ color: '#c95b08' }}>
                                         Lihat Detail
@@ -378,11 +506,10 @@ export default function DashboardClient() {
             </div>
 
             {/* ═══════════════════════════════════════════════════════════════════
-                PROGRESS PENILAIAN PER MAPEL - Progress Bar Cards
+                PROGRESS PENILAIAN PER MAPEL
             ═══════════════════════════════════════════════════════════════════ */}
             <div className="mb-6 db-fadeUp" style={{ animationDelay: '0.4s' }}>
                 <Card className="overflow-hidden">
-                    {/* Header */}
                     <div
                         className="px-6 py-5 flex items-center justify-between"
                         style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)' }}
@@ -409,7 +536,6 @@ export default function DashboardClient() {
                         </button>
                     </div>
 
-                    {/* Content */}
                     <div className="p-6">
                         {dashboard.mata_pelajaran_list.length === 0 ? (
                             <div className="text-center py-20">
@@ -428,7 +554,6 @@ export default function DashboardClient() {
                             </div>
                         ) : (
                             <>
-                                {/* Summary Stats */}
                                 <div className="grid grid-cols-3 gap-4 mb-6">
                                     <div className="p-4 rounded-2xl" style={{ background: '#fff0e5', border: '2px solid #fde0c8' }}>
                                         <div className="flex items-center gap-2 mb-1">
@@ -453,7 +578,6 @@ export default function DashboardClient() {
                                     </div>
                                 </div>
 
-                                {/* Progress Bar Cards */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {dashboard.mata_pelajaran_list.map((mapel, index) => (
                                         <MapelProgressCard
@@ -483,23 +607,26 @@ export default function DashboardClient() {
                         </div>
 
                         <div className="space-y-3">
+                            {/* ✅ PTS dengan status dinamis */}
                             <div className="flex items-center justify-between px-4 py-3 rounded-xl"
                                 style={{
-                                    background: dashboard.jenis_penilaian_aktif === 'PTS' ? '#fff0e5' : '#f9fafb',
-                                    border: `2px solid ${dashboard.jenis_penilaian_aktif === 'PTS' ? '#fde0c8' : '#e5e7eb'}`
+                                    background: dashboard.status_pts === 'aktif' ? '#fff0e5' : dashboard.status_pts === 'selesai' ? '#f9fafb' : '#fef3c7',
+                                    border: `2px solid ${dashboard.status_pts === 'aktif' ? '#fde0c8' : dashboard.status_pts === 'selesai' ? '#e5e7eb' : '#fcd34d'}`
                                 }}>
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg flex items-center justify-center"
                                         style={{
-                                            background: dashboard.jenis_penilaian_aktif === 'PTS'
+                                            background: dashboard.status_pts === 'aktif'
                                                 ? 'linear-gradient(135deg,#c95b08,#e8690a)'
-                                                : '#e5e7eb'
+                                                : dashboard.status_pts === 'selesai' ? '#e5e7eb' : '#fef3c7'
                                         }}>
-                                        <Award size={18} className={dashboard.jenis_penilaian_aktif === 'PTS' ? 'text-white' : 'text-gray-400'} />
+                                        <Award size={18} className={dashboard.status_pts === 'aktif' ? 'text-white' : dashboard.status_pts === 'selesai' ? 'text-gray-400' : 'text-yellow-600'} />
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800">PTS</p>
-                                        <p className="text-xs text-gray-500">Penilaian Tengah Semester</p>
+                                        <p className="text-xs text-gray-500">
+                                            {dashboard.status_pts === 'aktif' ? '● Aktif' : dashboard.status_pts === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                                        </p>
                                     </div>
                                 </div>
                                 <span className="text-sm font-semibold" style={{ color: '#c95b08' }}>
@@ -507,23 +634,26 @@ export default function DashboardClient() {
                                 </span>
                             </div>
 
+                            {/* ✅ PAS dengan status dinamis */}
                             <div className="flex items-center justify-between px-4 py-3 rounded-xl"
                                 style={{
-                                    background: dashboard.jenis_penilaian_aktif === 'PAS' ? '#fff0e5' : '#f9fafb',
-                                    border: `2px solid ${dashboard.jenis_penilaian_aktif === 'PAS' ? '#fde0c8' : '#e5e7eb'}`
+                                    background: dashboard.status_pas === 'aktif' ? '#fff0e5' : dashboard.status_pas === 'selesai' ? '#f9fafb' : '#fef3c7',
+                                    border: `2px solid ${dashboard.status_pas === 'aktif' ? '#fde0c8' : dashboard.status_pas === 'selesai' ? '#e5e7eb' : '#fcd34d'}`
                                 }}>
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg flex items-center justify-center"
                                         style={{
-                                            background: dashboard.jenis_penilaian_aktif === 'PAS'
+                                            background: dashboard.status_pas === 'aktif'
                                                 ? 'linear-gradient(135deg,#c95b08,#e8690a)'
-                                                : '#e5e7eb'
+                                                : dashboard.status_pas === 'selesai' ? '#e5e7eb' : '#fef3c7'
                                         }}>
-                                        <Award size={18} className={dashboard.jenis_penilaian_aktif === 'PAS' ? 'text-white' : 'text-gray-400'} />
+                                        <Award size={18} className={dashboard.status_pas === 'aktif' ? 'text-white' : dashboard.status_pas === 'selesai' ? 'text-gray-400' : 'text-yellow-600'} />
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800">PAS</p>
-                                        <p className="text-xs text-gray-500">Penilaian Akhir Semester</p>
+                                        <p className="text-xs text-gray-500">
+                                            {dashboard.status_pas === 'aktif' ? '● Aktif' : dashboard.status_pas === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                                        </p>
                                     </div>
                                 </div>
                                 <span className="text-sm font-semibold" style={{ color: '#c95b08' }}>
@@ -590,6 +720,55 @@ export default function DashboardClient() {
                     </div>
                 </Card>
             </div>
+            {/* ✅ MODAL NOTIFIKASI PERIODE */}
+            {showPeriodModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 db-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowPeriodModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 db-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle size={24} className="text-orange-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">
+                                    {isPeriodLocked
+                                        ? '🔒 Periode Penilaian Selesai'
+                                        : '⏳ Periode Penilaian Belum Aktif'}
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 text-sm text-gray-600 mb-6">
+                            <p>
+                                {isPeriodLocked
+                                    ? 'Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah. Anda hanya dapat melihat nilai yang sudah ada.'
+                                    : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data dashboard, tetapi belum dapat menginput nilai siswa.'}
+                            </p>
+                            {isPeriodNotActive && (
+                                <p className="text-xs" style={{ color: '#c95b08' }}>
+                                    💡 <strong>Tip:</strong> Silakan hubungi Administrator untuk membuka periode penilaian.
+                                </p>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => setShowPeriodModal(false)}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                        >
+                            OK, Mengerti
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
