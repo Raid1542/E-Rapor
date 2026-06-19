@@ -580,7 +580,7 @@ export default function DataTahunAjaranClient() {
                                     style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
                                     onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
-                                    Ya, Tambah & Aktifkan
+                                    Tambah & Aktifkan
                                 </button>
                             </div>
                         </div>
@@ -795,7 +795,7 @@ export default function DataTahunAjaranClient() {
                                     style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
                                     onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
-                                    Ya, Ganti Semester
+                                    Ganti Semester
                                 </button>
                             </div>
                         </div>

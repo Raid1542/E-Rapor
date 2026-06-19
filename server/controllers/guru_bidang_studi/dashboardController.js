@@ -1,7 +1,9 @@
 /**
  * Nama File: dashboardController.js
- * Fungsi: Dashboard guru bidang studi
- * LOGIKA: PTS otomatis 100%, PAS harus diatur manual
+ * UPDATE: 
+ *   - Fix status code 404 → 403 untuk "belum ditugaskan"
+ *   - Tambah code: 'NOT_ASSIGNED' untuk frontend
+ *   - Tambah status_pts & status_pas untuk banner warning
  */
 
 const db = require('../../config/db');
@@ -30,6 +32,7 @@ exports.getDashboardData = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Tahun ajaran aktif tidak ditemukan.',
+                code: 'NO_ACTIVE_YEAR'
             });
         }
 
@@ -69,24 +72,26 @@ exports.getDashboardData = async (req, res) => {
 
         // STEP 4: Ambil Mata Pelajaran yang Diajar (HANYA JENIS PILIHAN)
         const [mapelDasar] = await db.execute(`
-        SELECT 
-            mp.id_mata_pelajaran,
-            mp.nama_mapel,
-            mp.jenis,
-            COUNT(DISTINCT p.kelas_id) AS total_kelas_per_mapel
-        FROM pembelajaran p
-        JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
-        WHERE p.user_id = ? 
-            AND p.tahun_ajaran_id = ?
-            AND mp.jenis = 'pilihan'  
-        GROUP BY mp.id_mata_pelajaran, mp.nama_mapel, mp.jenis
+            SELECT 
+                mp.id_mata_pelajaran,
+                mp.nama_mapel,
+                mp.jenis,
+                COUNT(DISTINCT p.kelas_id) AS total_kelas_per_mapel
+            FROM pembelajaran p
+            JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
+            WHERE p.user_id = ? 
+                AND p.tahun_ajaran_id = ?
+                AND mp.jenis = 'pilihan'  
+            GROUP BY mp.id_mata_pelajaran, mp.nama_mapel, mp.jenis
             ORDER BY mp.nama_mapel
         `, [userId, semesterId]);
 
+        // ✅ PERBAIKAN: Cek apakah guru ditugaskan
         if (mapelDasar.length === 0) {
-            return res.status(404).json({
+            return res.status(403).json({  // ✅ UBAH: 404 → 403
                 success: false,
-                message: 'Anda belum ditugaskan mengajar di tahun ajaran aktif ini.',
+                message: 'Anda belum ditugaskan mengajar mata pelajaran apapun di semester ini.',
+                code: 'NOT_ASSIGNED'  // ✅ TAMBAHKAN: code untuk frontend
             });
         }
 
@@ -203,6 +208,9 @@ exports.getDashboardData = async (req, res) => {
             data: {
                 tahun_ajaran: ta.tahun_ajaran,
                 semester: ta.semester,
+                // ✅ TAMBAHKAN: status_pts dan status_pas untuk banner warning
+                status_pts: ta.status_pts || 'nonaktif',
+                status_pas: ta.status_pas || 'nonaktif',
                 jenis_penilaian_aktif,
                 jadwal,
                 total_kelas: totalKelasUnik,

@@ -5,8 +5,7 @@
  *         edit, hapus, pemilihan tahun ajaran, dan penetapan wali kelas.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan DataGuruPage
- * Update: Wali kelas kini dapat langsung dipilih saat menambahkan kelas baru
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -62,7 +61,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
   );
 };
 
-// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
+// ─── CONFIRM MODAL (untuk hapus) ─────────────────────────────────────────────
 
 const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dk-fadeIn">
@@ -133,7 +132,6 @@ interface FormDataType {
   nama_kelas: string;
   fase: string;
   user_id: string;
-  confirmData: boolean;
 }
 
 // ─── SECONDARY BUTTON ─────────────────────────────────────────────────────────
@@ -165,7 +163,11 @@ export default function DataKelasClient() {
   const [guruList, setGuruList] = useState<GuruOption[]>([]);
   const [loadingGuru, setLoadingGuru] = useState(false);
 
-  const [formData, setFormData] = useState<FormDataType>({ nama_kelas: '', fase: '', user_id: '', confirmData: false });
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
+
+  const [formData, setFormData] = useState<FormDataType>({ nama_kelas: '', fase: '', user_id: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [modal, setModal] = useState<ModalConfig | null>(null);
@@ -271,7 +273,7 @@ export default function DataKelasClient() {
     const ne: Record<string, string> = {};
     if (!formData.nama_kelas?.trim()) ne.nama_kelas = 'Nama kelas wajib diisi';
     if (!formData.fase?.trim()) ne.fase = 'Fase wajib diisi';
-    if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data';
+    // ✅ HAPUS validasi confirmData
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah sebelum melanjutkan.' });
@@ -280,10 +282,35 @@ export default function DataKelasClient() {
     return true;
   };
 
-
-
-  const handleSubmitTambah = async () => {
+  // ✅ TAMBAHAN: Buka modal konfirmasi
+  const openConfirmModal = (action: 'add' | 'edit') => {
     if (!validate()) return;
+
+    if (action === 'edit') {
+      const originalData = kelasList.find(k => k.id === editId);
+      if (originalData) {
+        const hasChanges =
+          originalData.nama_kelas.toLowerCase().trim() !== formData.nama_kelas.toLowerCase().trim() ||
+          originalData.fase.toLowerCase().trim() !== formData.fase.toLowerCase().trim() ||
+          String(originalData.wali_kelas_id || '') !== String(formData.user_id || '');
+
+        if (!hasChanges) {
+          showModal({
+            type: 'warning',
+            title: 'Tidak Ada Perubahan',
+            message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
+          });
+          return;
+        }
+      }
+    }
+
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+  const executeTambah = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
@@ -296,7 +323,7 @@ export default function DataKelasClient() {
         body: JSON.stringify({
           nama_kelas: formData.nama_kelas.trim(),
           fase: formData.fase.trim(),
-          user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null, // ✅ KIRIM user_id
+          user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null,
         }),
       });
 
@@ -319,54 +346,12 @@ export default function DataKelasClient() {
     }
   };
 
-  const handleEdit = (kelas: Kelas) => {
-    setEditId(kelas.id);
-    setFormData({ nama_kelas: kelas.nama_kelas, fase: kelas.fase, user_id: kelas.wali_kelas_id ? String(kelas.wali_kelas_id) : '', confirmData: false });
-    setShowEdit(true);
-  };
-
-  const handleHapus = (kelasId: number, namaKelas: string) => {
-    showConfirm(`Yakin ingin menghapus kelas "${namaKelas}"? Tindakan ini tidak dapat dibatalkan.`, async () => {
-      const token = localStorage.getItem('token');
-      if (!token || !selectedTahunAjaranId) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' }); return; }
-      try {
-        const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}`, {
-          method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          fetchKelas(selectedTahunAjaranId);
-          showModal({ type: 'success', title: 'Kelas Dihapus!', message: `Kelas "${namaKelas}" berhasil dihapus.` });
-        } else {
-          const err = await res.json();
-          showModal({ type: 'error', title: 'Gagal Menghapus', message: err.message || 'Terjadi kesalahan saat menghapus kelas.' });
-        }
-      } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
-    });
-  };
-
-  const handleSubmitEdit = async () => {
-    if (!validate()) return;
+  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+  const executeEdit = async () => {
     const token = localStorage.getItem('token');
     if (!token || !editId || !selectedTahunAjaranId) {
       showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' });
       return;
-    }
-
-    const originalData = kelasList.find(k => k.id === editId);
-    if (originalData) {
-      const hasChanges =
-        originalData.nama_kelas.toLowerCase().trim() !== formData.nama_kelas.toLowerCase().trim() ||
-        originalData.fase.toLowerCase().trim() !== formData.fase.toLowerCase().trim() ||
-        String(originalData.wali_kelas_id || '') !== String(formData.user_id || ''); // ✅ Cek perubahan wali kelas
-
-      if (!hasChanges) {
-        showModal({
-          type: 'warning',
-          title: 'Tidak Ada Perubahan',
-          message: 'Tidak ada data yang berubah. Tidak perlu menyimpan.'
-        });
-        return;
-      }
     }
 
     try {
@@ -376,7 +361,7 @@ export default function DataKelasClient() {
         body: JSON.stringify({
           nama_kelas: formData.nama_kelas.trim(),
           fase: formData.fase.trim(),
-          user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null  // ✅ Kirim user_id (bisa null)
+          user_id: formData.user_id && formData.user_id !== '' ? Number(formData.user_id) : null
         }),
       });
 
@@ -401,7 +386,32 @@ export default function DataKelasClient() {
     }
   };
 
-  const handleReset = () => { setFormData({ nama_kelas: '', fase: '', user_id: '', confirmData: false }); setErrors({}); };
+  const handleEdit = (kelas: Kelas) => {
+    setEditId(kelas.id);
+    setFormData({ nama_kelas: kelas.nama_kelas, fase: kelas.fase, user_id: kelas.wali_kelas_id ? String(kelas.wali_kelas_id) : '' });
+    setShowEdit(true);
+  };
+
+  const handleHapus = (kelasId: number, namaKelas: string) => {
+    showConfirm(`Yakin ingin menghapus kelas "${namaKelas}"? Tindakan ini tidak dapat dibatalkan.`, async () => {
+      const token = localStorage.getItem('token');
+      if (!token || !selectedTahunAjaranId) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' }); return; }
+      try {
+        const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}`, {
+          method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          fetchKelas(selectedTahunAjaranId);
+          showModal({ type: 'success', title: 'Kelas Dihapus!', message: `Kelas "${namaKelas}" berhasil dihapus.` });
+        } else {
+          const err = await res.json();
+          showModal({ type: 'error', title: 'Gagal Menghapus', message: err.message || 'Terjadi kesalahan saat menghapus kelas.' });
+        }
+      } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
+    });
+  };
+
+  const handleReset = () => { setFormData({ nama_kelas: '', fase: '', user_id: '' }); setErrors({}); };
 
   // ── filter & pagination ────────────────────────────────────────────────────
 
@@ -516,7 +526,7 @@ export default function DataKelasClient() {
             {errors.fase && <p className="text-red-500 text-xs">{errors.fase}</p>}
           </div>
 
-          {/* Wali Kelas — tampil di TAMBAH dan EDIT */}
+          {/* Wali Kelas */}
           <div className="md:col-span-2 flex flex-col gap-1.5">
             <label className={labelCls} style={labelColor}>
               Wali Kelas
@@ -550,22 +560,7 @@ export default function DataKelasClient() {
           </div>
         </div>
 
-        {/* Konfirmasi */}
-        <div className="px-6 pb-4">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              name="confirmData"
-              checked={formData.confirmData}
-              onChange={e => setFormData(p => ({ ...p, confirmData: e.target.checked }))}
-              className="mt-0.5 w-4 h-4 rounded accent-orange-500"
-            />
-            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-              Saya yakin data yang diisi sudah benar
-            </span>
-          </label>
-          {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-        </div>
+        {/* ✅ HAPUS bagian checkbox konfirmasi */}
 
         {/* Actions */}
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
@@ -574,7 +569,7 @@ export default function DataKelasClient() {
           </BtnSecondary>
           <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
           <button
-            onClick={isEdit ? handleSubmitEdit : handleSubmitTambah}
+            onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
             className={btnPrimary.base}
             style={btnPrimary.style}
             onMouseEnter={btnPrimary.hover}
@@ -584,6 +579,56 @@ export default function DataKelasClient() {
           </button>
         </div>
       </div>
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 dk-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dk-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add'
+                ? 'Apakah Anda yakin ingin menambahkan data kelas ini?'
+                : 'Apakah Anda yakin ingin mengubah data kelas ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add') {
+                    executeTambah();
+                  } else {
+                    executeEdit();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -777,7 +822,6 @@ export default function DataKelasClient() {
                       </td>
                       <td className="px-5 py-3.5 text-center whitespace-nowrap">
                         <div className="flex justify-center gap-2">
-                          {/* LIHAT SISWA: SELALU MUNCUL (walau tahun ajaran tidak aktif) */}
                           <Link
                             href={`/admin/data_kelas_siswa/${kelas.id}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
@@ -788,7 +832,6 @@ export default function DataKelasClient() {
                             <Users size={13} /> Lihat Siswa
                           </Link>
 
-                          {/* EDIT & HAPUS: HANYA MUNCUL JIKA TAHUN AJARAN AKTIF */}
                           {selectedTahunAjaranAktif && (
                             <>
                               <button

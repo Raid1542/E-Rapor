@@ -1,12 +1,4 @@
-/**
- * Nama File: arsip_rapor_client.tsx
- * Fungsi: Komponen utama halaman Arsip Rapor untuk admin.
- *         Mengelola status penilaian (PTS/PAS) dan unduh rapor siswa.
- * Update: Struktur dropdown sama dengan DataMataPelajaranPage
- *         (TA → Semester → Jenis → Kelas)
- */
-
-'use client';
+"use client";
 import { useState, useEffect, useCallback, ReactNode } from 'react';
 import {
     FileText, Download, Play, Pause, Lock,
@@ -95,9 +87,6 @@ const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5
 
 const selectCls = "w-full border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200";
 
-const labelCls = "block text-sm font-semibold mb-1.5";
-const labelColor = { color: '#7a3a0a' };
-
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 
 interface TahunAjaranInduk {
@@ -160,14 +149,13 @@ export default function ArsipRaporPage() {
 
     // ── States ─────────────────────────────────────────────────────────────────
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaranInduk[]>([]);
-    const [activeTahunAjaranId, setActiveTahunAjaranId] = useState<number | null>(null);
     const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
     const [kelasList, setKelasList] = useState<Kelas[]>([]);
     const [siswaList, setSiswaList] = useState<Siswa[]>([]);
 
     const [selectedTA, setSelectedTA] = useState<number | null>(null);
     const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-    const [selectedSemester, setSelectedSemester] = useState<string | null>(null); // 'Ganjil' | 'Genap'
+    const [selectedSemester, setSelectedSemester] = useState<string | null>(null);
     const [selectedJenis, setSelectedJenis] = useState<'PTS' | 'PAS' | null>(null);
     const [selectedKelas, setSelectedKelas] = useState<number | null>(null);
 
@@ -185,6 +173,7 @@ export default function ArsipRaporPage() {
 
     // ── Fetch Functions ────────────────────────────────────────────────────────
 
+    // ✅ 1. Fetch Tahun Ajaran
     const fetchTahunAjaranList = async () => {
         setLoadingTA(true);
         try {
@@ -201,15 +190,16 @@ export default function ArsipRaporPage() {
                     new Map(data.data.map((item: any) => [item.id_induk, {
                         id: item.id_induk,
                         tahun_ajaran: item.tahun_ajaran,
-                        is_aktif: item.status === 'AKTIF'  // ✅ Simpan status aktif
+                        is_aktif: item.status === 'AKTIF'
                     }])).values()
                 ) as TahunAjaranInduk[];
 
                 setTahunAjaranList(uniqueTA);
 
+                // Auto-select TA aktif jika belum ada yang dipilih
                 const activeTA = uniqueTA.find(ta => ta.is_aktif);
                 if (activeTA) {
-                    setActiveTahunAjaranId(activeTA.id);
+                    setSelectedTA(prev => prev ?? activeTA.id);
                 }
             }
         } catch {
@@ -219,6 +209,7 @@ export default function ArsipRaporPage() {
         }
     };
 
+    // ✅ 2. Fetch Semester by TA
     const fetchSemesterByTahunAjaran = async (idInduk: number) => {
         try {
             const token = localStorage.getItem('token');
@@ -230,7 +221,6 @@ export default function ArsipRaporPage() {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                // Filter semester untuk TA yang dipilih + ambil status PTS/PAS
                 const semesters = data.data
                     .filter((sem: any) => sem.id_induk === idInduk)
                     .map((sem: any) => ({
@@ -241,7 +231,7 @@ export default function ArsipRaporPage() {
                         status_pas: 'nonaktif' as StatusPenilaian,
                     }));
 
-                // Ambil status PTS/PAS dari endpoint tahun-ajaran
+                // Ambil status PTS/PAS
                 const resTA = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -263,26 +253,34 @@ export default function ArsipRaporPage() {
 
                 setSemesterOptions(semesters);
 
-                setSelectedSemesterId(null);
-                setSelectedSemester(null);
+                // ✅ Auto-select semester aktif jika belum ada yang dipilih
+                const activeSemester = semesters.find(s => s.is_aktif);
+                if (activeSemester && !selectedSemesterId) {
+                    setSelectedSemesterId(activeSemester.id);
+                    setSelectedSemester(activeSemester.semester);
+                }
             }
         } catch (err) {
             console.error('Error fetch semester:', err);
         }
     };
 
-    const fetchKelas = async (semesterId: number) => {
-        if (!selectedSemester) return;
+    // ✅ 3. Fetch Kelas (INI YANG HILANG!)
+    const fetchKelas = async () => {
+        if (!selectedTA || !selectedSemester) return;
+        
         setLoadingKelas(true);
         setKelasList([]);
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
+            
             const res = await fetch(
                 `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${selectedTA}&semester=${selectedSemester}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await res.json();
+            
             if (res.ok && data.success) {
                 setKelasList(data.data || []);
             } else {
@@ -295,18 +293,22 @@ export default function ArsipRaporPage() {
         }
     };
 
+    // ✅ 4. Fetch Siswa (INI JUGA HILANG!)
     const fetchSiswa = async () => {
         if (!selectedTA || !selectedKelas || !selectedSemester) return;
+        
         setLoadingSiswa(true);
         setSiswaList([]);
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
+            
             const res = await fetch(
                 `${API_BASE}/admin/arsip-rapor/daftar-siswa/${selectedTA}/${selectedKelas}?semester=${selectedSemester}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await res.json();
+            
             if (res.ok && data.success) {
                 setSiswaList(data.data || []);
             } else {
@@ -321,27 +323,36 @@ export default function ArsipRaporPage() {
 
     // ── Effects ────────────────────────────────────────────────────────────────
 
+    // Load TA list saat mount
     useEffect(() => {
         fetchTahunAjaranList();
     }, []);
 
+    // Fetch semester saat TA berubah
     useEffect(() => {
         if (selectedTA) {
             fetchSemesterByTahunAjaran(selectedTA);
-        } else {
-            setSemesterOptions([]);
-            setSelectedSemesterId(null);
-            setSelectedSemester(null);
-            setSelectedJenis(null);
-            setSelectedKelas(null);
+            // ✅ Reset kelas & siswa saat TA berubah
             setKelasList([]);
             setSiswaList([]);
+            setSelectedKelas(null);
+        } else {
+            setSemesterOptions([]);
+            setKelasList([]);
+            setSiswaList([]);
+            setSelectedSemesterId(null);
+            setSelectedSemester(null);
+            setSelectedKelas(null);
         }
     }, [selectedTA]);
 
+    // Fetch kelas saat semester berubah
     useEffect(() => {
         if (selectedSemesterId && selectedSemester) {
-            fetchKelas(selectedSemesterId);
+            fetchKelas();
+            // ✅ Reset kelas & siswa saat semester berubah
+            setSelectedKelas(null);
+            setSiswaList([]);
         } else {
             setKelasList([]);
             setSelectedKelas(null);
@@ -349,13 +360,14 @@ export default function ArsipRaporPage() {
         }
     }, [selectedSemesterId, selectedSemester]);
 
+    // Fetch siswa saat kelas berubah (TAPI JANGAN saat jenis berubah!)
     useEffect(() => {
-        if (selectedKelas && selectedJenis) {
+        if (selectedKelas) {
             fetchSiswa();
         } else {
             setSiswaList([]);
         }
-    }, [selectedKelas, selectedJenis]);
+    }, [selectedKelas]);
 
     // ── Derived Data ───────────────────────────────────────────────────────────
 
@@ -364,8 +376,6 @@ export default function ArsipRaporPage() {
         ? (currentSemester?.status_pts || 'nonaktif')
         : (currentSemester?.status_pas || 'nonaktif');
     const statusStyle = getStatusStyle(statusSaatIni);
-
-    const kelas = kelasList.find(k => k.id_kelas === selectedKelas);
 
     const filteredSiswa = siswaList.filter(s => {
         const q = searchQuery.toLowerCase().trim();
@@ -409,7 +419,6 @@ export default function ArsipRaporPage() {
                     title: 'Status Diperbarui!',
                     message: result.message || `Status ${selectedJenis} berhasil diubah.`
                 });
-                // Refresh semester data
                 if (selectedTA) await fetchSemesterByTahunAjaran(selectedTA);
             } else {
                 showModal({
@@ -546,21 +555,9 @@ export default function ArsipRaporPage() {
                                 const value = e.target.value;
                                 if (value === '' || value === 'no-data') {
                                     setSelectedTA(null);
-                                    setSelectedSemesterId(null);
-                                    setSelectedSemester(null);
-                                    localStorage.removeItem('arsip_selectedTA');
-                                    localStorage.removeItem('arsip_selectedSemester');
                                     return;
                                 }
-                                const id = Number(value);
-                                setSelectedTA(id);
-                                setSelectedSemesterId(null);
-                                setSelectedSemester(null);
-                                setSelectedJenis(null);
-                                setSelectedKelas(null);
-                                setSiswaList([]);
-                                localStorage.setItem('arsip_selectedTA', id.toString());
-                                localStorage.removeItem('arsip_selectedSemester');
+                                setSelectedTA(Number(value));
                             }}
                             className={`${selectCls} min-w-[220px]`}
                             disabled={loadingTA}
@@ -594,20 +591,12 @@ export default function ArsipRaporPage() {
                                         if (value === '' || value === 'no-data') {
                                             setSelectedSemesterId(null);
                                             setSelectedSemester(null);
-                                            setSelectedJenis(null);
-                                            setSelectedKelas(null);
-                                            setSiswaList([]);
-                                            localStorage.removeItem('arsip_selectedSemester');
                                             return;
                                         }
                                         const id = Number(value);
                                         const sem = semesterOptions.find(s => s.id === id);
                                         setSelectedSemesterId(id);
                                         setSelectedSemester(sem?.semester || null);
-                                        setSelectedJenis(null);
-                                        setSelectedKelas(null);
-                                        setSiswaList([]);
-                                        localStorage.setItem('arsip_selectedSemester', id.toString());
                                     }}
                                     className={`${selectCls} min-w-[220px]`}
                                 >
@@ -655,8 +644,6 @@ export default function ArsipRaporPage() {
                                             onChange={(e) => {
                                                 const val = e.target.value as 'PTS' | 'PAS' | '';
                                                 setSelectedJenis(val || null);
-                                                setSelectedKelas(null);
-                                                setSiswaList([]);
                                             }}
                                             className={`${selectCls} min-w-[220px]`}
                                         >
@@ -713,8 +700,6 @@ export default function ArsipRaporPage() {
                                                                 background: 'linear-gradient(135deg,#16a34a,#22c55e)',
                                                                 boxShadow: '0 3px 10px rgba(22,163,74,0.25)'
                                                             }}
-                                                            onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#15803d,#16a34a)')}
-                                                            onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#16a34a,#22c55e)')}
                                                         >
                                                             <Play size={15} /> Aktifkan {selectedJenis}
                                                         </button>
@@ -737,8 +722,6 @@ export default function ArsipRaporPage() {
                                                                     background: 'linear-gradient(135deg,#d97706,#f59e0b)',
                                                                     boxShadow: '0 3px 10px rgba(217,119,6,0.25)'
                                                                 }}
-                                                                onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#b45309,#d97706)')}
-                                                                onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#d97706,#f59e0b)')}
                                                             >
                                                                 <Pause size={15} /> Nonaktifkan
                                                             </button>
@@ -758,8 +741,6 @@ export default function ArsipRaporPage() {
                                                                     background: 'linear-gradient(135deg,#dc2626,#ef4444)',
                                                                     boxShadow: '0 3px 10px rgba(220,38,38,0.25)'
                                                                 }}
-                                                                onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#b91c1c,#dc2626)')}
-                                                                onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#dc2626,#ef4444)')}
                                                             >
                                                                 <Lock size={15} /> Arsipkan & Kunci
                                                             </button>
@@ -899,8 +880,6 @@ export default function ArsipRaporPage() {
                                                                                         disabled={downloadingId === siswa.id_siswa}
                                                                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                                                                                         style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
-                                                                                        onMouseEnter={e => { if (downloadingId !== siswa.id_siswa) e.currentTarget.style.background = '#d4f0de'; }}
-                                                                                        onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}
                                                                                     >
                                                                                         {downloadingId === siswa.id_siswa ? (
                                                                                             <>

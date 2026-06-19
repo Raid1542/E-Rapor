@@ -16,6 +16,7 @@ const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 const cekPenilaianStatus = require('../middleware/cekPenilaianStatus');
 const cekGuruKelasDitugaskan = require('../middleware/cekGuruKelasDitugaskan');
+const cekStatusPAS = require ('../middleware/cekStatusPAS');
 
 // ─── CONTROLLERS ──────────────────────────────────────
 const guruKelasControllers = require('../controllers/guru_kelas');
@@ -130,7 +131,6 @@ router.get('/kelas',
 router.get('/siswa',
     authenticate,
     guruKelasOnly,
-    cekPenilaianStatus,
     cekGuruKelasDitugaskan,
     guruKelasControllers.getSiswaByKelas
 );
@@ -177,9 +177,10 @@ router.get('/absensi/:jenis/:semester',
     guruKelasControllers.getAbsensiSiswa
 );
 
-router.post('/absensi',
+router.post('/absensi/:jenis/:semester',
     authenticate,
     guruKelasOnly,
+    validateJenisSemester,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
     guruKelasControllers.upsertAbsensi
@@ -212,7 +213,7 @@ router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester',
 router.get('/ekskul',
     authenticate,
     guruKelasOnly,
-    cekPenilaianStatus,
+    cekStatusPAS,
     cekGuruKelasDitugaskan,
     guruKelasControllers.getEkskulSiswa
 );
@@ -221,7 +222,7 @@ router.put('/ekskul/:siswaId',
     authenticate,
     guruKelasOnly,
     validateIdParam('siswaId'),
-    cekPenilaianStatus,
+    cekStatusPAS,
     cekGuruKelasDitugaskan,
     guruKelasControllers.updateEkskulSiswa
 );
@@ -501,6 +502,7 @@ router.get('/rekapan-nilai/export-excel',
 router.get('/tahun-ajaran/aktif',
     authenticate,
     guruKelasOnly,
+    cekGuruKelasDitugaskan,
     guruKelasControllers.getTahunAjaranAktif
 );
 
@@ -593,10 +595,12 @@ const adminOrGuruKelasDitugaskan = [
     authenticate,
     authorize(['admin', 'guru kelas']),
     (req, res, next) => {
+        // Skip cekPenilaianStatus untuk admin
         if (req.user.role === 'admin') {
-            return cekPenilaianStatus(false)(req, res, next);
+            return next();
         }
-        cekPenilaianStatus(true)(req, res, next);
+        // Untuk guru kelas, langsung panggil middleware
+        cekPenilaianStatus(req, res, next);
     },
     (req, res, next) => {
         if (req.user.role === 'admin') return next();

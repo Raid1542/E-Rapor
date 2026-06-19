@@ -8,7 +8,7 @@ interface SessionExpiredModalProps {
 }
 
 export default function SessionExpiredModal({ onConfirm }: SessionExpiredModalProps) {
-    const [countdown, setCountdown] = useState(3);
+    const [countdown, setCountdown] = useState(10);
 
     useEffect(() => {
         const timer = setInterval(() => {

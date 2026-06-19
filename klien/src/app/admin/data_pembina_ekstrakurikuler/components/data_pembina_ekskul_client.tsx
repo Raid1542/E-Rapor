@@ -1,3 +1,11 @@
+/**
+ * Nama File: data_pembina_ekskul_client.tsx
+ * Fungsi: Komponen klien untuk mengelola data pembina ekstrakurikuler,
+ *         mencakup fitur tambah, edit, detail, import Excel, filter,
+ *         pencarian, dan pagination.
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ */
+
 'use client';
 
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
@@ -85,6 +93,7 @@ interface PembinaEkskul {
   statusPembina?: string;
 }
 
+// ✅ HAPUS confirmData dari FormDataType
 interface FormDataType {
   nama: string;
   niy: string;
@@ -95,7 +104,6 @@ interface FormDataType {
   alamat: string;
   no_telepon: string;
   statusPembina: string;
-  confirmData: boolean;
 }
 
 const formatTanggalIndonesia = (dateStr?: string | null): string => {
@@ -146,6 +154,10 @@ export default function DataPembinaEkskulClient() {
   const [detailClosing, setDetailClosing] = useState(false);
   const [importClosing, setImportClosing] = useState(false);
 
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
+
   const [modal, setModal] = useState<ModalConfig | null>(null);
   const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
@@ -182,9 +194,10 @@ export default function DataPembinaEkskulClient() {
 
   // ── form state ─────────────────────────────────────────────────────────────
 
+  // ✅ HAPUS confirmData dari formData
   const [formData, setFormData] = useState<FormDataType>({
     nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '',
-    jenisKelamin: '', alamat: '', no_telepon: '', statusPembina: 'aktif', confirmData: false,
+    jenisKelamin: '', alamat: '', no_telepon: '', statusPembina: 'aktif',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -197,20 +210,17 @@ export default function DataPembinaEkskulClient() {
       tempatLahir: pembina.tempat_lahir || '', tanggalLahir: pembina.tanggal_lahir || '',
       jenisKelamin: pembina.jenisKelamin || '', alamat: pembina.alamat || '',
       no_telepon: pembina.no_telepon || '',
-      statusPembina: pembina.statusPembina === 'aktif' ? 'aktif' : 'nonaktif', confirmData: false,
+      statusPembina: pembina.statusPembina === 'aktif' ? 'aktif' : 'nonaktif',
     });
     setShowEdit(true);
   };
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-      setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ✅ HAPUS validasi confirmData
   const validate = (isEdit: boolean): boolean => {
     const ne: Record<string, string> = {};
     if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
@@ -230,7 +240,6 @@ export default function DataPembinaEkskulClient() {
       }
     }
     if (isEdit && (!formData.statusPembina || formData.statusPembina === '')) ne.statusPembina = 'Status wajib dipilih';
-    if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data sebelum melanjutkan';
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah sebelum melanjutkan.' });
@@ -239,10 +248,39 @@ export default function DataPembinaEkskulClient() {
     return true;
   };
 
-  const handleSubmitTambah = async () => {
-    if (!validate(false)) return;
+  // ✅ TAMBAHAN: Buka modal konfirmasi
+  const openConfirmModal = (action: 'add' | 'edit') => {
+    if (action === 'edit') {
+      const originalData = pembinaList.find(p => p.id === editId);
+      if (!originalData) return;
+      const normalize = (str?: string | null) => (str || '').trim().toLowerCase();
+      const hasChanged =
+        formData.nama !== (originalData.nama || '') ||
+        formData.niy !== (originalData.niy || '') ||
+        formData.nuptk !== (originalData.nuptk || '') ||
+        formData.tempatLahir !== (originalData.tempat_lahir || '') ||
+        formData.tanggalLahir !== (originalData.tanggal_lahir || '') ||
+        normalize(formData.jenisKelamin) !== normalize(originalData.jenisKelamin) ||
+        formData.alamat !== (originalData.alamat || '') ||
+        formData.no_telepon !== (originalData.no_telepon || '') ||
+        formData.statusPembina !== (originalData.statusPembina || 'aktif');
+      if (!hasChanged) {
+        showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+        return;
+      }
+    }
+    if (!validate(action === 'edit')) return;
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+  const executeTambah = async () => {
     const token = localStorage.getItem('token');
-    if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
+    if (!token) {
+      showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+      return;
+    }
     try {
       const res = await fetch('http://localhost:5000/api/admin/pembina-ekskul', {
         method: 'POST',
@@ -263,24 +301,13 @@ export default function DataPembinaEkskulClient() {
     } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
   };
 
-  const handleSubmitEdit = async () => {
-    const originalData = pembinaList.find(p => p.id === editId);
-    if (!originalData) return;
-    const normalize = (str?: string | null) => (str || '').trim().toLowerCase();
-    const hasChanged =
-      formData.nama !== (originalData.nama || '') ||
-      formData.niy !== (originalData.niy || '') ||
-      formData.nuptk !== (originalData.nuptk || '') ||
-      formData.tempatLahir !== (originalData.tempat_lahir || '') ||
-      formData.tanggalLahir !== (originalData.tanggal_lahir || '') ||
-      normalize(formData.jenisKelamin) !== normalize(originalData.jenisKelamin) ||
-      formData.alamat !== (originalData.alamat || '') ||
-      formData.no_telepon !== (originalData.no_telepon || '') ||
-      formData.statusPembina !== (originalData.statusPembina || 'aktif');
-    if (!hasChanged) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' }); return; }
-    if (!validate(true)) return;
+  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+  const executeEdit = async () => {
     const token = localStorage.getItem('token');
-    if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
+    if (!token) {
+      showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+      return;
+    }
     try {
       const res = await fetch(`http://localhost:5000/api/admin/pembina-ekskul/${editId}`, {
         method: 'PUT',
@@ -303,7 +330,7 @@ export default function DataPembinaEkskulClient() {
   };
 
   const handleReset = () => {
-    setFormData({ nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '', jenisKelamin: '', alamat: '', no_telepon: '', statusPembina: 'aktif', confirmData: false });
+    setFormData({ nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '', jenisKelamin: '', alamat: '', no_telepon: '', statusPembina: 'aktif' });
     setErrors({});
   };
 
@@ -462,27 +489,68 @@ export default function DataPembinaEkskulClient() {
           </div>
         </div>
 
-        {/* Konfirmasi */}
-        <div className="px-6 pb-4">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" name="confirmData" checked={formData.confirmData}
-              onChange={e => setFormData(p => ({ ...p, confirmData: e.target.checked }))}
-              className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
-            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Saya yakin data yang diisi sudah benar</span>
-          </label>
-          {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-        </div>
+        {/* ✅ HAPUS bagian checkbox konfirmasi */}
 
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
           <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>Batal</BtnSecondary>
           <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
-          <button onClick={isEdit ? handleSubmitEdit : handleSubmitTambah}
+          <button onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
             className={btnPrimary.base} style={btnPrimary.style}
             onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
             {isEdit ? 'Simpan Perubahan' : 'Simpan'}
           </button>
         </div>
       </div>
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 pe-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 pe-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add'
+                ? 'Apakah Anda yakin ingin menambahkan data pembina ini?'
+                : 'Apakah Anda yakin ingin mengubah data pembina ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add') {
+                    executeTambah();
+                  } else {
+                    executeEdit();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

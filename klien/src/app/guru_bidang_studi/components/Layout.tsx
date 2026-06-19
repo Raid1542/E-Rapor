@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
+import Footer from './Footer'; 
 
 interface UserData {
     id: number;
@@ -48,6 +49,7 @@ export default function GuruBidangStudiLayout({
             <div className="flex flex-col flex-1 overflow-hidden">
                 <Header user={user} />
                 <main className="flex-1 overflow-y-auto">{children}</main>
+                <Footer/>
             </div>
         </div>
     );

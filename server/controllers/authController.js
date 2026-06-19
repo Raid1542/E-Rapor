@@ -75,7 +75,7 @@ const login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id_user, role: selectedRole },
       process.env.JWT_SECRET,
-      { expiresIn: '6h' }
+      { expiresIn: '8h' }
     );
 
     // Ambil data tambahan dari tabel guru (jika ada)

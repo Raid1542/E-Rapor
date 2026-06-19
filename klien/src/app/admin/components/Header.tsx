@@ -1,18 +1,11 @@
 /**
  * Nama File: Header.tsx
- * Fungsi: Komponen header untuk halaman admin.
- *         Menampilkan judul halaman dan dropdown profil pengguna dengan foto,
- *         nama, role, serta opsi menu Profil, Ubah Kata Sandi, dan Logout.
- *         Mendukung deteksi klik di luar dropdown untuk menutupnya secara otomatis.
- *         Update: Konfirmasi logout sebelum keluar.
- * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan Sidebar
+ * Update: Static title dengan indikator Tahun Ajaran Aktif
  */
 
 'use client';
 
-import { LogOut, ChevronDown, User, Lock, X } from 'lucide-react';
+import { LogOut, ChevronDown, User, Lock, X, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 
@@ -22,6 +15,12 @@ interface UserData {
   email_sekolah: string;
   role: string;
   profileImage?: string;
+}
+
+interface TahunAjaranInfo {
+  tahun_ajaran: string;
+  semester: string;
+  is_aktif: boolean;
 }
 
 const getInitials = (name: string): string => {
@@ -39,9 +38,15 @@ const GlobalStyles = () => (
     @keyframes hd-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
     @keyframes hd-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
     @keyframes hd-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    @keyframes hd-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     .hd-fadeIn  { animation: hd-fadeIn  0.2s ease; }
     .hd-scaleIn { animation: hd-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .hd-pulse   { animation: hd-pulse   0.6s ease 0.15s; }
+    .hd-shimmer { 
+      background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.2) 100%);
+      background-size: 200% 100%;
+      animation: hd-shimmer 1.5s infinite;
+    }
   `}</style>
 );
 
@@ -59,7 +64,6 @@ const ConfirmLogoutModal = ({
     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 hd-scaleIn"
       style={{ border: '1px solid #fde0c8' }}>
 
-      {/* Tombol X tutup */}
       <button
         onClick={onCancel}
         className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
@@ -67,12 +71,10 @@ const ConfirmLogoutModal = ({
         <X size={18} />
       </button>
 
-      {/* Ikon */}
       <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 hd-pulse">
         <LogOut size={32} style={{ color: '#e8690a' }} />
       </div>
 
-      {/* Teks */}
       <div className="text-center">
         <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Logout</h3>
         <p className="text-sm text-gray-500 leading-relaxed mt-2">
@@ -81,7 +83,6 @@ const ConfirmLogoutModal = ({
         </p>
       </div>
 
-      {/* Tombol aksi */}
       <div className="flex gap-3 w-full">
         <button
           onClick={onCancel}
@@ -118,6 +119,9 @@ export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [tahunAjaranInfo, setTahunAjaranInfo] = useState<TahunAjaranInfo | null>(null);
+  const [taLoading, setTaLoading] = useState(true);
 
   // ── Load user data ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -161,6 +165,53 @@ export default function Header() {
     };
   }, []);
 
+  // ── Load Tahun Ajaran Aktif ─────────────────────────────────────────────
+  useEffect(() => {
+    const fetchTahunAjaran = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setTaLoading(false);
+          return;
+        }
+
+        const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success && Array.isArray(data.data)) {
+          const aktif = data.data.find((s: any) => s.is_aktif);
+          if (aktif) {
+            setTahunAjaranInfo({
+              tahun_ajaran: aktif.tahun_ajaran || aktif.tahun_ajaran_induk || '-',
+              semester: aktif.semester || '-',
+              is_aktif: true
+            });
+          } else {
+            setTahunAjaranInfo(null);
+          }
+        }
+      } catch (err) {
+        console.error('Gagal memuat tahun ajaran:', err);
+      } finally {
+        setTaLoading(false);
+      }
+    };
+
+    fetchTahunAjaran();
+
+    const interval = setInterval(fetchTahunAjaran, 5 * 60 * 1000);
+    const handleRefresh = () => fetchTahunAjaran();
+    window.addEventListener('tahunAjaranUpdated', handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('tahunAjaranUpdated', handleRefresh);
+    };
+  }, []);
+
   // ── Close dropdown on outside click ──────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -172,15 +223,13 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Handlers ───────────────────────────────────────────────────────────
 
-  /** Klik tombol Logout → tutup dropdown, tampilkan modal konfirmasi */
   const handleLogoutClick = () => {
     setDropdownOpen(false);
     setShowLogoutConfirm(true);
   };
 
-  /** User konfirmasi → benar-benar logout */
   const handleLogoutConfirm = () => {
     setShowLogoutConfirm(false);
     localStorage.removeItem('token');
@@ -189,7 +238,6 @@ export default function Header() {
     router.push('/login');
   };
 
-  /** User batal → tutup modal saja */
   const handleLogoutCancel = () => {
     setShowLogoutConfirm(false);
   };
@@ -204,17 +252,29 @@ export default function Header() {
     router.push('/admin/ubah_password');
   };
 
+  const handleTahunAjaranClick = () => {
+    router.push('/admin/data_tahun_ajaran');
+  };
+
   // ── Skeleton loading ──────────────────────────────────────────────────────
   if (!user) {
     return (
-      <header className="bg-white border-b" style={{ borderColor: '#fde0c8' }}>
-        <div className="px-6 py-3 flex justify-between items-center">
-          <div className="h-6 w-48 rounded-lg bg-orange-100 animate-pulse" />
-          <div className="h-10 w-44 rounded-xl bg-orange-100 animate-pulse" />
+      <header className="border-b" style={{ borderColor: '#fde0c8' }}>
+        <div className="px-6 py-3 flex justify-between items-center"
+          style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-64 rounded-xl hd-shimmer" />
+          </div>
+          <div className="h-10 w-44 rounded-xl hd-shimmer" />
         </div>
       </header>
     );
   }
+
+  // Build static header title
+  const headerTitle = tahunAjaranInfo 
+    ? `E-Rapor SDIT Ulil Albab | ${tahunAjaranInfo.tahun_ajaran} - ${tahunAjaranInfo.semester}`
+    : 'E-Rapor SDIT Ulil Albab';
 
   // ── Avatar ────────────────────────────────────────────────────────────────
   const Avatar = ({ size = 'sm' }: { size?: 'sm' | 'md' }) => {
@@ -239,7 +299,6 @@ export default function Header() {
     <>
       <GlobalStyles />
 
-      {/* Modal konfirmasi logout */}
       {showLogoutConfirm && (
         <ConfirmLogoutModal
           onConfirm={handleLogoutConfirm}
@@ -248,25 +307,44 @@ export default function Header() {
       )}
 
       <header
-        className="border-b"
+        className="border-b sticky top-0 z-40"
         style={{
           background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)',
           borderColor: 'rgba(255,255,255,0.15)',
         }}
       >
-        <div className="px-6 py-3 flex justify-between items-center">
+        <div className="px-4 md:px-6 py-3 flex items-center justify-between gap-3">
 
-          {/* ── Judul halaman ── */}
-          <div className="flex items-center gap-3">
-            <div className="w-1 h-7 rounded-full" style={{ background: 'rgba(255,255,255,0.5)' }} />
-            <h1 className="text-lg font-bold text-white tracking-tight">Dashboard Admin</h1>
+          {/* ── KIRI: Static Title + Indikator TA ── */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <h1 className="text-base md:text-lg font-bold text-white tracking-tight truncate">
+              {headerTitle}
+            </h1>
+
+            {/* Indikator jika belum ada TA aktif */}
+            {!taLoading && !tahunAjaranInfo && (
+              <button
+                onClick={handleTahunAjaranClick}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all animate-pulse"
+                style={{ 
+                  background: 'rgba(239,68,68,0.3)',
+                  border: '1px solid rgba(239,68,68,0.5)',
+                  color: '#fff'
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.5)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.3)')}
+                title="Klik untuk mengatur Tahun Ajaran"
+              >
+                <AlertCircle className="w-3 h-3" />
+                Belum Ada TA Aktif
+              </button>
+            )}
           </div>
 
-          {/* ── Kanan: profil ── */}
-          <div className="flex items-center gap-2">
+          {/* ── KANAN: Profil Dropdown ── */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="relative" ref={dropdownRef}>
 
-              {/* Tombol profil */}
               <button
                 onClick={() => setDropdownOpen(v => !v)}
                 className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl transition-all duration-150"
@@ -279,8 +357,12 @@ export default function Header() {
               >
                 <Avatar size="sm" />
                 <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-white leading-tight drop-shadow-sm">{user.nama_lengkap}</p>
-                  <p className="text-[10px] text-white/90 leading-tight capitalize font-medium">{user.role}</p>
+                  <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">
+                    {user.nama_lengkap}
+                  </p>
+                  <p className="text-[10px] text-white/90 leading-tight capitalize font-medium">
+                    {user.role}
+                  </p>
                 </div>
                 <ChevronDown
                   className="w-3.5 h-3.5 text-white transition-transform duration-200"
@@ -288,13 +370,11 @@ export default function Header() {
                 />
               </button>
 
-              {/* Dropdown panel */}
               {dropdownOpen && (
                 <div
-                  className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden"
+                  className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden hd-scaleIn"
                   style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
                 >
-                  {/* Info user */}
                   <div className="p-4" style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
                     <div className="flex items-center gap-3">
                       <div
@@ -321,9 +401,7 @@ export default function Header() {
                     </div>
                   </div>
 
-                  {/* Menu items */}
                   <div className="p-2">
-                    {/* Profil */}
                     <button
                       onClick={handleProfile}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
@@ -337,7 +415,6 @@ export default function Header() {
                       Profil Saya
                     </button>
 
-                    {/* Ubah Password */}
                     <button
                       onClick={handleUbahPassword}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
@@ -353,7 +430,6 @@ export default function Header() {
 
                     <div className="my-1.5 border-t" style={{ borderColor: '#fde0c8' }} />
 
-                    {/* Logout */}
                     <button
                       onClick={handleLogoutClick}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"

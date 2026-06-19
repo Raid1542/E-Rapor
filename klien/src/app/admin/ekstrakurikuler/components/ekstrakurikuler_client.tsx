@@ -3,6 +3,7 @@
  * Fungsi: Komponen utama halaman Data Ekstrakurikuler untuk admin.
  *         Menyediakan fitur CRUD (Create, Read, Update, Delete) ekstrakurikuler
  *         berdasarkan tahun ajaran, termasuk pencarian, paginasi, dan dropdown pembina.
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -50,10 +51,10 @@ interface PesertaEkskul {
   nama_kelas: string;
 }
 
+// ✅ HAPUS confirmData dari FormDataType
 interface FormDataType {
   nama_ekskul: string;
   pembina_id: string;
-  confirmData: boolean;
 }
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -290,8 +291,13 @@ export default function DataEkstrakurikulerPage() {
   const [pesertaList, setPesertaList] = useState<PesertaEkskul[]>([]);
   const [loadingPeserta, setLoadingPeserta] = useState(false);
 
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
+
+  // ✅ HAPUS confirmData dari formData
   const [formData, setFormData] = useState<FormDataType>({
-    nama_ekskul: '', pembina_id: '', confirmData: false
+    nama_ekskul: '', pembina_id: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -385,7 +391,6 @@ export default function DataEkstrakurikulerPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // ← PERBAIKAN: Handle response dengan lebih robust
       let data;
       try {
         data = await res.json();
@@ -401,7 +406,6 @@ export default function DataEkstrakurikulerPage() {
         throw new Error(data.message || 'Operasi gagal');
       }
 
-      // Handle berbagai format response
       let peserta: PesertaEkskul[] = [];
       if (data.data) {
         if (Array.isArray(data.data)) {
@@ -450,20 +454,15 @@ export default function DataEkstrakurikulerPage() {
   // ── Form Handlers ─────────────────────────────────────────────────────────
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData(prev => ({ ...prev, [name]: checked }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
+  // ✅ HAPUS validasi confirmData
   const validate = (): boolean => {
     const ne: Record<string, string> = {};
     if (!formData.nama_ekskul?.trim()) ne.nama_ekskul = 'Nama ekstrakurikuler wajib diisi';
-    if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data';
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah.' });
@@ -472,8 +471,33 @@ export default function DataEkstrakurikulerPage() {
     return true;
   };
 
-  const handleSubmitTambah = async () => {
+  // ✅ TAMBAHAN: Buka modal konfirmasi
+  const openConfirmModal = (action: 'add' | 'edit') => {
+    if (action === 'edit') {
+      const originalEkskul = ekskulList.find(e => e.id_ekskul === editId);
+      if (!originalEkskul) {
+        showModal({ type: 'error', title: 'Error', message: 'Data tidak ditemukan.' });
+        return;
+      }
+      const hasChanges =
+        originalEkskul.nama_ekskul.trim().toLowerCase() !== formData.nama_ekskul.trim().toLowerCase() ||
+        String(originalEkskul.pembina_id || '') !== String(formData.pembina_id ? Number(formData.pembina_id) : '');
+      if (!hasChanges) {
+        showModal({
+          type: 'warning',
+          title: 'Tidak Ada Perubahan',
+          message: 'Tidak ada data yang diubah.'
+        });
+        return;
+      }
+    }
     if (!validate()) return;
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+  const executeTambah = async () => {
     const token = localStorage.getItem('token');
     if (!token || !selectedTahunAjaranId) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi tidak valid.' });
@@ -503,47 +527,14 @@ export default function DataEkstrakurikulerPage() {
     }
   };
 
-  const handleEdit = (ekskul: Ekstrakurikuler) => {
-    setEditId(ekskul.id_ekskul);
-    setEditData(ekskul);
-    setFormData({
-      nama_ekskul: ekskul.nama_ekskul,
-      pembina_id: ekskul.pembina_id ? String(ekskul.pembina_id) : '',
-      confirmData: false,
-    });
-    setShowEdit(true);
-  };
-
-  const handleSubmitEdit = async () => {
-    if (!validate() || !editId) return;
-
-    // ← PERBAIKAN: Cari data asli dari ekskulList, bukan dari editData state
-    const originalEkskul = ekskulList.find(e => e.id_ekskul === editId);
-    if (!originalEkskul) {
-      showModal({ type: 'error', title: 'Error', message: 'Data tidak ditemukan.' });
-      return;
-    }
-
-    // Cek apakah ada perubahan
-    const hasChanges =
-      originalEkskul.nama_ekskul.trim().toLowerCase() !== formData.nama_ekskul.trim().toLowerCase() ||
-      String(originalEkskul.pembina_id || '') !== String(formData.pembina_id ? Number(formData.pembina_id) : '');
-
-    if (!hasChanges) {
-      showModal({
-        type: 'warning',
-        title: 'Tidak Ada Perubahan',
-        message: 'Tidak ada data yang diubah.'
-      });
-      return;
-    }
-
+  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+  const executeEdit = async () => {
+    if (!editId) return;
     const token = localStorage.getItem('token');
     if (!token || !selectedTahunAjaranId) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi tidak valid.' });
       return;
     }
-
     try {
       const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${editId}`, {
         method: 'PUT',
@@ -568,6 +559,16 @@ export default function DataEkstrakurikulerPage() {
     } catch {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
     }
+  };
+
+  const handleEdit = (ekskul: Ekstrakurikuler) => {
+    setEditId(ekskul.id_ekskul);
+    setEditData(ekskul);
+    setFormData({
+      nama_ekskul: ekskul.nama_ekskul,
+      pembina_id: ekskul.pembina_id ? String(ekskul.pembina_id) : '',
+    });
+    setShowEdit(true);
   };
 
   const handleDelete = (id: number, namaEkskul: string) => {
@@ -639,9 +640,9 @@ export default function DataEkstrakurikulerPage() {
   };
 
   const handleReset = () => {
-    setFormData({ nama_ekskul: '', pembina_id: '', confirmData: false });
+    setFormData({ nama_ekskul: '', pembina_id: '' });
     setErrors({});
-    setEditData(null); // ← Reset editData
+    setEditData(null);
   };
 
   // ── Filtering & Pagination ────────────────────────────────────────────────
@@ -753,28 +754,14 @@ export default function DataEkstrakurikulerPage() {
             </select>
           </div>
 
-          <div className="pt-1">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                name="confirmData"
-                checked={formData.confirmData}
-                onChange={handleInputChange}
-                className="mt-0.5 w-4 h-4 rounded accent-orange-500"
-              />
-              <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                Saya yakin data yang diisi sudah benar
-              </span>
-            </label>
-            {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-          </div>
+          {/* ✅ HAPUS bagian checkbox konfirmasi */}
         </div>
 
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
           <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>Batal</BtnSecondary>
           <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
           <button
-            onClick={isEdit ? handleSubmitEdit : handleSubmitTambah}
+            onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
             className={btnPrimary.base}
             style={btnPrimary.style}
             onMouseEnter={btnPrimary.hover}
@@ -784,6 +771,56 @@ export default function DataEkstrakurikulerPage() {
           </button>
         </div>
       </div>
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 ek-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ek-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add'
+                ? 'Apakah Anda yakin ingin menambahkan ekstrakurikuler ini?'
+                : 'Apakah Anda yakin ingin mengubah data ekstrakurikuler ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add') {
+                    executeTambah();
+                  } else {
+                    executeEdit();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

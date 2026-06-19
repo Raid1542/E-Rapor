@@ -14,6 +14,9 @@ module.exports = {
     // Siswa
     ...require('./siswaController'),
 
+    // Siswa Per Kelas
+    ...require('./siswaPerKelasController'),
+
     // Tahun Ajaran
     ...require('./tahunAjaranController'),
 

@@ -1,210 +1,233 @@
 /**
  * Nama File: siswaModel.js
- * Fungsi: Model untuk mengelola data siswa
+ * Fungsi: Model untuk operasi database terkait siswa (master data)
  */
 
 const db = require('../../config/db');
 
-const siswaModel = {
-  async getSiswaByTahunAjaran(tahunAjaranId) {
-    // Ambil id_tahun_ajaran_induk dari tahunAjaranId
-    const [taInfo] = await db.execute(
-        `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-        [tahunAjaranId]
-    );
+class SiswaModel {
+    // ═════════════════════════════════════════════════════════════════════════════
+    // GET semua siswa dengan pagination & filter
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async getAllSiswa(search = null, status = 'aktif', page = 1, limit = 10) {
+        const offset = (page - 1) * limit;
+        const params = [];
+        const whereConditions = [];
 
-    if (taInfo.length === 0) {
-        return [];
-    }
-
-    const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
-
-    const [rows] = await db.execute(
-      `
-        SELECT 
-            s.id_siswa AS id,
-            s.nama_lengkap AS nama,
-            s.nis,
-            s.nisn,
-            s.tempat_lahir,
-            s.tanggal_lahir,
-            s.jenis_kelamin,
-            s.alamat,
-            k.nama_kelas AS kelas,
-            k.fase,
-            s.status
-        FROM siswa s
-        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-        INNER JOIN kelas k ON sk.kelas_id = k.id_kelas
-        WHERE sk.id_tahun_ajaran_induk = ?
-        ORDER BY s.nama_lengkap ASC
-      `,
-      [idTahunAjaranInduk]
-    );
-    return rows;
-  },
-
-  async getSiswaById(id, tahunAjaranId = null) {
-    let idTahunAjaranInduk = null;
-    
-    if (tahunAjaranId) {
-        const [taInfo] = await db.execute(
-            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-            [tahunAjaranId]
-        );
-        if (taInfo.length > 0) {
-            idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
+        // Filter status
+        if (status && status !== 'semua') {
+            whereConditions.push('s.status = ?');
+            params.push(status);
         }
+
+        // Search filter
+        if (search) {
+            whereConditions.push(`
+                (s.nama_lengkap LIKE ?
+                 OR s.nis LIKE ?
+                 OR s.nisn LIKE ?)
+            `);
+            const searchParam = `%${search}%`;
+            params.push(searchParam, searchParam, searchParam);
+        }
+
+        const whereClause = whereConditions.length > 0 
+            ? `WHERE ${whereConditions.join(' AND ')}` 
+            : '';
+
+        // Query utama
+        const query = `
+            SELECT 
+                s.id_siswa,
+                s.nis,
+                s.nisn,
+                s.nama_lengkap,
+                s.tempat_lahir,
+                s.tanggal_lahir,
+                s.jenis_kelamin,
+                s.alamat,
+                s.status
+            FROM siswa s
+            ${whereClause}
+            ORDER BY s.nama_lengkap ASC
+            LIMIT ? OFFSET ?
+        `;
+
+        params.push(parseInt(limit), parseInt(offset));
+
+        const [rows] = await db.execute(query, params);
+
+        // Get total count
+        const countQuery = `
+            SELECT COUNT(*) as total 
+            FROM siswa s
+            ${whereClause}
+        `;
+
+        const countParams = status && status !== 'semua' ? [status] : [];
+        if (search) {
+            const searchParam = `%${search}%`;
+            countParams.push(searchParam, searchParam, searchParam);
+        }
+
+        const [countResult] = await db.execute(countQuery, countParams);
+
+        return {
+            data: rows,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: countResult[0].total,
+                totalPages: Math.ceil(countResult[0].total / limit)
+            }
+        };
     }
 
-    let query = `
-      SELECT 
-          s.id_siswa AS id,
-          s.nama_lengkap AS nama,
-          s.nis,
-          s.nisn,
-          s.tempat_lahir,
-          s.tanggal_lahir,
-          s.jenis_kelamin,
-          s.alamat,
-          k.nama_kelas AS kelas,
-          k.fase,
-          s.status,
-          sk.kelas_id,
-          sk.id_tahun_ajaran_induk
-      FROM siswa s
-      INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-      INNER JOIN kelas k ON sk.kelas_id = k.id_kelas
-    `;
-    const params = [id];
-
-    if (idTahunAjaranInduk) {
-      query += ` WHERE s.id_siswa = ? AND sk.id_tahun_ajaran_induk = ?`;
-      params.push(idTahunAjaranInduk);
-    } else {
-      query += ` WHERE s.id_siswa = ?`;
-    }
-
-    const [rows] = await db.execute(query, params);
-    return rows[0] || null;
-  },
-
-  async createSiswa(siswaData, idTahunAjaranInduk, connection = null) {
-    const useConn = connection || db;
-    const {
-      nis,
-      nisn,
-      nama_lengkap,
-      tempat_lahir,
-      tanggal_lahir,
-      jenis_kelamin,
-      alamat,
-      status = 'aktif',
-    } = siswaData;
-
-    const [result] = await useConn.execute(
-      `
-        INSERT INTO siswa (
-            nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir,
-            jenis_kelamin, alamat, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        nis,
-        nisn,
-        nama_lengkap,
-        tempat_lahir || null,
-        tanggal_lahir || null,
-        jenis_kelamin,
-        alamat || null,
-        status,
-      ]
-    );
-
-    const siswaId = result.insertId;
-
-    await useConn.execute(
-      `
-        INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk)
-        VALUES (?, ?, ?)
-      `,
-      [siswaId, siswaData.kelas_id, idTahunAjaranInduk]
-    );
-
-    return siswaId;
-  },
-
-  async updateSiswa(id, siswaData, idTahunAjaranInduk, connection = null) {
-    const useConn = connection || db;
-    const {
-      nis,
-      nisn,
-      nama_lengkap,
-      tempat_lahir,
-      tanggal_lahir,
-      jenis_kelamin,
-      alamat,
-      status = 'aktif',
-    } = siswaData;
-
-    await useConn.execute(
-      `
-        UPDATE siswa SET
-            nis = ?,
-            nisn = ?,
-            nama_lengkap = ?,
-            tempat_lahir = ?,
-            tanggal_lahir = ?,
-            jenis_kelamin = ?,
-            alamat = ?,
-            status = ?
-        WHERE id_siswa = ?
-      `,
-      [
-        nis,
-        nisn,
-        nama_lengkap,
-        tempat_lahir || null,
-        tanggal_lahir || null,
-        jenis_kelamin,
-        alamat || null,
-        status,
-        id,
-      ]
-    );
-
-    const [existing] = await useConn.execute(
-      `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?`,
-      [id, idTahunAjaranInduk]
-    );
-
-    if (existing.length > 0) {
-      await useConn.execute(
-        `UPDATE siswa_kelas SET kelas_id = ? WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?`,
-        [siswaData.kelas_id, id, idTahunAjaranInduk]
-      );
-    } else {
-      await useConn.execute(
-        `INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk) VALUES (?, ?, ?)`,
-        [id, siswaData.kelas_id, idTahunAjaranInduk]
-      );
-    }
-
-    return true;
-  },
-
-  async deleteSiswa(id, idTahunAjaranInduk = null) {
-    if (idTahunAjaranInduk) {
-        await db.execute(
-            'DELETE FROM siswa_kelas WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?',
-            [id, idTahunAjaranInduk]
+    // ═════════════════════════════════════════════════════════════════════════════
+    // GET siswa by ID
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async getSiswaById(id) {
+        const [rows] = await db.execute(
+            `SELECT * FROM siswa WHERE id_siswa = ?`,
+            [id]
         );
-    } else {
-        await db.execute('DELETE FROM siswa_kelas WHERE siswa_id = ?', [id]);
+        return rows.length > 0 ? rows[0] : null;
     }
-    const [result] = await db.execute('DELETE FROM siswa WHERE id_siswa = ?', [id]);
-    return result.affectedRows > 0;
-  },
-};
 
-module.exports = siswaModel;
+    // ═════════════════════════════════════════════════════════════════════════════
+    // CREATE siswa baru
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async createSiswa(data) {
+        const {
+            nis,
+            nisn,
+            nama_lengkap,
+            tempat_lahir,
+            tanggal_lahir,
+            jenis_kelamin,
+            alamat
+        } = data;
+
+        const [result] = await db.execute(
+            `INSERT INTO siswa (
+                nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir,
+                jenis_kelamin, alamat, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'aktif', NOW(), NOW())`,
+            [
+                nis,
+                nisn || null,
+                nama_lengkap,
+                tempat_lahir || null,
+                tanggal_lahir || null,
+                jenis_kelamin,
+                alamat || null
+            ]
+        );
+
+        return result.insertId;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // UPDATE siswa
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async updateSiswa(id, data) {
+        const {
+            nis,
+            nisn,
+            nama_lengkap,
+            tempat_lahir,
+            tanggal_lahir,
+            jenis_kelamin,
+            alamat,
+            status
+        } = data;
+
+        const [result] = await db.execute(
+            `UPDATE siswa SET
+                nis = ?,
+                nisn = ?,
+                nama_lengkap = ?,
+                tempat_lahir = ?,
+                tanggal_lahir = ?,
+                jenis_kelamin = ?,
+                alamat = ?,
+                status = ?,
+                updated_at = NOW()
+            WHERE id_siswa = ?`,
+            [
+                nis,
+                nisn || null,
+                nama_lengkap,
+                tempat_lahir || null,
+                tanggal_lahir || null,
+                jenis_kelamin,
+                alamat || null,
+                status || 'aktif',
+                id
+            ]
+        );
+
+        return result.affectedRows > 0;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // DELETE siswa (soft delete)
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async deleteSiswa(id) {
+        const [result] = await db.execute(
+            `UPDATE siswa SET status = 'pindah', updated_at = NOW() WHERE id_siswa = ?`,
+            [id]
+        );
+        return result.affectedRows > 0;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // CHECK apakah NIS sudah ada
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async checkNisExists(nis, excludeId = null) {
+        const query = excludeId
+            ? `SELECT id_siswa FROM siswa WHERE nis = ? AND id_siswa != ?`
+            : `SELECT id_siswa FROM siswa WHERE nis = ?`;
+        
+        const params = excludeId ? [nis, excludeId] : [nis];
+        const [rows] = await db.execute(query, params);
+        return rows.length > 0;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // CHECK apakah NISN sudah ada
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async checkNisnExists(nisn, excludeId = null) {
+        const query = excludeId
+            ? `SELECT id_siswa FROM siswa WHERE nisn = ? AND id_siswa != ?`
+            : `SELECT id_siswa FROM siswa WHERE nisn = ?`;
+        
+        const params = excludeId ? [nisn, excludeId] : [nisn];
+        const [rows] = await db.execute(query, params);
+        return rows.length > 0;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // CHECK apakah siswa masih terdaftar di kelas
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async checkSiswaInKelas(id) {
+        const [rows] = await db.execute(
+            `SELECT COUNT(*) as total FROM siswa_kelas WHERE siswa_id = ?`,
+            [id]
+        );
+        return rows[0].total;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // CHECK nama siswa (untuk warning duplikasi nama)
+    // ═════════════════════════════════════════════════════════════════════════════
+    static async checkNamaExists(nama) {
+        const [rows] = await db.execute(
+            `SELECT id_siswa FROM siswa WHERE nama_lengkap = ?`,
+            [nama]
+        );
+        return rows.length > 0;
+    }
+}
+
+module.exports = SiswaModel;

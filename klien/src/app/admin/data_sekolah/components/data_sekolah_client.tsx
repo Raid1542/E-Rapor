@@ -6,6 +6,7 @@
  *         sedangkan logo diupload via FormData ke endpoint khusus.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -25,7 +26,7 @@ const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 out
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
-// ─── NOTIF MODAL (sama persis dengan data_guru_client) ────────────────────────
+// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
@@ -74,18 +75,16 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 export default function DataSekolahPage() {
     const { showSessionExpired, handleLogout } = useSession();
 
-
-
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         namaSekolah: '', npsn: '', nss: '', kodePos: '', telepon: '',
         alamat: '', email: '', website: '', kepalaSekolah: '',
-        niyKepalaSekolah: '', confirmData: false
+        niyKepalaSekolah: ''
     });
     const [originalData, setOriginalData] = useState({
         namaSekolah: '', npsn: '', nss: '', kodePos: '', telepon: '',
         alamat: '', email: '', website: '', kepalaSekolah: '',
-        niyKepalaSekolah: '', confirmData: false
+        niyKepalaSekolah: ''
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -93,6 +92,9 @@ export default function DataSekolahPage() {
     const [fileInputKey, setFileInputKey] = useState(0);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [modal, setModal] = useState<ModalConfig | null>(null);
+
+    // ✅ TAMBAHAN: State untuk modal konfirmasi
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
@@ -116,8 +118,7 @@ export default function DataSekolahPage() {
                     namaSekolah: s.nama_sekolah || '', npsn: s.npsn || '', nss: s.nss || '',
                     kodePos: s.kode_pos || '', telepon: s.telepon || '', alamat: s.alamat || '',
                     email: s.email || '', website: s.website || '',
-                    kepalaSekolah: s.kepala_sekolah || '', niyKepalaSekolah: s.niy_kepala_sekolah || '',
-                    confirmData: false
+                    kepalaSekolah: s.kepala_sekolah || '', niyKepalaSekolah: s.niy_kepala_sekolah || ''
                 };
                 setFormData(data);
                 setOriginalData(data);
@@ -134,8 +135,8 @@ export default function DataSekolahPage() {
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value, type, checked } = e.target as HTMLInputElement;
-        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,7 +169,8 @@ export default function DataSekolahPage() {
         );
     };
 
-    const handleSubmit = async () => {
+    // ✅ TAMBAHAN: Buka modal konfirmasi
+    const openConfirmModal = () => {
         if (!formData.namaSekolah?.trim()) {
             showModal({
                 type: 'warning',
@@ -187,10 +189,11 @@ export default function DataSekolahPage() {
             return;
         }
 
-        if (!formData.confirmData) {
-            showModal({ type: 'warning', title: 'Konfirmasi Diperlukan', message: 'Mohon centang konfirmasi data sebelum menyimpan.' });
-            return;
-        }
+        setShowConfirmModal(true);
+    };
+
+    // ✅ TAMBAHAN: Eksekusi submit (setelah konfirmasi)
+    const executeSubmit = async () => {
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
@@ -276,7 +279,6 @@ export default function DataSekolahPage() {
             {showSessionExpired && (
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
-
 
             {/* Page header */}
             <div className="w-full max-w-3xl mb-6">
@@ -388,27 +390,20 @@ export default function DataSekolahPage() {
                         </div>
                     </div>
 
-                    {/* ── Konfirmasi + Simpan ── */}
+                    {/* ── Simpan ── */}
                     <div className="mt-2 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
-                        <label className="flex items-start gap-2 cursor-pointer mb-5">
-                            <input type="checkbox" id="confirmData" name="confirmData"
-                                checked={formData.confirmData} onChange={handleInputChange}
-                                className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
-                            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                                Saya yakin sudah mengisikan data dengan benar
-                            </span>
-                        </label>
+                        {/* ✅ HAPUS checkbox konfirmasi */}
 
                         <div className="flex justify-end">
                             <button
-                                onClick={handleSubmit}
-                                disabled={isBusy || !formData.confirmData}
+                                onClick={openConfirmModal}
+                                disabled={isBusy}
                                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{
                                     background: 'linear-gradient(135deg,#e8690a,#f5a623)',
                                     boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
                                 }}
-                                onMouseEnter={e => { if (!isBusy && formData.confirmData) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
+                                onMouseEnter={e => { if (!isBusy) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
                             >
                                 {isBusy ? (
@@ -424,6 +419,52 @@ export default function DataSekolahPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {showConfirmModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                    style={{ animation: 'ds-fadeIn 0.2s ease' }}
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
+                        style={{ animation: 'ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1)' }}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi Perubahan Data
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            Apakah Anda yakin ingin menyimpan perubahan data sekolah ini?
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    executeSubmit();
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

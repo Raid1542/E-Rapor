@@ -6,7 +6,7 @@
  *         Data profil disinkronkan antara localStorage dan API backend.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * UI Redesign: Tema oranye elegan, konsisten dengan DataGuruPage & DataMataPelajaranPage
+ * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -117,9 +117,11 @@ const ProfilePage = () => {
   const [selectedFileName, setSelectedFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isConfirmed, setIsConfirmed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Simpan data awal untuk mendeteksi perubahan
   const initialFormDataRef = useRef<typeof formData | null>(null);
@@ -144,18 +146,16 @@ const ProfilePage = () => {
         const userData: UserProfile = JSON.parse(storedUser);
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-        // ✅ FIX: SELALU fetch data terbaru dari backend
         const res = await fetch(`http://localhost:5000/api/admin/admin/${userData.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        let freshData = userData; // Default: pakai data localStorage
+        let freshData = userData;
 
         if (res.ok) {
           const apiResponse = await res.json();
           freshData = apiResponse.data;
 
-          // Update localStorage dengan data terbaru dari backend
           const updatedUser = {
             ...userData,
             nama_lengkap: freshData.nama || userData.nama_lengkap,
@@ -172,14 +172,12 @@ const ProfilePage = () => {
           localStorage.setItem('currentUser', JSON.stringify(updatedUser));
         }
 
-        // Set foto profil
         if (freshData.profileImage && freshData.profileImage.trim()) {
           setProfileImage(`${baseUrl}${freshData.profileImage}`);
         } else {
           setProfileImage(null);
         }
 
-        // Load data ke form - SELALU dari data terbaru
         const loadedData = {
           nama: freshData.nama || freshData.nama_lengkap || '',
           nuptk: freshData.nuptk || '',
@@ -223,7 +221,6 @@ const ProfilePage = () => {
       return 'Tanggal lahir tidak boleh di masa depan';
     }
 
-    // Hitung usia
     let age = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
@@ -235,11 +232,8 @@ const ProfilePage = () => {
     return null;
   };
 
-  // ── Submit profil ──────────────────────────────────────────────────────────
-
-  const handleSubmitProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  // ✅ TAMBAHAN: Buka modal konfirmasi
+  const openConfirmModal = () => {
     // Cek tanggal lahir (usia minimal 18 tahun)
     const tanggalError = validateTanggalLahir(formData.tanggalLahir);
     if (tanggalError) {
@@ -252,7 +246,6 @@ const ProfilePage = () => {
       return;
     }
 
-    // Clear error jika valid
     setErrors({});
 
     // Cek apakah ada perubahan dibanding data awal
@@ -272,11 +265,11 @@ const ProfilePage = () => {
       return;
     }
 
-    if (!isConfirmed) {
-      showModal({ type: 'warning', title: 'Konfirmasi Diperlukan', message: 'Harap centang konfirmasi terlebih dahulu sebelum menyimpan perubahan.' });
-      return;
-    }
+    setShowConfirmModal(true);
+  };
 
+  // ✅ TAMBAHAN: Eksekusi submit (setelah konfirmasi)
+  const executeSubmitProfile = async () => {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('currentUser');
     if (!token || !storedUser) {
@@ -323,8 +316,6 @@ const ProfilePage = () => {
           tanggal_lahir: formData.tanggalLahir
         };
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-        setIsConfirmed(false);
-        // Update snapshot supaya submit berikutnya juga terdeteksi tidak ada perubahan
         initialFormDataRef.current = { ...formData };
         showModal({ type: 'success', title: 'Profil Diperbarui!', message: 'Data profil Anda berhasil disimpan.' });
       } else {
@@ -554,155 +545,184 @@ const ProfilePage = () => {
               <p className="text-base font-bold text-white">Edit Profil</p>
             </div>
 
-            <form onSubmit={handleSubmitProfile}>
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                {/* Nama */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>Nama <span className="text-red-500">*</span></label>
-                  <input type="text" name="nama" value={formData.nama} onChange={handleChange}
-                    placeholder="Masukkan nama lengkap" className={inputCls} required />
-                </div>
+              {/* Nama */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>Nama <span className="text-red-500">*</span></label>
+                <input type="text" name="nama" value={formData.nama} onChange={handleChange}
+                  placeholder="Masukkan nama lengkap" className={inputCls} required />
+              </div>
 
-                {/* Email (readonly) */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>Email Akun</label>
-                  <input type="email" name="email" value={formData.email}
-                    className={readonlyCls} readOnly />
-                  <p className="text-xs text-gray-400">Email tidak dapat diubah</p>
-                </div>
+              {/* Email (readonly) */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>Email Akun</label>
+                <input type="email" name="email" value={formData.email}
+                  className={readonlyCls} readOnly />
+                <p className="text-xs text-gray-400">Email tidak dapat diubah</p>
+              </div>
 
-                {/* NUPTK */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>NUPTK</label>
-                  <input type="text" name="nuptk" value={formData.nuptk} onChange={handleChange}
-                    placeholder="Nomor Unik Pendidik" className={inputCls} />
-                </div>
+              {/* NUPTK */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>NUPTK</label>
+                <input type="text" name="nuptk" value={formData.nuptk} onChange={handleChange}
+                  placeholder="Nomor Unik Pendidik" className={inputCls} />
+              </div>
 
-                {/* NIY */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>NIY</label>
-                  <input type="text" name="niy" value={formData.niy} onChange={handleChange}
-                    placeholder="Nomor Induk Yayasan" className={inputCls} />
-                </div>
+              {/* NIY */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>NIY</label>
+                <input type="text" name="niy" value={formData.niy} onChange={handleChange}
+                  placeholder="Nomor Induk Yayasan" className={inputCls} />
+              </div>
 
-                {/* Jenis Kelamin */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>Jenis Kelamin <span className="text-red-500">*</span></label>
-                  <select name="jenisKelamin" value={formData.jenisKelamin} onChange={handleChange}
-                    className={inputCls} required>
-                    <option value="Laki-laki">Laki-laki</option>
-                    <option value="Perempuan">Perempuan</option>
-                  </select>
-                </div>
+              {/* Jenis Kelamin */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>Jenis Kelamin <span className="text-red-500">*</span></label>
+                <select name="jenisKelamin" value={formData.jenisKelamin} onChange={handleChange}
+                  className={inputCls} required>
+                  <option value="Laki-laki">Laki-laki</option>
+                  <option value="Perempuan">Perempuan</option>
+                </select>
+              </div>
 
-                {/* Telepon */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>Telepon</label>
-                  <input type="tel" name="telepon" value={formData.telepon} onChange={handleChange}
-                    placeholder="Misal: 081234567890" className={inputCls} />
-                </div>
+              {/* Telepon */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>Telepon</label>
+                <input type="tel" name="telepon" value={formData.telepon} onChange={handleChange}
+                  placeholder="Misal: 081234567890" className={inputCls} />
+              </div>
 
-                {/* Tempat Lahir*/}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>
-                    Tempat Lahir <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="tempatLahir"
-                    value={formData.tempatLahir}
-                    onChange={handleChange}
-                    placeholder="Masukkan tempat lahir"
-                    className={inputCls}
-                    required
-                  />
-                </div>
+              {/* Tempat Lahir*/}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>
+                  Tempat Lahir <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="tempatLahir"
+                  value={formData.tempatLahir}
+                  onChange={handleChange}
+                  placeholder="Masukkan tempat lahir"
+                  className={inputCls}
+                  required
+                />
+              </div>
 
-                {/* Tanggal Lahir */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>
-                    Tanggal Lahir <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    name="tanggalLahir"
-                    value={formData.tanggalLahir}
-                    onChange={(e) => {
-                      handleChange(e);
-                      // Clear error saat user mengubah tanggal
-                      if (errors.tanggalLahir) {
-                        setErrors(prev => {
-                          const newErrors = { ...prev };
-                          delete newErrors.tanggalLahir;
-                          return newErrors;
-                        });
-                      }
-                    }}
-                    className={errors.tanggalLahir
-                      ? "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400"
-                      : inputCls
+              {/* Tanggal Lahir */}
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>
+                  Tanggal Lahir <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  name="tanggalLahir"
+                  value={formData.tanggalLahir}
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (errors.tanggalLahir) {
+                      setErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.tanggalLahir;
+                        return newErrors;
+                      });
                     }
-                    required
-                  />
-                  {errors.tanggalLahir && (
-                    <p className="text-red-500 text-xs flex items-center gap-1">
-                      {errors.tanggalLahir}
-                    </p>
-                  )}
-                </div>
-
-                {/* Alamat */}
-                <div className="md:col-span-2 flex flex-col gap-1.5">
-                  <label className={labelCls} style={labelColor}>Alamat</label>
-                  <textarea name="alamat" value={formData.alamat} onChange={handleChange}
-                    rows={3} placeholder="Masukkan alamat lengkap" className={inputCls} />
-                </div>
+                  }}
+                  className={errors.tanggalLahir
+                    ? "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400"
+                    : inputCls
+                  }
+                  required
+                />
+                {errors.tanggalLahir && (
+                  <p className="text-red-500 text-xs flex items-center gap-1">
+                    {errors.tanggalLahir}
+                  </p>
+                )}
               </div>
 
-              {/* Konfirmasi + Simpan */}
-              <div className="px-6 pb-6">
-                <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                  <label className="flex items-start gap-2 cursor-pointer mb-5">
-                    <input
-                      type="checkbox" id="confirm"
-                      checked={isConfirmed}
-                      onChange={e => setIsConfirmed(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded accent-orange-500"
-                    />
-                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                      Saya yakin akan mengubah data tersebut
-                    </span>
-                  </label>
+              {/* Alamat */}
+              <div className="md:col-span-2 flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>Alamat</label>
+                <textarea name="alamat" value={formData.alamat} onChange={handleChange}
+                  rows={3} placeholder="Masukkan alamat lengkap" className={inputCls} />
+              </div>
+            </div>
 
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={isSaving}
-                      className="flex items-center gap-2 text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                      style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }}
-                      onMouseEnter={e => { if (!isSaving) e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
-                      onMouseLeave={e => { if (!isSaving) e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
-                    >
-                      {isSaving ? (
-                        <>
-                          <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                          Menyimpan...
-                        </>
-                      ) : (
-                        <>
-                          <User size={15} />
-                          Simpan Profil
-                        </>
-                      )}
-                    </button>
-                  </div>
+            {/* ✅ HAPUS checkbox konfirmasi, ganti dengan button yang buka modal */}
+            <div className="px-6 pb-6">
+              <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={openConfirmModal}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }}
+                    onMouseEnter={e => { if (!isSaving) e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
+                    onMouseLeave={e => { if (!isSaving) e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <User size={15} />
+                        Simpan Profil
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>
+
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 pf-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 pf-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi Perubahan Profil
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              Apakah Anda yakin ingin menyimpan perubahan profil ini?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  executeSubmitProfile();
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

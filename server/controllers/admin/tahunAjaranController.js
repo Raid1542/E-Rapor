@@ -148,7 +148,7 @@ const tambahTahunAjaran = async (req, res) => {
     try {
         const { tahun1, tahun2, pts_ganjil, pas_ganjil, pts_genap, pas_genap } = req.body;
 
-        // ═══ VALIDASI 1: Field wajib ═══
+        // ═══ VALIDASI Field wajib ═══
         if (!tahun1 || !tahun2) {
             return res.status(400).json({
                 success: false,
@@ -156,7 +156,7 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ VALIDASI 2: Format tahun harus angka ═══
+        // ═══ VALIDASI Format tahun harus angka ═══
         const t1 = parseInt(tahun1);
         const t2 = parseInt(tahun2);
 
@@ -167,7 +167,7 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ VALIDASI 3: Tahun akhir harus > tahun awal ═══
+        // ═══ Tahun akhir harus > tahun awal ═══
         if (t2 <= t1) {
             return res.status(400).json({
                 success: false,
@@ -175,18 +175,10 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ VALIDASI 4: Tahun tidak terlalu jauh (maks 10 tahun ke depan) ═══
-        const currentYear = new Date().getFullYear();
-        if (t1 < 2000 || t2 > currentYear + 10) {
-            return res.status(400).json({
-                success: false,
-                message: `Tahun harus antara 2000 dan ${currentYear + 10}.`
-            });
-        }
 
         const tahun_ajaran = `${t1}/${t2}`;
 
-        // ═══ VALIDASI 5: Cek duplikasi tahun ajaran ═══
+        // ═══ Cek duplikasi tahun ajaran ═══
         const [existing] = await db.execute(
             `SELECT id_tahun_ajaran_induk, tahun_ajaran FROM tahun_ajaran_induk WHERE tahun_ajaran = ?`,
             [tahun_ajaran]

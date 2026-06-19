@@ -1,14 +1,16 @@
 /**
  * Nama File: input_nilai_gbs_client.tsx
  * Fungsi: Input nilai siswa per mata pelajaran untuk guru bidang studi
- * UPDATE: Template guru kelas + dropdown mapel & kelas + filter siswa aktif
+ * UPDATE: 
+ *   - Template guru kelas + dropdown mapel & kelas + filter siswa aktif
+ *   - Hapus simpan langsung, ganti dengan popup modal konfirmasi sederhana
  * UI: Tema oranye elegan, konsisten dengan DataGuruPage
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut } from 'lucide-react';
+import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock, Info, AlertTriangle } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -83,7 +85,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok,</button>
             </div>
         </div>
     );
@@ -124,6 +126,10 @@ export default function InputNilaiGBSClient() {
     const { showSessionExpired, handleLogout } = useSession();
 
     const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
+    const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+    const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+    const [showPeriodModal, setShowPeriodModal] = useState(false);
+    const [periodModalShown, setPeriodModalShown] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isNotAssigned, setIsNotAssigned] = useState(false);
 
@@ -162,6 +168,9 @@ export default function InputNilaiGBSClient() {
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
     const [saving, setSaving] = useState(false);
 
+    // ✅ TAMBAHAN: State untuk modal konfirmasi
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+
     // ── FETCH DATA AWAL ─────────────────────────────────────────────────────────
 
     useEffect(() => {
@@ -196,10 +205,12 @@ export default function InputNilaiGBSClient() {
                 ]);
 
                 const { status_pts, status_pas } = taData.data;
+                setStatusPTS(status_pts || 'nonaktif');
+                setStatusPAS(status_pas || 'nonaktif');
+
                 const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
                 setJenisPenilaianAktif(jenisAktif);
 
-                // ✅ Backend sudah filter mapel pilihan, langsung pakai
                 const allMapel = mapelData.data || [];
                 setMapelList(allMapel);
                 setKomponenList(komponenData.data || []);
@@ -323,6 +334,19 @@ export default function InputNilaiGBSClient() {
         fetchNilai();
     }, [selectedMapelId, selectedKelasId, mapelList, kelasList, showModal]);
 
+    // ====== SHOW MODAL NOTIFIKASI PERIODE ======
+    useEffect(() => {
+        if (loading) return;
+
+        const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
+        const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
+
+        if ((isPeriodNotActive || isPeriodLocked) && !periodModalShown) {
+            setShowPeriodModal(true);
+            setPeriodModalShown(true);
+        }
+    }, [statusPTS, statusPAS, loading, periodModalShown]);
+
     // ── FILTER & PAGINATION ─────────────────────────────────────────────────────
 
     useEffect(() => {
@@ -384,7 +408,22 @@ export default function InputNilaiGBSClient() {
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
+    const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
+    const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
+    const isReadOnly = isPeriodNotActive || isPeriodLocked;
+
     const handleEdit = (siswa: SiswaNilai) => {
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: '🔒 Mode Baca-Saja',
+                message: isPeriodLocked
+                    ? 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengedit nilai siswa.'
+                    : 'Periode penilaian belum aktif.\n\nAnda belum dapat mengedit nilai siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
+            });
+            return;
+        }
+
         setEditingSiswa(siswa);
         setEditingNilai({ ...siswa.nilai });
         setShowEdit(true);
@@ -401,101 +440,119 @@ export default function InputNilaiGBSClient() {
         }, 150);
     };
 
-    const simpanNilaiKomponen = async () => {
-    if (!editingSiswa || !selectedMapelId) return;
+    // ✅ TAMBAHAN: Validasi dan buka modal konfirmasi
+    const openConfirmSimpan = () => {
+        if (!editingSiswa || !selectedMapelId) return;
 
-    // Validasi nilai
-    for (const [idStr, nilai] of Object.entries(editingNilai)) {
-        if (nilai !== null) {
-            const nama = komponenList.find(k => k.id_komponen === Number(idStr))?.nama_komponen || idStr;
-            if (typeof nilai !== 'number' || isNaN(nilai) || nilai < 0 || nilai > 100) {
-                closeEditThenShow({
-                    type: 'warning',
-                    title: 'Nilai Tidak Valid',
-                    message: `Nilai untuk "${nama}" harus angka 0-100.`
-                });
-                return;
+        // Validasi nilai
+        for (const [idStr, nilai] of Object.entries(editingNilai)) {
+            if (nilai !== null) {
+                const nama = komponenList.find(k => k.id_komponen === Number(idStr))?.nama_komponen || idStr;
+                if (typeof nilai !== 'number' || isNaN(nilai) || nilai < 0 || nilai > 100) {
+                    closeEditThenShow({
+                        type: 'warning',
+                        title: 'Nilai Tidak Valid',
+                        message: `Nilai untuk "${nama}" harus angka 0-100.`
+                    });
+                    return;
+                }
             }
         }
-    }
 
-    // Cek perubahan
-    const hasChanged = Object.entries(editingNilai).some(([idStr, nilaiBaru]) => {
-        const nilaiLama = editingSiswa.nilai[Number(idStr)] ?? null;
-        return nilaiBaru !== nilaiLama;
-    });
-
-    if (!hasChanged) {
-        closeEditThenShow({
-            type: 'warning',
-            title: 'Tidak Ada Perubahan',
-            message: 'Data yang Anda masukkan sama dengan data sebelumnya.'
-        });
-        return;
-    }
-
-    setSaving(true);
-    try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API}/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ nilai: editingNilai }),
+        // Cek perubahan
+        const hasChanged = Object.entries(editingNilai).some(([idStr, nilaiBaru]) => {
+            const nilaiLama = editingSiswa.nilai[Number(idStr)] ?? null;
+            return nilaiBaru !== nilaiLama;
         });
 
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
-            throw new Error(err.message);
+        if (!hasChanged) {
+            closeEditThenShow({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Data yang Anda masukkan sama dengan data sebelumnya.'
+            });
+            return;
         }
 
-        const data = await res.json();
-        console.log('📥 Backend response:', data);
+        // Tutup modal edit dan buka modal konfirmasi
+        setEditClosing(true);
+        setTimeout(() => {
+            setShowEdit(false);
+            setEditClosing(false);
+            setShowConfirmModal(true);
+        }, 200);
+    };
 
-        const updatedSiswa: SiswaNilai = {
-            ...editingSiswa,
-            nilai: editingNilai,
-            nilai_rapor_pts: data.nilai_rapor_pts ?? data.nilai_rapor ?? editingSiswa.nilai_rapor_pts,
-            deskripsi_pts: data.deskripsi_pts ?? data.deskripsi ?? editingSiswa.deskripsi_pts,
-            nilai_rapor_pas: data.nilai_rapor_pas ?? editingSiswa.nilai_rapor_pas,
-            deskripsi_pas: data.deskripsi_pas ?? editingSiswa.deskripsi_pas,
-        };
+    // ✅ TAMBAHAN: Eksekusi simpan nilai (setelah konfirmasi)
+    const executeSimpanNilai = async () => {
+        if (!editingSiswa || !selectedMapelId) return;
 
-        console.log('Updated siswa:', updatedSiswa);
+        setSaving(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API}/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ nilai: editingNilai }),
+            });
 
-        setSiswaList(prevList => {
-            const newList = prevList.map(siswa => 
-                siswa.id === editingSiswa.id ? updatedSiswa : siswa
-            );
-            console.log('📋 siswaList updated, length:', newList.length);
-            return newList;
-        });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+                throw new Error(err.message);
+            }
 
-        setFilteredSiswa(prevList => {
-            const newList = prevList.map(siswa => 
-                siswa.id === editingSiswa.id ? updatedSiswa : siswa
-            );
-            console.log('📋 filteredSiswa updated, length:', newList.length);
-            return newList;
-        });
+            const data = await res.json();
+            console.log('📥 Backend response:', data);
 
-        // Tutup modal dan show success
-        closeEditThenShow({
-            type: 'success',
-            title: 'Nilai Disimpan!',
-            message: `Nilai ${editingSiswa.nama} berhasil disimpan.`
-        });
+            const updatedSiswa: SiswaNilai = {
+                ...editingSiswa,
+                nilai: editingNilai,
+                nilai_rapor_pts: data.nilai_rapor_pts ?? data.nilai_rapor ?? editingSiswa.nilai_rapor_pts,
+                deskripsi_pts: data.deskripsi_pts ?? data.deskripsi ?? editingSiswa.deskripsi_pts,
+                nilai_rapor_pas: data.nilai_rapor_pas ?? editingSiswa.nilai_rapor_pas,
+                deskripsi_pas: data.deskripsi_pas ?? editingSiswa.deskripsi_pas,
+            };
 
-    } catch (err: any) {
-        console.error('Error saving:', err);
-        closeEditThenShow({
-            type: 'error',
-            title: 'Gagal Menyimpan',
-            message: err.message || 'Gagal menyimpan nilai.'
-        });
-    } finally {
-        setSaving(false);
-    }
-};
+            console.log('Updated siswa:', updatedSiswa);
+
+            setSiswaList(prevList => {
+                const newList = prevList.map(siswa =>
+                    siswa.id === editingSiswa.id ? updatedSiswa : siswa
+                );
+                console.log('📋 siswaList updated, length:', newList.length);
+                return newList;
+            });
+
+            setFilteredSiswa(prevList => {
+                const newList = prevList.map(siswa =>
+                    siswa.id === editingSiswa.id ? updatedSiswa : siswa
+                );
+                console.log('📋 filteredSiswa updated, length:', newList.length);
+                return newList;
+            });
+
+            // Tutup modal konfirmasi dan show success
+            setShowConfirmModal(false);
+            setEditingSiswa(null);
+            showModal({
+                type: 'success',
+                title: 'Nilai Disimpan!',
+                message: `Nilai ${editingSiswa.nama} berhasil disimpan.`
+            });
+
+        } catch (err: any) {
+            console.error('Error saving:', err);
+            setShowConfirmModal(false);
+            setEditingSiswa(null);
+            showModal({
+                type: 'error',
+                title: 'Gagal Menyimpan',
+                message: err.message || 'Gagal menyimpan nilai.'
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // ── BADGE NILAI ─────────────────────────────────────────────────────────────
 
@@ -584,12 +641,50 @@ export default function InputNilaiGBSClient() {
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola nilai komponen & rapor siswa per mata pelajaran pilihan</p>
             </div>
 
+            {(() => {
+                if (isPeriodLocked) {
+                    return (
+                        <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                            style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}>
+                            <Lock className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-600" />
+                            <div className="flex-1">
+                                <p className="text-sm font-bold mb-1 text-red-900">
+                                    🔒 Periode Penilaian Selesai
+                                </p>
+                                <p className="text-xs text-red-800">
+                                    Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah.
+                                </p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                if (isPeriodNotActive) {
+                    return (
+                        <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                            style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                            <Info className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
+                            <div className="flex-1">
+                                <p className="text-sm font-bold mb-1 text-yellow-900">
+                                    ⏳ Periode Penilaian Belum Aktif
+                                </p>
+                                <p className="text-xs text-yellow-800">
+                                    Baik PTS maupun PAS belum dibuka oleh admin. Anda hanya dapat melihat data nilai dalam mode baca-saja.
+                                </p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return null;
+            })()}
+
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
                 {/* Toolbar */}
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        {/* Dropdown Mapel */}
-                        <div className="flex items-center gap-3 flex-1 min-w-[300px]">
+                    <div className="flex flex-col gap-4 mb-4">
+                        {/* Row 1: Dropdown Mapel */}
+                        <div className="flex items-center gap-3">
                             <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
                                 Mata Pelajaran
                             </label>
@@ -613,9 +708,9 @@ export default function InputNilaiGBSClient() {
                             </select>
                         </div>
 
-                        {/* Dropdown Kelas - Muncul setelah pilih mapel */}
+                        {/* Row 2: Dropdown Kelas - Muncul setelah pilih mapel */}
                         {selectedMapelId && (
-                            <div className="flex items-center gap-3 min-w-[200px]">
+                            <div className="flex items-center gap-3">
                                 <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
                                     Kelas
                                 </label>
@@ -639,9 +734,9 @@ export default function InputNilaiGBSClient() {
                             </div>
                         )}
 
-                        {/* Search */}
+                        {/* Row 3: Search - Muncul setelah pilih mapel & kelas */}
                         {selectedMapelId && selectedKelasId && (
-                            <div className="relative min-w-[220px]">
+                            <div className="relative" style={{ maxWidth: '300px' }}>
                                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                     <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
                                 </div>
@@ -658,21 +753,11 @@ export default function InputNilaiGBSClient() {
                         )}
                     </div>
 
-                    {/* Info bar */}
+                    {/* Info bar - Hanya tampilkan jumlah data dan pagination */}
                     {selectedMapelId && selectedKelasId && currentMapel && currentKelas && (
                         <>
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold"
-                                    style={{ background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }}>
-                                    <CheckCircle2 size={11} /> Dapat Input Nilai
-                                </span>
-                                {jenisPenilaianAktif && (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
-                                        style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
-                                        Periode Aktif: <strong className="ml-1">{jenisPenilaianAktif}</strong>
-                                    </span>
-                                )}
-                                <div className="flex items-center gap-2 ml-auto">
+                            <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+                                <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
                                     <select value={itemsPerPage}
                                         onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
@@ -683,11 +768,11 @@ export default function InputNilaiGBSClient() {
                                     </select>
                                     <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                                 </div>
-                            </div>
 
-                            <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                                Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} siswa
-                            </p>
+                                <p className="text-xs" style={{ color: '#c95b08' }}>
+                                    Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} siswa
+                                </p>
+                            </div>
                         </>
                     )}
                 </div>
@@ -759,12 +844,31 @@ export default function InputNilaiGBSClient() {
                                                             onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}>
                                                             <Eye size={13} /> Detail
                                                         </button>
-                                                        <button onClick={() => handleEdit(siswa)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                            style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                                            onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}>
-                                                            <Pencil size={13} /> Edit
+                                                        <button
+                                                            onClick={() => handleEdit(siswa)}
+                                                            disabled={isReadOnly}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            style={{
+                                                                background: isReadOnly ? '#e5e7eb' : '#fff0e5',
+                                                                border: isReadOnly ? '1px solid #d1d5db' : '1px solid #f5a623',
+                                                                color: isReadOnly ? '#6b7280' : '#b35a08'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                if (!isReadOnly) e.currentTarget.style.background = '#fff0e5';
+                                                            }}
+                                                        >
+                                                            {isReadOnly ? (
+                                                                <>
+                                                                    <Lock size={13} /> Terkunci
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Pencil size={13} /> Edit
+                                                                </>
+                                                            )}
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1005,11 +1109,13 @@ export default function InputNilaiGBSClient() {
 
                             <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
                                 <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
-                                <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
-                                    className={btnPrimary.base} style={btnPrimary.style}
-                                    onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
-                                    <Pencil size={14} /> Edit Nilai
-                                </button>
+                                {!isReadOnly && (
+                                    <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
+                                        className={btnPrimary.base} style={btnPrimary.style}
+                                        onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
+                                        <Pencil size={14} /> Edit Nilai
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1107,8 +1213,8 @@ export default function InputNilaiGBSClient() {
                                                         disabled={isDisabled}
                                                         placeholder="-"
                                                         className={`w-full px-2 py-2.5 rounded-lg text-sm font-bold text-center transition-all border ${isDisabled
-                                                                ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                                : 'bg-orange-50/50 border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                            ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                            : 'bg-orange-50/50 border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                                             }`}
                                                     />
                                                 </div>
@@ -1133,8 +1239,8 @@ export default function InputNilaiGBSClient() {
                                             return (
                                                 <div key={komponen.id_komponen}
                                                     className={`rounded-xl p-4 border-2 transition-all relative overflow-hidden ${isActive
-                                                            ? 'border-orange-400 shadow-md'
-                                                            : 'border-gray-200 bg-gray-50'
+                                                        ? 'border-orange-400 shadow-md'
+                                                        : 'border-gray-200 bg-gray-50'
                                                         }`}>
                                                     {isActive && (
                                                         <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-10"
@@ -1184,8 +1290,8 @@ export default function InputNilaiGBSClient() {
                                                             disabled={isDisabled}
                                                             placeholder="0"
                                                             className={`w-full px-4 py-3 rounded-lg text-2xl font-bold text-center transition-all ${isDisabled
-                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                                    : 'bg-white text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400'
+                                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                                : 'bg-white text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400'
                                                                 }`}
                                                         />
 
@@ -1205,7 +1311,8 @@ export default function InputNilaiGBSClient() {
 
                             <div className="flex justify-end gap-3 mt-6 pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
                                 <BtnSecondary onClick={closeEdit} disabled={saving}>Batal</BtnSecondary>
-                                <button onClick={simpanNilaiKomponen} disabled={saving}
+                                {/* ✅ UBAH: onClick={openConfirmSimpan} */}
+                                <button onClick={openConfirmSimpan} disabled={saving}
                                     className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     style={btnPrimary.style}
                                     onMouseEnter={e => { if (!saving) btnPrimary.hover(e); }}
@@ -1221,6 +1328,100 @@ export default function InputNilaiGBSClient() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {showConfirmModal && editingSiswa && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi Penyimpanan Nilai
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            Apakah Anda yakin ingin menyimpan nilai {editingSiswa.nama}?
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    executeSimpanNilai();
+                                }}
+                                disabled={saving}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                {saving ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    <>Simpan</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showPeriodModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowPeriodModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 dg-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle size={24} className="text-orange-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">
+                                    {isPeriodLocked
+                                        ? '🔒 Periode Penilaian Selesai'
+                                        : '⏳ Periode Penilaian Belum Aktif'}
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 text-sm text-gray-600 mb-6">
+                            <p>
+                                {isPeriodLocked
+                                    ? 'Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah.'
+                                    : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda hanya dapat melihat data nilai dalam mode baca-saja.'}
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={() => setShowPeriodModal(false)}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                        >
+                            Ok
+                        </button>
                     </div>
                 </div>
             )}

@@ -2,13 +2,16 @@
  * Nama File: atur_penilaian_gbs_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian
  *         oleh guru bidang studi, mencakup kategori akademik dan bobot.
- * UPDATE: Fix syntax error di dropdown mapel, filter hanya mapel pilihan
+ * UPDATE: 
+ *   - Tambah banner status periode (belum aktif/selesai)
+ *   - Hapus banner info jenis penilaian aktif (sudah ada di header global)
+ *   - Pertahankan state jenisPenilaianAktif untuk logika validasi
  * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage
  */
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut } from 'lucide-react';
+import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut, Lock, Info } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -122,10 +125,10 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                         >Batal</button>
                         <button onClick={() => { modal.onConfirm?.(); onClose(); }}
                             className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
-                        >Ya, Lanjutkan</button>
+                        >Ya</button>
                     </div>
                 ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
                 )}
             </div>
         </div>
@@ -191,6 +194,14 @@ export default function AturPenilaianGBSClient() {
     const { showSessionExpired, handleLogout } = useSession();
 
     const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
+
+    const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+    const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+
+    const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
+    const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
+    const isReadOnly = isPeriodNotActive || isPeriodLocked;
+
     const [activeTab, setActiveTab] = useState<'akademik' | 'bobot'>('akademik');
     const [loading, setLoading] = useState(true);
 
@@ -198,7 +209,7 @@ export default function AturPenilaianGBSClient() {
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
     const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
 
-    // ✅ State untuk kelas (per tab)
+    // State untuk kelas (per tab)
     const [kelasListAkademik, setKelasListAkademik] = useState<KelasItem[]>([]);
     const [kelasListBobot, setKelasListBobot] = useState<KelasItem[]>([]);
     const [selectedKelasAkademik, setSelectedKelasAkademik] = useState<number | null>(null);
@@ -232,6 +243,10 @@ export default function AturPenilaianGBSClient() {
     const [isSavingBobot, setIsSavingBobot] = useState(false);
     const [isSavingKategori, setIsSavingKategori] = useState(false);
 
+    // State untuk modal konfirmasi
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<'save-bobot' | 'save-kategori' | null>(null);
+
     // Modals
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
@@ -239,6 +254,9 @@ export default function AturPenilaianGBSClient() {
 
     // Akses ditolak
     const [isNotAssigned, setIsNotAssigned] = useState(false);
+
+    const [showPeriodModal, setShowPeriodModal] = useState(false);
+    const [periodModalShown, setPeriodModalShown] = useState(false);
 
     // ====== FETCH DATA DUKUNGAN ======
     useEffect(() => {
@@ -277,6 +295,11 @@ export default function AturPenilaianGBSClient() {
                 ]);
 
                 const { status_pts, status_pas } = taData.data;
+
+                // ✅ SIMPAN STATUS PERIODE
+                setStatusPTS(status_pts || 'nonaktif');
+                setStatusPAS(status_pas || 'nonaktif');
+
                 const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
                 setJenisPenilaianAktif(jenisAktif);
                 setKomponenList(komponenData.data || []);
@@ -319,7 +342,6 @@ export default function AturPenilaianGBSClient() {
                     const kelasData = data.data || [];
                     setKelasListAkademik(kelasData);
 
-                    // Auto-select kelas pertama
                     if (kelasData.length > 0) {
                         setSelectedKelasAkademik(kelasData[0].kelas_id);
                     }
@@ -360,7 +382,6 @@ export default function AturPenilaianGBSClient() {
                     const kelasData = data.data || [];
                     setKelasListBobot(kelasData);
 
-                    // Auto-select kelas pertama
                     if (kelasData.length > 0) {
                         setSelectedKelasBobot(kelasData[0].kelas_id);
                     }
@@ -505,6 +526,19 @@ export default function AturPenilaianGBSClient() {
         fetchBobot();
     }, [selectedMapelBobot, selectedKelasBobot, komponenList, activeTab, showModal]);
 
+    // ====== SHOW MODAL NOTIFIKASI PERIODE ======
+    useEffect(() => {
+        if (loading) return;
+
+        const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
+        const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
+
+        if ((isPeriodNotActive || isPeriodLocked) && !periodModalShown) {
+            setShowPeriodModal(true);
+            setPeriodModalShown(true);
+        }
+    }, [statusPTS, statusPAS, loading, periodModalShown]);
+
     // ====== TAB CHANGE HANDLER ======
     const handleTabChange = (tab: 'akademik' | 'bobot') => {
         setKategoriList([]);
@@ -542,8 +576,8 @@ export default function AturPenilaianGBSClient() {
         }, 200);
     };
 
-    // ====== SAVE KATEGORI ======
-    const handleSaveKategori = async () => {
+    // Validasi kategori dan buka modal konfirmasi
+    const validateKategori = (): boolean => {
         const ne: Record<string, string> = {};
 
         if (isNaN(editKategoriData.min_nilai) || isNaN(editKategoriData.max_nilai)) {
@@ -568,7 +602,7 @@ export default function AturPenilaianGBSClient() {
         if (Object.keys(ne).length > 0) {
             setErrors(ne);
             showModal({ type: 'warning', title: 'Form Belum Lengkap', message: Object.values(ne).join('\n') });
-            return;
+            return false;
         }
 
         const initial = initialEditKategoriDataRef.current;
@@ -580,9 +614,21 @@ export default function AturPenilaianGBSClient() {
 
         if (isUnchanged) {
             showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-            return;
+            return false;
         }
 
+        return true;
+    };
+
+    // Buka modal konfirmasi untuk save kategori
+    const openConfirmSaveKategori = () => {
+        if (!validateKategori()) return;
+        setConfirmAction('save-kategori');
+        setShowConfirmModal(true);
+    };
+
+    // Eksekusi save kategori (setelah konfirmasi)
+    const executeSaveKategori = async () => {
         setIsSavingKategori(true);
         try {
             const token = localStorage.getItem('token');
@@ -711,8 +757,9 @@ export default function AturPenilaianGBSClient() {
         );
     };
 
-    const handleSaveBobot = async () => {
-        if (!selectedMapelBobot || !selectedKelasBobot) return;
+    // Validasi bobot dan buka modal konfirmasi
+    const validateBobot = (): boolean => {
+        if (!selectedMapelBobot || !selectedKelasBobot) return false;
 
         const isUnchanged = bobotList.every((b) => {
             const initial = initialBobotListRef.current.find((i) => i.komponen_id === b.komponen_id);
@@ -721,13 +768,13 @@ export default function AturPenilaianGBSClient() {
 
         if (isUnchanged) {
             showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-            return;
+            return false;
         }
 
         const adaNegatif = bobotList.some(b => b.bobot < 0);
         if (adaNegatif) {
             showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' });
-            return;
+            return false;
         }
 
         const total = bobotList.reduce((sum, b) => sum + b.bobot, 0);
@@ -737,7 +784,7 @@ export default function AturPenilaianGBSClient() {
                 title: 'Total Bobot Salah',
                 message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%`,
             });
-            return;
+            return false;
         }
 
         if (isPTSActive) {
@@ -746,8 +793,22 @@ export default function AturPenilaianGBSClient() {
                 title: 'Periode PTS Aktif',
                 message: 'Bobot tidak dapat diubah saat periode PTS aktif.',
             });
-            return;
+            return false;
         }
+
+        return true;
+    };
+
+    // Buka modal konfirmasi untuk save bobot
+    const openConfirmSaveBobot = () => {
+        if (!validateBobot()) return;
+        setConfirmAction('save-bobot');
+        setShowConfirmModal(true);
+    };
+
+    // Eksekusi save bobot (setelah konfirmasi)
+    const executeSaveBobot = async () => {
+        if (!selectedMapelBobot || !selectedKelasBobot) return;
 
         setIsSavingBobot(true);
         try {
@@ -869,6 +930,54 @@ export default function AturPenilaianGBSClient() {
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola kategori dan bobot penilaian mata pelajaran yang Anda ajar</p>
             </div>
 
+            {/* ✅ BANNER STATUS PERIODE */}
+            {(() => {
+                const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
+                const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
+
+                if (isPeriodLocked) {
+                    return (
+                        <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                            style={{
+                                background: '#fef2f2',
+                                border: '1px solid #fca5a5'
+                            }}>
+                            <Lock className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-600" />
+                            <div className="flex-1">
+                                <p className="text-sm font-bold mb-1 text-red-900">
+                                    🔒 Periode Penilaian Selesai
+                                </p>
+                                <p className="text-xs text-red-800">
+                                    Baik PTS maupun PAS telah selesai. Konfigurasi kategori dan bobot sudah dikunci dan tidak dapat diubah.
+                                </p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                if (isPeriodNotActive) {
+                    return (
+                        <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                            style={{
+                                background: '#fef3c7',
+                                border: '1px solid #fcd34d'
+                            }}>
+                            <Info className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
+                            <div className="flex-1">
+                                <p className="text-sm font-bold mb-1 text-yellow-900">
+                                    ⏳ Periode Penilaian Belum Aktif
+                                </p>
+                                <p className="text-xs text-yellow-800">
+                                    Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat menyiapkan kategori dan bobot penilaian sekarang sebagai persiapan.
+                                </p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return null;
+            })()}
+
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
                 {/* Tabs */}
                 <div className="px-6 py-3 border-b" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
@@ -899,16 +1008,9 @@ export default function AturPenilaianGBSClient() {
                     {/* ====== TAB: AKADEMIK ====== */}
                     {activeTab === 'akademik' && (
                         <div>
-                            {jenisPenilaianAktif && (
-                                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                    <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                                        <span className="font-bold">ℹ️ Info: </span>
-                                        Periode <strong>{jenisPenilaianAktif}</strong> sedang aktif.
-                                    </p>
-                                </div>
-                            )}
+                            {/* ✅ BANNER INFO JENIS PENILAIAN AKTIF DIHAPUS (sudah ada di header global) */}
 
-                            {/* ✅ Dropdown Mapel - DIPERBAIKI */}
+                            {/* Dropdown Mapel */}
                             <div className="mb-4">
                                 <label className={labelCls} style={labelColor}>
                                     Mata Pelajaran
@@ -967,13 +1069,23 @@ export default function AturPenilaianGBSClient() {
                                         </p>
                                         <button
                                             onClick={() => openEditKategori()}
-                                            className={btnPrimary.base}
+                                            disabled={isReadOnly}
+                                            className={`${btnPrimary.base} disabled:opacity-50 disabled:cursor-not-allowed`}
                                             style={btnPrimary.style}
                                             onMouseEnter={btnPrimary.hover}
                                             onMouseLeave={btnPrimary.leave}
                                         >
-                                            <Plus size={16} />
-                                            Tambah Kategori
+                                            {isReadOnly ? (
+                                                <>
+                                                    <Lock size={16} />
+                                                    Terkunci
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Plus size={16} />
+                                                    Tambah Kategori
+                                                </>
+                                            )}
                                         </button>
                                     </div>
 
@@ -1025,21 +1137,55 @@ export default function AturPenilaianGBSClient() {
                                                                 <div className="flex justify-center gap-2">
                                                                     <button
                                                                         onClick={() => openEditKategori(kategori)}
-                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                                        style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                                                        onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                                        disabled={isReadOnly}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                        style={{
+                                                                            background: isReadOnly ? '#e5e7eb' : '#fff0e5',
+                                                                            border: isReadOnly ? '1px solid #d1d5db' : '1px solid #f5a623',
+                                                                            color: isReadOnly ? '#6b7280' : '#b35a08'
+                                                                        }}
+                                                                        onMouseEnter={e => {
+                                                                            if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8';
+                                                                        }}
+                                                                        onMouseLeave={e => {
+                                                                            if (!isReadOnly) e.currentTarget.style.background = '#fff0e5';
+                                                                        }}
                                                                     >
-                                                                        <Pencil size={13} /> Edit
+                                                                        {isReadOnly ? (
+                                                                            <>
+                                                                                <Lock size={13} /> Terkunci
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Pencil size={13} /> Edit
+                                                                            </>
+                                                                        )}
                                                                     </button>
                                                                     <button
                                                                         onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)}
-                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                                        style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' }}
-                                                                        onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                                                        disabled={isReadOnly}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                        style={{
+                                                                            background: isReadOnly ? '#e5e7eb' : '#fef2f2',
+                                                                            border: isReadOnly ? '1px solid #d1d5db' : '1px solid #fca5a5',
+                                                                            color: isReadOnly ? '#6b7280' : '#dc2626'
+                                                                        }}
+                                                                        onMouseEnter={e => {
+                                                                            if (!isReadOnly) e.currentTarget.style.background = '#fee2e2';
+                                                                        }}
+                                                                        onMouseLeave={e => {
+                                                                            if (!isReadOnly) e.currentTarget.style.background = '#fef2f2';
+                                                                        }}
                                                                     >
-                                                                        <Trash2 size={13} /> Hapus
+                                                                        {isReadOnly ? (
+                                                                            <>
+                                                                                <Lock size={13} /> Terkunci
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Trash2 size={13} /> Hapus
+                                                                            </>
+                                                                        )}
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -1065,14 +1211,7 @@ export default function AturPenilaianGBSClient() {
                     {/* ====== TAB: BOBOT ====== */}
                     {activeTab === 'bobot' && (
                         <div>
-                            {isPTSActive && (
-                                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                    <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                                        <span className="font-bold">ℹ️ Periode PTS Aktif: </span>
-                                        Sistem otomatis menetapkan <strong>PTS = 100%</strong>. Anda tidak perlu mengatur bobot manual.
-                                    </p>
-                                </div>
-                            )}
+                            {/* ✅ BANNER INFO PERIODE PTS DIHAPUS (sudah ada di header global) */}
 
                             {/* Dropdown Mapel */}
                             <div className="mb-4">
@@ -1131,12 +1270,24 @@ export default function AturPenilaianGBSClient() {
                                     </div>
                                 ) : (
                                     <div>
+                                        {/* Info inline untuk PTS aktif - lebih subtle */}
+                                        {isPTSActive && (
+                                            <div className="mb-4 p-3 rounded-lg flex items-center gap-2"
+                                                style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                                <AlertCircle size={14} style={{ color: '#c95b08' }} />
+                                                <p className="text-xs" style={{ color: '#7a3a0a' }}>
+                                                    Periode <strong>PTS</strong> aktif — bobot otomatis ditetapkan <strong>PTS = 100%</strong>
+                                                </p>
+                                            </div>
+                                        )}
+
                                         <div className="space-y-3 mb-6">
                                             {bobotList.map((bobot) => {
                                                 const komponen = komponenList.find((k) => k.id_komponen === bobot.komponen_id);
                                                 const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
                                                 const displayBobot = isPTSActive ? (isPTS ? 100 : 0) : bobot.bobot;
-                                                const isEditable = !isPTSActive;
+                                                // ✅ UBAH: Tambahkan kondisi isReadOnly
+                                                const isEditable = !isPTSActive && !isReadOnly;
 
                                                 return (
                                                     <div
@@ -1165,7 +1316,7 @@ export default function AturPenilaianGBSClient() {
                                                                 disabled={!isEditable}
                                                                 className={`${isEditable ? inputCls : inputDisabledCls} text-right`}
                                                                 style={{ maxWidth: '120px' }}
-                                                                readOnly={isPTSActive}
+                                                                readOnly={!isEditable}
                                                             />
                                                             <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>%</span>
                                                         </div>
@@ -1183,10 +1334,10 @@ export default function AturPenilaianGBSClient() {
                                             </div>
                                         </div>
 
-                                        {!isPTSActive && (
+                                        {!isPTSActive && !isReadOnly && (
                                             <div className="flex justify-end pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                                                 <button
-                                                    onClick={handleSaveBobot}
+                                                    onClick={openConfirmSaveBobot}
                                                     disabled={isSavingBobot || !isBobotValid}
                                                     className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
                                                     style={btnPrimary.style}
@@ -1342,7 +1493,7 @@ export default function AturPenilaianGBSClient() {
                         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
                             <BtnSecondary onClick={closeEditKategori} disabled={isSavingKategori}>Batal</BtnSecondary>
                             <button
-                                onClick={handleSaveKategori}
+                                onClick={openConfirmSaveKategori}
                                 disabled={isSavingKategori}
                                 className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
                                 style={btnPrimary.style}
@@ -1359,6 +1510,105 @@ export default function AturPenilaianGBSClient() {
                                 )}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Konfirmasi Sederhana */}
+            {showConfirmModal && (
+                <div
+                    className="fixed inset-0 z-[110] flex items-center justify-center p-4 ap-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ap-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi Penyimpanan Data
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            {confirmAction === 'save-bobot'
+                                ? 'Apakah Anda yakin ingin menyimpan bobot penilaian ini?'
+                                : 'Apakah Anda yakin ingin menyimpan kategori ini?'}
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    if (confirmAction === 'save-bobot') {
+                                        executeSaveBobot();
+                                    } else {
+                                        executeSaveKategori();
+                                    }
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* ✅ MODAL NOTIFIKASI PERIODE */}
+            {showPeriodModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowPeriodModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 ap-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle size={24} className="text-orange-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">
+                                    {statusPTS === 'selesai' || statusPAS === 'selesai'
+                                        ? '🔒 Periode Penilaian Selesai'
+                                        : '⏳ Periode Penilaian Belum Aktif'}
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 text-sm text-gray-600 mb-6">
+                            <p>
+                                {statusPTS === 'selesai' || statusPAS === 'selesai'
+                                    ? 'Baik PTS maupun PAS telah selesai. Konfigurasi kategori dan bobot sudah dikunci dan tidak dapat diubah.'
+                                    : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat menyiapkan kategori dan bobot penilaian sekarang sebagai persiapan.'}
+                            </p>
+                            {(statusPTS !== 'aktif' && statusPAS !== 'aktif') && (
+                                <p className="text-xs" style={{ color: '#c95b08' }}>
+                                    💡 <strong>Tip:</strong> Anda tetap bisa mengatur kategori dan bobot sekarang agar siap digunakan saat periode dibuka.
+                                </p>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => setShowPeriodModal(false)}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                        >
+                            Ok
+                        </button>
                     </div>
                 </div>
             )}

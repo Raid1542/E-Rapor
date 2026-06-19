@@ -1,137 +1,72 @@
-const siswaModel = require('../../models/admin/siswaModel');
-const db = require('../../config/db');
+/**
+ * Nama File: siswaMasterController.js
+ * Fungsi: Master data siswa (TANPA tahun ajaran)
+ *         Menggunakan Model untuk operasi database
+ */
+
+const SiswaModel = require('../../models/admin/siswaModel');
 const XLSX = require('xlsx');
 const fs = require('fs');
+const db = require('../../config/db');
 
-const getIdTahunAjaranAktif = async (idInduk) => {
-    const [rows] = await db.execute(
-        `SELECT id_tahun_ajaran 
-            FROM tahun_ajaran 
-            WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
-            LIMIT 1`,
-        [idInduk]
-    );
-    return rows.length > 0 ? rows[0].id_tahun_ajaran : null;
-};
-
-const getSiswa = async (req, res) => {
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /siswa-master - Ambil SEMUA siswa (master data)
+// ═════════════════════════════════════════════════════════════════════════════
+const getSiswaMaster = async (req, res) => {
     try {
-        let { tahun_ajaran_id } = req.query;
+        const { search, page = 1, limit = 10, status = 'aktif' } = req.query;
 
-        if (!tahun_ajaran_id) {
-            return res.status(400).json({ success: false, message: 'Tahun ajaran wajib dipilih' });
-        }
+        const result = await SiswaModel.getAllSiswa(search, status, parseInt(page), parseInt(limit));
 
-        const [cekInduk] = await db.execute(
-            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran_induk WHERE id_tahun_ajaran_induk = ?`,
-            [tahun_ajaran_id]
-        );
+        res.json({
+            success: true,
+            data: result.data,
+            pagination: result.pagination
+        });
 
-        if (cekInduk.length > 0) {
-            tahun_ajaran_id = await getIdTahunAjaranAktif(tahun_ajaran_id);
-            if (!tahun_ajaran_id) {
-                return res.json({ success: true, data: [] });
-            }
-        }
-
-        const siswaList = await siswaModel.getSiswaByTahunAjaran(tahun_ajaran_id);
-        res.json({ success: true, data: siswaList });
     } catch (err) {
-        console.error('Error get siswa:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
+        console.error('Error getSiswaMaster:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil data siswa: ' + err.message
+        });
     }
 };
 
-const getSiswaById = async (req, res) => {
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /siswa-master/:id - Ambil detail siswa
+// ═════════════════════════════════════════════════════════════════════════════
+const getSiswaMasterById = async (req, res) => {
     try {
         const { id } = req.params;
-        const idInduk = req.idTahunAjaranInduk;
 
-        if (!idInduk) {
-            return res.status(400).json({ success: false, message: 'ID Tahun Ajaran tidak ditemukan' });
-        }
+        const siswa = await SiswaModel.getSiswaById(id);
 
-        const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
-        if (!tahunAjaranId) {
-            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
-        }
-
-        const siswa = await siswaModel.getSiswaById(id, tahunAjaranId);
-        if (!siswa) return res.status(404).json({ success: false, message: 'Siswa tidak ditemukan' });
-
-        res.json({ success: true, data: siswa });
-    } catch (err) {
-        console.error('Error get siswa by ID:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil detail siswa' });
-    }
-};
-
-const getSiswaByKelas = async (req, res) => {
-    try {
-        const { id } = req.params;
-        let { tahun_ajaran_id } = req.query;
-
-        if (!id) {
-            return res.status(400).json({
+        if (!siswa) {
+            return res.status(404).json({
                 success: false,
-                message: 'Kelas ID wajib diisi'
+                message: 'Siswa tidak ditemukan'
             });
         }
 
-        if (!tahun_ajaran_id) {
-            const [taAktif] = await db.execute(`
-                SELECT id_tahun_ajaran, id_tahun_ajaran_induk 
-                FROM tahun_ajaran 
-                WHERE status = 'aktif' 
-                LIMIT 1
-            `);
+        res.json({
+            success: true,
+            data: siswa
+        });
 
-            if (taAktif.length === 0) {
-                return res.json({ success: true, data: [] });
-            }
-
-            tahun_ajaran_id = taAktif[0].id_tahun_ajaran;
-        }
-
-        const [taInfo] = await db.execute(
-            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-            [tahun_ajaran_id]
-        );
-
-        if (taInfo.length === 0) {
-            return res.json({ success: true, data: [] });
-        }
-
-        const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
-
-        const [rows] = await db.execute(`
-            SELECT 
-                s.id_siswa,
-                s.nama_lengkap,
-                s.nis,
-                s.nisn,
-                s.tempat_lahir,
-                s.tanggal_lahir,
-                s.jenis_kelamin,
-                s.alamat,
-                s.status,
-                k.nama_kelas,
-                k.fase
-            FROM siswa s
-            INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-            INNER JOIN kelas k ON sk.kelas_id = k.id_kelas
-            WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
-            ORDER BY s.nama_lengkap ASC
-        `, [id, idTahunAjaranInduk]);
-
-        res.json({ success: true, data: rows });
     } catch (err) {
-        console.error('Error get siswa by kelas:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
+        console.error('Error getSiswaMasterById:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengambil detail siswa: ' + err.message
+        });
     }
 };
 
-const tambahSiswa = async (req, res) => {
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /siswa-master - Tambah siswa baru (MASTER DATA)
+// ═════════════════════════════════════════════════════════════════════════════
+const tambahSiswaMaster = async (req, res) => {
     try {
         const {
             nis,
@@ -140,92 +75,91 @@ const tambahSiswa = async (req, res) => {
             tempat_lahir,
             tanggal_lahir,
             jenis_kelamin,
-            alamat,
-            kelas_id,
+            alamat
         } = req.body;
 
-        const idInduk = req.idTahunAjaranInduk;
-        if (!idInduk) {
-            return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
-        }
-
-        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
-        if (!tahun_ajaran_id) {
+        // Validasi field wajib
+        if (!nis || !nama_lengkap || !jenis_kelamin) {
             return res.status(400).json({
                 success: false,
-                message: 'Tidak ada semester aktif di tahun ajaran ini'
+                message: 'NIS, nama lengkap, dan jenis kelamin wajib diisi'
             });
         }
 
-        const parsedKelasId = Number(kelas_id);
-        if (isNaN(parsedKelasId) || parsedKelasId <= 0) {
-            return res.status(400).json({ success: false, message: 'kelas_id tidak valid' });
-        }
+        // Trim semua input
+        const trimmedNis = nis.trim();
+        const trimmedNisn = nisn ? nisn.trim() : null;
+        const trimmedNama = nama_lengkap.trim();
 
-        const [kelasCheck] = await db.execute(
-            `SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?`,
-            [parsedKelasId, tahun_ajaran_id]
-        );
-        if (kelasCheck.length === 0) {
+        // ✅ CEK DUPLIKAT NIS
+        const nisExists = await SiswaModel.checkNisExists(trimmedNis);
+        if (nisExists) {
             return res.status(400).json({
                 success: false,
-                message: 'Kelas tidak valid atau bukan milik tahun ajaran aktif'
+                message: `NIS "${trimmedNis}" sudah digunakan`,
+                code: 'DUPLICATE_NIS'
             });
         }
 
-        const [cekDuplikat] = await db.execute(`
-            SELECT s.id_siswa 
-            FROM siswa s
-            JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-            WHERE sk.id_tahun_ajaran_induk = ? AND (s.nis = ? OR s.nisn = ?)
-        `, [idInduk, nis?.trim(), nisn?.trim()]);
-
-        if (cekDuplikat.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Siswa dengan NIS "${nis}" atau NISN "${nisn}" sudah ada di tahun ajaran ini!`
-            });
+        // ✅ CEK DUPLIKAT NISN (jika ada)
+        if (trimmedNisn) {
+            const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
+            if (nisnExists) {
+                return res.status(400).json({
+                    success: false,
+                    message: `NISN "${trimmedNisn}" sudah digunakan`,
+                    code: 'DUPLICATE_NISN'
+                });
+            }
         }
 
-        const siswaId = await siswaModel.createSiswa(
-            {
-                nis: nis?.trim(),
-                nisn: nisn?.trim(),
-                nama_lengkap: nama_lengkap?.trim(),
-                tempat_lahir: tempat_lahir?.trim() || null,
-                tanggal_lahir: tanggal_lahir || null,
-                jenis_kelamin,
-                alamat: alamat?.trim() || null,
-                kelas_id: parsedKelasId,
-                status: 'aktif',
-            },
-            idInduk
-        );
+        // ✅ CEK NAMA SAMA (Warning, bukan error)
+        const namaExists = await SiswaModel.checkNamaExists(trimmedNama);
+        let warningMessage = null;
+        if (namaExists) {
+            warningMessage = `Perhatian: Sudah ada siswa dengan nama "${trimmedNama}" di sistem.`;
+        }
+
+        // Insert data
+        const id = await SiswaModel.createSiswa({
+            nis: trimmedNis,
+            nisn: trimmedNisn,
+            nama_lengkap: trimmedNama,
+            tempat_lahir: tempat_lahir ? tempat_lahir.trim() : null,
+            tanggal_lahir: tanggal_lahir || null,
+            jenis_kelamin: jenis_kelamin,
+            alamat: alamat ? alamat.trim() : null
+        });
 
         res.status(201).json({
             success: true,
-            message: 'Data siswa berhasil ditambahkan',
-            id: siswaId,
+            message: 'Siswa berhasil ditambahkan',
+            id: id,
+            warning: warningMessage
         });
 
     } catch (err) {
-        console.error('Error tambah siswa:', err);
+        console.error('Error tambahSiswaMaster:', err);
 
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({
                 success: false,
-                message: 'NIS atau NISN sudah terdaftar di sistem!'
+                message: 'NIS atau NISN sudah terdaftar di sistem!',
+                code: 'DUPLICATE_ENTRY'
             });
         }
 
         res.status(500).json({
             success: false,
-            message: err.message || 'Gagal menambah data siswa'
+            message: 'Gagal menambah siswa: ' + err.message
         });
     }
 };
 
-const editSiswa = async (req, res) => {
+// ═════════════════════════════════════════════════════════════════════════════
+// PUT /siswa-master/:id - Edit data siswa
+// ═════════════════════════════════════════════════════════════════════════════
+const editSiswaMaster = async (req, res) => {
     try {
         const { id } = req.params;
         const {
@@ -236,43 +170,57 @@ const editSiswa = async (req, res) => {
             tanggal_lahir,
             jenis_kelamin,
             alamat,
-            kelas_id,
-            status,
+            status
         } = req.body;
 
-        const idInduk = req.idTahunAjaranInduk;
-        if (!idInduk) {
-            return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
-        }
-
-        const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
-        if (!tahunAjaranId) {
-            return res.status(400).json({
+        // Cek apakah siswa ada
+        const existingSiswa = await SiswaModel.getSiswaById(id);
+        if (!existingSiswa) {
+            return res.status(404).json({
                 success: false,
-                message: 'Tidak ada semester aktif'
+                message: 'Siswa tidak ditemukan'
             });
         }
 
-        const existingSiswa = await siswaModel.getSiswaById(id, tahunAjaranId);
-        if (!existingSiswa) {
-            return res.status(404).json({ success: false, message: 'Siswa tidak ditemukan di tahun ajaran aktif' });
+        // Trim input
+        const trimmedNis = nis ? nis.trim() : existingSiswa.nis;
+        const trimmedNisn = nisn ? nisn.trim() : existingSiswa.nisn;
+        const trimmedNama = nama_lengkap ? nama_lengkap.trim() : existingSiswa.nama_lengkap;
+
+        // ✅ CEK DUPLIKAT NIS (kecuali diri sendiri)
+        if (trimmedNis !== existingSiswa.nis) {
+            const nisExists = await SiswaModel.checkNisExists(trimmedNis, id);
+            if (nisExists) {
+                return res.status(400).json({
+                    success: false,
+                    message: `NIS "${trimmedNis}" sudah digunakan`,
+                    code: 'DUPLICATE_NIS'
+                });
+            }
         }
 
-        const parsedKelasId = Number(kelas_id);
-        if (isNaN(parsedKelasId) || parsedKelasId <= 0) {
-            return res.status(400).json({ success: false, message: 'kelas_id tidak valid' });
+        // ✅ CEK DUPLIKAT NISN (kecuali diri sendiri)
+        if (trimmedNisn && trimmedNisn !== existingSiswa.nisn) {
+            const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn, id);
+            if (nisnExists) {
+                return res.status(400).json({
+                    success: false,
+                    message: `NISN "${trimmedNisn}" sudah digunakan`,
+                    code: 'DUPLICATE_NISN'
+                });
+            }
         }
 
+        // ✅ CEK PERUBAHAN
         const hasChanges =
-            String(existingSiswa.nis || '').trim() !== String(nis || '').trim() ||
-            String(existingSiswa.nisn || '').trim() !== String(nisn || '').trim() ||
-            String(existingSiswa.nama || '').toLowerCase().trim() !== String(nama_lengkap || '').toLowerCase().trim() ||
-            String(existingSiswa.tempat_lahir || '').toLowerCase().trim() !== String(tempat_lahir || '').toLowerCase().trim() ||
+            existingSiswa.nis !== trimmedNis ||
+            (existingSiswa.nisn || '') !== (trimmedNisn || '') ||
+            existingSiswa.nama_lengkap !== trimmedNama ||
+            (existingSiswa.tempat_lahir || '') !== (tempat_lahir ? tempat_lahir.trim() : '') ||
             String(existingSiswa.tanggal_lahir || '') !== String(tanggal_lahir || '') ||
-            String(existingSiswa.jenis_kelamin || '').toLowerCase() !== String(jenis_kelamin || '').toLowerCase() ||
-            String(existingSiswa.alamat || '').toLowerCase().trim() !== String(alamat || '').toLowerCase().trim() ||
-            String(existingSiswa.kelas_id || '') !== String(parsedKelasId) ||
-            String(existingSiswa.status || 'aktif').toLowerCase() !== String(status || 'aktif').toLowerCase();
+            existingSiswa.jenis_kelamin !== jenis_kelamin ||
+            (existingSiswa.alamat || '') !== (alamat ? alamat.trim() : '') ||
+            (existingSiswa.status || 'aktif') !== (status || 'aktif');
 
         if (!hasChanges) {
             return res.status(400).json({
@@ -281,56 +229,108 @@ const editSiswa = async (req, res) => {
             });
         }
 
-        const updated = await siswaModel.updateSiswa(
-            id,
-            {
-                nis: nis?.trim(),
-                nisn: nisn?.trim(),
-                nama_lengkap: nama_lengkap?.trim(),
-                tempat_lahir: tempat_lahir?.trim() || null,
-                tanggal_lahir: tanggal_lahir || null,
-                jenis_kelamin,
-                alamat: alamat?.trim() || null,
-                kelas_id: parsedKelasId,
-                status: status || 'aktif',
-            },
-            idInduk
-        );
+        // Update data
+        const updated = await SiswaModel.updateSiswa(id, {
+            nis: trimmedNis,
+            nisn: trimmedNisn,
+            nama_lengkap: trimmedNama,
+            tempat_lahir: tempat_lahir ? tempat_lahir.trim() : null,
+            tanggal_lahir: tanggal_lahir || null,
+            jenis_kelamin: jenis_kelamin,
+            alamat: alamat ? alamat.trim() : null,
+            status: status || 'aktif'
+        });
 
         if (!updated) {
-            return res.status(404).json({ success: false, message: 'Gagal memperbarui data siswa' });
+            return res.status(404).json({
+                success: false,
+                message: 'Gagal memperbarui data siswa'
+            });
         }
 
-        res.json({ success: true, message: 'Data siswa berhasil diperbarui' });
+        res.json({
+            success: true,
+            message: 'Data siswa berhasil diperbarui'
+        });
 
     } catch (err) {
-        console.error('Error edit siswa:', err);
+        console.error('Error editSiswaMaster:', err);
 
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({
                 success: false,
-                message: 'NIS atau NISN sudah terdaftar di sistem!'
+                message: 'NIS atau NISN sudah terdaftar di sistem!',
+                code: 'DUPLICATE_ENTRY'
             });
         }
 
         res.status(500).json({
             success: false,
-            message: err.message || 'Gagal memperbarui data siswa'
+            message: 'Gagal memperbarui data siswa: ' + err.message
         });
     }
 };
 
-const importSiswa = async (req, res) => {
-    const connection = await db.getConnection();
+// ═════════════════════════════════════════════════════════════════════════════
+// DELETE /siswa-master/:id - Hapus siswa (soft delete)
+// ═════════════════════════════════════════════════════════════════════════════
+const hapusSiswaMaster = async (req, res) => {
     try {
-        if (!req.file)
-            return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
+        const { id } = req.params;
 
-        const { kelas_id } = req.body;
-        if (!kelas_id) {
+        // Cek apakah siswa ada
+        const existingSiswa = await SiswaModel.getSiswaById(id);
+        if (!existingSiswa) {
+            return res.status(404).json({
+                success: false,
+                message: 'Siswa tidak ditemukan'
+            });
+        }
+
+        // Cek apakah siswa masih terdaftar di kelas manapun
+        const totalKelas = await SiswaModel.checkSiswaInKelas(id);
+        if (totalKelas > 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Kelas ID tidak ditemukan. Silakan import ulang.'
+                message: `Siswa "${existingSiswa.nama_lengkap}" tidak dapat dihapus karena masih terdaftar di ${totalKelas} kelas.`,
+                code: 'STILL_ENROLLED'
+            });
+        }
+
+        // Soft delete
+        const deleted = await SiswaModel.deleteSiswa(id);
+
+        if (!deleted) {
+            return res.status(404).json({
+                success: false,
+                message: 'Gagal menghapus siswa'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `Siswa "${existingSiswa.nama_lengkap}" berhasil dihapus (soft delete)`
+        });
+
+    } catch (err) {
+        console.error('Error hapusSiswaMaster:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal menghapus siswa: ' + err.message
+        });
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /siswa-master/import - Import siswa dari Excel (MASTER DATA)
+// ═════════════════════════════════════════════════════════════════════════════
+const importSiswaMaster = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'File Excel diperlukan'
             });
         }
 
@@ -338,76 +338,59 @@ const importSiswa = async (req, res) => {
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-        if (data.length === 0) throw new Error('File Excel kosong');
-
-        const idInduk = req.idTahunAjaranInduk;
-        if (!idInduk) {
-            throw new Error('Tidak ada tahun ajaran aktif');
-        }
-
-        const tahunAjaranId = await getIdTahunAjaranAktif(idInduk);
-        if (!tahunAjaranId) {
-            throw new Error('Tidak ada semester aktif di tahun ajaran ini');
-        }
-
-        const [kelasInfo] = await connection.execute(
-            `SELECT id_kelas, nama_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?`,
-            [kelas_id, tahunAjaranId]
-        );
-
-        if (kelasInfo.length === 0) {
+        if (data.length === 0) {
+            fs.unlinkSync(req.file.path);
             return res.status(400).json({
                 success: false,
-                message: 'Kelas tidak ditemukan di tahun ajaran aktif'
+                message: 'File Excel kosong'
             });
         }
 
-        const targetKelasNama = kelasInfo[0].nama_kelas;
-
         await connection.beginTransaction();
 
-        const skipped = [];
         let processedCount = 0;
-        const kelasMismatchRows = [];
+        const skipped = [];
 
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNumber = i + 2;
 
-            if (!row.nis || !row.nisn || !row.nama_lengkap || !row.kelas_id) {
+            // Validasi kolom wajib
+            if (!row.nis || !row.nama_lengkap || !row.jenis_kelamin) {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
-                    reason: 'Kolom wajib (NIS, NISN, nama lengkap, kelas) tidak lengkap'
+                    reason: 'Kolom wajib (NIS, nama lengkap, jenis kelamin) tidak lengkap'
                 });
                 continue;
             }
 
-            const excelKelasNama = String(row.kelas_id).trim();
-            if (excelKelasNama.toLowerCase() !== targetKelasNama.toLowerCase()) {
-                kelasMismatchRows.push({
+            const trimmedNis = String(row.nis).trim();
+            const trimmedNisn = row.nisn ? String(row.nisn).trim() : null;
+            const trimmedNama = String(row.nama_lengkap).trim();
+
+            // Cek duplikat NIS
+            const nisExists = await SiswaModel.checkNisExists(trimmedNis);
+            if (nisExists) {
+                skipped.push({
                     row: rowNumber,
-                    nama: row.nama_lengkap || '-',
-                    kelasDiExcel: excelKelasNama,
-                    kelasTujuan: targetKelasNama
+                    nama: trimmedNama,
+                    reason: `NIS "${trimmedNis}" sudah terdaftar`
                 });
                 continue;
             }
 
-            const [cekDuplikat] = await connection.execute(`
-                SELECT s.id_siswa 
-                FROM siswa s
-                JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-                WHERE sk.id_tahun_ajaran_induk = ? AND (s.nis = ? OR s.nisn = ?)
-            `, [idInduk, String(row.nis).trim(), String(row.nisn).trim()]);
-
-            if (cekDuplikat.length > 0) {
-                skipped.push({
-                    row: rowNumber,
-                    nama: row.nama_lengkap || '-',
-                    reason: `Siswa dengan NIS "${row.nis}" atau NISN "${row.nisn}" sudah ada di tahun ajaran ini`
-                });
-                continue;
+            // Cek duplikat NISN
+            if (trimmedNisn) {
+                const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
+                if (nisnExists) {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: trimmedNama,
+                        reason: `NISN "${trimmedNisn}" sudah terdaftar`
+                    });
+                    continue;
+                }
             }
 
             // Parse tanggal lahir
@@ -421,53 +404,34 @@ const importSiswa = async (req, res) => {
                 }
             } else if (typeof tanggal_lahir === 'string') {
                 tanggal_lahir = tanggal_lahir.trim();
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) tanggal_lahir = null;
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                    tanggal_lahir = null;
+                }
             }
-
-            // Cek kelas di database
-            const [kelasRows] = await connection.execute(
-                'SELECT id_kelas FROM kelas WHERE nama_kelas = ? AND tahun_ajaran_id = ?',
-                [excelKelasNama, tahunAjaranId]
-            );
-            if (kelasRows.length === 0) {
-                skipped.push({
-                    row: rowNumber,
-                    nama: row.nama_lengkap || '-',
-                    reason: `Kelas "${excelKelasNama}" tidak ditemukan di tahun ajaran aktif`
-                });
-                continue;
-            }
-            const kelasId = kelasRows[0].id_kelas;
 
             try {
-                await siswaModel.createSiswa(
-                    {
-                        nis: String(row.nis).trim(),
-                        nisn: String(row.nisn).trim(),
-                        nama_lengkap: String(row.nama_lengkap).trim(),
-                        tempat_lahir: row.tempat_lahir?.toString().trim() || null,
-                        tanggal_lahir,
-                        jenis_kelamin: row.jenis_kelamin || 'Laki-laki',
-                        alamat: row.alamat?.toString().trim() || null,
-                        kelas_id: kelasId,
-                        status: 'aktif',
-                    },
-                    idInduk,
-                    connection
-                );
+                await SiswaModel.createSiswa({
+                    nis: trimmedNis,
+                    nisn: trimmedNisn,
+                    nama_lengkap: trimmedNama,
+                    tempat_lahir: row.tempat_lahir ? String(row.tempat_lahir).trim() : null,
+                    tanggal_lahir: tanggal_lahir,
+                    jenis_kelamin: row.jenis_kelamin || 'Laki-laki',
+                    alamat: row.alamat ? String(row.alamat).trim() : null
+                });
                 processedCount++;
             } catch (insertErr) {
                 if (insertErr.code === 'ER_DUP_ENTRY' || insertErr.errno === 1062) {
                     skipped.push({
                         row: rowNumber,
-                        nama: row.nama_lengkap || '-',
-                        reason: `Siswa dengan NIS "${row.nis}" atau NISN "${row.nisn}" sudah terdaftar di tahun ajaran ini`
+                        nama: trimmedNama,
+                        reason: `NIS "${trimmedNis}" atau NISN "${trimmedNisn}" sudah terdaftar`
                     });
                 } else {
                     skipped.push({
                         row: rowNumber,
-                        nama: row.nama_lengkap || '-',
-                        reason: 'Gagal menyimpan data siswa'
+                        nama: trimmedNama,
+                        reason: 'Gagal menyimpan data'
                     });
                 }
             }
@@ -476,43 +440,24 @@ const importSiswa = async (req, res) => {
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
-        if (kelasMismatchRows.length > 0) {
-            const mismatchMessages = kelasMismatchRows.map((d) =>
-                `• Baris ${d.row} (${d.nama})\n  Kelas di file: "${d.kelasDiExcel}"\n  Kelas tujuan: "${d.kelasTujuan}"`
-            ).join('\n\n');
-
-            return res.status(400).json({
-                success: false,
-                message: `Import Dibatalkan - Kelas Tidak Sesuai\n\nDitemukan ${kelasMismatchRows.length} data dengan kelas yang berbeda:\n\n${mismatchMessages}\n\n**Pastikan file Excel berisi data untuk kelas ${targetKelasNama}**`,
-                mismatch_count: kelasMismatchRows.length,
-                mismatch_details: kelasMismatchRows
-            });
-        }
-
         res.json({
             success: true,
             message: skipped.length > 0
                 ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati`
-                : `Import data siswa berhasil: ${processedCount} data ditambahkan`,
+                : `Import berhasil: ${processedCount} siswa ditambahkan`,
             total: processedCount,
             skipped: skipped
         });
 
     } catch (err) {
         await connection.rollback();
-        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        console.error('Import siswa error:', err);
-
-        if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
-            return res.status(400).json({
-                success: false,
-                message: 'Import gagal: Ada NIS atau NISN yang sudah terdaftar di tahun ajaran ini.'
-            });
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
         }
-
+        console.error('Import siswa master error:', err);
         res.status(500).json({
             success: false,
-            message: err.message || 'Gagal mengimport data siswa'
+            message: 'Gagal import siswa: ' + err.message
         });
     } finally {
         connection.release();
@@ -520,10 +465,10 @@ const importSiswa = async (req, res) => {
 };
 
 module.exports = {
-    getSiswa,
-    getSiswaById,
-    getSiswaByKelas,
-    tambahSiswa,
-    editSiswa,
-    importSiswa,
+    getSiswaMaster,
+    getSiswaMasterById,
+    tambahSiswaMaster,
+    editSiswaMaster,
+    hapusSiswaMaster,
+    importSiswaMaster
 };

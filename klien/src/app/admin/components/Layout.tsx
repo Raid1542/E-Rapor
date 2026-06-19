@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import Footer from './Footer'; // ← Tambahan
+import Footer from './Footer'; 
 
 interface UserData {
   id: number;

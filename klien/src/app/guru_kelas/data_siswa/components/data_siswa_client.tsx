@@ -2,6 +2,7 @@
  * Nama File: data_siswa_client.tsx
  * Fungsi: Komponen klien untuk menampilkan daftar siswa kelas
  *         oleh guru kelas. Menggunakan template UI Atur Penilaian.
+ * UPDATE: Fix bug logic isNotAssigned - array kosong ≠ belum ditugaskan
  */
 
 'use client';
@@ -53,7 +54,7 @@ interface Siswa {
     fase?: string;
 }
 
-// ====== GLOBAL STYLES (SAMA PERSIS DENGAN ATUR PENILAIAN) ======
+// ====== GLOBAL STYLES ======
 const GlobalStyles = () => (
     <style jsx global>{`
     @keyframes ap-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
@@ -65,7 +66,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ====== NOTIF MODAL (SAMA PERSIS DENGAN ATUR PENILAIAN) ======
+// ====== NOTIF MODAL ======
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
@@ -92,18 +93,17 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                 {isConfirm ? (
                     <div className="flex gap-3 w-full">
                         <button onClick={onClose} className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}>Batal</button>
-                        <button onClick={() => { modal.onConfirm?.(); onClose(); }} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm">Ya, Lanjutkan</button>
+                        <button onClick={() => { modal.onConfirm?.(); onClose(); }} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm">Lanjutkan</button>
                     </div>
                 ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
                 )}
             </div>
         </div>
     );
 };
 
-// ====== SHARED STYLE CONSTANTS (SAMA PERSIS DENGAN ATUR PENILAIAN) ======
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+// ====== SHARED STYLE CONSTANTS ======
 const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
@@ -191,13 +191,27 @@ export default function DataSiswaClient() {
                         const siswa = data.data || [];
                         setSiswaList(siswa);
                         setFilteredSiswa(siswa);
-                        if (siswa.length > 0) setKelasNama(siswa[0].kelas || 'Kelas Anda');
-                        else setIsNotAssigned(true); // Jika array kosong, anggap belum ditugaskan
+                        
+                        // ✅ FIX: Ambil nama kelas dengan benar
+                        if (data.kelas_nama) {
+                            setKelasNama(data.kelas_nama);
+                        } else if (siswa.length > 0) {
+                            setKelasNama(siswa[0].kelas || 'Kelas Anda');
+                        } else {
+                            setKelasNama('Kelas Anda');
+                        }
+                        
+                        // ✅ FIX: JANGAN set isNotAssigned = true kalau array kosong!
+                        // isNotAssigned hanya true kalau backend return 403
                     } else {
-                        setIsNotAssigned(true);
+                        showModal({ 
+                            type: 'error', 
+                            title: 'Gagal Memuat', 
+                            message: data.message || 'Terjadi kesalahan' 
+                        });
                     }
                 } else {
-                    // Jika backend return 403/404 (guru belum ditugaskan)
+                    // ✅ HANYA set isNotAssigned = true kalau backend return 403
                     const errData = await parseBackendError(res);
                     if (res.status === 403 || errData.code === 'NOT_ASSIGNED') {
                         setIsNotAssigned(true);

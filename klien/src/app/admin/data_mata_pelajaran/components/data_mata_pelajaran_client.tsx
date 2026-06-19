@@ -3,10 +3,12 @@
  * Fungsi: Komponen utama halaman Data Mata Pelajaran untuk admin.
  *         Menyediakan fitur CRUD mata pelajaran per SEMESTER
  *         (bukan per tahun ajaran induk).
- * Update: Support pilih semester spesifik (Ganjil/Genap),
- *         disable CRUD untuk semester non-aktif.
- *         Struktur dropdown sama dengan Data Pembelajaran.
- *         Dropdown TA menampilkan "(Aktif)" untuk TA yang aktif.
+ * Update: 
+ *   - Support pilih semester spesifik (Ganjil/Genap)
+ *   - Disable CRUD untuk semester non-aktif
+ *   - Struktur dropdown sama dengan Data Pembelajaran
+ *   - Dropdown TA menampilkan "(Aktif)" untuk TA yang aktif
+ *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -50,13 +52,13 @@ interface SemesterOption {
   is_aktif: boolean;
 }
 
+// ✅ HAPUS confirmData dari FormDataType
 interface FormDataType {
   kode_mapel: string;
   nama_mapel: string;
   jenis: string;
   kurikulum: string;
   urutan_rapor: string;
-  confirmData: boolean;
 }
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -165,8 +167,13 @@ export default function DataMataPelajaranPage() {
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [isSemesterActive, setIsSemesterActive] = useState<boolean>(false);
 
+  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
+
+  // ✅ HAPUS confirmData dari formData
   const [formData, setFormData] = useState<FormDataType>({
-    kode_mapel: '', nama_mapel: '', jenis: '', kurikulum: '', urutan_rapor: '', confirmData: false
+    kode_mapel: '', nama_mapel: '', jenis: '', kurikulum: '', urutan_rapor: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -178,7 +185,6 @@ export default function DataMataPelajaranPage() {
 
   // ── Fetch Functions ────────────────────────────────────────────────────────
 
-  // Tambah is_aktif saat mapping data
   const fetchTahunAjaranList = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -190,12 +196,11 @@ export default function DataMataPelajaranPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Ambil unique tahun ajaran dari id_induk
         const uniqueTA = Array.from(
           new Map(data.data.map((item: any) => [item.id_induk, {
             id: item.id_induk,
             tahun_ajaran: item.tahun_ajaran,
-            is_aktif: item.status === 'AKTIF'  // ← TAMBAH INI
+            is_aktif: item.status === 'AKTIF'
           }])).values()
         );
 
@@ -224,7 +229,6 @@ export default function DataMataPelajaranPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Filter semester untuk tahun ajaran yang dipilih
         const semesters = data.data
           .filter((sem: any) => sem.id_induk === idInduk)
           .map((sem: any) => ({
@@ -235,7 +239,6 @@ export default function DataMataPelajaranPage() {
 
         setSemesterOptions(semesters);
 
-        // Load saved semester
         const savedSemester = localStorage.getItem('selectedSemesterId_mapel');
         if (savedSemester) {
           const savedId = Number(savedSemester);
@@ -249,7 +252,6 @@ export default function DataMataPelajaranPage() {
           }
         }
 
-        // Jangan auto-select, biarkan user pilih manual
         setSelectedSemesterId(null);
         setIsSemesterActive(false);
         setMapelList([]);
@@ -329,6 +331,7 @@ export default function DataMataPelajaranPage() {
     }
   };
 
+  // ✅ HAPUS validasi confirmData
   const validate = (): boolean => {
     const ne: Record<string, string> = {};
     const kodeMapel = formData.kode_mapel?.trim().toUpperCase() || '';
@@ -358,7 +361,6 @@ export default function DataMataPelajaranPage() {
         ne.urutan_rapor = 'Urutan rapor 1-100';
       }
     }
-    if (!formData.confirmData) ne.confirmData = 'Harap konfirmasi data';
 
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
@@ -368,8 +370,31 @@ export default function DataMataPelajaranPage() {
     return true;
   };
 
-  const handleSubmitTambah = async () => {
+  // ✅ TAMBAHAN: Buka modal konfirmasi
+  const openConfirmModal = (action: 'add' | 'edit') => {
     if (!validate()) return;
+
+    if (action === 'edit' && initialFormDataRef.current) {
+      const initial = initialFormDataRef.current;
+      const hasChanges =
+        formData.kode_mapel !== initial.kode_mapel ||
+        formData.nama_mapel !== initial.nama_mapel ||
+        formData.jenis !== initial.jenis ||
+        formData.kurikulum !== initial.kurikulum ||
+        formData.urutan_rapor !== initial.urutan_rapor;
+
+      if (!hasChanges) {
+        showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+        return;
+      }
+    }
+
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+  const executeTambah = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
@@ -417,36 +442,8 @@ export default function DataMataPelajaranPage() {
     }
   };
 
-  const handleEdit = (mapel: MataPelajaran) => {
-    const initialData: FormDataType = {
-      kode_mapel: mapel.kode_mapel.toUpperCase(),
-      nama_mapel: mapel.nama_mapel,
-      jenis: mapel.jenis.toLowerCase(),
-      kurikulum: mapel.kurikulum,
-      urutan_rapor: mapel.urutan_rapor !== null ? String(mapel.urutan_rapor) : '',
-      confirmData: false
-    };
-    setEditId(mapel.id);
-    setFormData(initialData);
-    initialFormDataRef.current = { ...initialData };
-    setShowEdit(true);
-  };
-
-  const handleSubmitEdit = async () => {
-    const initial = initialFormDataRef.current;
-    const hasChanges =
-      formData.kode_mapel !== initial?.kode_mapel ||
-      formData.nama_mapel !== initial?.nama_mapel ||
-      formData.jenis !== initial?.jenis ||
-      formData.kurikulum !== initial?.kurikulum ||
-      formData.urutan_rapor !== initial?.urutan_rapor;
-
-    if (!hasChanges) {
-      showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-      return;
-    }
-    if (!validate()) return;
-
+  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+  const executeEdit = async () => {
     const token = localStorage.getItem('token');
     if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
     if (!editId) return;
@@ -480,6 +477,20 @@ export default function DataMataPelajaranPage() {
     }
   };
 
+  const handleEdit = (mapel: MataPelajaran) => {
+    const initialData: FormDataType = {
+      kode_mapel: mapel.kode_mapel.toUpperCase(),
+      nama_mapel: mapel.nama_mapel,
+      jenis: mapel.jenis.toLowerCase(),
+      kurikulum: mapel.kurikulum,
+      urutan_rapor: mapel.urutan_rapor !== null ? String(mapel.urutan_rapor) : ''
+    };
+    setEditId(mapel.id);
+    setFormData(initialData);
+    initialFormDataRef.current = { ...initialData };
+    setShowEdit(true);
+  };
+
   const handleDelete = (id: number, namaMapel: string) => {
     showModal({
       type: 'confirm',
@@ -508,7 +519,7 @@ export default function DataMataPelajaranPage() {
   };
 
   const handleReset = () => {
-    setFormData({ kode_mapel: '', nama_mapel: '', jenis: '', kurikulum: '', urutan_rapor: '', confirmData: false });
+    setFormData({ kode_mapel: '', nama_mapel: '', jenis: '', kurikulum: '', urutan_rapor: '' });
     setErrors({});
   };
 
@@ -654,22 +665,13 @@ export default function DataMataPelajaranPage() {
           )}
         </div>
 
-        <div className="px-6 pb-4">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" name="confirmData" checked={formData.confirmData}
-              onChange={handleInputChange} className="mt-0.5 w-4 h-4 rounded accent-orange-500" />
-            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-              Saya yakin data yang diisi sudah benar
-            </span>
-          </label>
-          {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-        </div>
+        {/* ✅ HAPUS bagian checkbox konfirmasi */}
 
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
           <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>Batal</BtnSecondary>
           <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
           <button
-            onClick={isEdit ? handleSubmitEdit : handleSubmitTambah}
+            onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
             className={btnPrimary.base} style={btnPrimary.style}
             onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}
           >
@@ -677,6 +679,56 @@ export default function DataMataPelajaranPage() {
           </button>
         </div>
       </div>
+
+      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 mp-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 mp-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi {confirmAction === 'add' ? 'Penambahan' : 'Perubahan'} Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add'
+                ? 'Apakah Anda yakin ingin menambahkan mata pelajaran ini?'
+                : 'Apakah Anda yakin ingin mengubah data mata pelajaran ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add') {
+                    executeTambah();
+                  } else {
+                    executeEdit();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
