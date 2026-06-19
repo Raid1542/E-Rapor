@@ -6,12 +6,14 @@
  *         - Status jenis penilaian aktif (PTS/PAS)
  *         - Dropdown profil pengguna
  *         - Menu: Profil, Ubah Kata Sandi, Logout
- * Update: Responsive layout + status penilaian aktif
+ * Update: 
+ *   - Responsive layout + status penilaian aktif
+ *   - Badge "Jenis Penilaian Belum Aktif" saat tidak ada PTS/PAS aktif
  */
 
 'use client';
 
-import { LogOut, ChevronDown, User, Lock, X, FileText } from 'lucide-react';
+import { LogOut, ChevronDown, User, Lock, X, FileText, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 
@@ -57,31 +59,11 @@ const GlobalStyles = () => (
     `}</style>
 );
 
-// ─── STATUS BADGE ──────────────────────────────────────────────────────────
+// ─── STATUS BADGE (untuk PTS/PAS Aktif atau Selesai) ────────────────────────
 
 const StatusBadge = ({ jenis, status }: { jenis: string; status: string }) => {
     const isActive = status === 'aktif';
     const isSelesai = status === 'selesai';
-    const isNonaktif = status === 'nonaktif';
-
-    // Style untuk belum aktif (warning)
-    if (isNonaktif) {
-        return (
-            <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
-                style={{
-                    background: 'rgba(253, 230, 138, 0.95)',
-                    color: '#92400e',
-                    border: '1.5px solid rgba(252, 211, 77, 0.5)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                }}
-            >
-                <FileText size={11} />
-                <span className="hidden sm:inline">{jenis} (Belum Aktif)</span>
-                <span className="sm:hidden">Menunggu</span>
-            </span>
-        );
-    }
 
     // Style untuk aktif
     if (isActive) {
@@ -103,21 +85,43 @@ const StatusBadge = ({ jenis, status }: { jenis: string; status: string }) => {
     }
 
     // Style untuk selesai
-    return (
-        <span
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
-            style={{
-                background: 'rgba(255,255,255,0.4)',
-                color: 'rgba(255,255,255,0.7)',
-                border: '1px solid rgba(255,255,255,0.3)',
-            }}
-        >
-            <FileText size={11} />
-            <span className="hidden sm:inline">{jenis} (Selesai)</span>
-            <span className="sm:hidden">{jenis}</span>
-        </span>
-    );
+    if (isSelesai) {
+        return (
+            <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
+                style={{
+                    background: 'rgba(255,255,255,0.4)',
+                    color: 'rgba(255,255,255,0.85)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                }}
+            >
+                <FileText size={11} />
+                <span className="hidden sm:inline">{jenis} (Selesai)</span>
+                <span className="sm:hidden">{jenis}</span>
+            </span>
+        );
+    }
+
+    return null;
 };
+
+// ─── BADGE "JENIS PENILAIAN BELUM AKTIF" ────────────────────────────────────
+
+const JenisPenilaianBelumAktif = () => (
+    <span
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap"
+        style={{
+            background: 'rgba(253, 230, 138, 0.95)',
+            color: '#92400e',
+            border: '1.5px solid rgba(252, 211, 77, 0.5)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+        }}
+    >
+        <AlertCircle size={11} />
+        <span className="hidden sm:inline">Jenis Penilaian Belum Aktif</span>
+        <span className="sm:hidden">Belum Aktif</span>
+    </span>
+);
 
 // ─── CONFIRM LOGOUT MODAL ───────────────────────────────────────────────────
 
@@ -255,7 +259,6 @@ export default function Header() {
                 if (res.ok && data.success && data.data) {
                     const taData = data.data;
 
-                    // Sesuaikan dengan struktur response dari controller
                     setTahunAjaranInfo({
                         tahun_ajaran: taData.tahun_ajaran || taData.tahun_ajaran_induk || '-',
                         semester: taData.semester || '-',
@@ -310,11 +313,11 @@ export default function Header() {
     const handleProfile = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/profil'); };
     const handleUbahPassword = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/ubah_password'); };
 
-    // Tentukan jenis penilaian yang aktif
+    // ✅ LOGIKA BARU: Tentukan jenis penilaian yang ditampilkan
     const getActiveJenisPenilaian = (): { jenis: string; status: string } | null => {
         if (!tahunAjaranInfo) return null;
 
-        // Prioritas: Aktif > Selesai > Nonaktif
+        // Prioritas: Aktif > Selesai
         if (tahunAjaranInfo.status_pts === 'aktif') {
             return { jenis: 'PTS', status: 'aktif' };
         }
@@ -328,11 +331,16 @@ export default function Header() {
             return { jenis: 'PAS', status: 'selesai' };
         }
 
-        // Jika keduanya nonaktif, tampilkan PTS dengan status nonaktif
-        return { jenis: 'PTS', status: 'nonaktif' };
+        // ✅ Jika keduanya nonaktif, return null (akan tampilkan "Jenis Penilaian Belum Aktif")
+        return null;
     };
 
     const activeJenisInfo = getActiveJenisPenilaian();
+
+    // ✅ Cek apakah ada jenis penilaian yang belum aktif (untuk tampilkan badge warning)
+    const isJenisPenilaianBelumAktif = tahunAjaranInfo 
+        && tahunAjaranInfo.status_pts === 'nonaktif' 
+        && tahunAjaranInfo.status_pas === 'nonaktif';
 
     // ── Skeleton ───────────────────────────────────────────────────────────
     if (!user) {
@@ -363,6 +371,17 @@ export default function Header() {
                 )}
             </div>
         );
+    };
+
+    // ✅ Helper untuk render badge status penilaian
+    const renderPenilaianBadge = () => {
+        if (activeJenisInfo) {
+            return <StatusBadge jenis={activeJenisInfo.jenis} status={activeJenisInfo.status} />;
+        }
+        if (isJenisPenilaianBelumAktif) {
+            return <JenisPenilaianBelumAktif />;
+        }
+        return null;
     };
 
     return (
@@ -403,13 +422,8 @@ export default function Header() {
                                         {/* Separator */}
                                         <span style={{ color: 'rgba(255,255,255,0.5)' }}>•</span>
 
-                                        {/* Badge Status */}
-                                        {activeJenisInfo && (
-                                            <StatusBadge
-                                                jenis={activeJenisInfo.jenis}
-                                                status={activeJenisInfo.status}
-                                            />
-                                        )}
+                                        {/* Badge Status Penilaian */}
+                                        {renderPenilaianBadge()}
                                     </>
                                 )}
                                 {taLoading && (
@@ -537,13 +551,8 @@ export default function Header() {
                                 {/* Separator */}
                                 <span style={{ color: 'rgba(255,255,255,0.5)' }}>•</span>
 
-                                {/* Badge Status */}
-                                {activeJenisInfo && (
-                                    <StatusBadge
-                                        jenis={activeJenisInfo.jenis}
-                                        status={activeJenisInfo.status}
-                                    />
-                                )}
+                                {/* Badge Status Penilaian */}
+                                {renderPenilaianBadge()}
                             </>
                         )}
                         {taLoading && (
