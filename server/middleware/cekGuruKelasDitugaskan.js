@@ -1,8 +1,7 @@
 /**
  * Nama File: cekGuruKelasDitugaskan.js
  * Fungsi: Memastikan user yang login ditugaskan sebagai wali kelas 
- *         di tahun ajaran yang sedang aktif.
- * UPDATE: Auto-fetch tahun ajaran aktif jika req.idSemesterAktif tidak ada
+ *         di semester yang sedang aktif.
  */
 
 const db = require('../config/db');

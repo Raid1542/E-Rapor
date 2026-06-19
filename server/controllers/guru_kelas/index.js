@@ -11,6 +11,7 @@ const ekskulController = require('./ekskulController');
 const kokurikulerController = require('./kokurikulerController');
 const nilaiAkademikController = require('./nilaiAkademikController');
 const aturPenilaianController = require('./aturPenilaianController');
+const batchPenilaianController = require('./batchPenilaianController');
 const rekapanController = require('./rekapanController');
 const raporController = require('./raporController');
 const tahunAjaranController = require('./tahunAjaranController');
@@ -39,6 +40,9 @@ module.exports = {
 
     // Atur Penilaian
     ...aturPenilaianController,
+
+    // Batch Penilaian
+    ...batchPenilaianController,
 
     // Rekapan
     ...rekapanController,
