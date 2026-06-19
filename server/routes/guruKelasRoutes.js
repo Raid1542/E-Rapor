@@ -9,6 +9,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const db = require('../config/db'); // ← TAMBAHAN BARU
 
 // ─── MIDDLEWARE ──────────────────────────────────────────────────────────────
 const authenticate = require('../middleware/authenticate');
@@ -89,14 +90,40 @@ const validateIdParam = (paramName) => (req, res, next) => {
     next();
 };
 
+// ← TAMBAHAN BARU: middleware ringan khusus route /kelas dan /progress-penilaian
+// Tugasnya sama seperti cekPenilaianStatus tapi TANPA cek status PTS/PAS
+// karena dashboard hanya butuh info tahun ajaran, tidak butuh tahu periode aktif
+const cekTahunAjaranAktif = async (req, res, next) => {
+    try {
+        const [taRows] = await db.execute(`
+            SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran
+            FROM tahun_ajaran
+            WHERE status = 'aktif'
+            LIMIT 1
+        `);
+        if (taRows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tahun ajaran aktif belum diatur oleh admin'
+            });
+        }
+        req.idTahunAjaranInduk = taRows[0].id_tahun_ajaran_induk;
+        req.idSemesterAktif = taRows[0].id_tahun_ajaran;
+        req.tahunAjaranAktif = taRows[0];
+        next();
+    } catch (err) {
+        console.error('Error cekTahunAjaranAktif:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil tahun ajaran' });
+    }
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. DATA KELAS & SISWA
 // ═════════════════════════════════════════════════════════════════════════════
 router.get('/kelas',
     authenticate,
     guruKelasOnly,
-    cekPenilaianStatus,
-    cekGuruKelasDitugaskan,
+    cekTahunAjaranAktif,        // ← DIUBAH: dari cekPenilaianStatus ke cekTahunAjaranAktif
     guruKelasControllers.getKelasSaya
 );
 
@@ -106,6 +133,14 @@ router.get('/siswa',
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
     guruKelasControllers.getSiswaByKelas
+);
+
+router.get('/progress-penilaian',
+    authenticate,
+    guruKelasOnly,
+    cekTahunAjaranAktif,        // ← DIUBAH: dari cekPenilaianStatus ke cekTahunAjaranAktif
+    cekGuruKelasDitugaskan,
+    guruKelasControllers.getProgressPenilaian
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -282,6 +317,12 @@ router.get('/atur-penilaian/aspek-kokurikuler',
     guruKelasControllers.getAspekKokurikuler
 );
 
+router.post('/atur-penilaian/aspek-kokurikuler',
+    authenticate,
+    guruKelasOnly,
+    guruKelasControllers.createAspekKokurikuler
+);
+
 router.get('/atur-penilaian/komponen',
     authenticate,
     guruKelasOnly,
@@ -393,6 +434,47 @@ router.put('/atur-penilaian/bobot-akademik/:mapelId',
     cekGuruKelasDitugaskan,
     guruKelasControllers.updateBobotAkademikByMapel
 );
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 11.1 ATUR PENILAIAN: BATCH SAVE & COPY DARI TA SEBELUMNYA
+// ═════════════════════════════════════════════════════════════════════════════
+
+// 1. Batch save kategori kokurikuler (simpan multiple grade sekaligus)
+router.post('/atur-penilaian/kategori-kokurikuler-batch',
+    authenticate,
+    guruKelasOnly,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    batchPenilaianController.saveBatchKategoriKokurikuler
+);
+
+// 2. Copy kategori kokurikuler dari TA sebelumnya
+router.post('/atur-penilaian/copy-kokurikuler',
+    authenticate,
+    guruKelasOnly,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    batchPenilaianController.copyKokurikulerDariTASebelumnya
+);
+
+// 3. Copy kategori akademik dari TA sebelumnya
+router.post('/atur-penilaian/copy-akademik',
+    authenticate,
+    guruKelasOnly,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    batchPenilaianController.copyAkademikDariTASebelumnya
+);
+
+// 4. Copy bobot akademik dari TA sebelumnya
+router.post('/atur-penilaian/copy-bobot',
+    authenticate,
+    guruKelasOnly,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    batchPenilaianController.copyBobotDariTASebelumnya
+);
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 12. REKAPAN NILAI

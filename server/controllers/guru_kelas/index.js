@@ -14,6 +14,8 @@ const aturPenilaianController = require('./aturPenilaianController');
 const rekapanController = require('./rekapanController');
 const raporController = require('./raporController');
 const tahunAjaranController = require('./tahunAjaranController');
+const aturPenilaianController = require('../controllers/guru_kelas/aturPenilaianController');
+const batchPenilaianController = require('../controllers/guru_kelas/batchPenilaianController');
 
 module.exports = {
     // Profil
@@ -48,4 +50,7 @@ module.exports = {
 
     // Tahun Ajaran
     ...tahunAjaranController,
+    
+    // Batch Penilaian
+    ...batchPenilaianController,
 };

@@ -1,574 +1,884 @@
 'use client';
 
-import { useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { Pencil, X, Search, Award, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Save, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Layers, RotateCcw, Pencil, X, ChevronDown } from 'lucide-react';
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
+// ====== KONSTANTA API ======
+const API = 'http://localhost:5000/api/guru-kelas';
 
+// ====== TYPES ======
 type ModalType = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
 
-interface KokurikulerData {
-    mutabaah_nilai: number | null;
-    mutabaah_grade: string | null;
-    mutabaah_deskripsi: string | null;
-    bpi_nilai: number | null;
-    bpi_grade: string | null;
-    bpi_deskripsi: string | null;
-    literasi_nilai: number | null;
-    literasi_grade: string | null;
-    literasi_deskripsi: string | null;
-    judul_proyek_nilai: number | null;
-    judul_proyek_grade: string | null;
-    judul_proyek_deskripsi: string | null;
-    nama_judul_proyek: string | null;
+interface ModalConfig {
+  type: ModalType;
+  title: string;
+  message: string;
 }
 
-interface SiswaKokurikuler {
-    id: number;
-    nama: string;
-    nis: string;
-    nisn: string;
-    kokurikuler: KokurikulerData;
+interface AspekKokurikuler {
+  id_aspek_kokurikuler: number;
+  kode: string;
+  nama: string;
 }
 
-const ASPEK_ID = { mutabaah: 1, literasi: 2, bpi: 3, proyek: 4 };
+interface GradeConfig {
+  id: number;
+  min_nilai: number;
+  max_nilai: number;
+  grade: string;
+  deskripsi: string;
+}
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+interface SiswaItem {
+  id: number;
+  nama: string;
+  nis: string;
+  nisn: string;
+}
 
+interface NilaiSiswa {
+  id_nilai: number | null;
+  aspek_id: number;
+  nilai: number | null;
+  grade: string | null;
+  deskripsi: string | null;
+}
+
+interface SiswaDenganNilai extends SiswaItem {
+  nilai: Record<number, NilaiSiswa>;
+  editingNilai: string;
+  isChanged: boolean;
+}
+
+// ====== GLOBAL STYLES ======
 const GlobalStyles = () => (
-    <style jsx global>{`
-    @keyframes ds-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes ds-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes ds-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .ds-fadeIn  { animation: ds-fadeIn  0.2s ease; }
-    .ds-scaleIn { animation: ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .ds-pulse   { animation: ds-pulse   0.6s ease 0.15s; }
+  <style jsx global>{`
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.95) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+    
+    .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+    .animate-scaleIn { animation: scaleIn 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+    .animate-slideDown { animation: slideDown 0.3s ease-out; }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    
+    input:focus { outline: none; }
+    button:focus-visible { outline: 2px solid #F47920; outline-offset: 2px; }
+    
+    /* Table striping */
+    tbody tr:nth-child(odd) { background-color: #f8fafc; }
+    tbody tr:nth-child(even) { background-color: #fff; }
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Orange focus ring override */
+    .focus-orange:focus { ring-color: #F47920 !important; border-color: #F47920 !important; box-shadow: 0 0 0 2px #F4792033; }
   `}</style>
 );
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
-
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+// ====== MODAL STYLES (IMPROVED) ======
+const MODAL_STYLES: Record<ModalType, { iconBg: string; iconColor: string; ring: string; icon: React.ReactNode; btn: string; btnHover: string }> = {
+  success: { 
+    iconBg: '#ecfdf5', 
+    iconColor: '#10b981', 
+    ring: '#d1fae5', 
+    icon: <CheckCircle2 size={40} className="text-emerald-500" />, 
+    btn: 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800',
+    btnHover: 'hover:shadow-lg hover:shadow-emerald-200'
+  },
+  error: { 
+    iconBg: '#fef2f2', 
+    iconColor: '#ef4444', 
+    ring: '#fee2e2', 
+    icon: <AlertCircle size={40} className="text-red-500" />, 
+    btn: 'bg-red-600 hover:bg-red-700 active:bg-red-800',
+    btnHover: 'hover:shadow-lg hover:shadow-red-200'
+  },
+  warning: { 
+    iconBg: '#fffbeb', 
+    iconColor: '#f59e0b', 
+    ring: '#fef3c7', 
+    icon: <ShieldAlert size={40} className="text-amber-500" />, 
+    btn: 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800',
+    btnHover: 'hover:shadow-lg hover:shadow-amber-200'
+  },
+  network: { 
+    iconBg: '#f1f5f9', 
+    iconColor: '#64748b', 
+    ring: '#e2e8f0', 
+    icon: <WifiOff size={40} className="text-slate-500" />, 
+    btn: 'bg-slate-600 hover:bg-slate-700 active:bg-slate-800',
+    btnHover: 'hover:shadow-lg hover:shadow-slate-200'
+  },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-    const s = MODAL_STYLES[modal.type];
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ds-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ds-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ds-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-                </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
-            </div>
+  const s = MODAL_STYLES[modal.type];
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 animate-fadeIn">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 animate-scaleIn">
+        <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-slate-100 rounded-lg transition-colors">
+          <X size={18} className="text-slate-400" />
+        </button>
+        
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center ring-8`} style={{ backgroundColor: s.iconBg, ringColor: s.ring }}>
+          {s.icon}
         </div>
-    );
+        
+        <div className="text-center space-y-2">
+          <h3 className="text-lg font-bold text-slate-900">{modal.title}</h3>
+          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{modal.message}</p>
+        </div>
+        
+        <button 
+          onClick={onClose} 
+          className={`w-full ${s.btn} ${s.btnHover} text-white font-semibold py-3 rounded-xl transition-all duration-200 mt-4`}
+        >
+          Mengerti
+        </button>
+      </div>
+    </div>
+  );
 };
 
-// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
-
-const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ds-fadeIn">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ds-scaleIn">
-            <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 ds-pulse">
-                <ShieldAlert size={40} className="text-orange-500" />
-            </div>
-            <div className="text-center">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi</h3>
-                <p className="text-sm text-gray-500 leading-relaxed mt-2">{message}</p>
-            </div>
-            <div className="flex gap-3 w-full">
-                <button onClick={onCancel} className="flex-1 py-3 rounded-xl border font-semibold text-sm"
-                    style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>Batal</button>
-                <button onClick={onConfirm} className="flex-1 py-3 rounded-xl text-white font-semibold text-sm"
-                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}>Ya, Lanjutkan</button>
-            </div>
-        </div>
-    </div>
+// ====== INPUT COMPONENTS ======
+const SelectField = ({ value, onChange, options, label }: any) => (
+  <div className="relative">
+    <select
+      value={value || ''}
+      onChange={onChange}
+      className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 font-medium transition-all appearance-none cursor-pointer hover:border-slate-300"
+      style={{ outline: 'none' }}
+      onFocus={e => { e.target.style.borderColor = '#F47920'; e.target.style.boxShadow = '0 0 0 2px #F4792033'; }}
+      onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+    >
+      <option value="">{label}</option>
+      {options.map((opt: any) => (
+        <option key={opt.id} value={opt.id}>{opt.name}</option>
+      ))}
+    </select>
+    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+  </div>
 );
 
-// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
-
-const PAGE_BG     = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
-
-const inputCls = "w-full border rounded-xl px-3 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-
-const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-    >{children}</button>
+const InputText = ({ value, onChange, placeholder, disabled = false }: any) => (
+  <input
+    type="text"
+    value={value}
+    onChange={onChange}
+    placeholder={placeholder}
+    disabled={disabled}
+    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 font-medium transition-all disabled:bg-slate-50 disabled:text-slate-500"
+    style={{ outline: 'none' }}
+    onFocus={e => { e.target.style.borderColor = '#F47920'; e.target.style.boxShadow = '0 0 0 2px #F4792033'; }}
+    onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+  />
 );
 
-const BtnPrimary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-        style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
-    >{children}</button>
+const InputNumber = ({ value, onChange, placeholder, disabled = false }: any) => (
+  <input
+    type="number"
+    min="0"
+    max="100"
+    value={value}
+    onChange={onChange}
+    placeholder={placeholder}
+    disabled={disabled}
+    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 font-semibold transition-all disabled:bg-slate-50 disabled:text-slate-500"
+    style={{ outline: 'none' }}
+    onFocus={e => { e.target.style.borderColor = '#F47920'; e.target.style.boxShadow = '0 0 0 2px #F4792033'; }}
+    onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+  />
 );
 
-// ─── GRADE DISPLAY ────────────────────────────────────────────────────────────
-
-const GradeDisplay = ({ grade }: { grade: string | null }) => (
-    <div className="flex items-center justify-center h-full min-h-[38px]">
-        {grade ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
-                <Award size={12} style={{ color: '#f5a623' }} />
-                {grade}
-            </span>
-        ) : (
-            <span className="text-gray-300 text-sm">–</span>
-        )}
-    </div>
+// ====== BADGE COMPONENTS ======
+const GradeBadge = ({ grade, deskripsi }: { grade: string; deskripsi: string }) => (
+  <div className="inline-flex items-center gap-2">
+    <span className="px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm" style={{ backgroundColor: '#10b981' }}>
+      {grade}
+    </span>
+  </div>
 );
 
-const DeskripsiDisplay = ({ text }: { text: string | null }) => (
-    <div className="w-full rounded-xl px-3 py-2.5 text-sm whitespace-pre-wrap break-words min-h-[64px]"
-        style={{ background: '#fffaf6', border: '1px solid #fde0c8', color: text ? '#374151' : '#9ca3af' }}>
-        {text || '–'}
-    </div>
+const ChangedBadge = () => (
+  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 animate-pulse">
+    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+    Belum Disimpan
+  </span>
 );
 
-// ─── ASPEK CARD ───────────────────────────────────────────────────────────────
-
-const AspekCard = ({ title, nilaiField, gradeVal, deskripsiVal, onChange }: {
-    title: string;
-    nilaiField: string;
-    gradeVal: string | null;
-    deskripsiVal: string | null;
-    onChange: (val: string) => void;
-}) => (
-    <div className="rounded-xl p-4 space-y-3" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
-        <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{title}</p>
-        <div className="grid grid-cols-2 gap-3">
-            <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Nilai (0–100)</label>
-                <input type="number" min="0" max="100" value={nilaiField} onChange={e => onChange(e.target.value)}
-                    className={inputCls} placeholder="0–100" />
-            </div>
-            <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Grade</label>
-                <GradeDisplay grade={gradeVal} />
-            </div>
-        </div>
-        <div>
-            <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi</label>
-            <DeskripsiDisplay text={deskripsiVal} />
-        </div>
-    </div>
+// ====== BUTTON COMPONENTS ======
+const BtnPrimary = ({ onClick, children, disabled = false, loading = false }: any) => (
+  <button
+    onClick={onClick}
+    disabled={disabled || loading}
+    className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+    style={{ backgroundColor: disabled || loading ? '#fdba74' : '#F47920' }}
+    onMouseEnter={e => { if (!disabled && !loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#E8731A'; }}
+    onMouseLeave={e => { if (!disabled && !loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F47920'; }}
+    onMouseDown={e => { if (!disabled && !loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#D4650F'; }}
+    onMouseUp={e => { if (!disabled && !loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#E8731A'; }}
+  >
+    {loading && <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+    {children}
+  </button>
 );
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+const BtnSecondary = ({ onClick, children, disabled = false }: any) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className="px-5 py-2.5 rounded-lg text-sm font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 active:bg-slate-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    {children}
+  </button>
+);
 
-export default function KokurikulerClient() {
-    const [siswaList,     setSiswaList]     = useState<SiswaKokurikuler[]>([]);
-    const [loading,       setLoading]       = useState(true);
-    const [showDetail,    setShowDetail]    = useState(false);
-    const [isDetailClosing, setIsDetailClosing] = useState(false);
-    const [detailId,      setDetailId]      = useState<number | null>(null);
-    const [detailData,    setDetailData]    = useState<KokurikulerData | null>(null);
-    const [searchQuery,   setSearchQuery]   = useState('');
-    const [itemsPerPage,  setItemsPerPage]  = useState(10);
-    const [currentPage,   setCurrentPage]   = useState(1);
-    const [kelasNama,     setKelasNama]     = useState<string>('Kelas Anda');
-    const [semester,      setSemester]      = useState<string>('');
-    const [kelasId,       setKelasId]       = useState<number | null>(null);
-    const [tahunAjaranId, setTahunAjaranId] = useState<number | null>(null);
-    const [gradeConfig,   setGradeConfig]   = useState<any[]>([]);
+const BtnReset = ({ onClick }: any) => (
+  <button
+    onClick={onClick}
+    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 active:bg-amber-200 transition-colors duration-200"
+  >
+    <RotateCcw size={12} /> Reset
+  </button>
+);
 
-    const [modal,      setModal]      = useState<ModalConfig | null>(null);
-    const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
-    const showModal   = useCallback((cfg: ModalConfig) => setModal(cfg), []);
-    const closeModal  = useCallback(() => setModal(null), []);
-    const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
+const BtnEdit = ({ onClick }: any) => (
+  <button
+    onClick={onClick}
+    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors duration-200"
+    style={{ color: '#c2550f', backgroundColor: '#fff7ed', border: '1px solid #fed7aa' }}
+    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#ffedd5')}
+    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#fff7ed')}
+  >
+    <Pencil size={12} /> Edit
+  </button>
+);
 
-    // ── Fetch ──────────────────────────────────────────────────────────────────
-    const fetchKokurikuler = async () => {
-        setLoading(true);
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-            const res = await fetch('http://localhost:5000/api/guru-kelas/kokurikuler', { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    setSiswaList(data.data || []);
-                    setKelasNama(data.kelas || 'Kelas Anda');
-                    setSemester(data.semester || '');
-                    setKelasId(data.kelasId || null);
-                    setTahunAjaranId(data.tahunAjaranId || null);
-                } else {
-                    showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal memuat data kokurikuler.' });
-                }
-            } else {
-                const err = await res.json();
-                showModal({ type: 'error', title: 'Gagal Memuat', message: err.message || 'Gagal memuat data kokurikuler.' });
+// ====== MAIN COMPONENT ======
+export default function InputNilaiKokurikulerBulkClient() {
+  const [loading, setLoading] = useState(true);
+  const [aspekList, setAspekList] = useState<AspekKokurikuler[]>([]);
+  const [gradeConfig, setGradeConfig] = useState<GradeConfig[]>([]);
+  const [siswaList, setSiswaList] = useState<SiswaDenganNilai[]>([]);
+  const [kelasNama, setKelasNama] = useState('');
+  const [selectedAspek, setSelectedAspek] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  
+  // Modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editClosing, setEditClosing] = useState(false);
+  const [editingSiswa, setEditingSiswa] = useState<SiswaItem | null>(null);
+  const [editingNilai, setEditingNilai] = useState<string>('');
+  
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const closeModal = useCallback(() => setModal(null), []);
+
+  // ====== FETCH DATA AWAL ======
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+          return;
+        }
+
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const taRes = await fetch(`${API}/tahun-ajaran/aktif`, { headers });
+        if (!taRes.ok) throw new Error('Gagal memuat tahun ajaran');
+        await taRes.json();
+
+        const aspekRes = await fetch(`${API}/atur-penilaian/aspek-kokurikuler`, { headers });
+        if (!aspekRes.ok) throw new Error('Gagal memuat aspek');
+        const aspekData = await aspekRes.json();
+        setAspekList(aspekData.data || []);
+
+        const gradeRes = await fetch(`${API}/atur-penilaian/kategori-kokurikuler`, { headers });
+        if (!gradeRes.ok) throw new Error('Gagal memuat konfigurasi grade');
+        const gradeData = await gradeRes.json();
+        setGradeConfig(gradeData.data || []);
+
+        const kelasRes = await fetch(`${API}/kelas`, { headers });
+        if (!kelasRes.ok) throw new Error('Gagal memuat kelas');
+        const kelasData = await kelasRes.json();
+        setKelasNama(kelasData.data?.nama_kelas || 'Kelas Anda');
+
+        const siswaRes = await fetch(`${API}/siswa`, { headers });
+        if (!siswaRes.ok) throw new Error('Gagal memuat siswa');
+        const siswaData = await siswaRes.json();
+        
+        const siswaList: SiswaDenganNilai[] = (siswaData.data || []).map((s: any, index: number) => ({
+          id: s.id_siswa || s.id || (index + 1),
+          nama: s.nama_lengkap || s.nama || s.nama_siswa || '',
+          nis: s.nis || '',
+          nisn: s.nisn || '',
+          nilai: {},
+          editingNilai: '',
+          isChanged: false
+        }));
+        
+        setSiswaList(siswaList);
+
+      } catch (err: any) {
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [showModal]);
+
+  // ====== FETCH NILAI SAAT ASPEK DIPILIH ======
+  useEffect(() => {
+    if (!selectedAspek) return;
+
+    const fetchNilai = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = { Authorization: `Bearer ${token}` };
+        
+        const res = await fetch(`${API}/kokurikuler`, { headers });
+        if (!res.ok) throw new Error('Gagal memuat nilai');
+        
+        const data = await res.json();
+        
+        setSiswaList(prevSiswaList => {
+          const updatedList = prevSiswaList.map(siswa => {
+            const siswaData = data.data?.find((s: any) => s.id_siswa === siswa.id);
+            
+            if (!siswaData) {
+              return {
+                ...siswa,
+                nilai: { ...siswa.nilai, [selectedAspek]: null },
+                editingNilai: '',
+                isChanged: false
+              };
             }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        } finally {
-            setLoading(false);
-        }
-    };
+            
+            const nilaiData = siswaData.nilai?.find((n: any) => n.aspek_id === selectedAspek);
+            
+            const nilaiMapped = nilaiData ? {
+              id_nilai: nilaiData.id_nilai_kokurikuler,
+              aspek_id: selectedAspek,
+              nilai: nilaiData.nilai,
+              grade: nilaiData.grade,
+              deskripsi: nilaiData.deskripsi
+            } : null;
 
-    const fetchGradeConfig = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/guru-kelas/atur-penilaian/kategori-kokurikuler', { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) { const data = await res.json(); if (data.success) setGradeConfig(data.data); }
-        } catch { /* silent */ }
-    };
-
-    useEffect(() => { fetchKokurikuler(); fetchGradeConfig(); }, []);
-
-    const getGradeByNilai = (nilai: number | null, aspekId: number) => {
-        if (nilai === null) return { grade: null, deskripsi: null };
-        const cfg = gradeConfig.filter(c => c.id_aspek_kokurikuler === aspekId);
-        for (const c of cfg) { if (nilai >= c.min_nilai && nilai <= c.max_nilai) return { grade: c.grade, deskripsi: c.deskripsi }; }
-        return { grade: null, deskripsi: null };
-    };
-
-    // ── Detail modal ───────────────────────────────────────────────────────────
-    const handleDetail = (siswa: SiswaKokurikuler) => {
-        setDetailId(siswa.id); setDetailData({ ...siswa.kokurikuler });
-        setShowDetail(true); setIsDetailClosing(false);
-    };
-
-    const closeDetail = () => setIsDetailClosing(true);
-
-    const handleFieldChange = (field: keyof KokurikulerData, value: string) => {
-        if (!detailData) return;
-        if (field.endsWith('_nilai')) {
-            const numValue = value === '' ? null : Number(value);
-            if (value === '' || (numValue !== null && !isNaN(numValue) && numValue >= 0 && numValue <= 100)) {
-                setDetailData(prev => ({ ...prev!, [field]: numValue }));
-                let aspekId: number | null = null;
-                if (field === 'mutabaah_nilai')     aspekId = ASPEK_ID.mutabaah;
-                else if (field === 'bpi_nilai')      aspekId = ASPEK_ID.bpi;
-                else if (field === 'literasi_nilai') aspekId = ASPEK_ID.literasi;
-                else if (field === 'judul_proyek_nilai') aspekId = ASPEK_ID.proyek;
-                if (aspekId !== null) {
-                    const { grade, deskripsi } = getGradeByNilai(numValue, aspekId);
-                    setDetailData(prev => ({
-                        ...prev!,
-                        [field.replace('_nilai', '_grade')]: grade,
-                        [field.replace('_nilai', '_deskripsi')]: deskripsi,
-                    }));
-                }
-            }
-        } else if (field === 'nama_judul_proyek') {
-            setDetailData(prev => ({ ...prev!, [field]: value }));
-        }
-    };
-
-    // ── Save ───────────────────────────────────────────────────────────────────
-    const handleSave = async (siswaId: number) => {
-        if (!detailData) return;
-        const original = siswaList.find(s => s.id === siswaId);
-        if (!original) { showModal({ type: 'error', title: 'Data Tidak Ditemukan', message: 'Data siswa tidak ditemukan.' }); closeDetail(); return; }
-
-        const hasChanges =
-            detailData.mutabaah_nilai     !== original.kokurikuler.mutabaah_nilai ||
-            detailData.bpi_nilai          !== original.kokurikuler.bpi_nilai ||
-            detailData.literasi_nilai     !== original.kokurikuler.literasi_nilai ||
-            detailData.judul_proyek_nilai !== original.kokurikuler.judul_proyek_nilai ||
-            detailData.nama_judul_proyek  !== original.kokurikuler.nama_judul_proyek;
-
-        if (!hasChanges) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' }); return; }
-
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir.' }); return; }
-            const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/${siswaId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    mutabaah_nilai: detailData.mutabaah_nilai,
-                    bpi_nilai: detailData.bpi_nilai,
-                    literasi_nilai: detailData.literasi_nilai,
-                    judul_proyek_nilai: detailData.judul_proyek_nilai,
-                    nama_judul_proyek: detailData.nama_judul_proyek,
-                    kelasId, tahunAjaranId, semester,
-                }),
-            });
-            if (res.ok) {
-                await fetchKokurikuler();
-                closeDetail();
-                showModal({ type: 'success', title: 'Data Disimpan!', message: 'Nilai kokurikuler berhasil disimpan.' });
-            } else {
-                const err = await res.json();
-                showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan data kokurikuler.' });
-            }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        }
-    };
-
-    // ── Filter & pagination ────────────────────────────────────────────────────
-    const filteredSiswa = useMemo(() => {
-        const q = searchQuery.toLowerCase().trim();
-        return siswaList.filter(s => !q || s.nama.toLowerCase().includes(q) || s.nis.includes(q) || s.nisn.includes(q));
-    }, [siswaList, searchQuery]);
-
-    const totalPages   = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
-    const startIndex   = (currentPage - 1) * itemsPerPage;
-    const endIndex     = startIndex + itemsPerPage;
-    const currentSiswa = filteredSiswa.slice(startIndex, endIndex);
-
-    const renderPagination = () => {
-        const pages: ReactNode[] = [];
-        const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive   = "text-white border-orange-500";
-        const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
-
-        pages.push(<button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-            className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>);
-        const range: number[] = [];
-        if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) range.push(i); }
-        else {
-            range.push(1);
-            if (currentPage > 3) range.push(-1);
-            for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) range.push(i);
-            if (currentPage < totalPages - 2) range.push(-2);
-            range.push(totalPages);
-        }
-        range.forEach(p => {
-            if (p < 0) { pages.push(<span key={p} className="px-1 text-gray-400 text-sm">…</span>); }
-            else pages.push(
-                <button key={p} onClick={() => setCurrentPage(p)}
-                    className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
-                    style={currentPage === p ? { background: 'linear-gradient(135deg,#e8690a,#f5a623)' } : {}}
-                >{p}</button>
-            );
+            return {
+              ...siswa,
+              nilai: { ...siswa.nilai, [selectedAspek]: nilaiMapped },
+              editingNilai: nilaiMapped?.nilai?.toString() || '',
+              isChanged: false
+            };
+          });
+          
+          return updatedList;
         });
-        pages.push(<button key="next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-            className={`${btnBase} ${btnInactive} disabled:opacity-40`}>»</button>);
-        return pages;
+      } catch (err: any) {
+        showModal({ type: 'error', title: 'Gagal Memuat', message: 'Gagal memuat nilai siswa.' });
+      }
     };
 
-    // ── Nilai badge helper ─────────────────────────────────────────────────────
-    const NilaiBadge = ({ nilai }: { nilai: number | null }) => nilai != null ? (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
-            style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>{nilai}</span>
-    ) : <span className="text-gray-300">–</span>;
+    fetchNilai();
+  }, [selectedAspek]);
 
-    // ── Render ────────────────────────────────────────────────────────────────
+  // ====== HANDLERS ======
+  const handleNilaiChange = useCallback((siswaId: number, value: string) => {
+    setSiswaList(prev => {
+      return prev.map(siswa => {
+        if (siswa.id === siswaId) {
+          const originalNilai = siswa.nilai[selectedAspek || -1]?.nilai;
+          const isChanged = value !== (originalNilai?.toString() || '');
+          return {
+            ...siswa,
+            editingNilai: value,
+            isChanged
+          };
+        }
+        return siswa;
+      });
+    });
+  }, [selectedAspek]);
+
+  const handleReset = useCallback((siswaId: number) => {
+    setSiswaList(prev => {
+      return prev.map(siswa => {
+        if (siswa.id === siswaId) {
+          const originalNilai = siswa.nilai[selectedAspek || -1]?.nilai;
+          return {
+            ...siswa,
+            editingNilai: originalNilai?.toString() || '',
+            isChanged: false
+          };
+        }
+        return siswa;
+      });
+    });
+  }, [selectedAspek]);
+
+  const handleEdit = (siswa: SiswaItem) => {
+    const nilaiData = siswaList.find(s => s.id === siswa.id)?.nilai[selectedAspek || -1];
+    setEditingSiswa(siswa);
+    setEditingNilai(nilaiData?.nilai?.toString() || '');
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setEditClosing(true);
+    setTimeout(() => {
+      setShowEditModal(false);
+      setEditClosing(false);
+      setEditingSiswa(null);
+      setEditingNilai('');
+    }, 200);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingSiswa || !selectedAspek) return;
+
+    const nilai = parseInt(editingNilai);
+    if (isNaN(nilai) || nilai < 0 || nilai > 100) {
+      showModal({ type: 'warning', title: 'Nilai Tidak Valid', message: 'Nilai harus antara 0-100.' });
+      return;
+    }
+
+    const grade = gradeConfig.find(g => nilai >= g.min_nilai && nilai <= g.max_nilai);
+
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}` 
+      };
+
+      const payload = {
+        aspek_id: selectedAspek,
+        nilai: nilai,
+        grade: grade?.grade || null,
+        deskripsi: grade?.deskripsi || null
+      };
+
+      const res = await fetch(`${API}/kokurikuler/${editingSiswa.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        setSiswaList(prev => prev.map(siswa => {
+          if (siswa.id === editingSiswa.id) {
+            return {
+              ...siswa,
+              nilai: {
+                ...siswa.nilai,
+                [selectedAspek]: {
+                  id_nilai: siswa.nilai[selectedAspek]?.id_nilai || Date.now(),
+                  aspek_id: selectedAspek,
+                  nilai: nilai,
+                  grade: grade?.grade || null,
+                  deskripsi: grade?.deskripsi || null
+                }
+              },
+              editingNilai: nilai.toString(),
+              isChanged: false
+            };
+          }
+          return siswa;
+        }));
+
+        closeEditModal();
+        showModal({ type: 'success', title: 'Tersimpan!', message: 'Nilai berhasil diperbarui.' });
+      } else {
+        const error = await res.json();
+        throw new Error(error.message);
+      }
+    } catch (err: any) {
+      showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Terjadi kesalahan.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    const changedSiswa = siswaList.filter(s => s.isChanged && selectedAspek);
+    
+    if (changedSiswa.length === 0) {
+      showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Semua nilai sudah tersimpan.' });
+      return;
+    }
+
+    const invalidData = changedSiswa.filter(s => {
+      const nilai = parseInt(s.editingNilai);
+      return isNaN(nilai) || nilai < 0 || nilai > 100;
+    });
+
+    if (invalidData.length > 0) {
+      showModal({ 
+        type: 'warning', 
+        title: 'Nilai Tidak Valid', 
+        message: `${invalidData.length} siswa memiliki nilai tidak valid (harus 0-100).` 
+      });
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}` 
+      };
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const siswa of changedSiswa) {
+        const nilai = parseInt(siswa.editingNilai);
+        const grade = gradeConfig.find(g => nilai >= g.min_nilai && nilai <= g.max_nilai);
+        
+        const payload = {
+          aspek_id: selectedAspek,
+          nilai: nilai,
+          grade: grade?.grade || null,
+          deskripsi: grade?.deskripsi || null
+        };
+
+        try {
+          const res = await fetch(`${API}/kokurikuler/${siswa.id}`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (err) {
+          errorCount++;
+        }
+      }
+
+      setSiswaList(prev => prev.map(siswa => {
+        if (siswa.isChanged) {
+          const nilai = parseInt(siswa.editingNilai);
+          const grade = gradeConfig.find(g => nilai >= g.min_nilai && nilai <= g.max_nilai);
+          return {
+            ...siswa,
+            nilai: {
+              ...siswa.nilai,
+              [selectedAspek || -1]: {
+                id_nilai: siswa.nilai[selectedAspek || -1]?.id_nilai || Date.now(),
+                aspek_id: selectedAspek || -1,
+                nilai: nilai,
+                grade: grade?.grade || null,
+                deskripsi: grade?.deskripsi || null
+              }
+            },
+            isChanged: false
+          };
+        }
+        return siswa;
+      }));
+
+      showModal({ 
+        type: successCount > 0 ? 'success' : 'error', 
+        title: successCount > 0 ? 'Berhasil!' : 'Gagal', 
+        message: `Tersimpan ${successCount} nilai.${errorCount > 0 ? ` Gagal: ${errorCount}` : ''}` 
+      });
+
+    } catch (err: any) {
+      showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Terjadi kesalahan.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ====== FILTER ======
+  const filteredSiswa = siswaList.filter(s => {
+    const namaLower = (s.nama || '').toLowerCase();
+    const queryLower = searchQuery.toLowerCase();
+    return namaLower.includes(queryLower) || (s.nis || '').includes(searchQuery);
+  });
+
+  const changedCount = filteredSiswa.filter(s => s.isChanged).length;
+
+  // ====== RENDER ======
+  if (loading) {
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
-            <GlobalStyles />
-            {modal && <NotifModal modal={modal} onClose={closeModal} />}
-            {confirmCfg && (
-                <ConfirmModal
-                    message={confirmCfg.message}
-                    onConfirm={() => { confirmCfg.onConfirm(); setConfirmCfg(null); }}
-                    onCancel={() => setConfirmCfg(null)}
-                />
-            )}
-
-            {/* Page header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Nilai Kokurikuler Siswa</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelas {kelasNama} — Isi dan perbarui nilai kokurikuler siswa</p>
-            </div>
-
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Toolbar */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
-                            Kelas: <span style={{ color: '#e8690a' }}>{kelasNama}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200">
-                                    {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
-                                </select>
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                            </div>
-                            <div className="relative min-w-[200px] sm:min-w-[220px]">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                                </div>
-                                <input type="text" placeholder="Cari siswa..." value={searchQuery}
-                                    onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400" />
-                                {searchQuery && (
-                                    <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                                        className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                        Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
-                    </p>
-                </div>
-
-                {/* Tabel */}
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[750px] text-sm border-collapse">
-                        <thead>
-                            <tr style={TH_GRAD}>
-                                {["No.", "Nama", "NIS", "NISN", "Mutaba'ah", "BPI", "Literasi", "Judul Proyek", "Aksi"].map(h => (
-                                    <th key={h} className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr><td colSpan={9} className="py-12 text-center">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                        <span className="text-sm text-gray-400">Memuat data...</span>
-                                    </div>
-                                </td></tr>
-                            ) : currentSiswa.length === 0 ? (
-                                <tr><td colSpan={9} className="py-12 text-center text-sm text-gray-400">
-                                    {searchQuery ? 'Tidak ada siswa yang cocok.' : 'Belum ada siswa di kelas ini.'}
-                                </td></tr>
-                            ) : currentSiswa.map((siswa, index) => (
-                                <tr key={siswa.id} className="transition-colors"
-                                    style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
-                                    <td className="px-4 py-3 text-center text-gray-500 font-medium">{startIndex + index + 1}</td>
-                                    <td className="px-4 py-3 font-bold text-gray-800">{siswa.nama}</td>
-                                    <td className="px-4 py-3 text-center text-gray-600">{siswa.nis}</td>
-                                    <td className="px-4 py-3 text-center text-gray-600">{siswa.nisn}</td>
-                                    <td className="px-4 py-3 text-center"><NilaiBadge nilai={siswa.kokurikuler.mutabaah_nilai} /></td>
-                                    <td className="px-4 py-3 text-center"><NilaiBadge nilai={siswa.kokurikuler.bpi_nilai} /></td>
-                                    <td className="px-4 py-3 text-center"><NilaiBadge nilai={siswa.kokurikuler.literasi_nilai} /></td>
-                                    <td className="px-4 py-3 text-center text-xs text-gray-600 max-w-[120px] truncate" title={siswa.kokurikuler.nama_judul_proyek || ''}>
-                                        {siswa.kokurikuler.nama_judul_proyek || <span className="text-gray-300">–</span>}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <button onClick={() => handleDetail(siswa)}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}>
-                                            <Pencil size={12} /> Input Nilai
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                    <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Halaman {currentPage} dari {totalPages}</span>
-                    <div className="flex items-center gap-1">{renderPagination()}</div>
-                </div>
-            </div>
-
-            {/* ── Modal Detail / Input Nilai ───────────────────────────────── */}
-            {showDetail && detailData && (
-                <div className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${isDetailClosing ? 'opacity-0' : 'opacity-100'}`}
-                    onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}
-                    onTransitionEnd={() => {
-                        if (isDetailClosing) { setShowDetail(false); setIsDetailClosing(false); setDetailId(null); setDetailData(null); }
-                    }}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${isDetailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-                        style={CARD_STYLE}>
-
-                        {/* Modal header */}
-                        <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                            <h2 className="text-base font-bold text-white">Input Nilai Kokurikuler</h2>
-                            <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center"
-                                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                                <X size={16} className="text-white" />
-                            </button>
-                        </div>
-
-                        <div className="p-6 space-y-4">
-                            {/* Mutaba'ah */}
-                            <AspekCard
-                                title="Mutaba'ah Yaumiyah"
-                                nilaiField={detailData.mutabaah_nilai?.toString() ?? ''}
-                                gradeVal={detailData.mutabaah_grade}
-                                deskripsiVal={detailData.mutabaah_deskripsi}
-                                onChange={v => handleFieldChange('mutabaah_nilai', v)}
-                            />
-
-                            {/* BPI */}
-                            <AspekCard
-                                title="Mentoring BPI"
-                                nilaiField={detailData.bpi_nilai?.toString() ?? ''}
-                                gradeVal={detailData.bpi_grade}
-                                deskripsiVal={detailData.bpi_deskripsi}
-                                onChange={v => handleFieldChange('bpi_nilai', v)}
-                            />
-
-                            {/* Literasi */}
-                            <AspekCard
-                                title="Literasi"
-                                nilaiField={detailData.literasi_nilai?.toString() ?? ''}
-                                gradeVal={detailData.literasi_grade}
-                                deskripsiVal={detailData.literasi_deskripsi}
-                                onChange={v => handleFieldChange('literasi_nilai', v)}
-                            />
-
-                            {/* Judul Proyek */}
-                            <div className="rounded-xl p-4 space-y-3" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
-                                <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Judul Proyek</p>
-                                <div>
-                                    <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Nama Kegiatan Proyek</label>
-                                    <input type="text" value={detailData.nama_judul_proyek ?? ''}
-                                        onChange={e => setDetailData(prev => ({ ...prev!, nama_judul_proyek: e.target.value }))}
-                                        className={inputCls} placeholder="Contoh: Kebersihan Lingkungan" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Nilai (0–100)</label>
-                                        <input type="number" min="0" max="100" value={detailData.judul_proyek_nilai?.toString() ?? ''}
-                                            onChange={e => handleFieldChange('judul_proyek_nilai', e.target.value)}
-                                            className={inputCls} placeholder="0–100" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Grade</label>
-                                        <GradeDisplay grade={detailData.judul_proyek_grade} />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi</label>
-                                    <DeskripsiDisplay text={detailData.judul_proyek_deskripsi} />
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex justify-end gap-3 pt-2" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <BtnSecondary onClick={closeDetail}>Batal</BtnSecondary>
-                                <BtnPrimary onClick={() => detailId && handleSave(detailId)}>Simpan</BtnPrimary>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+      <div className="flex-1 p-6 min-h-screen flex items-center justify-center bg-slate-50">
+        <GlobalStyles />
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 rounded-full border-2 border-slate-300 border-t-orange-500 animate-spin mx-auto" />
+          <p className="text-sm font-medium text-slate-600">Memuat data...</p>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="flex-1 min-h-screen bg-slate-50 p-6 md:p-8">
+      <GlobalStyles />
+      {modal && <NotifModal modal={modal} onClose={closeModal} />}
+
+      {/* Header */}
+      <div className="mb-8 animate-slideDown">
+        <h1 className="text-3xl font-bold text-slate-900 mb-1">Input Nilai Kokurikuler</h1>
+        <p className="text-sm text-slate-600">Kelas <span className="font-semibold" style={{ color: '#F47920' }}>{kelasNama}</span> • Kelola nilai siswa dengan mudah</p>
+      </div>
+
+      {/* Main Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fadeIn">
+        
+        {/* Toolbar */}
+        <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-orange-50/30 space-y-4">
+          {/* Row 1: Select Aspek & Search */}
+          <div className="flex flex-col md:flex-row gap-4 md:items-end">
+            <div className="flex-1">
+              <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
+                Pilih Aspek Kokurikuler
+              </label>
+              <SelectField
+                value={selectedAspek}
+                onChange={(e: any) => setSelectedAspek(e.target.value ? Number(e.target.value) : null)}
+                options={aspekList.map(a => ({ id: a.id_aspek_kokurikuler, name: a.nama }))}
+                label="-- Pilih Aspek --"
+              />
+            </div>
+
+            {selectedAspek && (
+              <div className="flex-1 md:flex-0">
+                <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
+                  Cari Siswa
+                </label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <div className="pl-9">
+                    <InputText
+                      value={searchQuery}
+                      onChange={(e: any) => setSearchQuery(e.target.value)}
+                      placeholder="Nama atau NIS..."
+                    />
+                  </div>
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Row 2: Status & Action */}
+          {selectedAspek && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+              <div className="text-sm text-slate-600 space-y-1">
+                <p className="font-medium">{filteredSiswa.length} siswa ditampilkan</p>
+                {changedCount > 0 && <ChangedBadge />}
+              </div>
+              
+              {changedCount > 0 && (
+                <BtnPrimary 
+                  onClick={handleSaveAll}
+                  disabled={saving}
+                  loading={saving}
+                >
+                  <Save size={16} />
+                  Simpan {changedCount} Nilai
+                </BtnPrimary>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        {!selectedAspek ? (
+          <div className="px-6 py-16 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#fff7ed' }}>
+              <Layers size={28} style={{ color: '#F47920' }} />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Pilih Aspek untuk Mulai</h3>
+            <p className="text-sm text-slate-600">Silakan pilih salah satu aspek kokurikuler di atas untuk melihat daftar siswa dan input nilai.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-white" style={{ background: 'linear-gradient(to right, #F47920, #E8731A)' }}>
+                  <th className="px-4 py-3.5 text-center font-semibold text-xs tracking-wider">No.</th>
+                  <th className="px-4 py-3.5 text-left font-semibold text-xs tracking-wider">Nama Siswa</th>
+                  <th className="px-4 py-3.5 text-center font-semibold text-xs tracking-wider">NIS</th>
+                  <th className="px-4 py-3.5 text-center font-semibold text-xs tracking-wider">Nilai</th>
+                  <th className="px-4 py-3.5 text-center font-semibold text-xs tracking-wider">Grade</th>
+                  <th className="px-4 py-3.5 text-center font-semibold text-xs tracking-wider">Deskripsi</th>
+                  <th className="px-4 py-3.5 text-center font-semibold text-xs tracking-wider">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSiswa.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16 text-center">
+                      <p className="text-slate-500 text-sm">{searchQuery ? 'Siswa tidak ditemukan' : 'Belum ada data siswa'}</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSiswa.map((siswa, idx) => {
+                    const nilaiData = siswa.nilai[selectedAspek];
+                    const grade = gradeConfig.find(g => {
+                      const nilai = parseInt(siswa.editingNilai);
+                      return !isNaN(nilai) && nilai >= g.min_nilai && nilai <= g.max_nilai;
+                    });
+
+                    return (
+                      <tr
+                        key={`siswa-${siswa.id}`}
+                        className={`border-b border-slate-200 transition-all duration-200 ${siswa.isChanged ? 'bg-amber-50' : ''}`}
+                      >
+                        <td className="px-4 py-4 text-center text-slate-500 font-medium">{idx + 1}</td>
+                        <td className="px-4 py-4 font-semibold text-slate-900">{siswa.nama}</td>
+                        <td className="px-4 py-4 text-center text-slate-600 font-mono text-xs">{siswa.nis}</td>
+                        <td className="px-4 py-4">
+                          <InputNumber
+                            value={siswa.editingNilai}
+                            onChange={(e: any) => handleNilaiChange(siswa.id, e.target.value)}
+                            placeholder="—"
+                          />
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {siswa.editingNilai && grade ? (
+                            <GradeBadge grade={grade.grade} deskripsi={grade.deskripsi} />
+                          ) : nilaiData?.grade ? (
+                            <GradeBadge grade={nilaiData.grade} deskripsi={nilaiData.deskripsi} />
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center text-xs text-slate-600 max-w-xs">
+                          {siswa.editingNilai && grade ? (
+                            <span className="line-clamp-1">{grade.deskripsi}</span>
+                          ) : nilaiData?.deskripsi ? (
+                            <span className="line-clamp-1">{nilaiData.deskripsi}</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {siswa.isChanged ? (
+                            <BtnReset onClick={() => handleReset(siswa.id)} />
+                          ) : (
+                            <BtnEdit onClick={() => handleEdit(siswa)} />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Edit Modal */}
+      {showEditModal && editingSiswa && (
+        <div
+          className={`fixed inset-0 z-[80] flex items-center justify-center p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
+          onClick={(e) => { if (e.target === e.currentTarget) closeEditModal(); }}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: 'linear-gradient(to right, #F47920, #E8731A)' }}>
+              <h2 className="text-base font-bold text-white">Edit Nilai Siswa</h2>
+              <button onClick={closeEditModal} className="p-1 hover:bg-white/20 rounded-lg transition-colors">
+                <X size={18} className="text-white" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Student Info */}
+              <div className="p-4 rounded-lg border space-y-1" style={{ backgroundColor: '#fff7ed', borderColor: '#fed7aa' }}>
+                <p className="text-sm font-bold" style={{ color: '#7c2d12' }}>{editingSiswa.nama}</p>
+                <p className="text-xs" style={{ color: '#c2550f' }}>NIS: {editingSiswa.nis}</p>
+              </div>
+
+              {/* Nilai Input */}
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-900">
+                  Nilai <span className="text-red-500">*</span>
+                </label>
+                <InputNumber
+                  value={editingNilai}
+                  onChange={(e: any) => setEditingNilai(e.target.value)}
+                  placeholder="0-100"
+                />
+                <p className="text-xs text-slate-500">Masukkan nilai antara 0 dan 100</p>
+              </div>
+
+              {/* Grade Preview */}
+              {editingNilai && (() => {
+                const nilai = parseInt(editingNilai);
+                const grade = gradeConfig.find(g => nilai >= g.min_nilai && nilai <= g.max_nilai);
+                if (grade) {
+                  return (
+                    <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
+                      <p className="text-xs font-semibold text-emerald-900 uppercase tracking-wide">Ringkasan Nilai</p>
+                      <div className="flex items-center gap-3">
+                        <span className="px-3 py-1.5 rounded-full text-sm font-bold text-white bg-emerald-500">
+                          {grade.grade}
+                        </span>
+                        <span className="text-sm text-emerald-900">{grade.deskripsi}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200 rounded-b-2xl">
+              <BtnSecondary onClick={closeEditModal} disabled={saving}>
+                Batal
+              </BtnSecondary>
+              <BtnPrimary 
+                onClick={handleSaveEdit}
+                disabled={saving || !editingNilai}
+                loading={saving}
+              >
+                {saving ? 'Menyimpan...' : 'Simpan'}
+              </BtnPrimary>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

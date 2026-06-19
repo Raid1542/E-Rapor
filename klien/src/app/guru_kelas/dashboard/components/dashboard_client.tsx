@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import {
-    Users, User, Calendar, BookOpen,
+    Users, DoorOpen, Calendar, BookOpen,
     ClipboardList, CheckCircle2, Clock, AlertCircle,
-    ChevronRight, TrendingUp,
+    ChevronRight, GraduationCap, PieChart,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -33,34 +33,53 @@ interface NilaiProgress {
     jenis: 'wajib' | 'pilihan';
 }
 
-// ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
+// ─── DESIGN TOKEN ─────────────────────────────────────────────────────────────
 
-const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-    <div
-        className={`bg-white rounded-2xl ${className}`}
-        style={{ border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' }}
-    >
-        {children}
-    </div>
-);
+const ORANGE = '#E8570A';
 
 // ─── PROGRESS BAR ─────────────────────────────────────────────────────────────
 
 const ProgressBar = ({ value, total }: { value: number; total: number }) => {
-    const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-    const color = pct === 100 ? '#16a34a' : pct >= 60 ? '#e8690a' : '#dc2626';
+    const pct    = total > 0 ? Math.round((value / total) * 100) : 0;
+    const isDone = value === total && total > 0;
+    const isNone = value === 0;
+    const color  = isDone ? '#15803d' : isNone ? '#dc2626' : '#b45309';
+
     return (
-        <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: '#fde0c8' }}>
+        <div className="flex items-center gap-2 flex-1">
+            <div className="flex-1 h-[5px] rounded-full overflow-hidden bg-gray-100">
                 <div
                     className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${pct}%`, background: pct === 100 ? '#16a34a' : 'linear-gradient(90deg,#c95b08,#f5a623)' }}
+                    style={{ width: `${pct}%`, background: color }}
                 />
             </div>
-            <span className="text-xs font-bold w-10 text-right" style={{ color }}>
-                {pct}%
+            <span className="text-[11px] text-gray-400 tabular-nums min-w-[36px] text-right">
+                {value}/{total}
             </span>
         </div>
+    );
+};
+
+// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
+
+const StatusBadge = ({ done, total }: { done: number; total: number }) => {
+    const isDone = done === total && total > 0;
+    const isNone = done === 0;
+
+    const config = isDone
+        ? { label: 'Selesai', bg: '#ecfdf3', color: '#15803d', Icon: CheckCircle2 }
+        : isNone
+        ? { label: 'Belum',   bg: '#fef2f2', color: '#b91c1c', Icon: AlertCircle  }
+        : { label: 'Proses',  bg: '#fff7ed', color: '#c2410c', Icon: Clock        };
+
+    return (
+        <span
+            className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
+            style={{ background: config.bg, color: config.color }}
+        >
+            <config.Icon size={11} />
+            {config.label}
+        </span>
     );
 };
 
@@ -70,7 +89,7 @@ export default function GuruKelasDashboard() {
     const [user,      setUser]      = useState<UserData | null>(null);
     const [kelasInfo, setKelasInfo] = useState<KelasInfo | null>(null);
     const [progress,  setProgress]  = useState<NilaiProgress[]>([]);
-    const [loading,   setLoading]   = useState<boolean>(true);
+    const [loading,   setLoading]   = useState(true);
     const router = useRouter();
 
     useEffect(() => {
@@ -81,31 +100,22 @@ export default function GuruKelasDashboard() {
 
         try {
             const parsedUser: UserData = JSON.parse(userData);
-            if (parsedUser.role !== 'guru kelas') {
-                router.push('/login');
-                return;
-            }
+            if (parsedUser.role !== 'guru kelas') { router.push('/login'); return; }
             setUser(parsedUser);
 
             const fetchAll = async () => {
                 try {
-                    // Kelas info
                     const resKelas = await fetch('http://localhost:5000/api/guru-kelas/kelas', {
                         headers: { Authorization: `Bearer ${token}` },
                     });
-                    if (resKelas.ok) {
-                        const data = await resKelas.json();
-                        if (Array.isArray(data) && data.length > 0) setKelasInfo(data[0]);
-                    }
+                    const dataKelas = await resKelas.json();
+                    if (Array.isArray(dataKelas) && dataKelas.length > 0) setKelasInfo(dataKelas[0]);
 
-                    // Progress penilaian
                     const resProgress = await fetch('http://localhost:5000/api/guru-kelas/progress-penilaian', {
                         headers: { Authorization: `Bearer ${token}` },
                     });
-                    if (resProgress.ok) {
-                        const dataP = await resProgress.json();
-                        if (Array.isArray(dataP.data)) setProgress(dataP.data);
-                    }
+                    const dataProgress = await resProgress.json();
+                    if (Array.isArray(dataProgress.data)) setProgress(dataProgress.data);
                 } catch (err) {
                     console.error('Gagal memuat data dashboard:', err);
                 } finally {
@@ -120,317 +130,316 @@ export default function GuruKelasDashboard() {
         }
     }, [router]);
 
-    // ── Loading state ──────────────────────────────────────────────────────────
+    // ── Loading ────────────────────────────────────────────────────────────────
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen gap-4"
-                style={{ background: '#fdf6f0' }}>
-                <div className="w-12 h-12 rounded-full border-4 animate-spin"
-                    style={{ borderColor: '#fde0c8', borderTopColor: '#e8690a' }} />
-                <p className="text-sm font-semibold" style={{ color: '#c95b08' }}>Memuat data...</p>
+            <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-gray-50">
+                <div
+                    className="w-8 h-8 rounded-full border-[3px] border-gray-200 animate-spin"
+                    style={{ borderTopColor: ORANGE }}
+                />
+                <p className="text-sm text-gray-400">Memuat data...</p>
             </div>
         );
     }
 
-    // ── Empty / belum ditugaskan ───────────────────────────────────────────────
+    // ── Empty state ────────────────────────────────────────────────────────────
 
     if (!user || !kelasInfo) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-6"
-                style={{ background: '#fdf6f0' }}>
-                <div className="text-5xl">📋</div>
-                <p className="text-base font-semibold text-gray-700">Belum Ditugaskan</p>
-                <p className="text-sm text-gray-400 text-center max-w-xs">
+            <div className="flex flex-col items-center justify-center min-h-screen gap-3 bg-gray-50 text-center p-6">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#fff3ec' }}>
+                    <ClipboardList className="w-6 h-6" style={{ color: ORANGE }} />
+                </div>
+                <p className="text-sm font-semibold text-gray-800">Belum Ditugaskan</p>
+                <p className="text-xs text-gray-400 max-w-xs">
                     Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini.
                 </p>
             </div>
         );
     }
 
-    // ── Derived stats ─────────────────────────────────────────────────────────
+    // ── Derived stats ──────────────────────────────────────────────────────────
 
-    const totalMapel      = progress.length;
-    const selesai         = progress.filter(p => p.belum_dinilai === 0 && p.total_siswa > 0).length;
-    const belumMulai      = progress.filter(p => p.sudah_dinilai === 0).length;
-    const sedangBerjalan  = totalMapel - selesai - belumMulai;
-    const overallPct      = totalMapel > 0 ? Math.round((selesai / totalMapel) * 100) : 0;
+    const totalMapel     = progress.length;
+    const selesai        = progress.filter(p => p.belum_dinilai === 0 && p.total_siswa > 0).length;
+    const belumMulai     = progress.filter(p => p.sudah_dinilai === 0).length;
+    const sedangBerjalan = totalMapel - selesai - belumMulai;
+    const overallPct     = totalMapel > 0 ? Math.round((selesai / totalMapel) * 100) : 0;
+
+    const CIRC  = 87.96;
+    const filled = (overallPct / 100) * CIRC;
+    const empty  = CIRC - filled;
+
+    // ── Stat cards config ──────────────────────────────────────────────────────
 
     const statCards = [
         {
-            label: 'Total Siswa',
-            value: kelasInfo.jumlah_siswa,
-            sub:   'Siswa di kelas Anda',
-            icon:  <Users className="w-5 h-5" />,
-            path:  '/guru_kelas/data_siswa',
+            label:     'Total Siswa',
+            value:     kelasInfo.jumlah_siswa,
+            icon:      <Users size={18} />,
+            path:      '/guru_kelas/data_siswa',
+            linkLabel: 'Lihat data siswa',
+            activeNow: false,
         },
         {
-            label: 'Kelas',
-            value: kelasInfo.kelas,
-            sub:   'Kelas yang Anda ampu',
-            icon:  <User className="w-5 h-5" />,
-            path:  '/guru_kelas/data_siswa',
+            label:     'Kelas',
+            value:     kelasInfo.kelas,
+            icon:      <DoorOpen size={18} />,
+            path:      '/guru_kelas/data_siswa',
+            linkLabel: 'Lihat detail',
+            activeNow: false,
         },
         {
-            label: 'Tahun Ajaran',
-            value: kelasInfo.tahun_ajaran,
-            sub:   kelasInfo.semester,
-            icon:  <Calendar className="w-5 h-5" />,
-            path:  null,
+            label:     'Tahun Ajaran',
+            value:     kelasInfo.tahun_ajaran,
+            icon:      <Calendar size={18} />,
+            path:      null,
+            linkLabel: null,
+            activeNow: true,
         },
         {
-            label: 'Mata Pelajaran',
-            value: totalMapel,
-            sub:   'Perlu dinilai',
-            icon:  <BookOpen className="w-5 h-5" />,
-            path:  '/guru_kelas/input_nilai',
+            label:     'Mata Pelajaran',
+            value:     totalMapel,
+            icon:      <BookOpen size={18} />,
+            path:      '/guru_kelas/input_nilai',
+            linkLabel: 'Input nilai',
+            activeNow: false,
         },
     ];
 
-    const progressStats = [
-        { label: 'Selesai',          value: selesai,        color: '#16a34a', bg: '#eaf7ef', icon: <CheckCircle2 size={16} /> },
-        { label: 'Sedang Berjalan',  value: sedangBerjalan, color: '#e8690a', bg: '#fff0e5', icon: <Clock        size={16} /> },
-        { label: 'Belum Dimulai',    value: belumMulai,     color: '#dc2626', bg: '#fef2f2', icon: <AlertCircle  size={16} /> },
+    const statusItems = [
+        { label: 'Selesai',         value: selesai,        bg: '#ecfdf3', color: '#15803d', Icon: CheckCircle2 },
+        { label: 'Sedang berjalan', value: sedangBerjalan, bg: '#fff7ed', color: '#c2410c', Icon: Clock        },
+        { label: 'Belum dimulai',   value: belumMulai,     bg: '#fef2f2', color: '#b91c1c', Icon: AlertCircle  },
     ];
 
-    // ── Render ────────────────────────────────────────────────────────────────
+    // ── Render ─────────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex-1 min-h-screen p-6" style={{ background: '#ffffff' }}>
+        <div className="flex-1 min-h-screen bg-gray-50 p-5 lg:p-7">
+            <div className="max-w-[1400px] mx-auto flex flex-col gap-5">
 
-            {/* ── Welcome card ── */}
-            <div
-                className="rounded-2xl p-6 mb-6 text-white relative overflow-hidden"
-                style={{
-                    background: 'linear-gradient(135deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
-                    boxShadow: '0 4px 20px rgba(200,80,10,0.25)',
-                }}
-            >
-                <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full"
-                    style={{ background: 'rgba(255,255,255,0.08)' }} />
-                <div className="absolute -bottom-10 right-16 w-56 h-56 rounded-full"
-                    style={{ background: 'rgba(255,255,255,0.05)' }} />
-                <div className="relative z-10">
-                    <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">
-                        Panel Wali Kelas
-                    </p>
-                    <h2 className="text-2xl font-bold mb-1.5">
-                        Selamat Datang, {user.nama_lengkap || 'Guru'}! 👋
-                    </h2>
-                    <p className="text-white/70 text-sm">
-                        Kelola siswa dan penilaian kelas <strong className="text-white">{kelasInfo.kelas}</strong> dari dashboard ini.
-                    </p>
-                </div>
-            </div>
+                {/* ── Banner ── */}
+                <div
+                    className="rounded-2xl px-7 py-7 relative overflow-hidden flex items-center justify-between"
+                    style={{ background: ORANGE }}
+                >
+                    <GraduationCap
+                        className="absolute -right-4 -bottom-5 w-44 h-44 opacity-[0.10] -rotate-6"
+                        style={{ color: '#fff' }}
+                        strokeWidth={0.8}
+                    />
 
-            {/* ── Stat cards ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {statCards.map((card) => (
-                    <Card key={card.label}>
-                        <div className="p-5">
-                            <div className="flex items-center justify-between mb-4">
-                                <div
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0"
-                                    style={{
-                                        background: 'linear-gradient(135deg, #c95b08, #e8690a)',
-                                        boxShadow: '0 3px 10px rgba(232,105,10,0.3)',
-                                    }}
-                                >
-                                    {card.icon}
-                                </div>
-                                <span className="text-2xl font-bold" style={{ color: '#c95b08' }}>
-                                    {card.value}
-                                </span>
+                    <div className="relative z-10">
+                        <span
+                            className="inline-flex items-center gap-1.5 text-white text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full mb-2.5"
+                            style={{ background: 'rgba(255,255,255,0.18)' }}
+                        >
+                            Panel Wali Kelas
+                        </span>
+                        <h2 className="text-white text-[22px] font-medium mb-1.5">
+                            Selamat Datang, {user.nama_lengkap || 'Guru'} 👋
+                        </h2>
+                        <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.80)' }}>
+                            Kelola siswa dan penilaian kelas{' '}
+                            <strong className="text-white font-semibold">{kelasInfo.kelas}</strong>
+                            {' '}— T.A {kelasInfo.tahun_ajaran} Semester {kelasInfo.semester}
+                        </p>
+                    </div>
+
+                    <div className="relative z-10 flex-shrink-0">
+                        <div
+                            className="rounded-2xl px-5 py-3.5 text-center"
+                            style={{ background: 'rgba(255,255,255,0.15)', border: '0.5px solid rgba(255,255,255,0.25)' }}
+                        >
+                            <div className="text-[28px] font-medium text-white leading-none">{overallPct}%</div>
+                            <div className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                                Penilaian selesai
                             </div>
-                            <p className="text-sm font-semibold text-gray-700 mb-0.5">{card.label}</p>
-                            <p className="text-xs text-gray-400 mb-3">{card.sub}</p>
-                            {card.path && (
-                                <div className="pt-3" style={{ borderTop: '1px solid #fde0c8' }}>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Stat cards ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    {statCards.map((card) => (
+                        <div
+                            key={card.label}
+                            className="group bg-white border border-gray-100 rounded-2xl p-5 flex flex-col transition-all duration-200 hover:border-orange-200 hover:shadow-[0_4px_20px_rgba(232,87,10,0.12)]"
+                        >
+                            {/* Icon */}
+                            <div
+                                className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center mb-3.5 transition-colors duration-200 group-hover:bg-orange-100"
+                                style={{ background: '#fff3ec', color: ORANGE }}
+                            >
+                                {card.icon}
+                            </div>
+
+                            {/* Value */}
+                            <div
+                                className="font-medium text-gray-900 mb-0.5 truncate"
+                                style={{ fontSize: typeof card.value === 'string' && card.value.length > 5 ? '18px' : '26px' }}
+                            >
+                                {card.value}
+                            </div>
+
+                            {/* Label */}
+                            <div className="text-[12px] text-gray-400 mb-3.5">{card.label}</div>
+
+                            {/* Footer */}
+                            <div className="border-t border-gray-100 pt-3 mt-auto">
+                                {card.activeNow ? (
+                                    <span className="flex items-center gap-1.5 text-[12px] font-medium text-green-600">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                                        Aktif sekarang
+                                    </span>
+                                ) : card.path && card.linkLabel ? (
                                     <button
                                         onClick={() => router.push(card.path!)}
-                                        className="flex items-center gap-1 text-xs font-semibold transition-colors group"
-                                        style={{ color: '#e8690a' }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = '#c95b08')}
-                                        onMouseLeave={e => (e.currentTarget.style.color = '#e8690a')}
+                                        className="flex items-center gap-0.5 text-[12px] font-semibold transition-colors duration-150"
+                                        style={{ color: ORANGE }}
                                     >
-                                        Lihat detail
-                                        <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                                        {card.linkLabel}
+                                        <ChevronRight size={13} />
                                     </button>
-                                </div>
-                            )}
-                        </div>
-                    </Card>
-                ))}
-            </div>
-
-            {/* ── Bottom section: Progress Penilaian ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-                {/* Ringkasan Progress — kiri */}
-                <Card>
-                    <div className="p-5 flex flex-col h-full">
-                        <div className="pb-4 mb-4" style={{ borderBottom: '1px solid #fde0c8' }}>
-                            <div className="flex items-center gap-2 mb-0.5">
-                                <TrendingUp size={16} style={{ color: '#e8690a' }} />
-                                <p className="text-sm font-bold text-gray-800">Ringkasan Penilaian</p>
+                                ) : null}
                             </div>
-                            <p className="text-xs" style={{ color: '#c95b08' }}>
-                                Semester {kelasInfo.semester} · {kelasInfo.tahun_ajaran}
-                            </p>
+                        </div>
+                    ))}
+                </div>
+
+                {/* ── Bottom section ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+
+                    {/* Ringkasan */}
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 transition-all duration-200 hover:border-orange-200 hover:shadow-[0_4px_20px_rgba(232,87,10,0.12)]">
+                        <div className="flex items-center gap-2 pb-4 mb-4 border-b border-gray-100">
+                            <PieChart size={16} style={{ color: ORANGE }} />
+                            <div>
+                                <p className="text-sm font-medium text-gray-800">Ringkasan Penilaian</p>
+                                <p className="text-xs text-gray-400">
+                                    Semester {kelasInfo.semester} · {kelasInfo.tahun_ajaran}
+                                </p>
+                            </div>
                         </div>
 
-                        {/* Donut-style progress ring */}
-                        <div className="flex flex-col items-center justify-center py-4">
-                            <div className="relative w-32 h-32">
+                        {/* Ring */}
+                        <div className="flex flex-col items-center py-3 pb-5">
+                            <div className="relative w-[130px] h-[130px]">
                                 <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                                    <circle cx="18" cy="18" r="15.9"
-                                        fill="none" stroke="#fde0c8" strokeWidth="3" />
-                                    <circle cx="18" cy="18" r="15.9"
+                                    <circle cx="18" cy="18" r="14"
+                                        fill="none" stroke="#f3f4f6" strokeWidth="3.2" />
+                                    <circle cx="18" cy="18" r="14"
                                         fill="none"
-                                        stroke="url(#ringGrad)"
-                                        strokeWidth="3"
+                                        stroke={ORANGE}
+                                        strokeWidth="3.2"
                                         strokeLinecap="round"
-                                        strokeDasharray={`${overallPct} ${100 - overallPct}`}
-                                        strokeDashoffset="0"
+                                        strokeDasharray={`${filled} ${empty}`}
                                         style={{ transition: 'stroke-dasharray 1s ease' }}
                                     />
-                                    <defs>
-                                        <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stopColor="#c95b08" />
-                                            <stop offset="100%" stopColor="#f5a623" />
-                                        </linearGradient>
-                                    </defs>
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-2xl font-bold" style={{ color: '#c95b08' }}>{overallPct}%</span>
-                                    <span className="text-xs text-gray-400">selesai</span>
+                                    <span className="text-[24px] font-medium text-gray-900 leading-none">{overallPct}%</span>
+                                    <span className="text-[11px] text-gray-400 mt-1">selesai</span>
                                 </div>
                             </div>
-                            <p className="text-sm font-semibold text-gray-700 mt-3">
+                            <p className="text-sm text-gray-500 mt-2.5">
                                 {selesai} dari {totalMapel} mata pelajaran
                             </p>
                         </div>
 
-                        {/* Mini stats */}
-                        <div className="space-y-2 mt-2">
-                            {progressStats.map(s => (
-                                <div key={s.label}
-                                    className="flex items-center justify-between px-3 py-2 rounded-xl"
-                                    style={{ background: s.bg }}>
-                                    <div className="flex items-center gap-2" style={{ color: s.color }}>
-                                        {s.icon}
-                                        <span className="text-xs font-semibold">{s.label}</span>
+                        {/* Status list */}
+                        <div className="flex flex-col gap-2">
+                            {statusItems.map((s) => (
+                                <div
+                                    key={s.label}
+                                    className="flex items-center justify-between px-3 py-2.5 rounded-xl"
+                                    style={{ background: s.bg }}
+                                >
+                                    <div className="flex items-center gap-2 text-xs font-medium" style={{ color: s.color }}>
+                                        <s.Icon size={14} />
+                                        {s.label}
                                     </div>
-                                    <span className="text-sm font-bold" style={{ color: s.color }}>
+                                    <span className="text-sm font-medium tabular-nums" style={{ color: s.color }}>
                                         {s.value}
                                     </span>
                                 </div>
                             ))}
                         </div>
                     </div>
-                </Card>
 
-                {/* Tabel progress per mapel — kanan */}
-                <Card className="lg:col-span-2">
-                    <div className="p-5">
-                        <div className="flex items-center justify-between pb-4 mb-2"
-                            style={{ borderBottom: '1px solid #fde0c8' }}>
+                    {/* Tabel progress */}
+                    <div className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl p-5 transition-all duration-200 hover:border-orange-200 hover:shadow-[0_4px_20px_rgba(232,87,10,0.12)]">
+                        <div className="flex items-center justify-between pb-4 mb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2">
-                                <ClipboardList size={16} style={{ color: '#e8690a' }} />
+                                <ClipboardList size={16} style={{ color: ORANGE }} />
                                 <div>
-                                    <p className="text-sm font-bold text-gray-800">Progress Per Mata Pelajaran</p>
-                                    <p className="text-xs" style={{ color: '#c95b08' }}>
-                                        Status pengisian nilai siswa
-                                    </p>
+                                    <p className="text-sm font-medium text-gray-800">Progress Per Mata Pelajaran</p>
+                                    <p className="text-xs text-gray-400">Status pengisian nilai siswa</p>
                                 </div>
                             </div>
-                            {/* FIX: route diubah ke /guru_kelas/input_nilai */}
                             <button
                                 onClick={() => router.push('/guru_kelas/input_nilai')}
-                                className="flex items-center gap-1 text-xs font-semibold transition-colors"
-                                style={{ color: '#e8690a' }}
-                                onMouseEnter={e => (e.currentTarget.style.color = '#c95b08')}
-                                onMouseLeave={e => (e.currentTarget.style.color = '#e8690a')}
+                                className="flex items-center gap-1 text-xs font-semibold text-white px-3 py-1.5 rounded-lg flex-shrink-0 transition-opacity hover:opacity-85"
+                                style={{ background: ORANGE }}
                             >
-                                Input Nilai <ChevronRight size={14} />
+                                Input Nilai <ChevronRight size={12} />
                             </button>
                         </div>
 
                         {progress.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 gap-2">
-                                <div className="text-4xl">📝</div>
-                                <p className="text-sm font-semibold text-gray-600">Belum Ada Data Penilaian</p>
-                                <p className="text-xs text-gray-400">
-                                    Data progress penilaian akan muncul setelah tersedia.
-                                </p>
+                            <div className="flex flex-col items-center justify-center py-14 gap-2">
+                                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1" style={{ background: '#fff3ec' }}>
+                                    <ClipboardList className="w-6 h-6" style={{ color: ORANGE }} />
+                                </div>
+                                <p className="text-sm font-medium text-gray-600">Belum Ada Data Penilaian</p>
+                                <p className="text-xs text-gray-400">Data progress akan muncul setelah tersedia.</p>
                             </div>
                         ) : (
-                            <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-                                {progress.map((item, i) => {
-                                    const pct = item.total_siswa > 0
-                                        ? Math.round((item.sudah_dinilai / item.total_siswa) * 100)
-                                        : 0;
-                                    const isDone      = item.belum_dinilai === 0 && item.total_siswa > 0;
-                                    const notStarted  = item.sudah_dinilai === 0;
+                            <>
+                                <div className="hidden sm:grid grid-cols-[1fr_200px_100px] gap-3 px-2 pb-2.5 border-b border-gray-100 mb-1">
+                                    {['Mata Pelajaran', 'Progress', 'Status'].map((h, i) => (
+                                        <span
+                                            key={h}
+                                            className="text-[11px] font-semibold uppercase tracking-wider text-gray-400"
+                                            style={{ textAlign: i === 2 ? 'right' : 'left' }}
+                                        >
+                                            {h}
+                                        </span>
+                                    ))}
+                                </div>
 
-                                    return (
+                                <div className="max-h-[320px] overflow-y-auto -mx-1 px-1">
+                                    {progress.map((item, i) => (
                                         <div
                                             key={i}
-                                            className="rounded-xl p-3 transition-all"
-                                            style={{
-                                                // FIX: background sebelumnya pakai arrow function yang tidak valid
-                                                background: isDone ? '#eaf7ef' : '#fffaf6',
-                                                border: `1px solid ${isDone ? '#b6e8c8' : '#fde0c8'}`,
-                                            }}
+                                            className="flex flex-col gap-2 sm:grid sm:grid-cols-[1fr_200px_100px] sm:items-center sm:gap-3 py-3 px-2 rounded-xl transition-colors hover:bg-orange-50/60"
+                                            style={{ borderBottom: i !== progress.length - 1 ? '0.5px solid #f1f3f5' : 'none' }}
                                         >
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    {/* Badge kode */}
-                                                    <span
-                                                        className="text-[10px] font-bold px-2 py-0.5 rounded-md flex-shrink-0"
-                                                        style={{
-                                                            background: isDone ? '#d4f0de' : '#fff0e5',
-                                                            color:      isDone ? '#1a7a3a' : '#c95b08',
-                                                        }}
-                                                    >
-                                                        {item.kode_mapel}
-                                                    </span>
-                                                    <span className="text-xs font-semibold text-gray-800 truncate">
-                                                        {item.mata_pelajaran}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                                    {/* Status badge */}
-                                                    {isDone ? (
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                                            style={{ background: '#eaf7ef', color: '#1a7a3a' }}>
-                                                            <CheckCircle2 size={10} /> Selesai
-                                                        </span>
-                                                    ) : notStarted ? (
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                                            style={{ background: '#fef2f2', color: '#dc2626' }}>
-                                                            <AlertCircle size={10} /> Belum
-                                                        </span>
-                                                    ) : (
-                                                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                                            style={{ background: '#fff0e5', color: '#e8690a' }}>
-                                                            <Clock size={10} /> Proses
-                                                        </span>
-                                                    )}
-                                                    <span className="text-xs text-gray-400 font-medium">
-                                                        {item.sudah_dinilai}/{item.total_siswa}
-                                                    </span>
-                                                </div>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200 flex-shrink-0">
+                                                    {item.kode_mapel}
+                                                </span>
+                                                <span className="text-[13px] font-medium text-gray-800 truncate">
+                                                    {item.mata_pelajaran}
+                                                </span>
                                             </div>
+
                                             <ProgressBar value={item.sudah_dinilai} total={item.total_siswa} />
+
+                                            <div className="flex justify-start sm:justify-end">
+                                                <StatusBadge done={item.sudah_dinilai} total={item.total_siswa} />
+                                            </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                    ))}
+                                </div>
+                            </>
                         )}
                     </div>
-                </Card>
 
+                </div>
             </div>
         </div>
     );

@@ -15,8 +15,8 @@ exports.getRekapanNilai = async (req, res) => {
         const userId = req.user.id;
         
         // Ambil ID dari middleware
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;  // Untuk jadwal
-        const semesterId = req.idSemesterAktif;              // Untuk nilai
+        const tahunAjaranIndukId = req.idTahunAjaranInduk;  // Untuk jadwal & siswa
+        const semesterId = req.idSemesterAktif;              // Untuk nilai & guru_kelas
         const { semester, status_pts, status_pas } = req.penilaianContext || {};
 
         if (!tahunAjaranIndukId || !semesterId || !semester) {
@@ -28,13 +28,13 @@ exports.getRekapanNilai = async (req, res) => {
 
         const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : 'PAS';
 
-        // Query jadwal pakai ID INDUK
+        // ✅ Query guru_kelas pakai semesterId
         const [kelasRows] = await db.execute(
             `SELECT k.id_kelas 
              FROM kelas k 
              INNER JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-            [userId, tahunAjaranIndukId]
+            [userId, semesterId]
         );
 
         if (kelasRows.length === 0) {
@@ -46,11 +46,11 @@ exports.getRekapanNilai = async (req, res) => {
 
         const kelasId = kelasRows[0].id_kelas;
 
-        // Query mapel pakai ID INDUK
+        // ✅ Query mapel pakai pembelajaran (pakai mapel_id)
         const [mapelRows] = await db.execute(
             `SELECT DISTINCT mp.id_mata_pelajaran, mp.kode_mapel 
              FROM mata_pelajaran mp 
-             INNER JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mata_pelajaran_id 
+             INNER JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mapel_id 
              WHERE p.kelas_id = ? AND p.tahun_ajaran_id = ? 
              ORDER BY mp.urutan_rapor IS NULL, mp.urutan_rapor ASC, mp.id_mata_pelajaran ASC`,
             [kelasId, tahunAjaranIndukId]
@@ -59,12 +59,12 @@ exports.getRekapanNilai = async (req, res) => {
         const mapelList = mapelRows.map(row => row.kode_mapel);
         const mapelIdToKode = new Map(mapelRows.map(row => [row.id_mata_pelajaran, row.kode_mapel]));
 
-        // Query siswa pakai ID INDUK
+        // ✅ PERBAIKAN: siswa_kelas pakai id_tahun_ajaran_induk (bukan tahun_ajaran_id)
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
              FROM siswa s 
              INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-             WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ? 
+             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
              ORDER BY s.nama_lengkap`,
             [kelasId, tahunAjaranIndukId]
         );
@@ -77,7 +77,7 @@ exports.getRekapanNilai = async (req, res) => {
             });
         }
 
-        // Query nilai pakai ID SEMESTER
+        // ✅ Query nilai pakai semesterId
         const [nilaiRows] = await db.execute(
             `SELECT nr.siswa_id, nr.mapel_id, nr.nilai_rapor AS nilai 
              FROM nilai_rapor nr 
@@ -102,11 +102,11 @@ exports.getRekapanNilai = async (req, res) => {
             }
         });
 
-        // Query config rata-rata pakai ID SEMESTER
+        // Query config rata-rata pakai semesterId
         const [configRataRata] = await db.execute(
             `SELECT min_nilai, max_nilai, deskripsi 
              FROM konfigurasi_nilai_rapor 
-             WHERE mapel_id IS NULL AND is_active = 1 AND tahun_ajaran_id = ? 
+             WHERE mapel_id IS NULL AND tahun_ajaran_id = ? 
              ORDER BY min_nilai DESC`,
             [semesterId]
         );
@@ -191,13 +191,13 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
 
         const jenisAktif = req.penilaianContext?.status_pts === 'aktif' ? 'PTS' : 'PAS';
 
-        // Query jadwal pakai ID INDUK
+        // ✅ Query guru_kelas pakai semesterId
         const [kelasRows] = await db.execute(
             `SELECT k.id_kelas 
              FROM kelas k 
              JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-            [userId, tahunAjaranIndukId]
+            [userId, semesterId]
         );
 
         if (kelasRows.length === 0) {
@@ -206,21 +206,21 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
 
         const kelasId = kelasRows[0].id_kelas;
 
-        // Query siswa pakai ID INDUK
+        // ✅ PERBAIKAN: siswa_kelas pakai id_tahun_ajaran_induk
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
              FROM siswa s 
              JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-             WHERE sk.kelas_id = ? AND sk.tahun_ajaran_id = ? 
+             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
              ORDER BY s.nama_lengkap`,
             [kelasId, tahunAjaranIndukId]
         );
 
-        // Query nilai pakai ID SEMESTER
+        // ✅ Query nilai pakai semesterId
         const [nilaiRows] = await db.execute(
             `SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai 
              FROM nilai_rapor nr 
-             JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran 
+             JOIN mata_pelajaran mp ON mp.id_mata_pelajaran = nr.mapel_id 
              WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? 
              AND nr.semester = ? AND nr.jenis_penilaian = ?`,
             [kelasId, semesterId, semester, jenisAktif]

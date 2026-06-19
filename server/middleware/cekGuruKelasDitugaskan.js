@@ -1,7 +1,6 @@
 /**
  * Nama File: cekGuruKelasDitugaskan.js
- * Fungsi: Memastikan user yang login ditugaskan sebagai wali kelas 
- *         di semester yang sedang aktif.
+ * Fungsi: Middleware untuk memeriksa status periode penilaian aktif (PTS/PAS)
  */
 
 const db = require('../config/db');
