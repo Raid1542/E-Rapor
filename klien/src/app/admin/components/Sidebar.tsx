@@ -110,28 +110,43 @@ export default function Sidebar() {
   };
 
   useEffect(() => {
-    fetchSchoolData();
+  fetchSchoolData();
+  fetchTahunAjaranAktif();
+
+  const handleLogoUpdate = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const logoPath = customEvent.detail?.logoPath;
+    if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
+    else fetchSchoolData();
+  };
+
+  const handleTAUpdate = () => fetchTahunAjaranAktif();
+
+  const pollingInterval = setInterval(() => {
     fetchTahunAjaranAktif();
+  }, 3000); 
 
-    const handleLogoUpdate = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const logoPath = customEvent.detail?.logoPath;
-      if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
-      else fetchSchoolData();
-    };
+  const handleStorageChange = (e: StorageEvent) => {
+    if (e.key === 'tahunAjaranUpdated' || e.key === 'semesterUpdated') {
+      fetchTahunAjaranAktif();
+    }
+  };
 
-    const handleTAUpdate = () => fetchTahunAjaranAktif();
+  window.addEventListener('logoUpdated', handleLogoUpdate);
+  window.addEventListener('schoolUpdated', fetchSchoolData);
+  window.addEventListener('tahunAjaranUpdated', handleTAUpdate);
+  window.addEventListener('semesterUpdated', handleTAUpdate); 
+  window.addEventListener('storage', handleStorageChange);
 
-    window.addEventListener('logoUpdated', handleLogoUpdate);
-    window.addEventListener('schoolUpdated', fetchSchoolData);
-    window.addEventListener('tahunAjaranUpdated', handleTAUpdate);
-
-    return () => {
-      window.removeEventListener('logoUpdated', handleLogoUpdate);
-      window.removeEventListener('schoolUpdated', fetchSchoolData);
-      window.removeEventListener('tahunAjaranUpdated', handleTAUpdate);
-    };
-  }, []);
+  return () => {
+    clearInterval(pollingInterval); 
+    window.removeEventListener('logoUpdated', handleLogoUpdate);
+    window.removeEventListener('schoolUpdated', fetchSchoolData);
+    window.removeEventListener('tahunAjaranUpdated', handleTAUpdate);
+    window.removeEventListener('semesterUpdated', handleTAUpdate);
+    window.removeEventListener('storage', handleStorageChange);
+  };
+}, []);
 
   // ── Submenu data ───────────────────────────────────────────────────────────
 

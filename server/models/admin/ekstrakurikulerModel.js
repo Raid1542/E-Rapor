@@ -140,21 +140,20 @@ const ekstrakurikulerModel = {
   async getPesertaByEkskul(ekskulId, tahunAjaranId) {
     const [rows] = await db.execute(
       `SELECT 
-          s.id_siswa,
-          s.nis,
-          s.nisn,
-          s.nama_lengkap AS nama,
-          pe.deskripsi,
-          k.id_kelas,
-          k.nama_kelas
-      FROM peserta_ekstrakurikuler pe
-      JOIN siswa s ON pe.siswa_id = s.id_siswa
-      LEFT JOIN siswa_kelas sk 
-          ON s.id_siswa = sk.siswa_id 
-          AND sk.tahun_ajaran_id = ?
-      LEFT JOIN kelas k ON sk.kelas_id = k.id_kelas
-      WHERE pe.ekskul_id = ? AND pe.tahun_ajaran_id = ?
-      ORDER BY s.nama_lengkap ASC`,
+        s.id_siswa,
+        s.nis,
+        s.nisn,
+        s.nama_lengkap AS nama,
+        k.nama_kelas,
+        k.id_kelas
+        FROM peserta_ekstrakurikuler pe
+        JOIN siswa s ON pe.siswa_id = s.id_siswa
+        LEFT JOIN siswa_kelas sk 
+        ON s.id_siswa = sk.siswa_id 
+        AND sk.id_tahun_ajaran_induk = ?
+    LEFT JOIN kelas k ON sk.kelas_id = k.id_kelas
+    WHERE pe.ekskul_id = ? AND pe.tahun_ajaran_id = ?
+    ORDER BY k.nama_kelas ASC, s.nama_lengkap ASC`,
       [tahunAjaranId, ekskulId, tahunAjaranId]
     );
     return rows;
