@@ -213,7 +213,7 @@ export default function EkskulClient() {
                             setTimeout(() => {
                                 showModal({
                                     type: 'warning',
-                                    title: '🔒 PAS Sudah Selesai',
+                                    title: 'PAS Sudah Selesai',
                                     message: 'Data ekstrakurikuler sudah dikunci karena PAS telah selesai.\n\nAnda dapat melihat data siswa dalam mode baca saja (read only), tetapi tidak dapat mengedit.'
                                 });
                             }, 500);
@@ -257,7 +257,7 @@ export default function EkskulClient() {
                         setTimeout(() => {
                             showModal({
                                 type: 'warning',
-                                title: '🔒 PAS Sudah Selesai',
+                                title: 'PAS Sudah Selesai',
                                 message: errData.message || 'Input ekstrakurikuler sudah dikunci karena PAS telah selesai.'
                             });
                         }, 500);
@@ -306,13 +306,13 @@ export default function EkskulClient() {
             if (readOnlyReason === 'locked') {
                 showModal({
                     type: 'warning',
-                    title: '🔒 Mode Baca-Saja',
+                    title: 'Mode Baca Saja',
                     message: 'PAS sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengedit data ekstrakurikuler.'
                 });
             } else {
                 showModal({
                     type: 'warning',
-                    title: '⏳ Mode Baca-Saja',
+                    title: '⏳ Mode Baca Saja',
                     message: 'PAS belum aktif.\n\nAnda belum dapat mengedit data ekstrakurikuler.\n\nSilakan tunggu admin membuka periode PAS.'
                 });
             }
@@ -529,7 +529,7 @@ export default function EkskulClient() {
                     <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
                     <div className="flex-1">
                         <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
-                            🔒 Mode Baca Saja (Read Only)
+                            Mode Baca Saja (Read Only)
                         </p>
                         <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
                             {readOnlyReason === 'locked'
@@ -658,7 +658,6 @@ export default function EkskulClient() {
                                                 onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}>
                                                 <Eye size={13} /> Detail
                                             </button>
-                                            {/* ✅ TOMBOL EDIT: Disabled jika read-only */}
                                             <button
                                                 onClick={() => handleEdit(siswa)}
                                                 disabled={isReadOnly}

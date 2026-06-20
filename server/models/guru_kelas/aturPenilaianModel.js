@@ -31,7 +31,7 @@ exports.getTahunAjaranAktif = async () => {
 
 exports.getAspekKokurikuler = async () => {
     const [aspek] = await db.execute(`
-        SELECT id_aspek_kokurikuler, nama
+        SELECT id_aspek_kokurikuler, kode, nama
         FROM aspek_kokurikuler
         ORDER BY urutan ASC
     `);
@@ -531,4 +531,167 @@ exports.cekKategoriKokurikulerDipakai = async (idKategori, kelasId) => {
         total: rows[0].total,
         exists: true
     };
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// JUDUL PROYEK KOKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Ambil judul proyek berdasarkan kelas dan tahun ajaran
+ */
+exports.getJudulProyekByKelas = async (kelasId, tahunAjaranId) => {
+    const [rows] = await db.execute(`
+        SELECT 
+            id_judul_proyek,
+            id_tahun_ajaran,
+            kelas_id,
+            judul,
+            deskripsi
+        FROM judul_proyek_per_tahun_ajaran
+        WHERE kelas_id = ? AND id_tahun_ajaran = ?
+        LIMIT 1
+    `, [kelasId, tahunAjaranId]);
+    
+    return rows.length > 0 ? rows[0] : null;
+};
+
+/**
+ * Simpan atau update judul proyek (UPSERT)
+ */
+exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul, deskripsi = null) => {
+    const [existing] = await db.execute(`
+        SELECT id_judul_proyek 
+        FROM judul_proyek_per_tahun_ajaran 
+        WHERE kelas_id = ? AND id_tahun_ajaran = ?
+    `, [kelasId, tahunAjaranId]);
+
+    if (existing.length > 0) {
+        // Update jika sudah ada
+        await db.execute(`
+            UPDATE judul_proyek_per_tahun_ajaran 
+            SET judul = ?, deskripsi = ?, updated_at = NOW()
+            WHERE kelas_id = ? AND id_tahun_ajaran = ?
+        `, [judul, deskripsi, kelasId, tahunAjaranId]);
+        
+        return { id: existing[0].id_judul_proyek, action: 'updated' };
+    } else {
+        // Insert jika belum ada
+        const [result] = await db.execute(`
+            INSERT INTO judul_proyek_per_tahun_ajaran 
+            (id_tahun_ajaran, kelas_id, judul, deskripsi, created_at, updated_at)
+            VALUES (?, ?, ?, ?, NOW(), NOW())
+        `, [tahunAjaranId, kelasId, judul, deskripsi]);
+        
+        return { id: result.insertId, action: 'created' };
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// KATEGORI DESKRIPSI RATA-RATA (PER KELAS)
+// ═════════════════════════════════════════════════════════════════════════════
+
+exports.getKategoriDeskripsiRataRata = async (tahunAjaranId, semester, kelasId) => {
+    const [kategori] = await db.execute(`
+        SELECT 
+            id_kategori AS id,
+            rentang_min AS min_nilai,
+            rentang_max AS max_nilai,
+            deskripsi,
+            urutan
+        FROM kategori_deskripsi_rata_rata
+        WHERE tahun_ajaran_id = ? 
+        AND semester = ? 
+        AND kelas_id = ?
+        ORDER BY urutan ASC, rentang_min DESC
+    `, [tahunAjaranId, semester, kelasId]);
+    return kategori;
+};
+
+exports.createKategoriDeskripsiRataRata = async (tahunAjaranId, semester, kelasId, minNilai, maxNilai, deskripsi) => {
+    const [result] = await db.execute(`
+        INSERT INTO kategori_deskripsi_rata_rata 
+        (tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, deskripsi, urutan)
+        VALUES (?, ?, ?, ?, ?, ?, 
+            (SELECT IFNULL(MAX(urutan), 0) + 1 
+            FROM (SELECT urutan FROM kategori_deskripsi_rata_rata 
+                WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ?) AS tmp)
+        )
+    `, [tahunAjaranId, semester, kelasId, minNilai, maxNilai, deskripsi, kelasId, tahunAjaranId, semester]);
+    return result.insertId;
+};
+
+exports.updateKategoriDeskripsiRataRata = async (id, minNilai, maxNilai, deskripsi) => {
+    await db.execute(`
+        UPDATE kategori_deskripsi_rata_rata 
+        SET rentang_min = ?, rentang_max = ?, deskripsi = ?, updated_at = NOW()
+        WHERE id_kategori = ?
+    `, [minNilai, maxNilai, deskripsi, id]);
+};
+
+exports.getKategoriDeskripsiRataRataByIdAndKelas = async (id, kelasId) => {
+    const [existing] = await db.execute(`
+        SELECT id_kategori, kelas_id, rentang_min, rentang_max, deskripsi
+        FROM kategori_deskripsi_rata_rata
+        WHERE id_kategori = ? AND kelas_id = ?
+    `, [id, kelasId]);
+    return existing.length > 0 ? existing[0] : null;
+};
+
+exports.deleteKategoriDeskripsiRataRata = async (id, kelasId) => {
+    await db.execute(`DELETE FROM kategori_deskripsi_rata_rata WHERE id_kategori = ? AND kelas_id = ?`, [id, kelasId]);
+};
+
+exports.cekOverlapDeskripsiRataRata = async (tahunAjaranId, semester, kelasId, minNilai, maxNilai, excludeId = null) => {
+    let query = `
+        SELECT id_kategori, rentang_min, rentang_max, deskripsi
+        FROM kategori_deskripsi_rata_rata
+        WHERE tahun_ajaran_id = ?
+        AND semester = ?
+        AND kelas_id = ?
+        AND (? <= rentang_max AND ? >= rentang_min)
+    `;
+    const params = [tahunAjaranId, semester, kelasId, minNilai, maxNilai];
+
+    if (excludeId) {
+        query += ` AND id_kategori != ?`;
+        params.push(excludeId);
+    }
+
+    const [overlaps] = await db.execute(query, params);
+    return overlaps;
+};
+
+exports.cekCoverageDeskripsiRataRata = async (tahunAjaranId, semester, kelasId) => {
+    const [kategoriRows] = await db.execute(`
+        SELECT rentang_min, rentang_max 
+        FROM kategori_deskripsi_rata_rata 
+        WHERE tahun_ajaran_id = ?
+        AND semester = ?
+        AND kelas_id = ?
+        ORDER BY rentang_min ASC
+    `, [tahunAjaranId, semester, kelasId]);
+
+    if (kategoriRows.length === 0) {
+        return { covered: false, gap: '0-100' };
+    }
+
+    if (kategoriRows[0].rentang_min > 0) {
+        return { covered: false, gap: `0-${kategoriRows[0].rentang_min - 1}` };
+    }
+
+    for (let i = 0; i < kategoriRows.length - 1; i++) {
+        const currentMax = kategoriRows[i].rentang_max;
+        const nextMin = kategoriRows[i + 1].rentang_min;
+        if (nextMin > currentMax + 1) {
+            return { covered: false, gap: `${currentMax + 1}-${nextMin - 1}` };
+        }
+    }
+
+    const lastMax = kategoriRows[kategoriRows.length - 1].rentang_max;
+    if (lastMax < 100) {
+        return { covered: false, gap: `${lastMax + 1}-100` };
+    }
+
+    return { covered: true };
 };

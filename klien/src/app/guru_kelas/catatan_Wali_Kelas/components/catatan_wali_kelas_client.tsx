@@ -220,7 +220,7 @@ export default function CatatanWaliClient() {
                     setTimeout(() => {
                         showModal({
                             type: 'warning',
-                            title: '🔒 Periode Penilaian Selesai',
+                            title: 'Periode Penilaian Selesai',
                             message: 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda dapat melihat data siswa dalam mode baca saja (read only), tetapi tidak dapat mengedit catatan wali kelas.\n\nSilakan hubungi Administrator jika ada perubahan yang diperlukan.'
                         });
                     }, 500);
@@ -329,13 +329,13 @@ export default function CatatanWaliClient() {
             if (readOnlyReason === 'locked') {
                 showModal({
                     type: 'warning',
-                    title: '🔒 Mode Baca-Saja',
+                    title: 'Mode Baca Saja',
                     message: 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengedit catatan wali kelas.'
                 });
             } else {
                 showModal({
                     type: 'warning',
-                    title: '⏳ Mode Baca-Saja',
+                    title: '⏳ Mode Baca Saja',
                     message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengedit catatan wali kelas.\n\nSilakan tunggu admin membuka periode penilaian.'
                 });
             }
@@ -601,7 +601,7 @@ export default function CatatanWaliClient() {
                     <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
                     <div className="flex-1">
                         <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
-                            🔒 Mode Baca Saja (Read Only)
+                            Mode Baca Saja (Read Only)
                         </p>
                         <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
                             {readOnlyReason === 'locked'

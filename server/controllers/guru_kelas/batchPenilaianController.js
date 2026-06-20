@@ -1,6 +1,70 @@
+/**
+ * Nama File: batchPenilaianController.js
+ * Fungsi: Handle batch operations untuk kategori penilaian
+ * UPDATE: ✅ Validasi periode PTS/PAS untuk Kategori Kokurikuler
+ *   - PTS aktif → hanya Mutaba'ah (id=5) yang boleh
+ *   - PAS aktif → semua aspek boleh
+ *   - Belum aktif → semua terkunci
+ */
+
 const db = require('../../config/db');
 const model = require('../../models/guru_kelas/aturPenilaianModel');
-const SalinDariTahunSebelumnyaService = require('../../services/salinDariTahunSebelumnyaService');
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ✅ KONSTANTA: ID Aspek Mutaba'ah (sesuai database)
+// ═════════════════════════════════════════════════════════════════════════════
+const ASPEK_MUTABAAH_ID = 5;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ✅ HELPER: Validasi Akses Aspek Kokurikuler Berdasarkan Periode
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Cek apakah aspek kokurikuler boleh dikelola berdasarkan periode aktif
+ * 
+ * @param {number} aspekId - ID aspek yang akan dikelola
+ * @param {string} status_pts - Status PTS ('aktif' | 'nonaktif' | 'selesai')
+ * @param {string} status_pas - Status PAS ('aktif' | 'nonaktif' | 'selesai')
+ * @returns {Object} { allowed: boolean, reason: string, message: string }
+ */
+const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
+    const isPtsActive = status_pts === 'aktif';
+    const isPasActive = status_pas === 'aktif';
+    const isLocked = status_pts === 'selesai' || status_pas === 'selesai';
+    
+    // Periode selesai → semua terkunci
+    if (isLocked) {
+        return {
+            allowed: false,
+            reason: 'period_locked',
+            message: 'Periode penilaian telah selesai. Data tidak dapat diubah.'
+        };
+    }
+    
+    // Belum ada periode aktif
+    if (!isPtsActive && !isPasActive) {
+        return {
+            allowed: false,
+            reason: 'not_open',
+            message: 'Periode penilaian belum aktif. Silakan tunggu admin membuka periode penilaian.'
+        };
+    }
+    
+    // PTS aktif: hanya Mutaba'ah
+    if (isPtsActive && aspekId !== ASPEK_MUTABAAH_ID) {
+        return {
+            allowed: false,
+            reason: 'locked_pts',
+            message: `Saat periode PTS aktif, hanya aspek Mutaba'ah Yaumiyah yang dapat dikelola kategorinya. Aspek lain (BPI, Literasi, Proyek) akan dibuka saat periode PAS.`
+        };
+    }
+    
+    // PAS aktif: semua aspek boleh
+    if (isPasActive) {
+        return { allowed: true, reason: 'pas_active' };
+    }
+    
+    return { allowed: true, reason: 'default' };
+};
 
 // ═════════════════════════════════════════════════════════════════════════════
 // HELPER: Ambil kelas_id dari request
@@ -10,6 +74,7 @@ const getKelasId = (req) => req.infoKelasWali?.kelas_id;
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. BATCH SAVE KATEGORI KOKURIKULER
 // POST /atur-penilaian/kategori-kokurikuler-batch
+// ✅ DENGAN VALIDASI PERIODE PTS/PAS
 // ═════════════════════════════════════════════════════════════════════════════
 exports.saveBatchKategoriKokurikuler = async (req, res) => {
     const connection = await db.getConnection();
@@ -27,7 +92,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             });
         }
 
-        // Validasi input dasar
+        // ✅ VALIDASI INPUT DASAR
         if (!id_aspek_kokurikuler) {
             return res.status(400).json({
                 success: false,
@@ -43,6 +108,30 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
                 code: 'EMPTY_GRADES'
             });
         }
+
+        // ✅ VALIDASI PERIODE: Cek apakah aspek ini boleh dikelola
+        const taAktif = await model.getTahunAjaranAktif();
+        if (!taAktif) {
+            throw new Error('Tahun ajaran aktif belum diatur');
+        }
+
+        const accessCheck = validateAspekKokurikulerAccess(
+            id_aspek_kokurikuler,
+            taAktif.status_pts,
+            taAktif.status_pas
+        );
+
+        if (!accessCheck.allowed) {
+            await connection.query('ROLLBACK');
+            return res.status(403).json({
+                success: false,
+                code: 'ASPEK_LOCKED',
+                reason: accessCheck.reason,
+                message: accessCheck.message
+            });
+        }
+
+        console.log(`✅ [BATCH] Aspek ${id_aspek_kokurikuler} boleh dikelola (reason: ${accessCheck.reason})`);
 
         // Validasi setiap grade
         for (const g of grades) {
@@ -79,14 +168,54 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             throw new Error(`Grade duplikat dalam batch: ${[...new Set(duplicates)].join(', ')}`);
         }
 
-        // Ambil tahun ajaran aktif
-        const taAktif = await model.getTahunAjaranAktif();
-        if (!taAktif) {
-            throw new Error('Tahun ajaran aktif belum diatur');
+        // ✅ Cek "Tidak Ada Perubahan"
+        const [existingGrades] = await connection.query(
+            `SELECT rentang_min, rentang_max, grade, deskripsi
+             FROM kategori_grade_kokurikuler
+             WHERE id_aspek_kokurikuler = ?
+             AND tahun_ajaran_id = ?
+             AND semester = ?
+             AND kelas_id = ?
+             ORDER BY rentang_min DESC`,
+            [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId]
+        );
+
+        if (existingGrades.length === grades.length) {
+            const normalizeGrade = (g) => ({
+                min: Math.floor(parseFloat(g.min_nilai || g.rentang_min)),
+                max: Math.floor(parseFloat(g.max_nilai || g.rentang_max)),
+                grade: (g.grade || '').toUpperCase().trim(),
+                deskripsi: (g.deskripsi || '').trim()
+            });
+
+            const newGradesNormalized = grades.map(normalizeGrade).sort((a, b) => b.min - a.min);
+            const existingGradesNormalized = existingGrades.map(normalizeGrade).sort((a, b) => b.min - a.min);
+
+            let isSame = true;
+            for (let i = 0; i < newGradesNormalized.length; i++) {
+                const newG = newGradesNormalized[i];
+                const existingG = existingGradesNormalized[i];
+                
+                if (newG.min !== existingG.min ||
+                    newG.max !== existingG.max ||
+                    newG.grade !== existingG.grade ||
+                    newG.deskripsi !== existingG.deskripsi) {
+                    isSame = false;
+                    break;
+                }
+            }
+
+            if (isSame) {
+                await connection.query('ROLLBACK');
+                return res.status(400).json({
+                    success: false,
+                    code: 'NO_CHANGES',
+                    message: 'Tidak ada perubahan data. Data yang disimpan sama dengan data yang sudah ada.'
+                });
+            }
         }
 
-        // Cek overlap dengan data existing (selain yang akan dihapus)
-        // Karena kita akan hapus semua grade untuk aspek ini dulu, overlap hanya terjadi dalam batch
+        // Cek overlap dalam batch
         for (let i = 0; i < grades.length; i++) {
             for (let j = i + 1; j < grades.length; j++) {
                 const a = grades[i];
@@ -104,7 +233,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             }
         }
 
-        // Hapus semua grade lama untuk aspek ini di kelas + TA aktif
+        // Hapus semua grade lama untuk aspek ini
         await connection.query(
             `DELETE FROM kategori_grade_kokurikuler 
              WHERE id_aspek_kokurikuler = ? 
@@ -124,7 +253,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             Math.floor(parseFloat(g.max_nilai)),
             g.grade.toUpperCase().trim(),
             g.deskripsi.trim(),
-            0 // urutan (akan diupdate jika perlu)
+            0
         ]);
 
         await connection.query(
@@ -135,6 +264,8 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
         );
 
         await connection.query('COMMIT');
+
+        console.log(`✅ [BATCH] ${grades.length} grade berhasil disimpan untuk aspek ${id_aspek_kokurikuler}`);
 
         res.json({
             success: true,
@@ -147,190 +278,13 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
 
     } catch (error) {
         await connection.query('ROLLBACK');
-        console.error('Error saveBatchKategoriKokurikuler:', error);
+        console.error('❌ Error saveBatchKategoriKokurikuler:', error);
         res.status(400).json({
             success: false,
             message: error.message || 'Gagal menyimpan batch grade',
-            code: 'BATCH_SAVE_ERROR'
+            code: error.code || 'BATCH_SAVE_ERROR'
         });
     } finally {
         connection.release();
-    }
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. COPY KATEGORI KOKURIKULER DARI TA SEBELUMNYA
-// POST /atur-penilaian/copy-kokurikuler
-// ═════════════════════════════════════════════════════════════════════════════
-exports.copyKokurikulerDariTASebelumnya = async (req, res) => {
-    try {
-        const kelasId = getKelasId(req);
-
-        if (!kelasId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Anda belum ditugaskan sebagai guru kelas'
-            });
-        }
-
-        const taAktif = await model.getTahunAjaranAktif();
-        if (!taAktif) {
-            return res.status(400).json({
-                success: false,
-                message: 'Tahun ajaran aktif belum diatur',
-                code: 'NO_ACTIVE_TA'
-            });
-        }
-
-        const result = await SalinDariTahunSebelumnyaService.salinKokurikuler(
-            taAktif.id_tahun_ajaran,
-            taAktif.semester,
-            kelasId
-        );
-
-        res.json(result);
-
-    } catch (error) {
-        console.error('Error copyKokurikuler:', error);
-        res.status(400).json({
-            success: false,
-            message: error.message || 'Gagal copy data',
-            code: 'COPY_ERROR'
-        });
-    }
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. COPY KATEGORI AKADEMIK DARI TA SEBELUMNYA
-// POST /atur-penilaian/copy-akademik?mapel_id=X
-// ═════════════════════════════════════════════════════════════════════════════
-exports.copyAkademikDariTASebelumnya = async (req, res) => {
-    try {
-        const idMapel = parseInt(req.query.mapel_id);
-        const kelasId = getKelasId(req);
-        const userId = req.user.id;
-
-        if (!idMapel) {
-            return res.status(400).json({
-                success: false,
-                message: 'mapel_id harus disertakan',
-                code: 'MISSING_MAPEL_ID'
-            });
-        }
-
-        if (!kelasId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Anda belum ditugaskan sebagai guru kelas'
-            });
-        }
-
-        const taAktif = await model.getTahunAjaranAktif();
-        if (!taAktif) {
-            return res.status(400).json({
-                success: false,
-                message: 'Tahun ajaran aktif belum diatur',
-                code: 'NO_ACTIVE_TA'
-            });
-        }
-
-        // Validasi: Guru mengajar mapel ini di kelasnya
-        const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(
-            userId, idMapel, kelasId, taAktif.id_tahun_ajaran
-        );
-        if (!mengajarMapel) {
-            return res.status(403).json({
-                success: false,
-                message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda'
-            });
-        }
-
-        const result = await SalinDariTahunSebelumnyaService.salinAkademik(
-            taAktif.id_tahun_ajaran,
-            idMapel,
-            kelasId
-        );
-
-        res.json(result);
-
-    } catch (error) {
-        console.error('Error copyAkademik:', error);
-        res.status(400).json({
-            success: false,
-            message: error.message || 'Gagal copy data',
-            code: 'COPY_ERROR'
-        });
-    }
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 4. COPY BOBOT AKADEMIK DARI TA SEBELUMNYA
-// POST /atur-penilaian/copy-bobot?mapel_id=X
-// ═════════════════════════════════════════════════════════════════════════════
-exports.copyBobotDariTASebelumnya = async (req, res) => {
-    try {
-        const idMapel = parseInt(req.query.mapel_id);
-        const kelasId = getKelasId(req);
-        const userId = req.user.id;
-
-        if (!idMapel) {
-            return res.status(400).json({
-                success: false,
-                message: 'mapel_id harus disertakan',
-                code: 'MISSING_MAPEL_ID'
-            });
-        }
-
-        if (!kelasId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Anda belum ditugaskan sebagai guru kelas'
-            });
-        }
-
-        const taAktif = await model.getTahunAjaranAktif();
-        if (!taAktif) {
-            return res.status(400).json({
-                success: false,
-                message: 'Tahun ajaran aktif belum diatur',
-                code: 'NO_ACTIVE_TA'
-            });
-        }
-
-        // Validasi: Guru mengajar mapel ini di kelasnya
-        const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(
-            userId, idMapel, kelasId, taAktif.id_tahun_ajaran
-        );
-        if (!mengajarMapel) {
-            return res.status(403).json({
-                success: false,
-                message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda'
-            });
-        }
-
-        // Cek apakah periode PTS aktif (bobot tidak bisa di-copy saat PTS aktif)
-        if (taAktif.status_pts === 'aktif') {
-            return res.status(403).json({
-                success: false,
-                code: 'PERIOD_LOCKED',
-                message: 'Tidak dapat copy bobot saat periode PTS aktif'
-            });
-        }
-
-        const result = await SalinDariTahunSebelumnyaService.salinBobot(
-            taAktif.id_tahun_ajaran,
-            idMapel,
-            kelasId
-        );
-
-        res.json(result);
-
-    } catch (error) {
-        console.error('Error copyBobot:', error);
-        res.status(400).json({
-            success: false,
-            message: error.message || 'Gagal copy data',
-            code: 'COPY_ERROR'
-        });
     }
 };

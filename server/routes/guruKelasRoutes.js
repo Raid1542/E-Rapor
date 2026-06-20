@@ -20,7 +20,6 @@ const cekStatusPAS = require('../middleware/cekStatusPAS');
 
 // ─── CONTROLLERS ──────────────────────────────────────
 const guruKelasControllers = require('../controllers/guru_kelas');
-const batchPenilaianController = require('../controllers/guru_kelas/batchPenilaianController');
 
 // ─── SETUP UPLOAD FOTO ───────────────────────────────────────────────────────
 const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
@@ -241,10 +240,26 @@ router.put('/ekskul/:siswaId',
 // ═════════════════════════════════════════════════════════════════════════════
 // 6. KOKURIKULER (PRIORITAS UTAMA)
 // ═════════════════════════════════════════════════════════════════════════════
-router.get('/kokurikuler',
+
+router.get('/kokurikuler/judul-proyek',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getJudulProyek)
+);
+
+router.post('/kokurikuler/judul-proyek',
+    authenticate,
+    guruKelasOnly,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.saveJudulProyek)
+);
+
+router.get('/kokurikuler',
+    authenticate,
+    guruKelasOnly,
     cekGuruKelasDitugaskan,
     safeHandler(guruKelasControllers.getNilaiKokurikuler)
 );
@@ -448,38 +463,56 @@ router.put('/atur-penilaian/bobot-akademik/:mapelId',
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 11.1 ATUR PENILAIAN: BATCH SAVE & COPY DARI TA SEBELUMNYA
+// 11.1 ATUR PENILAIAN: BATCH SAVE KATEGORI KOKURIKULER
 // ═════════════════════════════════════════════════════════════════════════════
 router.post('/atur-penilaian/kategori-kokurikuler-batch',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    safeHandler(batchPenilaianController.saveBatchKategoriKokurikuler)
+    safeHandler(guruKelasControllers.saveBatchKategoriKokurikuler)
 );
 
-router.post('/atur-penilaian/copy-kokurikuler',
+// ═════════════════════════════════════════════════════════════════════════════
+// 11.2 ATUR PENILAIAN: DESKRIPSI RATA-RATA (PER KELAS)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET - Ambil semua kategori deskripsi rata-rata
+router.get('/atur-penilaian/deskripsi-rata-rata',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    safeHandler(batchPenilaianController.copyKokurikulerDariTASebelumnya)
+    safeHandler(guruKelasControllers.getKategoriDeskripsiRataRata)
 );
 
-router.post('/atur-penilaian/copy-akademik',
+// POST - Tambah kategori deskripsi rata-rata baru
+router.post('/atur-penilaian/deskripsi-rata-rata',
     authenticate,
     guruKelasOnly,
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    safeHandler(batchPenilaianController.copyAkademikDariTASebelumnya)
+    safeHandler(guruKelasControllers.createKategoriDeskripsiRataRata)
 );
 
-router.post('/atur-penilaian/copy-bobot',
+// PUT - Update kategori deskripsi rata-rata
+router.put('/atur-penilaian/deskripsi-rata-rata/:id',
     authenticate,
     guruKelasOnly,
+    validateIdParam('id'),
     cekPenilaianStatus,
     cekGuruKelasDitugaskan,
-    safeHandler(batchPenilaianController.copyBobotDariTASebelumnya)
+    safeHandler(guruKelasControllers.updateKategoriDeskripsiRataRata)
+);
+
+// DELETE - Hapus kategori deskripsi rata-rata
+router.delete('/atur-penilaian/deskripsi-rata-rata/:id',
+    authenticate,
+    guruKelasOnly,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.deleteKategoriDeskripsiRataRata)
 );
 
 // ═════════════════════════════════════════════════════════════════════════════

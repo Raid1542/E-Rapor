@@ -2,20 +2,25 @@
  * Nama File: atur_penilaian_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian
  *         oleh guru kelas, mencakup kategori kokurikuler, akademik, dan bobot.
- * UPDATE: 
- *   - Hapus simpan langsung, ganti dengan popup modal konfirmasi sederhana
- * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage
  * 
+ * UPDATE: 
+ *   - ✅ Kategori Kokurikuler: PTS → hanya Mutaba'ah, PAS → semua aspek
+ *   - Fix error openBatchEdit is not defined
+ *   - Tambah validasi "Tidak Ada Perubahan"
+ *   - Reset originalBatchGrades saat tutup modal
  */
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut, Copy, Layers } from 'lucide-react';
+import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut, Layers, Lock, Calendar, Unlock } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ====== KONSTANTA API ======
 const API = 'http://localhost:5000/api/guru-kelas';
+
+// ====== ID ASPEK MUTABA'AH (untuk rules PTS) ======
+const ASPEK_MUTABAAH_ID = 5;
 
 // ====== HELPER: Parse Error dari Backend ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
@@ -26,30 +31,16 @@ const parseBackendError = async (res: Response): Promise<{ message: string; code
       const text = await res.text();
 
       if (res.status === 404) {
-        return {
-          message: 'Endpoint tidak ditemukan. Pastikan backend routes sudah terdaftar.',
-          code: 'NOT_FOUND'
-        };
+        return { message: 'Endpoint tidak ditemukan.', code: 'NOT_FOUND' };
       }
-
       if (res.status === 500) {
-        return {
-          message: 'Server error. Periksa console backend.',
-          code: 'SERVER_ERROR'
-        };
+        return { message: 'Server error.', code: 'SERVER_ERROR' };
       }
-
-      return {
-        message: `Server error (${res.status}). Periksa koneksi backend.`,
-        code: 'INVALID_RESPONSE'
-      };
+      return { message: `Server error (${res.status}).`, code: 'INVALID_RESPONSE' };
     }
 
     const data = await res.json();
-    return {
-      message: data.message || 'Terjadi kesalahan',
-      code: data.code
-    };
+    return { message: data.message || 'Terjadi kesalahan', code: data.code };
   } catch (error) {
     return { message: 'Gagal memproses response dari server' };
   }
@@ -108,13 +99,9 @@ interface BobotItem {
 interface CoverageInfo {
   covered: boolean;
   gap?: string;
-  gaps?: Array<{
-    aspek: string;
-    gap: string;
-  }>;
+  gaps?: Array<{ aspek: string; gap: string }>;
 }
 
-// ====== BATCH GRADE ITEM ======
 interface BatchGradeItem {
   id?: number;
   grade: string;
@@ -272,6 +259,11 @@ export default function AturPenilaianGuruKelasClient() {
   const { showSessionExpired, handleLogout } = useSession();
 
   const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [readOnlyReason, setReadOnlyReason] = useState<'not_open' | 'locked' | null>(null);
+  const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+  const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
+
   const [activeTab, setActiveTab] = useState<'kokurikuler' | 'akademik' | 'bobot'>('kokurikuler');
   const [loading, setLoading] = useState(true);
 
@@ -290,14 +282,10 @@ export default function AturPenilaianGuruKelasClient() {
   const [batchEditClosing, setBatchEditClosing] = useState(false);
   const [batchEditAspekId, setBatchEditAspekId] = useState<number | null>(null);
   const [batchGrades, setBatchGrades] = useState<BatchGradeItem[]>([]);
+  const [originalBatchGrades, setOriginalBatchGrades] = useState<BatchGradeItem[]>([]);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
-  // ====== TAMBAHAN BARU: State untuk Tambah Aspek ======
-  const [showNewAspekInput, setShowNewAspekInput] = useState(false);
-  const [newAspekNama, setNewAspekNama] = useState('');
-  const [isCreatingAspek, setIsCreatingAspek] = useState(false);
-
-  // Modal edit/tambah kategori (untuk akademik - single edit)
+  // Modal edit/tambah kategori (untuk akademik)
   const [showEditKategori, setShowEditKategori] = useState(false);
   const [editKategoriId, setEditKategoriId] = useState<number | null>(null);
   const [editKategoriClosing, setEditKategoriClosing] = useState(false);
@@ -321,9 +309,9 @@ export default function AturPenilaianGuruKelasClient() {
   const [isSavingBobot, setIsSavingBobot] = useState(false);
   const [isSavingKategori, setIsSavingKategori] = useState(false);
 
-  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  // Modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'save-kategori' | 'save-bobot' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'save-kategori' | 'save-bobot' | 'save-batch' | null>(null);
 
   // Modals
   const [modal, setModal] = useState<ModalConfig | null>(null);
@@ -333,6 +321,37 @@ export default function AturPenilaianGuruKelasClient() {
   const closeModal = useCallback(() => setModal(null), []);
 
   const [isNotAssigned, setIsNotAssigned] = useState(false);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ✅ HELPER: Rules Kategori Kokurikuler berdasarkan periode
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Cek apakah aspek kokurikuler bisa dikelola kategorinya
+   * - PTS aktif: hanya Mutaba'ah (id=5)
+   * - PAS aktif: semua aspek
+   * - Belum aktif: tidak ada
+   */
+  const canEditAspekKokurikuler = useCallback((aspekId: number): boolean => {
+    if (isReadOnly) return false;
+    if (!jenisPenilaianAktif) return false;
+    if (jenisPenilaianAktif === 'PTS') return aspekId === ASPEK_MUTABAAH_ID;
+    if (jenisPenilaianAktif === 'PAS') return true;
+    return false;
+  }, [jenisPenilaianAktif, isReadOnly]);
+
+  /**
+   * Alasan kenapa aspek kokurikuler terkunci
+   */
+  const getAspekKokurikulerLockReason = useCallback((aspekId: number): string => {
+    if (isReadOnly) {
+      if (readOnlyReason === 'locked') return 'Periode Selesai';
+      return 'Periode Belum Aktif';
+    }
+    if (!jenisPenilaianAktif) return 'Periode Belum Aktif';
+    if (jenisPenilaianAktif === 'PTS' && aspekId !== ASPEK_MUTABAAH_ID) return 'Terkunci - PTS';
+    return '';
+  }, [jenisPenilaianAktif, isReadOnly, readOnlyReason]);
 
   // ====== FETCH DATA DUKUNGAN ======
   useEffect(() => {
@@ -364,12 +383,10 @@ export default function AturPenilaianGuruKelasClient() {
         }
         if (!mapelRes.ok) {
           const err = await parseBackendError(mapelRes);
-
           if (mapelRes.status === 403 && err.code === 'NOT_ASSIGNED') {
-            console.log('Guru belum ditugaskan');
-          } else if (mapelRes.status === 403) {
-            console.log('Akses dibatasi:', err.message);
-          } else {
+            setIsNotAssigned(true);
+            return;
+          } else if (mapelRes.status !== 403) {
             throw new Error(err.message);
           }
         }
@@ -386,8 +403,38 @@ export default function AturPenilaianGuruKelasClient() {
         ]);
 
         const { status_pts, status_pas } = taData.data;
+
+        setStatusPTS(status_pts || 'nonaktif');
+        setStatusPAS(status_pas || 'nonaktif');
+
         const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
         setJenisPenilaianAktif(jenisAktif);
+
+        if (status_pts === 'aktif' || status_pas === 'aktif') {
+          setIsReadOnly(false);
+          setReadOnlyReason(null);
+        } else if (status_pts === 'selesai' || status_pas === 'selesai') {
+          setIsReadOnly(true);
+          setReadOnlyReason('locked');
+          setTimeout(() => {
+            showModal({
+              type: 'warning',
+              title: 'Periode Penilaian Selesai',
+              message: 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda dapat melihat konfigurasi dalam mode baca saja, tetapi tidak dapat mengedit.'
+            });
+          }, 500);
+        } else {
+          setIsReadOnly(true);
+          setReadOnlyReason('not_open');
+          setTimeout(() => {
+            showModal({
+              type: 'warning',
+              title: '⏳ Periode Penilaian Belum Aktif',
+              message: 'Baik PTS maupun PAS belum dibuka oleh admin.\n\nAnda dapat melihat konfigurasi dalam mode baca saja, tetapi belum dapat mengedit.\n\nSilakan hubungi admin untuk membuka periode penilaian.'
+            });
+          }, 500);
+        }
+
         setKomponenList(komponenData.data || []);
 
         const mapelWajib = mapelData.data?.wajib || mapelData.wajib || [];
@@ -450,7 +497,6 @@ export default function AturPenilaianGuruKelasClient() {
             errorData = { message: await res.text(), code: null };
           }
 
-          // Jika guru belum ditugaskan
           if (errorData.code === 'NOT_ASSIGNED') {
             setIsNotAssigned(true);
             return;
@@ -460,14 +506,13 @@ export default function AturPenilaianGuruKelasClient() {
             showModal({
               type: 'warning',
               title: 'Periode Belum Dibuka',
-              message: errorData.message || 'Admin belum membuka periode penilaian.\n\nAnda dapat melihat konfigurasi yang sudah ada.'
+              message: errorData.message || 'Admin belum membuka periode penilaian.'
             });
             setKategoriList([]);
             setKategoriLoading(false);
             return;
           }
 
-          // Jika periode terkunci
           if (errorData.code === 'PERIOD_LOCKED') {
             showModal({
               type: 'warning',
@@ -477,7 +522,6 @@ export default function AturPenilaianGuruKelasClient() {
             return;
           }
 
-          // Error 403 lainnya
           if (res.status === 403) {
             showModal({
               type: 'error',
@@ -592,7 +636,6 @@ export default function AturPenilaianGuruKelasClient() {
         initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
       } catch (err: any) {
         if (err.message.includes('belum ditugaskan')) return;
-
         showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal mengambil bobot penilaian' });
       } finally {
         setBobotLoading(false);
@@ -616,13 +659,19 @@ export default function AturPenilaianGuruKelasClient() {
     setActiveTab(tab);
   };
 
-  // ====== BATCH EDIT HANDLERS ======
-  const openBatchEdit = (aspekId: number | null = null) => {
-    setBatchEditAspekId(aspekId);
-    setShowNewAspekInput(false);
-    setNewAspekNama('');
-    
-    if (aspekId) {
+  // ====== HELPER: Load grade untuk aspek tertentu ======
+  const loadGradesForAspek = (aspekId: number | null) => {
+    if (!aspekId) {
+      const defaultGrades = [
+        { grade: 'A', min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
+        { grade: 'B', min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
+        { grade: 'C', min_nilai: 70, max_nilai: 79, deskripsi: 'Cukup', isNew: true },
+        { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
+        { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
+      ];
+      setBatchGrades(defaultGrades);
+      setOriginalBatchGrades([]);
+    } else {
       const existingGrades = kategoriList
         .filter(k => (k as KategoriKokurikuler).id_aspek_kokurikuler === aspekId)
         .map(k => ({
@@ -634,18 +683,42 @@ export default function AturPenilaianGuruKelasClient() {
           isNew: false,
         }))
         .sort((a, b) => b.min_nilai - a.min_nilai);
-      
-      setBatchGrades(existingGrades);
-    } else {
-      setBatchGrades([
-        { grade: 'A', min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
-        { grade: 'B', min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
-        { grade: 'C', min_nilai: 70, max_nilai: 79, deskripsi: 'Cukup', isNew: true },
-        { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
-        { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
-      ]);
+
+      if (existingGrades.length > 0) {
+        setBatchGrades(existingGrades);
+        setOriginalBatchGrades([...existingGrades]);
+      } else {
+        const defaultGrades = [
+          { grade: 'A', min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
+          { grade: 'B', min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
+          { grade: 'C', min_nilai: 70, max_nilai: 79, deskripsi: 'Cukup', isNew: true },
+          { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
+          { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
+        ];
+        setBatchGrades(defaultGrades);
+        setOriginalBatchGrades([]);
+      }
     }
-    
+  };
+
+  // ====== BATCH EDIT HANDLERS ======
+  // ✅ FIX: Validasi periode sebelum buka batch edit
+  const openBatchEdit = (aspekId: number | null = null) => {
+    // ✅ Cek apakah aspek ini bisa diedit
+    if (aspekId !== null && !canEditAspekKokurikuler(aspekId)) {
+      const reason = getAspekKokurikulerLockReason(aspekId);
+      showModal({
+        type: 'warning',
+        title: 'Aspek Terkunci',
+        message: `Aspek ini tidak dapat dikelola saat ini.\n\nAlasan: ${reason}\n\n${jenisPenilaianAktif === 'PTS'
+          ? 'Saat periode PTS aktif, hanya aspek Mutaba\'ah Yaumiyah yang dapat dikelola kategorinya. Aspek lain akan dibuka saat periode PAS.'
+          : 'Silakan tunggu admin mengaktifkan periode penilaian.'}`
+      });
+      return;
+    }
+
+    setBatchEditAspekId(aspekId);
+    loadGradesForAspek(aspekId);
     setShowBatchEdit(true);
   };
 
@@ -656,8 +729,7 @@ export default function AturPenilaianGuruKelasClient() {
       setBatchEditClosing(false);
       setBatchEditAspekId(null);
       setBatchGrades([]);
-      setShowNewAspekInput(false);
-      setNewAspekNama('');
+      setOriginalBatchGrades([]);
     }, 200);
   };
 
@@ -676,88 +748,30 @@ export default function AturPenilaianGuruKelasClient() {
   };
 
   const updateBatchGrade = (index: number, field: keyof BatchGradeItem, value: any) => {
-    setBatchGrades(prev => prev.map((g, i) => 
+    setBatchGrades(prev => prev.map((g, i) =>
       i === index ? { ...g, [field]: value } : g
     ));
   };
 
-  // ====== TAMBAHAN BARU: Fungsi untuk Membuat Aspek Baru dengan Konfirmasi ======
-  const handleCreateNewAspek = async () => {
-    if (!newAspekNama.trim()) {
-      showModal({ type: 'warning', title: 'Nama Kosong', message: 'Nama aspek tidak boleh kosong.' });
-      return;
+  const handleAspekChange = (newAspekId: number | null) => {
+    if (newAspekId !== batchEditAspekId) {
+      loadGradesForAspek(newAspekId);
     }
-
-    if (newAspekNama.trim().length < 3) {
-      showModal({ type: 'warning', title: 'Nama Terlalu Pendek', message: 'Nama aspek minimal 3 karakter.' });
-      return;
-    }
-
-    // ✅ KONFIRMASI PROFESIONAL
-    showModal({
-      type: 'confirm',
-      title: 'Konfirmasi Tambah Aspek',
-      message: `Apakah Anda yakin ingin menambahkan aspek kokurikuler baru?\n\nNama Aspek: "${newAspekNama.trim()}"`,
-      onConfirm: async () => {
-        setIsCreatingAspek(true);
-        try {
-          const token = localStorage.getItem('token');
-          
-          const res = await fetch(`${API}/atur-penilaian/aspek-kokurikuler`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ nama: newAspekNama.trim() }),
-          });
-
-          const result = await res.json();
-
-          if (res.ok) {
-            // Reload aspek list
-            const aspekRes = await fetch(`${API}/atur-penilaian/aspek-kokurikuler`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            const aspekData = await aspekRes.json();
-            setAspekList(aspekData.data || []);
-
-            // Reset form
-            const namaAspek = newAspekNama;
-            setNewAspekNama('');
-            setShowNewAspekInput(false);
-            
-            // Tampilkan pesan sukses
-            showModal({ 
-              type: 'success', 
-              title: '✅ Berhasil!', 
-              message: `Aspek "${namaAspek}" berhasil dibuat dan otomatis terpilih.` 
-            });
-          } else {
-            showModal({ type: 'error', title: '❌ Gagal Membuat Aspek', message: result.message || 'Terjadi kesalahan.' });
-          }
-        } catch (err: any) {
-          showModal({ type: 'network', title: '❌ Koneksi Gagal', message: err.message || 'Gagal menghubungi server.' });
-        } finally {
-          setIsCreatingAspek(false);
-        }
-      }
-    });
+    setBatchEditAspekId(newAspekId);
   };
 
-  // Validasi batch grades
   const validateBatchGrades = (): { valid: boolean; errors: string[] } => {
     const errors: string[] = [];
-    
+
     if (!batchEditAspekId) {
-      errors.push('Pilih atau buat aspek kokurikuler terlebih dahulu.');
+      errors.push('Pilih aspek kokurikuler terlebih dahulu.');
     }
-    
+
     if (batchGrades.length === 0) {
       errors.push('Minimal harus ada 1 grade.');
       return { valid: false, errors };
     }
-    
+
     batchGrades.forEach((g, i) => {
       if (!g.grade || g.grade.trim().length === 0) {
         errors.push(`Grade baris ${i + 1} tidak boleh kosong.`);
@@ -779,17 +793,17 @@ export default function AturPenilaianGuruKelasClient() {
         errors.push(`Grade ${g.grade || i + 1}: Deskripsi minimal 3 karakter.`);
       }
     });
-    
+
     const grades = batchGrades.map(g => g.grade.toUpperCase());
     const duplicates = grades.filter((g, i) => grades.indexOf(g) !== i);
     if (duplicates.length > 0) {
       errors.push(`Grade duplikat: ${[...new Set(duplicates)].join(', ')}`);
     }
-    
+
     const sorted = [...batchGrades].sort((a, b) => a.min_nilai - b.min_nilai);
     let covered = new Set<number>();
     let hasOverlap = false;
-    
+
     sorted.forEach(g => {
       for (let i = g.min_nilai; i <= g.max_nilai; i++) {
         if (covered.has(i)) {
@@ -798,29 +812,71 @@ export default function AturPenilaianGuruKelasClient() {
         covered.add(i);
       }
     });
-    
+
     if (hasOverlap) {
       errors.push('Ada overlap pada range nilai. Pastikan tidak ada nilai yang masuk ke 2 grade.');
     }
-    
+
     return { valid: errors.length === 0, errors };
   };
 
-  const handleSaveBatch = async () => {
+  const hasBatchChanges = (): boolean => {
+    if (originalBatchGrades.length === 0) {
+      return true;
+    }
+
+    if (batchGrades.length !== originalBatchGrades.length) {
+      return true;
+    }
+
+    const sortedCurrent = [...batchGrades].sort((a, b) =>
+      (a.grade || '').localeCompare(b.grade || '')
+    );
+    const sortedOriginal = [...originalBatchGrades].sort((a, b) =>
+      (a.grade || '').localeCompare(b.grade || '')
+    );
+
+    for (let i = 0; i < sortedCurrent.length; i++) {
+      const current = sortedCurrent[i];
+      const original = sortedOriginal[i];
+
+      const currentGrade = (current.grade || '').toUpperCase().trim();
+      const originalGrade = (original.grade || '').toUpperCase().trim();
+      if (currentGrade !== originalGrade) return true;
+
+      if (Number(current.min_nilai) !== Number(original.min_nilai)) return true;
+      if (Number(current.max_nilai) !== Number(original.max_nilai)) return true;
+
+      const currentDesc = (current.deskripsi || '').trim();
+      const originalDesc = (original.deskripsi || '').trim();
+      if (currentDesc !== originalDesc) return true;
+    }
+
+    return false;
+  };
+
+  const openConfirmSaveBatch = () => {
     const validation = validateBatchGrades();
     if (!validation.valid) {
-      showModal({
-        type: 'warning',
-        title: 'Validasi Gagal',
-        message: validation.errors.join('\n')
-      });
+      showModal({ type: 'warning', title: 'Validasi Gagal', message: validation.errors.join('\n') });
       return;
     }
 
+    const hasChanges = hasBatchChanges();
+    if (!hasChanges) {
+      showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Data yang Anda masukkan sama dengan data yang sudah ada.' });
+      return;
+    }
+
+    setConfirmAction('save-batch');
+    setShowConfirmModal(true);
+  };
+
+  const executeSaveBatch = async () => {
     setIsSavingBatch(true);
     try {
       const token = localStorage.getItem('token');
-      
+
       const payload = {
         id_aspek_kokurikuler: batchEditAspekId,
         grades: batchGrades.map(g => ({
@@ -835,137 +891,31 @@ export default function AturPenilaianGuruKelasClient() {
 
       const res = await fetch(`${API}/atur-penilaian/kategori-kokurikuler-batch`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
 
       const result = await res.json();
 
       if (res.ok) {
+        setShowConfirmModal(false);
         closeBatchEdit();
-        showModal({
-          type: 'success',
-          title: 'Berhasil Disimpan!',
-          message: `${batchGrades.length} grade berhasil disimpan untuk aspek ini.`
-        });
-        
-        const reloadRes = await fetch(`${API}/atur-penilaian/kategori-kokurikuler`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchGrades.length} grade berhasil disimpan.` });
+
+        const reloadRes = await fetch(`${API}/atur-penilaian/kategori-kokurikuler`, { headers: { Authorization: `Bearer ${token}` } });
         const reloadData = await reloadRes.json();
         setKategoriList(reloadData.data || []);
-        if (reloadData.coverage) {
-          setCoverageInfo(reloadData.coverage);
-        }
+        if (reloadData.coverage) setCoverageInfo(reloadData.coverage);
       } else {
-        showModal({
-          type: 'error',
-          title: 'Gagal Menyimpan',
-          message: result.message || 'Terjadi kesalahan saat menyimpan.'
-        });
+        setShowConfirmModal(false);
+        showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Terjadi kesalahan.' });
       }
     } catch (err: any) {
-      showModal({
-        type: 'network',
-        title: 'Koneksi Gagal',
-        message: 'Gagal menyimpan: ' + err.message
-      });
+      setShowConfirmModal(false);
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
     } finally {
       setIsSavingBatch(false);
     }
-  };
-
-  // ====== COPY FROM PREVIOUS YEAR ======
-  const handleCopyFromPreviousYear = async () => {
-    showModal({
-      type: 'confirm',
-      title: 'Copy dari Tahun Ajaran Sebelumnya',
-      message: 'Data penilaian dari tahun ajaran sebelumnya akan disalin ke tahun ajaran ini.\n\nData yang sudah ada akan ditimpa. Lanjutkan?',
-      onConfirm: async () => {
-        try {
-          const token = localStorage.getItem('token');
-          
-          let endpoint = '';
-          if (activeTab === 'kokurikuler') {
-            endpoint = `${API}/atur-penilaian/copy-kokurikuler`;
-          } else if (activeTab === 'akademik') {
-            if (!selectedMapelAkademik) {
-              showModal({ type: 'warning', title: 'Pilih Mapel', message: 'Pilih mata pelajaran terlebih dahulu.' });
-              return;
-            }
-            endpoint = `${API}/atur-penilaian/copy-akademik?mapel_id=${selectedMapelAkademik}`;
-          } else if (activeTab === 'bobot') {
-            if (!selectedMapelId) {
-              showModal({ type: 'warning', title: 'Pilih Mapel', message: 'Pilih mata pelajaran terlebih dahulu.' });
-              return;
-            }
-            endpoint = `${API}/atur-penilaian/copy-bobot?mapel_id=${selectedMapelId}`;
-          }
-
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` }
-          });
-
-          const result = await res.json();
-
-          if (res.ok) {
-            showModal({
-              type: 'success',
-              title: 'Berhasil Dicopy!',
-              message: result.message || 'Data berhasil disalin dari tahun ajaran sebelumnya.'
-            });
-            
-            if (activeTab === 'kokurikuler') {
-              const reloadRes = await fetch(`${API}/atur-penilaian/kategori-kokurikuler`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const reloadData = await reloadRes.json();
-              setKategoriList(reloadData.data || []);
-              if (reloadData.coverage) setCoverageInfo(reloadData.coverage);
-            } else if (activeTab === 'akademik' && selectedMapelAkademik) {
-              const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const reloadData = await reloadRes.json();
-              setKategoriList(reloadData.data || []);
-              if (reloadData.coverage) setCoverageInfo(reloadData.coverage);
-            } else if (activeTab === 'bobot' && selectedMapelId) {
-              const reloadRes = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const result = await reloadRes.json();
-              const bobotData: any[] = result.data || [];
-              const bobotMap = new Map<number, number>();
-              bobotData.forEach((b: any) => {
-                bobotMap.set(b.komponen_id, parseFloat(b.bobot) || 0);
-              });
-              const fullBobot = komponenList.map((k) => ({
-                komponen_id: k.id_komponen,
-                bobot: bobotMap.get(k.id_komponen) || 0,
-              }));
-              setBobotList(fullBobot);
-              initialBobotListRef.current = JSON.parse(JSON.stringify(fullBobot));
-            }
-          } else {
-            showModal({
-              type: 'error',
-              title: 'Gagal Copy',
-              message: result.message || 'Tidak ada data dari tahun ajaran sebelumnya.'
-            });
-          }
-        } catch (err: any) {
-          showModal({
-            type: 'network',
-            title: 'Koneksi Gagal',
-            message: err.message || 'Gagal menghubungi server.'
-          });
-        }
-      }
-    });
   };
 
   // ====== MODAL KATEGORI (untuk akademik) ======
@@ -1004,8 +954,7 @@ export default function AturPenilaianGuruKelasClient() {
     }, 200);
   };
 
-  // ====== SAVE KATEGORI ======
-  const handleSaveKategori = async () => {
+  const handleSaveKategori = () => {
     const ne: Record<string, string> = {};
 
     if (isNaN(editKategoriData.min_nilai) || isNaN(editKategoriData.max_nilai)) {
@@ -1037,7 +986,7 @@ export default function AturPenilaianGuruKelasClient() {
       } else if (grade.length !== 1) {
         ne.grade = 'Grade harus tepat 1 karakter (A, B, C, dst).';
       }
-    } 
+    }
 
     if (Object.keys(ne).length > 0) {
       setErrors(ne);
@@ -1060,10 +1009,10 @@ export default function AturPenilaianGuruKelasClient() {
     return true;
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi untuk save kategori
   const openConfirmSaveKategori = () => {
-    if (!validateKategori()) return;
-    // Tutup modal edit kategori dulu
+    const isValid = handleSaveKategori();
+    if (!isValid) return;
+
     setEditKategoriClosing(true);
     setTimeout(() => {
       setShowEditKategori(false);
@@ -1073,7 +1022,6 @@ export default function AturPenilaianGuruKelasClient() {
     }, 200);
   };
 
-  // ✅ TAMBAHAN: Eksekusi save kategori (setelah konfirmasi)
   const executeSaveKategori = async () => {
     setIsSavingKategori(true);
     try {
@@ -1130,7 +1078,6 @@ export default function AturPenilaianGuruKelasClient() {
     }
   };
 
-  // ====== DELETE KATEGORI ======
   const handleDeleteKategori = (id: number, deskripsi: string) => {
     showModal({
       type: 'confirm',
@@ -1182,7 +1129,6 @@ export default function AturPenilaianGuruKelasClient() {
     );
   };
 
-  // ✅ TAMBAHAN: Validasi bobot
   const validateBobot = (): boolean => {
     if (!selectedMapelId) return false;
 
@@ -1224,14 +1170,12 @@ export default function AturPenilaianGuruKelasClient() {
     return true;
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi untuk save bobot
   const openConfirmSaveBobot = () => {
     if (!validateBobot()) return;
     setConfirmAction('save-bobot');
     setShowConfirmModal(true);
   };
 
-  // ✅ TAMBAHAN: Eksekusi save bobot (setelah konfirmasi)
   const executeSaveBobot = async () => {
     if (!selectedMapelId) return;
 
@@ -1279,7 +1223,6 @@ export default function AturPenilaianGuruKelasClient() {
     );
   }
 
-  // ====== MODAL AKSES DITOLAK ======
   if (isNotAssigned) {
     return (
       <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
@@ -1333,6 +1276,85 @@ export default function AturPenilaianGuruKelasClient() {
       .sort((a, b) => b.min_nilai - a.min_nilai)
   }));
 
+  const isPasActive = jenisPenilaianAktif === 'PAS';
+  const isPtsActive = jenisPenilaianAktif === 'PTS';
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ✅ BANNER INFO KATEGORI KOKURIKULER
+  // ═══════════════════════════════════════════════════════════════════════════
+  const renderKokurikulerBanner = () => {
+    if (isReadOnly) return null;
+    if (!jenisPenilaianAktif) return null;
+
+    // Daftar aspek yang bisa dan tidak bisa dikelola
+    const editableAspek = aspekList.filter(a => canEditAspekKokurikuler(a.id_aspek_kokurikuler));
+    const lockedAspek = aspekList.filter(a => !canEditAspekKokurikuler(a.id_aspek_kokurikuler));
+
+    return (
+      <div className="mb-5 rounded-xl overflow-hidden" style={{ border: `1px solid ${isPtsActive ? '#fdba74' : '#86efac'}` }}>
+        {/* Header Banner */}
+        <div className="flex items-center gap-3 px-4 py-2.5" style={{ background: isPtsActive ? '#fff7ed' : '#ecfdf5' }}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isPtsActive ? 'bg-orange-100' : 'bg-green-100'}`}>
+            <Calendar className={`w-4 h-4 ${isPtsActive ? 'text-orange-600' : 'text-green-600'}`} />
+          </div>
+          <div>
+            <p className={`text-sm font-bold ${isPtsActive ? 'text-orange-900' : 'text-green-900'}`}>
+              Periode {jenisPenilaianAktif} Sedang Aktif
+            </p>
+            <p className={`text-xs ${isPtsActive ? 'text-orange-700' : 'text-green-700'}`}>
+              Rules pengelolaan kategori kokurikuler
+            </p>
+          </div>
+        </div>
+
+        {/* Content - 2 Kolom */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 bg-white">
+          {/* Kolom Kiri: Yang Bisa Dikelola */}
+          <div className="p-4 border-r border-gray-100">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                <Unlock size={12} className="text-green-600" />
+              </div>
+              <p className="text-xs font-bold text-green-800 uppercase tracking-wide">Dapat Dikelola</p>
+            </div>
+            <div className="space-y-2">
+              {editableAspek.map(aspek => (
+                <div key={aspek.id_aspek_kokurikuler} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+                  <CheckCircle2 size={14} className="text-green-600 flex-shrink-0" />
+                  <span className="text-sm font-medium text-green-900">{aspek.nama}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Kolom Kanan: Yang Terkunci */}
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
+                <Lock size={12} className="text-gray-600" />
+              </div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Terkunci</p>
+            </div>
+            {lockedAspek.length > 0 ? (
+              <div className="space-y-2">
+                {lockedAspek.map(aspek => (
+                  <div key={aspek.id_aspek_kokurikuler} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                    <Lock size={14} className="text-gray-500 flex-shrink-0" />
+                    <span className="text-sm text-gray-600">{aspek.nama}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-20 rounded-lg bg-green-50 border border-green-200">
+                <p className="text-sm text-green-700 font-medium">✨ Semua aspek terbuka</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ====== RENDER ======
   return (
     <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
@@ -1353,24 +1375,21 @@ export default function AturPenilaianGuruKelasClient() {
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola kategori dan bobot penilaian kelas Anda</p>
       </div>
 
-      {!jenisPenilaianAktif && mapelList.length > 0 && (
-        <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
+      {isReadOnly && (
+        <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
           style={{
-            background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-            border: '2px solid #fcd34d',
-            boxShadow: '0 2px 8px rgba(252,211,77,0.2)'
+            background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7',
+            border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}`
           }}>
-          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle size={20} style={{ color: '#d97706' }} />
-          </div>
+          <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
           <div className="flex-1">
-            <h3 className="font-bold text-sm mb-1" style={{ color: '#92400e' }}>
-              Periode Penilaian Belum Dibuka
-            </h3>
-            <p className="text-xs" style={{ color: '#78350f' }}>
-              Admin belum membuka periode PTS atau PAS untuk tahun ajaran ini.
-              Anda tetap dapat melihat konfigurasi yang sudah ada,
-              namun <strong>beberapa fitur mungkin terbatas</strong>.
+            <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
+              Mode Baca Saja (Read Only)
+            </p>
+            <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
+              {readOnlyReason === 'locked'
+                ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat konfigurasi, tetapi tidak dapat mengedit.'
+                : 'Periode penilaian belum aktif. Anda dapat melihat konfigurasi, tetapi belum dapat mengedit. Silakan hubungi admin untuk membuka periode penilaian.'}
             </p>
           </div>
         </div>
@@ -1437,65 +1456,10 @@ export default function AturPenilaianGuruKelasClient() {
           {/* ====== TAB: KOKURIKULER ====== */}
           {activeTab === 'kokurikuler' && (
             <div>
-              {jenisPenilaianAktif === 'PTS' && (
-                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
-                  style={{ background: '#fff7ed', border: '2px solid #fdba74' }}>
-                  <ShieldAlert size={20} style={{ color: '#c2410c', flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: '#9a3412' }}>
-                      Periode PTS Sedang Aktif
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: '#7c2d12' }}>
-                      Kategori nilai tetap dapat diedit. Bobot penilaian akan otomatis dikunci.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {jenisPenilaianAktif === 'PAS' && (
-                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
-                  style={{ background: '#ecfdf5', border: '2px solid #86efac' }}>
-                  <CheckCircle2 size={20} style={{ color: '#15803d', flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: '#14532d' }}>
-                      Periode PAS Sedang Aktif
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: '#166534' }}>
-                      Semua konfigurasi penilaian dapat diedit dengan bebas.
-                    </p>
-                  </div>
-                </div>
-              )}
+              {/* ✅ BANNER INFO RULES KATEGORI KOKURIKULER */}
+              {renderKokurikulerBanner()}
 
               <CoverageWarning coverage={coverageInfo} />
-
-              <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: '1px solid #fde0c8' }}>
-                <p className="text-xs" style={{ color: '#c95b08' }}>
-                  Menampilkan {aspekList.length} aspek kokurikuler
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCopyFromPreviousYear}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all"
-                    style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                  >
-                    <Copy size={16} />
-                    Copy dari TA Sebelumnya
-                  </button>
-                  <button
-                    onClick={() => openBatchEdit(null)}
-                    className={btnPrimary.base}
-                    style={btnPrimary.style}
-                    onMouseEnter={btnPrimary.hover}
-                    onMouseLeave={btnPrimary.leave}
-                  >
-                    <Plus size={16} />
-                    Tambah Aspek + Grade
-                  </button>
-                </div>
-              </div>
 
               {kategoriLoading ? (
                 <div className="py-12 text-center">
@@ -1505,66 +1469,119 @@ export default function AturPenilaianGuruKelasClient() {
               ) : groupedKokurikuler.length === 0 ? (
                 <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
                   <p className="text-base font-bold" style={{ color: '#c95b08' }}>Belum ada kategori kokurikuler</p>
-                  <p className="text-sm text-gray-500 mt-2">Klik "Tambah Aspek + Grade" untuk memulai</p>
+                  <p className="text-sm text-gray-500 mt-2">Klik tombol "Edit" pada aspek untuk mulai menambahkan grade</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {groupedKokurikuler.map(({ aspek, grades }) => (
-                    <div key={aspek.id_aspek_kokurikuler} className="rounded-xl overflow-hidden" style={{ border: '1px solid #fde0c8' }}>
-                      <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#fff7ed', borderBottom: '1px solid #fde0c8' }}>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#fed7aa' }}>
-                            <Layers size={16} style={{ color: '#c2410c' }} />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{aspek.nama}</h3>
-                            <p className="text-xs text-gray-500">{grades.length} grade</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => openBatchEdit(aspek.id_aspek_kokurikuler)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                          style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                          onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
-                        >
-                          <Pencil size={13} /> Edit Semua Grade
-                        </button>
-                      </div>
+                  {groupedKokurikuler.map(({ aspek, grades }) => {
+                    // ✅ Cek apakah aspek ini bisa dikelola
+                    const isAspekEditable = canEditAspekKokurikuler(aspek.id_aspek_kokurikuler);
+                    const lockReason = getAspekKokurikulerLockReason(aspek.id_aspek_kokurikuler);
 
-                      {grades.length > 0 ? (
-                        <table className="w-full text-sm border-collapse">
-                          <thead>
-                            <tr style={{ background: '#fffaf6' }}>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Grade</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Range Nilai</th>
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Deskripsi</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {grades.map((g, idx) => (
-                              <tr key={g.id} style={{ borderTop: idx > 0 ? '1px solid #fde0c8' : 'none' }}>
-                                <td className="px-4 py-2.5">
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold"
-                                    style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
-                                    {(g as KategoriKokurikuler).grade}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-gray-700">
-                                  {Math.floor(g.min_nilai)} – {Math.floor(g.max_nilai)}
-                                </td>
-                                <td className="px-4 py-2.5 text-gray-700">{g.deskripsi}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <div className="px-5 py-6 text-center text-sm text-gray-400">
-                          Belum ada grade untuk aspek ini
+                    return (
+                      <div
+                        key={aspek.id_aspek_kokurikuler}
+                        className="rounded-xl overflow-hidden transition-all"
+                        style={{
+                          border: `1px solid ${isAspekEditable ? '#fde0c8' : '#e5e7eb'}`,
+                          opacity: isAspekEditable ? 1 : 0.75
+                        }}
+                      >
+                        {/* Header Aspek */}
+                        <div
+                          className="px-5 py-3 flex items-center justify-between gap-3"
+                          style={{
+                            background: isAspekEditable ? '#fff7ed' : '#f9fafb',
+                            borderBottom: `1px solid ${isAspekEditable ? '#fde0c8' : '#e5e7eb'}`
+                          }}
+                        >
+                          {/* Kiri: Icon + Info Aspek */}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                              style={{ background: isAspekEditable ? '#fed7aa' : '#e5e7eb' }}
+                            >
+                              <Layers size={16} style={{ color: isAspekEditable ? '#c2410c' : '#6b7280' }} />
+                            </div>
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <h3 className="text-sm font-bold truncate" style={{ color: isAspekEditable ? '#7a3a0a' : '#6b7280' }} title={aspek.nama}>
+                                {aspek.nama}
+                              </h3>
+                              {!isAspekEditable && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-gray-200 text-gray-700 flex-shrink-0 whitespace-nowrap">
+                                  <Lock size={10} />
+                                  <span className="hidden lg:inline">{lockReason}</span>
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-500 flex-shrink-0 whitespace-nowrap">{grades.length} grade</span>
+                            </div>
+                          </div>
+
+                          {/* Kanan: Tombol Edit */}
+                          <div className="flex-shrink-0">
+                            <button
+                              onClick={() => openBatchEdit(aspek.id_aspek_kokurikuler)}
+                              disabled={!isAspekEditable}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                              style={{
+                                background: isAspekEditable ? '#fff0e5' : '#e5e7eb',
+                                border: isAspekEditable ? '1px solid #f5a623' : '1px solid #d1d5db',
+                                color: isAspekEditable ? '#b35a08' : '#6b7280'
+                              }}
+                              onMouseEnter={e => { if (isAspekEditable) e.currentTarget.style.background = '#ffe4c8'; }}
+                              onMouseLeave={e => { if (isAspekEditable) e.currentTarget.style.background = '#fff0e5'; }}
+                              title={!isAspekEditable ? `Aspek ini tidak bisa dikelola saat ini. Alasan: ${lockReason}` : ''}
+                            >
+                              {isAspekEditable ? (
+                                <>
+                                  <Pencil size={13} />
+                                  <span className="hidden sm:inline">Edit</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Lock size={13} />
+                                  <span className="hidden sm:inline">Terkunci</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+
+                        {/* Tabel Grade */}
+                        {grades.length > 0 ? (
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr style={{ background: isAspekEditable ? '#fffaf6' : '#f9fafb' }}>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Grade</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Range Nilai</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Deskripsi</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {grades.map((g, idx) => (
+                                <tr key={g.id} style={{ borderTop: idx > 0 ? '1px solid #fde0c8' : 'none' }}>
+                                  <td className="px-4 py-2.5">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold"
+                                      style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+                                      {(g as KategoriKokurikuler).grade}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-gray-700">
+                                    {Math.floor(g.min_nilai)} – {Math.floor(g.max_nilai)}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-gray-700">{g.deskripsi}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <div className="px-5 py-6 text-center text-sm text-gray-400">
+                            Belum ada grade untuk aspek ini
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1573,36 +1590,6 @@ export default function AturPenilaianGuruKelasClient() {
           {/* ====== TAB: AKADEMIK ====== */}
           {activeTab === 'akademik' && (
             <div>
-              {jenisPenilaianAktif === 'PTS' && (
-                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
-                  style={{ background: '#fff7ed', border: '2px solid #fdba74' }}>
-                  <ShieldAlert size={20} style={{ color: '#c2410c', flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: '#9a3412' }}>
-                      Periode PTS Sedang Aktif
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: '#7c2d12' }}>
-                      Kategori nilai tetap dapat diedit. Bobot penilaian akan otomatis dikunci.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {jenisPenilaianAktif === 'PAS' && (
-                <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
-                  style={{ background: '#ecfdf5', border: '2px solid #86efac' }}>
-                  <CheckCircle2 size={20} style={{ color: '#15803d', flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: '#14532d' }}>
-                      Periode PAS Sedang Aktif
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: '#166534' }}>
-                      Semua konfigurasi penilaian dapat diedit dengan bebas.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               <div className="mb-6">
                 <label className={labelCls} style={labelColor}>
                   Mata Pelajaran
@@ -1633,28 +1620,26 @@ export default function AturPenilaianGuruKelasClient() {
                     <p className="text-xs" style={{ color: '#c95b08' }}>
                       Menampilkan {kategoriList.length} kategori nilai
                     </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleCopyFromPreviousYear}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all"
-                        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                      >
-                        <Copy size={16} />
-                        Copy dari TA Sebelumnya
-                      </button>
-                      <button
-                        onClick={() => openEditKategori()}
-                        className={btnPrimary.base}
-                        style={btnPrimary.style}
-                        onMouseEnter={btnPrimary.hover}
-                        onMouseLeave={btnPrimary.leave}
-                      >
-                        <Plus size={16} />
-                        Tambah Kategori
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => openEditKategori()}
+                      disabled={isReadOnly}
+                      className={`${btnPrimary.base} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      style={btnPrimary.style}
+                      onMouseEnter={btnPrimary.hover}
+                      onMouseLeave={btnPrimary.leave}
+                    >
+                      {isReadOnly ? (
+                        <>
+                          <Lock size={16} />
+                          Terkunci
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={16} />
+                          Tambah Kategori
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid #fde0c8' }}>
@@ -1705,21 +1690,47 @@ export default function AturPenilaianGuruKelasClient() {
                                 <div className="flex justify-center gap-2">
                                   <button
                                     onClick={() => openEditKategori(kategori)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                    style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                    disabled={isReadOnly}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style={{
+                                      background: isReadOnly ? '#e5e7eb' : '#fff0e5',
+                                      border: isReadOnly ? '1px solid #d1d5db' : '1px solid #f5a623',
+                                      color: isReadOnly ? '#6b7280' : '#b35a08'
+                                    }}
+                                    onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8'; }}
+                                    onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fff0e5'; }}
                                   >
-                                    <Pencil size={13} /> Edit
+                                    {isReadOnly ? (
+                                      <>
+                                        <Lock size={13} /> Terkunci
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Pencil size={13} /> Edit
+                                      </>
+                                    )}
                                   </button>
                                   <button
                                     onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                    style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                    disabled={isReadOnly}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style={{
+                                      background: isReadOnly ? '#e5e7eb' : '#fef2f2',
+                                      border: isReadOnly ? '1px solid #d1d5db' : '1px solid #fca5a5',
+                                      color: isReadOnly ? '#6b7280' : '#dc2626'
+                                    }}
+                                    onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#fee2e2'; }}
+                                    onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fef2f2'; }}
                                   >
-                                    <Trash2 size={13} /> Hapus
+                                    {isReadOnly ? (
+                                      <>
+                                        <Lock size={13} /> Terkunci
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Trash2 size={13} /> Hapus
+                                      </>
+                                    )}
                                   </button>
                                 </div>
                               </td>
@@ -1744,8 +1755,7 @@ export default function AturPenilaianGuruKelasClient() {
               {isPTSActive && (
                 <div className="mb-5 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
                   <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                    <span className="font-bold">ℹ️ Periode PTS Aktif: </span>
-                    Sistem otomatis menetapkan <strong>PTS = 100%</strong>. Anda tidak perlu mengatur bobot manual.
+                    Sistem otomatis menetapkan <strong>PTS = 100% (PTS aktif)</strong>. Anda tidak perlu mengatur bobot manual.
                   </p>
                 </div>
               )}
@@ -1779,19 +1789,6 @@ export default function AturPenilaianGuruKelasClient() {
                   </div>
                 ) : (
                   <div>
-                    <div className="flex justify-end mb-4">
-                      <button
-                        onClick={handleCopyFromPreviousYear}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all"
-                        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                      >
-                        <Copy size={16} />
-                        Copy dari TA Sebelumnya
-                      </button>
-                    </div>
-
                     <div className="space-y-3 mb-6">
                       {bobotList.map((bobot) => {
                         const komponen = komponenList.find((k) => k.id_komponen === bobot.komponen_id);
@@ -1844,9 +1841,8 @@ export default function AturPenilaianGuruKelasClient() {
                       </div>
                     </div>
 
-                    {!isPTSActive && (
+                    {!isPTSActive && !isReadOnly && (
                       <div className="flex justify-end pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                        {/* ✅ UBAH: onClick={openConfirmSaveBobot} */}
                         <button
                           onClick={openConfirmSaveBobot}
                           disabled={isSavingBobot || !isBobotValid}
@@ -1878,7 +1874,7 @@ export default function AturPenilaianGuruKelasClient() {
         </div>
       </div>
 
-      {/* ====== MODAL BATCH EDIT (DENGAN FITUR TAMBAH ASPEK BARU) ====== */}
+      {/* ====== MODAL BATCH EDIT ====== */}
       {showBatchEdit && (
         <div
           className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditClosing ? 'opacity-0' : 'opacity-100'}`}
@@ -1893,7 +1889,7 @@ export default function AturPenilaianGuruKelasClient() {
           >
             <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
               <h2 className="text-base font-bold text-white">
-                {batchEditAspekId ? 'Edit Grade Aspek' : 'Tambah Aspek + Grade'}
+                Edit Grade Aspek
               </h2>
               <button
                 onClick={closeBatchEdit}
@@ -1906,88 +1902,10 @@ export default function AturPenilaianGuruKelasClient() {
 
             <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
               <div className="p-6 space-y-4">
-                {/* ====== TAMBAHAN BARU: Pilih Aspek atau Buat Baru ====== */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className={`${labelCls} mb-0`} style={labelColor}>
-                      Aspek Kokurikuler <span className="text-red-500">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNewAspekInput(!showNewAspekInput);
-                        setNewAspekNama('');
-                      }}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
-                      style={{ 
-                        background: showNewAspekInput ? '#fff0e5' : '#fff',
-                        color: '#c95b08',
-                        border: '1px solid #fde0c8'
-                      }}
-                      onMouseEnter={e => { if (!showNewAspekInput) e.currentTarget.style.background = '#fffaf6'; }}
-                      onMouseLeave={e => { if (!showNewAspekInput) e.currentTarget.style.background = '#fff'; }}
-                    >
-                      {showNewAspekInput ? '− Batal' : '+ Tambah Aspek Baru'}
-                    </button>
-                  </div>
-
-                  {showNewAspekInput ? (
-                    <div className="p-4 rounded-xl space-y-3" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                      <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>
-                          Nama Aspek Baru
-                        </label>
-                        <input
-                          type="text"
-                          value={newAspekNama}
-                          onChange={(e) => setNewAspekNama(e.target.value)}
-                          placeholder="Contoh: Proyek Kelas 2A - Kebersihan"
-                          className={inputCls}
-                          disabled={isCreatingAspek}
-                        />
-                        <p className="text-xs mt-1" style={{ color: '#7a3a0a' }}>
-                          💡 Masukkan nama aspek/proyek khusus untuk kelas ini
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleCreateNewAspek}
-                          disabled={isCreatingAspek || !newAspekNama.trim()}
-                          className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}
-                        >
-                          {isCreatingAspek ? (
-                            <>
-                              <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />
-                              Menyimpan...
-                            </>
-                          ) : (
-                            <>✓ Buat Aspek</>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <select
-                      value={batchEditAspekId || ''}
-                      onChange={(e) => setBatchEditAspekId(e.target.value ? Number(e.target.value) : null)}
-                      className={inputCls}
-                      disabled={!!batchEditAspekId}
-                    >
-                      <option value="">-- Pilih Aspek --</option>
-                      {aspekList.map(a => (
-                        <option key={a.id_aspek_kokurikuler} value={a.id_aspek_kokurikuler}>{a.nama}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {/* Info */}
                 <div className="p-3 rounded-lg text-xs" style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#7a3a0a' }}>
                   <strong>💡 Tips:</strong> Isi semua grade sekaligus untuk aspek ini. Sistem akan menyimpan semua grade dalam 1 aksi.
                 </div>
 
-                {/* Grade Rows */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>
@@ -2099,12 +2017,11 @@ export default function AturPenilaianGuruKelasClient() {
                   ))}
                 </div>
 
-                {/* Summary */}
                 {(() => {
                   const validation = validateBatchGrades();
                   return (
-                    <div className="p-3 rounded-lg" style={{ 
-                      background: validation.valid ? '#f0fdf4' : '#fef3c7', 
+                    <div className="p-3 rounded-lg" style={{
+                      background: validation.valid ? '#f0fdf4' : '#fef3c7',
                       border: `1px solid ${validation.valid ? '#86efac' : '#fcd34d'}`,
                       color: validation.valid ? '#166534' : '#78350f'
                     }}>
@@ -2119,24 +2036,14 @@ export default function AturPenilaianGuruKelasClient() {
             <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
               <BtnSecondary onClick={closeBatchEdit} disabled={isSavingBatch}>Batal</BtnSecondary>
               <button
-                onClick={handleSaveBatch}
+                onClick={openConfirmSaveBatch}
                 disabled={isSavingBatch}
                 className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
                 style={btnPrimary.style}
                 onMouseEnter={btnPrimary.hover}
                 onMouseLeave={btnPrimary.leave}
               >
-                {isSavingBatch ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={16} />
-                    Simpan {batchGrades.length} Grade
-                  </>
-                )}
+                Simpan {batchGrades.length} Grade
               </button>
             </div>
           </div>
@@ -2230,7 +2137,6 @@ export default function AturPenilaianGuruKelasClient() {
 
             <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
               <BtnSecondary onClick={closeEditKategori} disabled={isSavingKategori}>Batal</BtnSecondary>
-              {/* ✅ UBAH: onClick={openConfirmSaveKategori} */}
               <button
                 onClick={openConfirmSaveKategori}
                 disabled={isSavingKategori}
@@ -2253,7 +2159,7 @@ export default function AturPenilaianGuruKelasClient() {
         </div>
       )}
 
-      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+      {/* Modal Konfirmasi Sederhana */}
       {showConfirmModal && (
         <div
           className="fixed inset-0 z-[110] flex items-center justify-center p-4 ap-fadeIn"
@@ -2273,7 +2179,9 @@ export default function AturPenilaianGuruKelasClient() {
             <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
               {confirmAction === 'save-bobot'
                 ? 'Apakah Anda yakin ingin menyimpan bobot penilaian ini?'
-                : 'Apakah Anda yakin ingin menyimpan kategori ini?'}
+                : confirmAction === 'save-batch'
+                  ? `Apakah Anda yakin ingin menyimpan ${batchGrades.length} grade untuk aspek ini?`
+                  : 'Apakah Anda yakin ingin menyimpan kategori ini?'}
             </p>
 
             <div className="flex gap-3">
@@ -2288,15 +2196,17 @@ export default function AturPenilaianGuruKelasClient() {
                 onClick={() => {
                   if (confirmAction === 'save-bobot') {
                     executeSaveBobot();
+                  } else if (confirmAction === 'save-batch') {
+                    executeSaveBatch();
                   } else {
                     executeSaveKategori();
                   }
                 }}
-                disabled={isSavingBobot || isSavingKategori}
+                disabled={isSavingBobot || isSavingKategori || isSavingBatch}
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
               >
-                {(isSavingBobot || isSavingKategori) ? (
+                {(isSavingBobot || isSavingKategori || isSavingBatch) ? (
                   <>
                     <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />
                     Menyimpan...

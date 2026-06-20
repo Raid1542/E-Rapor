@@ -175,7 +175,7 @@ export default function AbsensiClient() {
                     setTimeout(() => {
                         showModal({
                             type: 'warning',
-                            title: '🔒 Periode Penilaian Selesai',
+                            title: 'Periode Penilaian Selesai',
                             message: 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda dapat melihat data absensi dalam mode baca saja (read only), tetapi tidak dapat mengedit.'
                         });
                     }, 500);
@@ -317,13 +317,13 @@ export default function AbsensiClient() {
             if (readOnlyReason === 'locked') {
                 showModal({
                     type: 'warning',
-                    title: '🔒 Mode Baca-Saja',
+                    title: 'Mode Baca Saja',
                     message: 'Periode penilaian sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengedit data absensi.'
                 });
             } else {
                 showModal({
                     type: 'warning',
-                    title: '⏳ Mode Baca-Saja',
+                    title: '⏳ Mode Baca Saja',
                     message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengedit data absensi.\n\nSilakan tunggu admin membuka periode penilaian.'
                 });
             }
@@ -537,8 +537,8 @@ export default function AbsensiClient() {
             if (status === 'selesai') {
                 showModal({
                     type: 'warning',
-                    title: '🔒 Periode Selesai',
-                    message: `Periode ${jenis} sudah selesai dan data sudah dikunci.\n\nAnda hanya dapat melihat data dalam mode baca-saja.`
+                    title: 'Periode Selesai',
+                    message: `Periode ${jenis} sudah selesai dan data sudah dikunci.\n\nAnda hanya dapat melihat data dalam mode baca saja.`
                 });
             } else {
                 showModal({
@@ -615,7 +615,7 @@ export default function AbsensiClient() {
                     <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
                     <div className="flex-1">
                         <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
-                            🔒 Mode Baca Saja (Read Only)
+                            Mode Baca Saja (Read Only)
                         </p>
                         <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
                             {readOnlyReason === 'locked'
@@ -672,7 +672,7 @@ export default function AbsensiClient() {
                             >
                                 <span>PTS</span>
                                 <span className="text-[9px] font-normal">
-                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
                                 </span>
                             </button>
                             {/* Tab PAS */}
@@ -696,7 +696,7 @@ export default function AbsensiClient() {
                             >
                                 <span>PAS</span>
                                 <span className="text-[9px] font-normal">
-                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
                                 </span>
                             </button>
                         </div>

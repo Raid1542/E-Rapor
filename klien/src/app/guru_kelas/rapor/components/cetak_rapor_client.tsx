@@ -1,7 +1,13 @@
 /**
  * Nama File: RaporGuruKelasClient.tsx
  * Fungsi: Cetak rapor siswa untuk guru kelas menggunakan template Word
- * UPDATE: Auto-detect semester, tab toggle PTS/PAS, tema oranye
+ * UPDATE: 
+ *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
+ *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif
+ *   - Banner warning status periode
+ *   - Tombol Download disabled jika periode belum aktif
+ *   - Modal warning saat klik tombol di mode read-only
+ *   - Auto-detect semester, tab toggle PTS/PAS, tema oranye
  */
 
 'use client';
@@ -9,7 +15,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     FileText, Download, AlertCircle, CheckCircle2,
-    WifiOff, ShieldAlert, X, School, Lock, Play, Pause, Users
+    WifiOff, ShieldAlert, X, School, Lock, Play, Pause, Users, LogOut
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -137,6 +143,13 @@ const RaporGuruKelasClient = () => {
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
+    // ✅ KONDISI 1: Belum ditugaskan
+    const [isNotAssigned, setIsNotAssigned] = useState(false);
+
+    // ✅ KONDISI 2: Read-Only mode (periode belum aktif)
+    const [isReadOnly, setIsReadOnly] = useState(false);
+    const [readOnlyReason, setReadOnlyReason] = useState<'not_open' | 'locked' | null>(null);
+
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
@@ -164,11 +177,49 @@ const RaporGuruKelasClient = () => {
                     status_pts: ta.status_pts as StatusPenilaian,
                     status_pas: ta.status_pas as StatusPenilaian,
                 });
+
+                // ✅ CEK STATUS PERIODE
+                const statusPts = ta.status_pts as StatusPenilaian;
+                const statusPas = ta.status_pas as StatusPenilaian;
+
+                if (statusPts === 'aktif' || statusPas === 'aktif') {
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else if (statusPts === 'selesai' || statusPas === 'selesai') {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('locked');
+                    setTimeout(() => {
+                        showModal({
+                            type: 'warning',
+                            title: '🔒 Periode Penilaian Selesai',
+                            message: 'Periode penilaian telah selesai.\n\nRapor yang sudah selesai dapat diunduh, tetapi data nilai tidak dapat diubah lagi.'
+                        });
+                    }, 500);
+                } else {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('not_open');
+                    setTimeout(() => {
+                        showModal({
+                            type: 'warning',
+                            title: '⏳ Periode Penilaian Belum Aktif',
+                            message: 'Baik PTS maupun PAS belum dibuka oleh admin.\n\nAnda belum dapat mengunduh rapor siswa.\n\nSilakan hubungi admin untuk membuka periode penilaian.'
+                        });
+                    }, 500);
+                }
             } else {
-                showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal mengambil tahun ajaran aktif.' });
+                const errCode = data.code;
+                if (errCode === 'NOT_ASSIGNED') {
+                    setIsNotAssigned(true);
+                } else {
+                    showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal mengambil tahun ajaran aktif.' });
+                }
             }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        } catch (err: any) {
+            if (err.message?.includes('belum ditugaskan')) {
+                setIsNotAssigned(true);
+            } else {
+                showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+            }
         } finally {
             setLoading(false);
         }
@@ -189,8 +240,13 @@ const RaporGuruKelasClient = () => {
             if (res.ok && data.success) {
                 setSiswaList(data.data || []);
             } else {
-                setSiswaList([]);
-                showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal memuat data siswa.' });
+                const errCode = data.code;
+                if (errCode === 'NOT_ASSIGNED') {
+                    setIsNotAssigned(true);
+                } else {
+                    setSiswaList([]);
+                    showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal memuat data siswa.' });
+                }
             }
         } catch {
             setSiswaList([]);
@@ -220,6 +276,16 @@ const RaporGuruKelasClient = () => {
 
     // === Unduh rapor ===
     const handleDownloadRapor = async (siswaId: number, namaSiswa: string, nisn: string) => {
+        // ✅ CEK READ-ONLY
+        if (isReadOnly && readOnlyReason === 'not_open') {
+            showModal({
+                type: 'warning',
+                title: '⏳ Mode Baca-Saja',
+                message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengunduh rapor siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
+            });
+            return;
+        }
+
         const token = localStorage.getItem('token');
         if (!token || !selectedJenis || !tahunAjaranInfo) {
             showModal({ type: 'warning', title: 'Data Tidak Lengkap', message: 'Silakan pilih jenis penilaian terlebih dahulu.' });
@@ -271,6 +337,16 @@ const RaporGuruKelasClient = () => {
 
     // === Download semua rapor ===
     const handleDownloadAll = async () => {
+        // ✅ CEK READ-ONLY
+        if (isReadOnly && readOnlyReason === 'not_open') {
+            showModal({
+                type: 'warning',
+                title: '⏳ Mode Baca-Saja',
+                message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengunduh rapor siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
+            });
+            return;
+        }
+
         if (siswaList.length === 0) {
             showModal({ type: 'warning', title: 'Tidak Ada Data', message: 'Tidak ada siswa untuk diunduh rapornya.' });
             return;
@@ -291,6 +367,7 @@ const RaporGuruKelasClient = () => {
 
     // === Derived state ===
     const currentStatus = getCurrentStatus();
+    // ✅ UPDATE: Download allowed jika aktif ATAU selesai (bukan nonaktif)
     const isDownloadAllowed = currentStatus === 'aktif' || currentStatus === 'selesai';
 
     // ── Loading state ──────────────────────────────────────────────────────────
@@ -306,12 +383,70 @@ const RaporGuruKelasClient = () => {
         );
     }
 
+    // ✅ KONDISI 1: Belum Ditugaskan → Blokir Total
+    if (isNotAssigned) {
+        return (
+            <div className="flex-1 min-h-screen p-6 flex items-center justify-center" style={PAGE_BG}>
+                <GlobalStyles />
+                {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn">
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ap-scaleIn">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ap-pulse">
+                            <AlertCircle size={48} className="text-red-500" />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                                Anda belum ditugaskan sebagai guru kelas di semester ini.
+                                <br />
+                                Silakan hubungi Administrator untuk penugasan kelas.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
+                            }}
+                        >
+                            <LogOut size={18} /> Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
 
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+            {/* ✅ BANNER READ-ONLY (KONDISI 2) */}
+            {isReadOnly && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                    style={{
+                        background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7',
+                        border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}`
+                    }}>
+                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
+                    <div className="flex-1">
+                        <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
+                            🔒 Mode Baca-Saja (Read-Only)
+                        </p>
+                        <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
+                            {readOnlyReason === 'locked'
+                                ? 'Periode penilaian telah selesai. Rapor yang sudah selesai dapat diunduh, tetapi data nilai tidak dapat diubah lagi.'
+                                : 'Periode penilaian belum aktif. Anda belum dapat mengunduh rapor siswa. Silakan hubungi admin untuk membuka periode penilaian.'}
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Page Header */}
             <div className="mb-6">
@@ -333,7 +468,6 @@ const RaporGuruKelasClient = () => {
                                 <h2 className="text-xl font-bold text-white">
                                     Cetak Rapor Siswa
                                 </h2>
-    
                             </div>
                         </div>
                     </div>

@@ -7,12 +7,12 @@
  */
 
 import { Metadata } from 'next';
-import DataInputNilaiClient from './components/input_nilai';
+import InputNilaiClient from './components/input_nilai';
 
-export const meta: Metadata = {
+export const metadata: Metadata = {
     title: 'Input Nilai',
 };
 
-export default function DataInputNilaiPage() {
-    return <DataInputNilaiClient />;
+export default function inputNilaiPage() {
+    return <InputNilaiClient />;
 }
