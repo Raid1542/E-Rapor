@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-    Users, DoorOpen, Calendar, BookOpen,
-    ClipboardList, CheckCircle2, Clock, AlertCircle,
-    ChevronRight, GraduationCap, PieChart,
-    Award, X, WifiOff, ShieldAlert
+    ChevronRight, Users, Award, Book,
+    TrendingUp, BookOpen, Settings,
+    ArrowRight, Sparkles, Target, AlertTriangle,
+    CheckCircle2, AlertCircle, CalendarDays, LogOut, X,
+    GraduationCap, ClipboardList
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
@@ -19,6 +20,9 @@ interface UserData {
     email_sekolah: string;
     role: string;
 }
+
+type ModalType = 'success' | 'error' | 'warning' | 'network';
+interface ModalConfig { type: ModalType; title: string; message: string; }
 
 interface KelasInfo {
     kelas: string;
@@ -36,105 +40,155 @@ interface NilaiProgress {
     jenis: 'wajib' | 'pilihan';
 }
 
-type ModalType = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
+interface DashboardData {
+    status_pts: 'aktif' | 'nonaktif' | 'selesai';
+    status_pas: 'aktif' | 'nonaktif' | 'selesai';
+    kelas_info: KelasInfo;
+    progress_list: NilaiProgress[];
+    total_mapel: number;
+    total_siswa: number;
+    overall_progress: number;
+}
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
-        @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        .dg-fadeIn  { animation: dg-fadeIn  0.2s ease; }
-        .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .dg-pulse   { animation: dg-pulse   0.6s ease 0.15s; }
+        @keyframes db-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes db-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes db-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes db-fadeUp { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        .db-fadeIn  { animation: db-fadeIn  0.2s ease; }
+        .db-scaleIn { animation: db-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .db-pulse   { animation: db-pulse   0.6s ease 0.15s; }
+        .db-fadeUp { animation: db-fadeUp 0.5s ease-out forwards; }
     `}</style>
 );
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <AlertTriangle size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <AlertCircle size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 db-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dg-scaleIn">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 db-scaleIn">
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>{s.icon}</div>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} db-pulse`}>{s.icon}</div>
                 <div className="text-center">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
             </div>
         </div>
     );
 };
 
-// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+// ─── CARD WRAPPER ─────────────────────────────────────────────────────────────
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+    <div
+        className={`bg-white rounded-2xl ${className}`}
+        style={{ border: '1px solid #fde0c8', boxShadow: '0 4px 20px rgba(200,80,10,0.06)' }}
+    >
+        {children}
+    </div>
+);
 
-const btnPrimary = {
-    base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
-    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
-    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
-};
+// ─── MAPEL PROGRESS CARD ──────────────────────────────────────────────────────
 
-// ─── PROGRESS BAR ─────────────────────────────────────────────────────────────
+const MapelProgressCard = ({ mapel, index, onClick }: { mapel: NilaiProgress; index: number; onClick: () => void }) => {
+    const percentage = mapel.total_siswa > 0
+        ? Math.round((mapel.sudah_dinilai / mapel.total_siswa) * 100)
+        : 0;
 
-const ProgressBar = ({ value, total }: { value: number; total: number }) => {
-    const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-    const isDone = value === total && total > 0;
-    const isNone = value === 0;
-    const color = isDone ? '#15803d' : isNone ? '#dc2626' : '#e8690a';
-
-    return (
-        <div className="flex items-center gap-2 flex-1">
-            <div className="flex-1 h-[6px] rounded-full overflow-hidden bg-orange-100">
-                <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${pct}%`, background: color }}
-                />
-            </div>
-            <span className="text-[11px] text-gray-500 tabular-nums min-w-[40px] text-right font-semibold">
-                {value}/{total}
-            </span>
-        </div>
-    );
-};
-
-// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
-
-const StatusBadge = ({ done, total }: { done: number; total: number }) => {
-    const isDone = done === total && total > 0;
-    const isNone = done === 0;
-
-    const config = isDone
-        ? { label: 'Selesai', bg: '#dcfce7', color: '#15803d', border: '#86efac', Icon: CheckCircle2 }
-        : isNone
-        ? { label: 'Belum', bg: '#fef2f2', color: '#dc2626', border: '#fca5a5', Icon: AlertCircle }
-        : { label: 'Proses', bg: '#fff7ed', color: '#c2410c', border: '#fdba74', Icon: Clock };
+    const isComplete = percentage === 100;
+    const isHighProgress = percentage >= 60;
 
     return (
-        <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full whitespace-nowrap"
-            style={{ background: config.bg, color: config.color, border: `1px solid ${config.border}` }}
+        <div
+            onClick={onClick}
+            className="group p-4 rounded-2xl cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+            style={{
+                background: 'linear-gradient(135deg, #fff 0%, #fffaf6 100%)',
+                border: `2px solid ${isComplete ? '#86efac' : '#fde0c8'}`,
+                animationDelay: `${index * 0.1}s`
+            }}
         >
-            <config.Icon size={12} />
-            {config.label}
-        </span>
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                    <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white transition-transform group-hover:scale-110"
+                        style={{
+                            background: isComplete
+                                ? 'linear-gradient(135deg, #16a34a, #22c55e)'
+                                : 'linear-gradient(135deg, #c95b08, #e8690a)',
+                            boxShadow: isComplete
+                                ? '0 4px 12px rgba(22,163,74,0.3)'
+                                : '0 4px 12px rgba(232,105,10,0.3)'
+                        }}
+                    >
+                        {isComplete ? <CheckCircle2 size={18} /> : <BookOpen size={18} />}
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-gray-900 group-hover:text-gray-900">{mapel.mata_pelajaran}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-xs text-gray-500">{mapel.kode_mapel}</p>
+                            {mapel.jenis === 'pilihan' && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                                    PILIHAN
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <p className={`text-2xl font-black ${isComplete ? 'text-green-600' : 'text-orange-600'}`}>
+                        {percentage}%
+                    </p>
+                </div>
+            </div>
+
+            <div className="mb-2">
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: '#fde0c8' }}>
+                    <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                            width: `${percentage}%`,
+                            background: isComplete
+                                ? 'linear-gradient(90deg, #16a34a, #22c55e)'
+                                : 'linear-gradient(90deg, #c95b08, #f5a623)',
+                        }}
+                    />
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">
+                    {mapel.sudah_dinilai} / {mapel.total_siswa} dinilai
+                </span>
+                <span
+                    className="font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                        background: isComplete ? '#dcfce7' : isHighProgress ? '#fff0e5' : '#fef9c3',
+                        color: isComplete ? '#15803d' : isHighProgress ? '#c95b08' : '#92400e'
+                    }}
+                >
+                    {isComplete ? '✓ Selesai' : isHighProgress ? 'Berjalan' : 'Belum'}
+                </span>
+            </div>
+        </div>
     );
 };
 
@@ -144,14 +198,33 @@ export default function GuruKelasDashboard() {
     const { showSessionExpired, handleLogout } = useSession();
     const router = useRouter();
 
+    // ✅ SEMUA HOOKS DI ATAS
     const [user, setUser] = useState<UserData | null>(null);
-    const [kelasInfo, setKelasInfo] = useState<KelasInfo | null>(null);
-    const [progress, setProgress] = useState<NilaiProgress[]>([]);
+    const [dashboard, setDashboard] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
-
+    const [isNotAssigned, setIsNotAssigned] = useState(false);
     const [modal, setModal] = useState<ModalConfig | null>(null);
-    const showModal = (cfg: ModalConfig) => setModal(cfg);
-    const closeModal = () => setModal(null);
+    const [showPeriodModal, setShowPeriodModal] = useState(false);
+    const [periodModalShown, setPeriodModalShown] = useState(false);
+
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const closeModal = useCallback(() => setModal(null), []);
+
+    const stats = useMemo(() => {
+        if (!dashboard) return { totalMapel: 0, selesai: 0, belumMulai: 0, sedangBerjalan: 0, overallPct: 0, filled: 0, empty: 0 };
+        
+        const totalMapel = dashboard.progress_list.length;
+        const selesai = dashboard.progress_list.filter(p => p.belum_dinilai === 0 && p.total_siswa > 0).length;
+        const belumMulai = dashboard.progress_list.filter(p => p.sudah_dinilai === 0).length;
+        const sedangBerjalan = totalMapel - selesai - belumMulai;
+        const overallPct = dashboard.overall_progress;
+
+        const CIRC = 87.96;
+        const filled = (overallPct / 100) * CIRC;
+        const empty = CIRC - filled;
+
+        return { totalMapel, selesai, belumMulai, sedangBerjalan, overallPct, filled, empty };
+    }, [dashboard]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -164,66 +237,133 @@ export default function GuruKelasDashboard() {
             if (parsedUser.role !== 'guru kelas') { router.push('/login'); return; }
             setUser(parsedUser);
 
-            const fetchAll = async () => {
+            const fetchDashboard = async () => {
                 try {
-                    const resKelas = await fetch('http://localhost:5000/api/guru-kelas/kelas', {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-                    const dataKelas = await resKelas.json();
-                    if (Array.isArray(dataKelas) && dataKelas.length > 0) setKelasInfo(dataKelas[0]);
+                    const headers = { Authorization: `Bearer ${token}` };
+                    
+                    // Fetch tahun ajaran aktif
+                    const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
+                    const taData = await taRes.json().catch(() => ({ data: {} }));
+                    
+                    // Fetch kelas
+                    const kelasRes = await fetch('http://localhost:5000/api/guru-kelas/kelas', { headers });
+                    
+                    if (kelasRes.status === 404) {
+                        setIsNotAssigned(true);
+                        setLoading(false);
+                        return;
+                    }
+                    
+                    const kelasData = await kelasRes.json();
+                    
+                    // Fetch progress
+                    const progressRes = await fetch('http://localhost:5000/api/guru-kelas/progress-penilaian', { headers });
+                    const progressData = await progressRes.json().catch(() => ({ data: [] }));
 
-                    const resProgress = await fetch('http://localhost:5000/api/guru-kelas/progress-penilaian', {
-                        headers: { Authorization: `Bearer ${token}` },
+                    let kelasInfo: KelasInfo;
+                    if (kelasData.success && kelasData.data) {
+                        kelasInfo = {
+                            kelas: kelasData.data.nama_kelas,
+                            jumlah_siswa: kelasData.data.jumlah_siswa,
+                            tahun_ajaran: kelasData.data.tahun_ajaran || taData.data?.tahun_ajaran || '2024/2025',
+                            semester: kelasData.data.semester || taData.data?.semester || 'Ganjil'
+                        };
+                    } else if (Array.isArray(kelasData) && kelasData.length > 0) {
+                        kelasInfo = {
+                            kelas: kelasData[0].nama_kelas || kelasData[0].kelas,
+                            jumlah_siswa: kelasData[0].jumlah_siswa || 0,
+                            tahun_ajaran: kelasData[0].tahun_ajaran || taData.data?.tahun_ajaran || '2024/2025',
+                            semester: kelasData[0].semester || taData.data?.semester || 'Ganjil'
+                        };
+                    } else {
+                        setIsNotAssigned(true);
+                        setLoading(false);
+                        return;
+                    }
+
+                    const progressList: NilaiProgress[] = Array.isArray(progressData.data) ? progressData.data : [];
+                    const totalSiswa = kelasInfo.jumlah_siswa;
+                    const totalMapel = progressList.length;
+                    
+                    const totalPenilaianDibutuhkan = totalSiswa * totalMapel;
+                    const totalPenilaianAda = progressList.reduce((sum, p) => sum + p.sudah_dinilai, 0);
+                    const overallProgress = totalPenilaianDibutuhkan > 0 
+                        ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100) 
+                        : 0;
+
+                    console.log('📊 Dashboard data:', {
+                        totalSiswa,
+                        totalMapel,
+                        progressList,
+                        overallProgress
                     });
-                    const dataProgress = await resProgress.json();
-                    if (Array.isArray(dataProgress.data)) setProgress(dataProgress.data);
+
+                    setDashboard({
+                        status_pts: taData.data?.status_pts || 'nonaktif',
+                        status_pas: taData.data?.status_pas || 'nonaktif',
+                        kelas_info: kelasInfo,
+                        progress_list: progressList,
+                        total_mapel: totalMapel,
+                        total_siswa: totalSiswa,
+                        overall_progress: overallProgress
+                    });
+
                 } catch (err) {
-                    console.error('Gagal memuat data dashboard:', err);
+                    console.error('❌ Error fetching data:', err);
                     showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal memuat data dashboard.' });
                 } finally {
                     setLoading(false);
                 }
             };
 
-            fetchAll();
+            fetchDashboard();
         } catch (e) {
             console.error('Error parsing user:', e);
             router.push('/login');
         }
-    }, [router]);
+    }, [router, showModal]);
 
-    // ── Loading ────────────────────────────────────────────────────────────────
+    useEffect(() => {
+        if (loading || isNotAssigned || !dashboard) return;
+
+        const isPeriodNotActive = dashboard.status_pts !== 'aktif' && dashboard.status_pas !== 'aktif';
+        const isPeriodLocked = dashboard.status_pts === 'selesai' && dashboard.status_pas === 'selesai';
+
+        if ((isPeriodNotActive || isPeriodLocked) && !periodModalShown) {
+            setShowPeriodModal(true);
+            setPeriodModalShown(true);
+        }
+    }, [dashboard, loading, isNotAssigned, periodModalShown]);
 
     if (loading) {
         return (
-            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
+            <div className="flex items-center justify-center min-h-screen" style={{ background: '#fdf6f0' }}>
                 <GlobalStyles />
                 <div className="text-center">
-                    <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
+                    <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin mx-auto" />
+                    <p className="mt-4 text-sm font-medium" style={{ color: '#c95b08' }}>Memuat dashboard...</p>
                 </div>
             </div>
         );
     }
 
-    // ── Empty state ────────────────────────────────────────────────────────────
-
-    if (!user || !kelasInfo) {
+    if (isNotAssigned) {
         return (
-            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
+            <div className="flex-1 min-h-screen p-6 flex items-center justify-center" style={{ background: '#fdf6f0' }}>
                 <GlobalStyles />
+                {modal && <NotifModal modal={modal} onClose={closeModal} />}
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 db-fadeIn">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
-                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dg-pulse">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 db-scaleIn">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 db-pulse">
                             <AlertCircle size={48} className="text-red-500" />
                         </div>
                         <div className="text-center">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Belum Ditugaskan</h3>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
                             <p className="text-sm text-gray-600 leading-relaxed">
-                                Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini.
+                                Anda belum ditugaskan sebagai guru kelas di tahun ajaran ini.
                                 <br />
                                 Silakan hubungi Administrator untuk penugasan kelas.
                             </p>
@@ -236,7 +376,7 @@ export default function GuruKelasDashboard() {
                                 boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
                             }}
                         >
-                            Logout
+                            <LogOut size={18} /> Logout
                         </button>
                     </div>
                 </div>
@@ -244,306 +384,448 @@ export default function GuruKelasDashboard() {
         );
     }
 
-    // ── Derived stats ──────────────────────────────────────────────────────────
+    if (!user || !dashboard) return null;
 
-    const stats = useMemo(() => {
-        const totalMapel = progress.length;
-        const selesai = progress.filter(p => p.belum_dinilai === 0 && p.total_siswa > 0).length;
-        const belumMulai = progress.filter(p => p.sudah_dinilai === 0).length;
-        const sedangBerjalan = totalMapel - selesai - belumMulai;
-        const overallPct = totalMapel > 0 ? Math.round((selesai / totalMapel) * 100) : 0;
-
-        const CIRC = 87.96;
-        const filled = (overallPct / 100) * CIRC;
-        const empty = CIRC - filled;
-
-        return { totalMapel, selesai, belumMulai, sedangBerjalan, overallPct, filled, empty };
-    }, [progress]);
-
-    // ── Stat cards config ──────────────────────────────────────────────────────
+    const isPeriodNotActive = dashboard.status_pts !== 'aktif' && dashboard.status_pas !== 'aktif';
+    const isPeriodLocked = dashboard.status_pts === 'selesai' && dashboard.status_pas === 'selesai';
 
     const statCards = [
         {
             label: 'Total Siswa',
-            value: kelasInfo.jumlah_siswa,
-            icon: <Users size={18} />,
+            value: dashboard.total_siswa,
+            icon: <Users className="w-7 h-7" />,
             path: '/guru_kelas/data_siswa',
-            linkLabel: 'Lihat data siswa',
-            activeNow: false,
+            gradient: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
+            lightBg: '#fff0e5',
+            desc: 'Siswa di kelas Anda'
         },
         {
             label: 'Kelas',
-            value: kelasInfo.kelas,
-            icon: <DoorOpen size={18} />,
+            value: dashboard.kelas_info.kelas,
+            icon: <GraduationCap className="w-7 h-7" />,
             path: '/guru_kelas/data_siswa',
-            linkLabel: 'Lihat detail',
-            activeNow: false,
-        },
-        {
-            label: 'Tahun Ajaran',
-            value: kelasInfo.tahun_ajaran,
-            icon: <Calendar size={18} />,
-            path: null,
-            linkLabel: null,
-            activeNow: true,
+            gradient: 'linear-gradient(135deg, #e8690a 0%, #f5870a 100%)',
+            lightBg: '#fff5eb',
+            desc: 'Kelas yang diampu'
         },
         {
             label: 'Mata Pelajaran',
-            value: stats.totalMapel,
-            icon: <BookOpen size={18} />,
+            value: dashboard.total_mapel,
+            icon: <BookOpen className="w-7 h-7" />,
             path: '/guru_kelas/input_nilai',
-            linkLabel: 'Input nilai',
-            activeNow: false,
+            gradient: 'linear-gradient(135deg, #f5870a 0%, #f5a623 100%)',
+            lightBg: '#fffaf0',
+            desc: 'Mapel yang diajar'
+        },
+        {
+            label: 'Progress',
+            value: `${dashboard.overall_progress}%`,
+            icon: <Target className="w-7 h-7" />,
+            path: '/guru_kelas/input_nilai',
+            gradient: 'linear-gradient(135deg, #f5a623 0%, #f97316 100%)',
+            lightBg: '#fffbf0',
+            desc: 'Penilaian selesai'
         },
     ];
 
     const statusItems = [
         { label: 'Selesai', value: stats.selesai, bg: '#dcfce7', color: '#15803d', border: '#86efac', Icon: CheckCircle2 },
-        { label: 'Sedang berjalan', value: stats.sedangBerjalan, bg: '#fff7ed', color: '#c2410c', border: '#fdba74', Icon: Clock },
+        { label: 'Sedang berjalan', value: stats.sedangBerjalan, bg: '#fff7ed', color: '#c2410c', border: '#fdba74', Icon: CalendarDays },
         { label: 'Belum dimulai', value: stats.belumMulai, bg: '#fef2f2', color: '#dc2626', border: '#fca5a5', Icon: AlertCircle },
     ];
 
-    // ── Render ─────────────────────────────────────────────────────────────────
-
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-6" style={{ background: '#fdf6f0' }}>
             <GlobalStyles />
+
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* ── Banner ── */}
-            <div className="mb-6 rounded-2xl overflow-hidden" style={{ border: '1px solid #fde0c8', boxShadow: '0 4px 20px rgba(200,80,10,0.12)' }}>
-                <div className="relative px-7 py-7 overflow-hidden" style={HEADER_GRAD}>
-                    <GraduationCap
-                        className="absolute -right-4 -bottom-5 w-44 h-44 opacity-10 -rotate-6"
-                        style={{ color: '#fff' }}
-                        strokeWidth={0.8}
-                    />
+            {/* ✅ BANNER: Periode Belum Aktif / Sudah Selesai */}
+            {(isPeriodNotActive || isPeriodLocked) && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl db-fadeUp"
+                    style={{
+                        background: isPeriodLocked ? '#fef2f2' : '#fef3c7',
+                        border: `1px solid ${isPeriodLocked ? '#fca5a5' : '#fcd34d'}`
+                    }}>
+                    <AlertTriangle className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isPeriodLocked ? 'text-red-600' : 'text-yellow-600'}`} />
+                    <div className="flex-1">
+                        <p className={`text-sm font-bold mb-1 ${isPeriodLocked ? 'text-red-900' : 'text-yellow-900'}`}>
+                            {isPeriodLocked ? '🔒 Periode Penilaian Selesai' : '⏳ Periode Penilaian Belum Aktif'}
+                        </p>
+                        <p className={`text-xs ${isPeriodLocked ? 'text-red-800' : 'text-yellow-800'}`}>
+                            {isPeriodLocked
+                                ? 'Baik PTS maupun PAS telah selesai. Data sudah dikunci dan tidak dapat diubah.'
+                                : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data, tetapi belum dapat menginput nilai.'}
+                        </p>
+                    </div>
+                </div>
+            )}
 
-                    <div className="relative z-10 flex items-center justify-between">
-                        <div>
-                            <span className="inline-flex items-center gap-1.5 text-white text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-3"
-                                style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}>
-                                <Award size={12} />
-                                Panel Wali Kelas
-                            </span>
-                            <h2 className="text-white text-[22px] font-bold mb-1.5">
-                                Selamat Datang, {user.nama_lengkap || 'Guru'} 👋
-                            </h2>
-                            <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.90)' }}>
-                                Kelola siswa dan penilaian kelas{' '}
-                                <strong className="text-white font-bold">{kelasInfo.kelas}</strong>
-                                {' '}— T.A {kelasInfo.tahun_ajaran} Semester {kelasInfo.semester}
-                            </p>
-                        </div>
+            {/* ═══════════════════════════════════════════════════════════════════
+                WELCOME BANNER - ✅ TANPA INFO TA AKTIF
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="mb-8 db-fadeUp">
+                <div className="flex items-center gap-3 mb-1">
+                    <Sparkles className="w-5 h-5" style={{ color: '#e8690a' }} />
+                    <p className="text-sm font-bold uppercase tracking-wider" style={{ color: '#c95b08' }}>
+                        Dashboard Guru Kelas
+                    </p>
+                </div>
+                <h1 className="text-3xl font-black text-gray-900">
+                    Selamat Datang, {user.nama_lengkap || 'Guru'} 👋
+                </h1>
+            </div>
 
-                        <div className="relative z-10 flex-shrink-0">
-                            <div className="rounded-2xl px-6 py-4 text-center"
-                                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)' }}>
-                                <div className="text-3xl font-bold text-white leading-none">{stats.overallPct}%</div>
-                                <div className="text-[11px] mt-1.5 font-medium" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                                    Penilaian selesai
+            {/* ═══════════════════════════════════════════════════════════════════
+                STAT CARDS
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {statCards.map((card, index) => (
+                    <Card
+                        key={card.label}
+                        className="hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 cursor-pointer group overflow-hidden db-fadeUp"
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                    >
+                        <div
+                            className="p-6 h-full relative"
+                            onClick={() => router.push(card.path)}
+                        >
+                            <div
+                                className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 group-hover:opacity-20 transition-all duration-500 group-hover:scale-150"
+                                style={{ background: card.gradient }}
+                            />
+
+                            <div className="relative z-10">
+                                <div
+                                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-6"
+                                    style={{
+                                        background: card.gradient,
+                                        boxShadow: '0 8px 20px rgba(232,105,10,0.3)',
+                                    }}
+                                >
+                                    {card.icon}
+                                </div>
+
+                                <p className="text-5xl font-black mb-2" style={{ color: '#c95b08' }}>
+                                    {card.value}
+                                </p>
+
+                                <p className="text-base font-bold text-gray-800 mb-1">{card.label}</p>
+                                <p className="text-xs text-gray-500">{card.desc}</p>
+
+                                <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTop: '1px solid #fde0c8' }}>
+                                    <span className="text-xs font-bold" style={{ color: '#c95b08' }}>
+                                        Lihat Detail
+                                    </span>
+                                    <div
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:translate-x-2"
+                                        style={{ background: card.lightBg }}
+                                    >
+                                        <ArrowRight className="w-4 h-4" style={{ color: '#c95b08' }} />
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Stat cards ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {statCards.map((card) => (
-                    <div
-                        key={card.label}
-                        className="bg-white rounded-2xl p-5 flex flex-col transition-all duration-200 hover:shadow-lg cursor-pointer"
-                        style={CARD_STYLE}
-                        onClick={() => card.path && router.push(card.path)}
-                    >
-                        {/* Icon */}
-                        <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
-                            style={{ background: '#fff7ed', color: '#c2410c' }}>
-                            {card.icon}
-                        </div>
-
-                        {/* Value */}
-                        <div className="font-bold text-gray-900 mb-1 truncate"
-                            style={{ fontSize: typeof card.value === 'string' && card.value.length > 5 ? '18px' : '26px' }}>
-                            {card.value}
-                        </div>
-
-                        {/* Label */}
-                        <div className="text-[12px] text-gray-500 mb-4 font-medium">{card.label}</div>
-
-                        {/* Footer */}
-                        <div className="border-t pt-3 mt-auto" style={{ borderColor: '#fde0c8' }}>
-                            {card.activeNow ? (
-                                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-green-600">
-                                    <span className="relative flex h-2 w-2">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                    </span>
-                                    Aktif sekarang
-                                </span>
-                            ) : card.path && card.linkLabel ? (
-                                <span className="flex items-center gap-0.5 text-[12px] font-bold transition-all"
-                                    style={{ color: '#c2410c' }}>
-                                    {card.linkLabel}
-                                    <ChevronRight size={13} />
-                                </span>
-                            ) : null}
-                        </div>
-                    </div>
+                    </Card>
                 ))}
             </div>
 
-            {/* ── Bottom section ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-                {/* Ringkasan */}
-                <div className="bg-white rounded-2xl p-6 transition-all duration-200 hover:shadow-lg" style={CARD_STYLE}>
-                    <div className="flex items-center gap-2.5 pb-4 mb-5 border-b" style={{ borderColor: '#fde0c8' }}>
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fff7ed' }}>
-                            <PieChart size={18} style={{ color: '#c2410c' }} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-bold text-gray-800">Ringkasan Penilaian</p>
-                            <p className="text-xs text-gray-500">
-                                Semester {kelasInfo.semester} · {kelasInfo.tahun_ajaran}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Ring */}
-                    <div className="flex flex-col items-center py-4 pb-6">
-                        <div className="relative w-36 h-36">
-                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                                <circle cx="18" cy="18" r="14"
-                                    fill="none" stroke="#fed7aa" strokeWidth="3.5" />
-                                <circle cx="18" cy="18" r="14"
-                                    fill="none"
-                                    stroke="#e8690a"
-                                    strokeWidth="3.5"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${stats.filled} ${stats.empty}`}
-                                    style={{ transition: 'stroke-dasharray 1s ease' }}
-                                />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-3xl font-bold text-gray-900 leading-none">{stats.overallPct}%</span>
-                                <span className="text-[11px] text-gray-500 mt-1.5 font-medium">selesai</span>
-                            </div>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-3 font-medium">
-                            <span className="font-bold" style={{ color: '#c2410c' }}>{stats.selesai}</span>
-                            {' '}dari <span className="font-bold">{stats.totalMapel}</span> mata pelajaran
-                        </p>
-                    </div>
-
-                    {/* Status list */}
-                    <div className="flex flex-col gap-2.5">
-                        {statusItems.map((s) => (
-                            <div
-                                key={s.label}
-                                className="flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200"
-                                style={{ background: s.bg, border: `1px solid ${s.border}` }}
-                            >
-                                <div className="flex items-center gap-2.5 text-xs font-bold" style={{ color: s.color }}>
-                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                                        style={{ background: `${s.color}15` }}>
-                                        <s.Icon size={14} />
-                                    </div>
-                                    {s.label}
-                                </div>
-                                <span className="text-base font-bold tabular-nums" style={{ color: s.color }}>
-                                    {s.value}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Tabel progress */}
-                <div className="lg:col-span-2 bg-white rounded-2xl p-6 transition-all duration-200 hover:shadow-lg" style={CARD_STYLE}>
-                    <div className="flex items-center justify-between pb-4 mb-4 border-b" style={{ borderColor: '#fde0c8' }}>
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fff7ed' }}>
-                                <ClipboardList size={18} style={{ color: '#c2410c' }} />
+            {/* ═══════════════════════════════════════════════════════════════════
+                PROGRESS PENILAIAN PER MAPEL
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="mb-6 db-fadeUp" style={{ animationDelay: '0.4s' }}>
+                <Card className="overflow-hidden">
+                    <div
+                        className="px-6 py-5 flex items-center justify-between"
+                        style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)' }}
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                <TrendingUp className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-gray-800">Progress Per Mata Pelajaran</p>
-                                <p className="text-xs text-gray-500">Status pengisian nilai siswa</p>
+                                <h3 className="text-lg font-bold text-white">Progress Penilaian per Mata Pelajaran</h3>
+                                <p className="text-xs text-white/80 mt-0.5">
+                                    Status input nilai siswa di setiap mata pelajaran
+                                </p>
                             </div>
                         </div>
                         <button
                             onClick={() => router.push('/guru_kelas/input_nilai')}
-                            className={btnPrimary.base}
-                            style={btnPrimary.style}
-                            onMouseEnter={btnPrimary.hover}
-                            onMouseLeave={btnPrimary.leave}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all backdrop-blur-sm"
+                            style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
                         >
-                            Input Nilai <ChevronRight size={12} />
+                            Input Nilai <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
 
-                    {progress.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-14 gap-3">
-                            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: '#fff7ed' }}>
-                                <ClipboardList size={32} style={{ color: '#c2410c' }} />
+                    <div className="p-6">
+                        {dashboard.progress_list.length === 0 ? (
+                            <div className="text-center py-20">
+                                <div
+                                    className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5"
+                                    style={{ background: '#fff0e5' }}
+                                >
+                                    <ClipboardList className="w-12 h-12" style={{ color: '#e8690a' }} />
+                                </div>
+                                <p className="text-lg font-bold text-gray-800 mb-2">
+                                    Belum Ada Mata Pelajaran
+                                </p>
+                                <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                                    Hubungi administrator untuk penugasan mata pelajaran
+                                </p>
                             </div>
-                            <p className="text-sm font-bold text-gray-700">Belum Ada Data Penilaian</p>
-                            <p className="text-xs text-gray-500 text-center max-w-xs">
-                                Data progress akan muncul setelah mata pelajaran tersedia untuk penilaian.
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="p-4 rounded-2xl" style={{ background: '#fff0e5', border: '2px solid #fde0c8' }}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <BookOpen className="w-5 h-5" style={{ color: '#c95b08' }} />
+                                            <p className="text-xs font-bold uppercase" style={{ color: '#c95b08' }}>Total Mapel</p>
+                                        </div>
+                                        <p className="text-3xl font-black" style={{ color: '#7a3a0a' }}>{dashboard.total_mapel}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl" style={{ background: '#fff5eb', border: '2px solid #fde0c8' }}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Users className="w-5 h-5" style={{ color: '#e8690a' }} />
+                                            <p className="text-xs font-bold uppercase" style={{ color: '#e8690a' }}>Total Siswa</p>
+                                        </div>
+                                        <p className="text-3xl font-black" style={{ color: '#7a3a0a' }}>{dashboard.total_siswa}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl" style={{ background: '#fffaf0', border: '2px solid #fde0c8' }}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Target className="w-5 h-5" style={{ color: '#f5870a' }} />
+                                            <p className="text-xs font-bold uppercase" style={{ color: '#f5870a' }}>Progress</p>
+                                        </div>
+                                        <p className="text-3xl font-black" style={{ color: '#7a3a0a' }}>{dashboard.overall_progress}%</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {dashboard.progress_list.map((mapel, index) => (
+                                        <MapelProgressCard
+                                            key={mapel.kode_mapel}
+                                            mapel={mapel}
+                                            index={index}
+                                            onClick={() => router.push('/guru_kelas/input_nilai')}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Card>
+            </div>
+
+            {/* ═══════════════════════════════════════════════════════════════════
+                BOTTOM SECTION
+            ═══════════════════════════════════════════════════════════════════ */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Ringkasan Penilaian - ✅ TANPA INFO TA */}
+                <Card>
+                    <div className="p-5">
+                        <div className="flex items-center gap-2 mb-4 pb-3" style={{ borderBottom: '1px solid #fde0c8' }}>
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fff7ed' }}>
+                                <TrendingUp size={18} style={{ color: '#c2410c' }} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-gray-800">Ringkasan Penilaian</p>
+                                <p className="text-xs text-gray-500">Status penilaian siswa</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col items-center py-4 pb-6">
+                            <div className="relative w-36 h-36">
+                                <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                                    <circle cx="18" cy="18" r="14"
+                                        fill="none" stroke="#fed7aa" strokeWidth="3.5" />
+                                    <circle cx="18" cy="18" r="14"
+                                        fill="none"
+                                        stroke="#e8690a"
+                                        strokeWidth="3.5"
+                                        strokeLinecap="round"
+                                        strokeDasharray={`${stats.filled} ${stats.empty}`}
+                                        style={{ transition: 'stroke-dasharray 1s ease' }}
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className="text-3xl font-bold text-gray-900 leading-none">{stats.overallPct}%</span>
+                                    <span className="text-[11px] text-gray-500 mt-1.5 font-medium">selesai</span>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-3 font-medium">
+                                <span className="font-bold" style={{ color: '#c2410c' }}>{stats.selesai}</span>
+                                {' '}dari <span className="font-bold">{stats.totalMapel}</span> mata pelajaran
                             </p>
                         </div>
-                    ) : (
-                        <>
-                            <div className="hidden sm:grid grid-cols-[1fr_200px_110px] gap-3 px-3 pb-3 border-b mb-2" style={{ borderColor: '#fde0c8' }}>
-                                {['Mata Pelajaran', 'Progress', 'Status'].map((h, i) => (
-                                    <span
-                                        key={h}
-                                        className="text-[11px] font-bold uppercase tracking-wider text-gray-500"
-                                        style={{ textAlign: i === 2 ? 'right' : 'left' }}
-                                    >
-                                        {h}
-                                    </span>
-                                ))}
-                            </div>
 
-                            <div className="max-h-[360px] overflow-y-auto">
-                                {progress.map((item, i) => (
-                                    <div
-                                        key={i}
-                                        className="flex flex-col gap-2.5 sm:grid sm:grid-cols-[1fr_200px_110px] sm:items-center sm:gap-3 py-3.5 px-3 rounded-xl transition-all duration-200 hover:bg-orange-50/50"
-                                        style={{ borderBottom: i !== progress.length - 1 ? '1px solid #fde0c8' : 'none' }}
-                                    >
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                            <span className="text-[10px] font-bold px-2 py-1 rounded-md flex-shrink-0"
-                                                style={{ background: '#fff7ed', color: '#c2410c', border: '1px solid #fde0c8' }}>
-                                                {item.kode_mapel}
-                                            </span>
-                                            <span className="text-[13px] font-semibold text-gray-800 truncate">
-                                                {item.mata_pelajaran}
-                                            </span>
-                                            {item.jenis === 'pilihan' && (
-                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0">
-                                                    PILIHAN
-                                                </span>
-                                            )}
+                        <div className="flex flex-col gap-2.5">
+                            {statusItems.map((s) => (
+                                <div
+                                    key={s.label}
+                                    className="flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200"
+                                    style={{ background: s.bg, border: `1px solid ${s.border}` }}
+                                >
+                                    <div className="flex items-center gap-2.5 text-xs font-bold" style={{ color: s.color }}>
+                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                                            style={{ background: `${s.color}15` }}>
+                                            <s.Icon size={14} />
                                         </div>
-
-                                        <ProgressBar value={item.sudah_dinilai} total={item.total_siswa} />
-
-                                        <div className="flex justify-start sm:justify-end">
-                                            <StatusBadge done={item.sudah_dinilai} total={item.total_siswa} />
-                                        </div>
+                                        {s.label}
                                     </div>
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </div>
+                                    <span className="text-base font-bold tabular-nums" style={{ color: s.color }}>
+                                        {s.value}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </Card>
 
+                {/* Jadwal Penting */}
+                <Card>
+                    <div className="p-5">
+                        <div className="flex items-center gap-2 mb-4 pb-3" style={{ borderBottom: '1px solid #fde0c8' }}>
+                            <CalendarDays size={16} style={{ color: '#e8690a' }} />
+                            <p className="text-sm font-bold text-gray-800">Jadwal Penting</p>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between px-4 py-3 rounded-xl"
+                                style={{
+                                    background: dashboard.status_pts === 'aktif' ? '#fff0e5' : dashboard.status_pts === 'selesai' ? '#f9fafb' : '#fef3c7',
+                                    border: `2px solid ${dashboard.status_pts === 'aktif' ? '#fde0c8' : dashboard.status_pts === 'selesai' ? '#e5e7eb' : '#fcd34d'}`
+                                }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                        style={{
+                                            background: dashboard.status_pts === 'aktif'
+                                                ? 'linear-gradient(135deg,#c95b08,#e8690a)'
+                                                : dashboard.status_pts === 'selesai' ? '#e5e7eb' : '#fef3c7'
+                                        }}>
+                                        <Award size={18} className={dashboard.status_pts === 'aktif' ? 'text-white' : dashboard.status_pts === 'selesai' ? 'text-gray-400' : 'text-yellow-600'} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800">PTS</p>
+                                        <p className="text-xs text-gray-500">
+                                            {dashboard.status_pts === 'aktif' ? '● Aktif' : dashboard.status_pts === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-sm font-semibold" style={{ color: '#c95b08' }}>
+                                    Penilaian Tengah Semester
+                                </span>
+                            </div>
+
+                            <div className="flex items-center justify-between px-4 py-3 rounded-xl"
+                                style={{
+                                    background: dashboard.status_pas === 'aktif' ? '#fff0e5' : dashboard.status_pas === 'selesai' ? '#f9fafb' : '#fef3c7',
+                                    border: `2px solid ${dashboard.status_pas === 'aktif' ? '#fde0c8' : dashboard.status_pas === 'selesai' ? '#e5e7eb' : '#fcd34d'}`
+                                }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                        style={{
+                                            background: dashboard.status_pas === 'aktif'
+                                                ? 'linear-gradient(135deg,#c95b08,#e8690a)'
+                                                : dashboard.status_pas === 'selesai' ? '#e5e7eb' : '#fef3c7'
+                                        }}>
+                                        <Award size={18} className={dashboard.status_pas === 'aktif' ? 'text-white' : dashboard.status_pas === 'selesai' ? 'text-gray-400' : 'text-yellow-600'} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800">PAS</p>
+                                        <p className="text-xs text-gray-500">
+                                            {dashboard.status_pas === 'aktif' ? '● Aktif' : dashboard.status_pas === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-sm font-semibold" style={{ color: '#c95b08' }}>
+                                    Penilaian Akhir Semester
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                            <p className="text-xs font-bold text-gray-600 mb-3">Aksi Cepat</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => router.push('/guru_kelas/input_nilai')}
+                                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all"
+                                    style={{
+                                        background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                        color: 'white',
+                                        boxShadow: '0 2px 8px rgba(232,105,10,0.3)'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                                >
+                                    <BookOpen size={14} /> Input Nilai
+                                </button>
+                                <button
+                                    onClick={() => router.push('/guru_kelas/rekapan_nilai')}
+                                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all"
+                                    style={{
+                                        background: '#fff0e5',
+                                        color: '#c2410c',
+                                        border: '1px solid #fde0c8'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                >
+                                    <TrendingUp size={14} /> Rekapan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
             </div>
+
+            {showPeriodModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 db-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowPeriodModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 db-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <AlertTriangle size={24} className="text-orange-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">
+                                    {isPeriodLocked ? '🔒 Periode Penilaian Selesai' : '⏳ Periode Penilaian Belum Aktif'}
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 text-sm text-gray-600 mb-6">
+                            <p>
+                                {isPeriodLocked
+                                    ? 'Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah.'
+                                    : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data dashboard, tetapi belum dapat menginput nilai siswa.'}
+                            </p>
+                            {isPeriodNotActive && (
+                                <p className="text-xs" style={{ color: '#c95b08' }}>
+                                    💡 <strong>Tip:</strong> Silakan hubungi Administrator untuk membuka periode penilaian.
+                                </p>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => setShowPeriodModal(false)}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
+                            }}
+                        >
+                            Ok
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
