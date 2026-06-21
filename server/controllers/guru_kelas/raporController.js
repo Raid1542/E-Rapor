@@ -27,7 +27,6 @@ exports.generateRaporPDF = async (req, res) => {
 
         // Ambil ID dari middleware
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
-        // Gunakan ID Semester dari params (jika ada) atau dari middleware (aktif)
         const semesterId = tahunAjaranId || req.idSemesterAktif;
         const { semester: activeSemester, status_pts, status_pas } = req.penilaianContext || {};
 
@@ -59,14 +58,16 @@ exports.generateRaporPDF = async (req, res) => {
             });
         }
 
-        // Ambil data tahun ajaran dari DB
+        // ── Ambil data tahun ajaran dari DB ─────────────────────────────────
         let id_tahun_ajaran, tahun_ajaran, semester_db, tanggal_pembagian_pts, tanggal_pembagian_pas;
 
         if (tahunAjaranId) {
             const [taRows] = await db.execute(
-                `SELECT id_tahun_ajaran, tahun_ajaran, semester AS semester_db, 
-                        tanggal_pembagian_pts, tanggal_pembagian_pas
-                 FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+                `SELECT ta.id_tahun_ajaran, tai.tahun_ajaran, ta.semester AS semester_db, 
+                        ta.tanggal_pembagian_pts, ta.tanggal_pembagian_pas
+                 FROM tahun_ajaran ta
+                 JOIN tahun_ajaran_induk tai ON ta.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk
+                 WHERE ta.id_tahun_ajaran = ?`,
                 [tahunAjaranId]
             );
 
@@ -86,11 +87,11 @@ exports.generateRaporPDF = async (req, res) => {
         } else {
             const [taAktifRows] = await db.execute(
                 `SELECT ta.id_tahun_ajaran, tai.tahun_ajaran, ta.semester,
-                ta.tanggal_pembagian_pts, ta.tanggal_pembagian_pas,
-                ta.status_pts, ta.status_pas
-         FROM tahun_ajaran ta
-         JOIN tahun_ajaran_induk tai ON ta.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk
-         WHERE ta.id_tahun_ajaran = ?`,
+                        ta.tanggal_pembagian_pts, ta.tanggal_pembagian_pas,
+                        ta.status_pts, ta.status_pas
+                 FROM tahun_ajaran ta
+                 JOIN tahun_ajaran_induk tai ON ta.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk
+                 WHERE ta.id_tahun_ajaran = ?`,
                 [semesterId]
             );
 
@@ -103,7 +104,7 @@ exports.generateRaporPDF = async (req, res) => {
 
             const taAktif = taAktifRows[0];
             id_tahun_ajaran = taAktif.id_tahun_ajaran;
-            tahun_ajaran = taAktif.tahun_ajaran;           // ✅ Dapat "2035/2036"
+            tahun_ajaran = taAktif.tahun_ajaran;
             semester_db = taAktif.semester;
             tanggal_pembagian_pts = taAktif.tanggal_pembagian_pts;
             tanggal_pembagian_pas = taAktif.tanggal_pembagian_pas;
@@ -127,7 +128,7 @@ exports.generateRaporPDF = async (req, res) => {
             }
         }
 
-        if (id_tahun_ajaran === null) {
+        if (!id_tahun_ajaran) {
             return res.status(500).json({
                 success: false,
                 message: 'ID tahun ajaran tidak valid'
@@ -136,9 +137,9 @@ exports.generateRaporPDF = async (req, res) => {
 
         // Validasi kesesuaian semester
         const rawDbSem = (semester_db || '').trim();
-        let normalizedDbSem = rawDbSem.toLowerCase() === 'ganjil' ? 'Ganjil'
+        const normalizedDbSem = rawDbSem.toLowerCase() === 'ganjil' ? 'Ganjil'
             : rawDbSem.toLowerCase() === 'genap' ? 'Genap'
-                : rawDbSem;
+            : rawDbSem;
 
         if (semesterNorm !== normalizedDbSem) {
             return res.status(400).json({
@@ -147,53 +148,41 @@ exports.generateRaporPDF = async (req, res) => {
             });
         }
 
-        // QUERY JADWAL & VALIDASI KELAS (PAKAI ID INDUK)
+        // ── Validasi Kelas ───────────────────────────────────────────────────
         let kelasRows = [];
-        if (req.user.role === 'admin') {
-            [kelasRows] = await db.execute(
-                `SELECT k.id_kelas, k.nama_kelas 
-                FROM guru_kelas gk 
-                JOIN kelas k ON gk.kelas_id = k.id_kelas 
-                JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id
-                WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ? 
-                AND sk.siswa_id = ? AND sk.id_tahun_ajaran_induk = ?`,
-                [userId, semesterId, siswaId, tahunAjaranIndukId]
-            );
-        } else {
-            [kelasRows] = await db.execute(
-                `SELECT k.id_kelas, k.nama_kelas 
-            FROM guru_kelas gk 
-            JOIN kelas k ON gk.kelas_id = k.id_kelas 
-            JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id
-            WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ? 
-            AND sk.siswa_id = ? AND sk.id_tahun_ajaran_induk = ?`,
-                [userId, semesterId, siswaId, tahunAjaranIndukId]
-            );
-        }
+        [kelasRows] = await db.execute(
+            `SELECT k.id_kelas, k.nama_kelas 
+             FROM guru_kelas gk 
+             JOIN kelas k ON gk.kelas_id = k.id_kelas 
+             JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id
+             WHERE gk.tahun_ajaran_id = ? 
+             AND sk.siswa_id = ? AND sk.id_tahun_ajaran_induk = ?`,
+            [semesterId, siswaId, tahunAjaranIndukId]
+        );
 
         if (kelasRows.length === 0) {
             return res.status(403).json({
                 success: false,
-                message: req.user.role === 'admin' ? 'Siswa tidak ditemukan' : 'Siswa tidak di kelas Anda'
+                message: 'Siswa tidak ditemukan di kelas manapun'
             });
         }
 
-        const kelasRow = kelasRows[0];
-        const kelas_id = kelasRow.id_kelas ?? null;
-        const nama_kelas = kelasRow.nama_kelas ?? 'Kelas Tidak Diketahui';
+        const kelas_id = kelasRows[0].id_kelas ?? null;
+        const nama_kelas = kelasRows[0].nama_kelas ?? 'Kelas Tidak Diketahui';
 
-        if (kelas_id === null) {
+        if (!kelas_id) {
             return res.status(500).json({
                 success: false,
                 message: 'ID kelas tidak valid'
             });
         }
 
+        // ── Data Siswa ───────────────────────────────────────────────────────
         const [siswaRows] = await db.execute(
             `SELECT s.nama_lengkap, s.nis, s.nisn 
-            FROM siswa s 
-            JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-            WHERE s.id_siswa = ? AND sk.id_tahun_ajaran_induk = ?`,
+             FROM siswa s 
+             JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+             WHERE s.id_siswa = ? AND sk.id_tahun_ajaran_induk = ?`,
             [siswaId, tahunAjaranIndukId]
         );
 
@@ -204,38 +193,30 @@ exports.generateRaporPDF = async (req, res) => {
             });
         }
 
-        const siswa = siswaRows[0];
-        const nama_lengkap = siswa.nama_lengkap ?? 'Nama Siswa';
-        const nis = siswa.nis ?? 'NIS';
-        const nisn = siswa.nisn ?? '–';
+        const nama_lengkap = siswaRows[0].nama_lengkap ?? 'Nama Siswa';
+        const nis = siswaRows[0].nis ?? 'NIS';
+        const nisn = siswaRows[0].nisn ?? '–';
 
+        // ── Fase Kelas ───────────────────────────────────────────────────────
         const [faseRows] = await db.execute(
-            `SELECT fase FROM kelas WHERE nama_kelas = ?`,
-            [nama_kelas]
+            `SELECT fase FROM kelas WHERE id_kelas = ?`,
+            [kelas_id]
         );
         const fase = faseRows[0]?.fase || '–';
 
-        // Ambil nama guru kelas
+        // ── Nama Guru Kelas ──────────────────────────────────────────────────
         let namagurukelas = 'Nama Guru Kelas';
-        if (req.user.role === 'admin') {
-            const [guruRows] = await db.execute(
-                `SELECT u.nama_lengkap 
-                 FROM user u 
-                 JOIN guru_kelas gk ON u.id_user = gk.user_id 
-                 WHERE gk.kelas_id = ? AND gk.tahun_ajaran_id = ? 
-                 LIMIT 1`,
-                [kelas_id, tahunAjaranIndukId]
-            );
-            namagurukelas = guruRows[0]?.nama_lengkap || 'Nama Guru Kelas';
-        } else {
-            const [guruRows] = await db.execute(
-                `SELECT u.nama_lengkap FROM user u WHERE u.id_user = ?`,
-                [userId]
-            );
-            namagurukelas = guruRows[0]?.nama_lengkap || 'Nama Guru Kelas';
-        }
+        const [guruRows] = await db.execute(
+            `SELECT u.nama_lengkap 
+             FROM user u 
+             JOIN guru_kelas gk ON u.id_user = gk.user_id 
+             WHERE gk.kelas_id = ? AND gk.tahun_ajaran_id = ? 
+             LIMIT 1`,
+            [kelas_id, semesterId]
+        );
+        namagurukelas = guruRows[0]?.nama_lengkap || 'Nama Guru Kelas';
 
-        // QUERY NILAI AKADEMIK (PAKAI ID SEMESTER)
+        // ── Nilai Akademik ───────────────────────────────────────────────────
         const [mapelRows] = await db.execute(`
             SELECT DISTINCT mp.id_mata_pelajaran, mp.kode_mapel, mp.nama_mapel, 
                    mp.urutan_rapor, mp.jenis
@@ -264,7 +245,7 @@ exports.generateRaporPDF = async (req, res) => {
             });
         });
 
-        // Isi nilai yang kosong dengan perhitungan dari nilai_detail
+        // Isi nilai kosong dari nilai_detail
         for (const mp of mapelRows) {
             const mapelId = mp.id_mata_pelajaran;
             if (!nilaiRaporMap.has(mapelId)) {
@@ -273,41 +254,27 @@ exports.generateRaporPDF = async (req, res) => {
                      WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
                     [siswaId, mapelId, semesterId]
                 );
-
                 const nilaiValid = detailRows
                     .map(r => r.nilai)
                     .filter(n => n != null && !isNaN(n) && n >= 0);
 
                 if (nilaiValid.length > 0) {
-                    const rataRata = Math.floor(
-                        nilaiValid.reduce((a, b) => a + b, 0) / nilaiValid.length
-                    );
                     nilaiRaporMap.set(mapelId, {
-                        nilai_rapor: rataRata,
+                        nilai_rapor: Math.floor(nilaiValid.reduce((a, b) => a + b, 0) / nilaiValid.length),
                         deskripsi: '–'
                     });
                 } else {
-                    nilaiRaporMap.set(mapelId, {
-                        nilai_rapor: '-',
-                        deskripsi: '-'
-                    });
+                    nilaiRaporMap.set(mapelId, { nilai_rapor: '-', deskripsi: '-' });
                 }
             }
         }
 
         const semuaMapel = mapelRows.map((mp, index) => {
-            const nilai = nilaiRaporMap.get(mp.id_mata_pelajaran) || {
-                nilai_rapor: '-',
-                deskripsi: '-'
-            };
-            const nilaiAkhir = typeof nilai.nilai_rapor === 'number'
-                ? Math.floor(nilai.nilai_rapor)
-                : nilai.nilai_rapor;
-
+            const nilai = nilaiRaporMap.get(mp.id_mata_pelajaran) || { nilai_rapor: '-', deskripsi: '-' };
             return {
                 no: index + 1,
                 nama_mapel: mp.nama_mapel || '–',
-                nilai_mapel: nilaiAkhir,
+                nilai_mapel: typeof nilai.nilai_rapor === 'number' ? Math.floor(nilai.nilai_rapor) : nilai.nilai_rapor,
                 deskripsi_mapel: nilai.deskripsi || '–'
             };
         });
@@ -315,177 +282,174 @@ exports.generateRaporPDF = async (req, res) => {
         const daftarMapel1 = semuaMapel.slice(0, 7);
         const daftarMapel2 = semuaMapel.slice(7);
 
-        const nilaiList = semuaMapel
-            .map(m => m.nilai_mapel)
-            .filter(v => typeof v === 'number' && v >= 0);
-
+        const nilaiList = semuaMapel.map(m => m.nilai_mapel).filter(v => typeof v === 'number' && v >= 0);
         const rataRata = nilaiList.length > 0
             ? parseFloat((nilaiList.reduce((a, b) => a + b, 0) / nilaiList.length).toFixed(2))
             : 0;
 
+        // ── Deskripsi Rata-rata ──────────────────────────────────────────────
+        // Pakai tabel kategori_deskripsi_rata_rata
         const [deskRata] = await db.execute(
-            `SELECT deskripsi FROM konfigurasi_nilai_rapor 
-             WHERE mapel_id IS NULL AND ? BETWEEN min_nilai AND max_nilai`,
-            [rataRata]
+            `SELECT deskripsi 
+             FROM kategori_deskripsi_rata_rata 
+             WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ?
+             AND ? BETWEEN rentang_min AND rentang_max
+             LIMIT 1`,
+            [kelas_id, semesterId, semesterNorm, rataRata]
         );
         const ckratarata = deskRata[0]?.deskripsi || '–';
 
-        // QUERY KOKURIKULER - hanya ambil nilai dari nilai_kokurikuler
-        const [kokur] = await db.execute(`
-    SELECT nk.nilai_mutabaah, nk.nilai_bpi, 
-           nk.nilai_literasi, nk.nilai_proyek,
-           jpt.judul AS nama_judul_proyek
-    FROM nilai_kokurikuler nk 
-    LEFT JOIN judul_proyek_per_tahun_ajaran jpt 
-        ON nk.id_judul_proyek = jpt.id_judul_proyek
-    WHERE nk.id_siswa = ? AND nk.id_tahun_ajaran = ? 
-    AND nk.semester = ? AND nk.jenis_penilaian = ?
-`, [siswaId, semesterId, semesterNorm, jenisNorm]);
+        // ── Kokurikuler ──────────────────────────────────────────────────────
+        // Struktur baru: per baris per aspek (id_aspek_kokurikuler)
+        // id_aspek: 1=Mutabaah, 2=Literasi, 3=BPI, 4=Proyek
+        const [kokurRows] = await db.execute(`
+            SELECT 
+                nk.id_aspek_kokurikuler,
+                nk.nilai,
+                nk.grade,
+                nk.deskripsi,
+                jpt.judul AS nama_judul_proyek
+            FROM nilai_kokurikuler nk
+            LEFT JOIN judul_proyek_per_tahun_ajaran jpt 
+                ON nk.id_judul_proyek = jpt.id_judul_proyek
+            WHERE nk.id_siswa = ? AND nk.id_tahun_ajaran = ? 
+            AND nk.semester = ? AND nk.jenis_penilaian = ?
+        `, [siswaId, semesterId, semesterNorm, jenisNorm]);
 
-        // Ambil konfigurasi grade dari kategori_grade_kokurikuler
-        const [gradeConfig] = await db.execute(`
-    SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
-    FROM kategori_grade_kokurikuler
-    WHERE tahun_ajaran_id = ? AND semester = ?
-    ORDER BY rentang_min DESC
-`, [semesterId, semesterNorm]);
-
-        // Helper: cari grade & deskripsi berdasarkan nilai dan id_aspek
-        const getGrade = (nilai, idAspek) => {
-            if (nilai == null) return { grade: '–', deskripsi: '–' };
-            const config = gradeConfig.find(c =>
-                c.id_aspek_kokurikuler === idAspek &&
-                nilai >= c.rentang_min &&
-                nilai <= c.rentang_max
-            );
+        const getAspek = (idAspek) => {
+            const row = kokurRows.find(r => r.id_aspek_kokurikuler === idAspek);
             return {
-                grade: config?.grade || '–',
-                deskripsi: config?.deskripsi || '–'
+                nilai: row?.nilai ?? 0,
+                grade: row?.grade || '–',
+                deskripsi: row?.deskripsi || '–',
+                namaJudulProyek: row?.nama_judul_proyek || '–'
             };
         };
 
-        // id_aspek: 1=Mutabaah, 2=Literasi, 3=BPI, 4=Proyek
-        const nk = kokur[0];
+        const aspekMutabaah = getAspek(5);
+        const aspekLiterasi = getAspek(2);
+        const aspekBPI      = getAspek(4);
+        const aspekProyek   = getAspek(3);
 
-        const my = nk?.nilai_mutabaah ?? 0;
-        const { grade: gmy, deskripsi: dmy } = getGrade(my, 1);
+        const my     = aspekMutabaah.nilai;
+        const gmy    = aspekMutabaah.grade;
+        const dmy    = aspekMutabaah.deskripsi;
 
-        const bpi = nk?.nilai_bpi ?? 0;
-        const { grade: gbpi, deskripsi: dbpi } = getGrade(bpi, 3);
+        const bpi    = aspekBPI.nilai;
+        const gbpi   = aspekBPI.grade;
+        const dbpi   = aspekBPI.deskripsi;
 
-        const li = nk?.nilai_literasi ?? 0;
-        const { grade: gli, deskripsi: dli } = getGrade(li, 2);
+        const li     = aspekLiterasi.nilai;
+        const gli    = aspekLiterasi.grade;
+        const dli    = aspekLiterasi.deskripsi;
 
-        const proyek = nk?.nilai_proyek ?? 0;
-        const { grade: gproyek, deskripsi: dproyek } = getGrade(proyek, 4);
+        const proyek  = aspekProyek.nilai;
+        const gproyek = aspekProyek.grade;
+        const dproyek = aspekProyek.deskripsi;
+        const namaproyek = aspekProyek.namaJudulProyek;
 
-        const namaproyek = nk?.nama_judul_proyek || '–';
-
-        // QUERY ABSENSI - sesuai struktur tabel baru (PTS vs Total)
+        // ── Absensi ──────────────────────────────────────────────────────────
+        // PTS: pakai sakit_pts/izin_pts/alpha_pts
+        // PAS: pakai sakit_total/izin_total/alpha_total (akumulasi 1 semester)
         const [abs] = await db.execute(
             `SELECT sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total 
-            FROM absensi 
-            WHERE siswa_id = ? AND id_tahun_ajaran = ?`,
+             FROM absensi 
+             WHERE siswa_id = ? AND id_tahun_ajaran = ?`,
             [siswaId, semesterId]
         );
 
         let s, i, a;
         if (jenisNorm === 'PTS') {
             s = abs[0]?.sakit_pts || 0;
-            i = abs[0]?.izin_pts || 0;
+            i = abs[0]?.izin_pts  || 0;
             a = abs[0]?.alpha_pts || 0;
         } else {
             s = abs[0]?.sakit_total || 0;
-            i = abs[0]?.izin_total || 0;
+            i = abs[0]?.izin_total  || 0;
             a = abs[0]?.alpha_total || 0;
         }
 
-        // QUERY EKSKUL (PAKAI ID SEMESTER)
+        // ── Ekstrakurikuler ──────────────────────────────────────────────────
         const [ekskulRows] = await db.execute(
             `SELECT e.nama_ekskul, pe.deskripsi 
-                FROM peserta_ekstrakurikuler pe 
-                JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
-                WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ? 
-                LIMIT 4`,
+             FROM peserta_ekstrakurikuler pe 
+             JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
+             WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ? 
+             LIMIT 4`,
             [siswaId, semesterId]
         );
 
-        const ekskul1 = ekskulRows[0]?.nama_ekskul || '–';
-        const dekskul1 = ekskulRows[0]?.deskripsi || '–';
-        const ekskul2 = ekskulRows[1]?.nama_ekskul || '–';
-        const dekskul2 = ekskulRows[1]?.deskripsi || '–';
-        const ekskul3 = ekskulRows[2]?.nama_ekskul || '–';
-        const dekskul3 = ekskulRows[2]?.deskripsi || '–';
-        const ekskul4 = ekskulRows[3]?.nama_ekskul || '–';
-        const dekskul4 = ekskulRows[3]?.deskripsi || '–';
+        const ekskul1  = ekskulRows[0]?.nama_ekskul || '–';
+        const dekskul1 = ekskulRows[0]?.deskripsi   || '–';
+        const ekskul2  = ekskulRows[1]?.nama_ekskul || '–';
+        const dekskul2 = ekskulRows[1]?.deskripsi   || '–';
+        const ekskul3  = ekskulRows[2]?.nama_ekskul || '–';
+        const dekskul3 = ekskulRows[2]?.deskripsi   || '–';
+        const ekskul4  = ekskulRows[3]?.nama_ekskul || '–';
+        const dekskul4 = ekskulRows[3]?.deskripsi   || '–';
 
-        // QUERY CATATAN WALI (PAKAI ID SEMESTER)
+        // ── Catatan Wali Kelas ───────────────────────────────────────────────
         const [catatan] = await db.execute(
             `SELECT catatan_wali_kelas 
-                FROM catatan_wali_kelas 
-                WHERE siswa_id = ? AND tahun_ajaran_id = ? 
-                AND semester = ? AND jenis_penilaian = ?`,
+             FROM catatan_wali_kelas 
+             WHERE siswa_id = ? AND tahun_ajaran_id = ? 
+             AND semester = ? AND jenis_penilaian = ?`,
             [siswaId, semesterId, semesterNorm, jenisNorm]
         );
         const cttwalikelas = catatan[0]?.catatan_wali_kelas || '–';
 
-        // Format tanggal
+        // ── Format Tanggal ───────────────────────────────────────────────────
         const formatTanggalIndonesia = (dateString) => {
             if (!dateString) return '';
-            const date = new Date(dateString);
             return new Intl.DateTimeFormat('id-ID', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            }).format(date);
+                day: 'numeric', month: 'long', year: 'numeric'
+            }).format(new Date(dateString));
         };
 
         const tanggalSah = jenisNorm === 'PTS'
             ? (tanggal_pembagian_pts ? formatTanggalIndonesia(tanggal_pembagian_pts) : formatTanggalIndonesia(new Date()))
             : (tanggal_pembagian_pas ? formatTanggalIndonesia(tanggal_pembagian_pas) : formatTanggalIndonesia(new Date()));
 
-        // Tentukan tingkat dan naik kelas
-        let tingkat = '–';
+        // ── Kenaikan Kelas (PAS Genap) ───────────────────────────────────────
+        let tingkat  = '–';
         let naikKelas = '–';
 
         if (jenisNorm === 'PAS' && semesterNorm === 'Genap') {
             const [naikRows] = await db.execute(
                 `SELECT naik_tingkat 
-                    FROM catatan_wali_kelas 
-                    WHERE siswa_id = ? AND tahun_ajaran_id = ? 
-                    AND semester = 'Genap' AND jenis_penilaian = 'PAS'`,
+                 FROM catatan_wali_kelas 
+                 WHERE siswa_id = ? AND tahun_ajaran_id = ? 
+                 AND semester = 'Genap' AND jenis_penilaian = 'PAS'`,
                 [siswaId, semesterId]
             );
 
             const statusNaik = naikRows[0]?.naik_tingkat;
-
             if (statusNaik === 'ya') {
                 const kelasAngka = parseInt(nama_kelas.match(/\d+/)?.[0] || '1');
                 const tingkatBerikutnya = kelasAngka + 1;
-                const romawi = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+                const romawi    = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
                 const terbilang = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam'];
-
-                tingkat = 'Naik';
+                tingkat   = 'Naik';
                 naikKelas = `${romawi[tingkatBerikutnya] || tingkatBerikutnya} (${terbilang[tingkatBerikutnya] || tingkatBerikutnya})`;
             } else if (statusNaik === 'tidak') {
-                tingkat = 'Tidak Naik';
+                tingkat   = 'Tidak Naik';
                 naikKelas = '–';
             } else {
-                tingkat = 'Belum ditentukan';
+                tingkat   = 'Belum ditentukan';
                 naikKelas = '–';
             }
         }
 
-        // Siapkan data untuk template
+        // ── Siapkan Data Template ────────────────────────────────────────────
         const data = {
             nama: nama_lengkap,
             kelas: nama_kelas,
-            nis: nis,
-            nisn: nisn,
-            fase: fase,
+            nis,
+            nisn,
+            fase,
             semester: semesterNorm === 'Ganjil' ? '1 (Ganjil)' : '2 (Genap)',
             ta: tahun_ajaran,
-            namagurukelas: namagurukelas,
+            namagurukelas,
             tanggalraporpts: tanggalSah,
             tanggalraporpas: tanggalSah,
             semuaMapel,
@@ -508,7 +472,7 @@ exports.generateRaporPDF = async (req, res) => {
             naikkelas: naikKelas,
         };
 
-        // Tentukan template file
+        // ── Pilih Template ───────────────────────────────────────────────────
         const templateFile = jenisNorm === 'PTS'
             ? (semesterNorm === 'Ganjil' ? 'template_pts_ganjil.docx' : 'template_pts_genap.docx')
             : (semesterNorm === 'Ganjil' ? 'template_pas_ganjil.docx' : 'template_pas_genap.docx');
@@ -522,7 +486,7 @@ exports.generateRaporPDF = async (req, res) => {
             });
         }
 
-        // Generate dokumen
+        // ── Generate DOCX ────────────────────────────────────────────────────
         const content = fs.readFileSync(templatePath, 'binary');
         const zip = new PizZip(content);
         const doc = new Docxtemplater(zip, {
@@ -539,8 +503,9 @@ exports.generateRaporPDF = async (req, res) => {
             compression: 'DEFLATE'
         });
 
+        // ── Nama File ────────────────────────────────────────────────────────
         const cleanNisn = (nisn || 'NISN').toString().replace(/[^0-9]/g, '');
-        const fileName = `rapor_${jenisNorm.toLowerCase()}_${semesterNorm.toLowerCase()}_${cleanNisn}.docx`;
+        const fileName  = `rapor_${jenisNorm.toLowerCase()}_${semesterNorm.toLowerCase()}_${cleanNisn}.docx`;
 
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

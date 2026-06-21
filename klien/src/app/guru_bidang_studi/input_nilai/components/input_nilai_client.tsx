@@ -3,9 +3,9 @@
  * Fungsi: Input nilai siswa per mata pelajaran untuk guru bidang studi
  * UPDATE: 
  *   - ✅ Tampilan konsisten dengan guru kelas
- *   - Banner Read Only dengan style sama
- *   - Info bar dengan badge status
- *   - Hapus modal period (redundant dengan banner)
+ *   - ✅ Fix z-index NotifModal (z-[200])
+ *   - ✅ Fix executeSimpanNilai (tutup modal edit sebelum show error)
+ *   - ✅ Layout toolbar responsive
  */
 
 'use client';
@@ -77,7 +77,7 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dg-fadeIn">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dg-scaleIn">
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -480,22 +480,32 @@ export default function InputNilaiGBSClient() {
             setSiswaList(prevList => prevList.map(siswa => siswa.id === editingSiswa.id ? updatedSiswa : siswa));
             setFilteredSiswa(prevList => prevList.map(siswa => siswa.id === editingSiswa.id ? updatedSiswa : siswa));
 
+            // ✅ Tutup semua modal dulu
             setShowConfirmModal(false);
             setEditingSiswa(null);
-            showModal({
-                type: 'success',
-                title: 'Nilai Disimpan!',
-                message: `Nilai ${editingSiswa.nama} berhasil disimpan.`
-            });
+
+            // ✅ Tambah delay agar animasi close modal selesai
+            setTimeout(() => {
+                showModal({
+                    type: 'success',
+                    title: 'Nilai Disimpan!',
+                    message: `Nilai ${editingSiswa.nama} berhasil disimpan.`
+                });
+            }, 250);
 
         } catch (err: any) {
+            // ✅ Tutup modal konfirmasi DAN modal edit
             setShowConfirmModal(false);
             setEditingSiswa(null);
-            showModal({
-                type: 'error',
-                title: 'Gagal Menyimpan',
-                message: err.message || 'Gagal menyimpan nilai.'
-            });
+
+            // ✅ Tambah delay agar animasi close modal selesai
+            setTimeout(() => {
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Menyimpan',
+                    message: err.message || 'Gagal menyimpan nilai.'
+                });
+            }, 250);
         } finally {
             setSaving(false);
         }
@@ -627,37 +637,35 @@ export default function InputNilaiGBSClient() {
             </div>
 
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Toolbar */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    {/* Row 1: Dropdown Mapel */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
-                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-                            Mata Pelajaran
-                        </label>
-                        <select
-                            value={selectedMapelId === null ? '' : String(selectedMapelId)}
-                            onChange={e => {
-                                const val = e.target.value;
-                                setSelectedMapelId(val ? Number(val) : null);
-                                setSelectedKelasId(null);
-                                setSearchQuery('');
-                            }}
-                            className={inputCls}
-                            style={{ maxWidth: '400px' }}
-                        >
-                            <option value="">-- Pilih Mata Pelajaran --</option>
-                            {mapelList.map(mapel => (
-                                <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
-                                    {mapel.nama_mapel}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                {/* Toolbar - Responsive Layout */}
+                <div className="px-5 py-4 space-y-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                    {/* Row 1: Dropdown Mapel & Kelas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                                Mata Pelajaran
+                            </label>
+                            <select
+                                value={selectedMapelId === null ? '' : String(selectedMapelId)}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setSelectedMapelId(val ? Number(val) : null);
+                                    setSelectedKelasId(null);
+                                    setSearchQuery('');
+                                }}
+                                className={inputCls}
+                            >
+                                <option value="">-- Pilih Mata Pelajaran --</option>
+                                {mapelList.map(mapel => (
+                                    <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
+                                        {mapel.nama_mapel}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                    {/* Row 2: Dropdown Kelas - SELALU DI BAWAH MAPEL */}
-                    {selectedMapelId && (
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
-                            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                        <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
                                 Kelas
                             </label>
                             <select
@@ -668,7 +676,7 @@ export default function InputNilaiGBSClient() {
                                     setSearchQuery('');
                                 }}
                                 className={inputCls}
-                                style={{ maxWidth: '200px' }}
+                                disabled={!selectedMapelId}
                             >
                                 <option value="">-- Pilih Kelas --</option>
                                 {kelasList.map(kelas => (
@@ -678,55 +686,65 @@ export default function InputNilaiGBSClient() {
                                 ))}
                             </select>
                         </div>
-                    )}
+                    </div>
 
-                    {/* Row 3: Search & Info - Muncul setelah pilih mapel & kelas */}
+                    {/* Row 2: Search, Badge, dan Items Per Page */}
                     {selectedMapelId && selectedKelasId && (
-                        <>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
-                                {/* Search */}
-                                <div className="relative w-full sm:w-auto sm:min-w-[220px]">
+                        <div className="pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
+                            <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between">
+                                {/* Search Bar */}
+                                <div className="relative w-full xl:w-96">
                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                         <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
                                     </div>
-                                    <input type="text" placeholder="Cari siswa..." value={searchQuery}
+                                    <input 
+                                        type="text" 
+                                        placeholder="Cari berdasarkan nama, NIS, atau NISN..." 
+                                        value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400" />
+                                        className="w-full border rounded-xl pl-10 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200 placeholder:text-gray-400" 
+                                    />
                                     {searchQuery && (
-                                        <button type="button" onClick={() => setSearchQuery('')}
-                                            className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setSearchQuery('')}
+                                            className="absolute inset-y-0 right-3 flex items-center justify-center w-6 h-6 rounded-full hover:bg-orange-100 transition-colors" 
+                                            style={{ color: '#c95b08' }}
+                                        >
                                             <X className="w-4 h-4" />
                                         </button>
                                     )}
                                 </div>
 
-                                {/* Info & Pagination */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
-                                        Kelas: <strong>{currentKelas?.nama_kelas}</strong>
-                                    </span>
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold"
+                                {/* Right Section: Badge + Items Per Page */}
+                                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap"
                                         style={{ background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }}>
-                                        <CheckCircle2 size={11} /> Dapat Input Nilai
+                                        <CheckCircle2 size={14} /> Dapat Input Nilai
                                     </span>
-                                    <div className="flex items-center gap-2 ml-auto sm:ml-0">
-                                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                        <select value={itemsPerPage}
+                                    
+                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-orange-200">
+                                        <span className="text-sm font-medium whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                                        <select 
+                                            value={itemsPerPage}
                                             onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                            className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200">
+                                            className="text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-400 bg-transparent"
+                                            style={{ color: '#c95b08', minWidth: '50px' }}
+                                        >
                                             <option value={10}>10</option>
                                             <option value={25}>25</option>
                                             <option value={50}>50</option>
                                         </select>
-                                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
+                                        <span className="text-sm font-medium whitespace-nowrap" style={{ color: '#7a3a0a' }}>data</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                                Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} siswa
+                            {/* Pagination Info */}
+                            <p className="text-xs mt-3 text-center xl:text-left" style={{ color: '#c95b08' }}>
+                                Menampilkan <strong>{filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)}</strong> dari <strong>{filteredSiswa.length}</strong> siswa
                             </p>
-                        </>
+                        </div>
                     )}
                 </div>
 
@@ -966,7 +984,7 @@ export default function InputNilaiGBSClient() {
                                         <div className="w-1 h-4 rounded-full" style={{ background: '#fbbf24' }}></div>
                                         <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7a3a0a' }}>Ulangan Harian</p>
                                     </div>
-                                    <div className="grid grid-cols-5 gap-3">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                         {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(k => {
                                             const nilai = selectedSiswa.nilai[k.id_komponen];
                                             return (
@@ -995,7 +1013,7 @@ export default function InputNilaiGBSClient() {
                                         <div className="w-1 h-4 rounded-full" style={{ background: '#e8690a' }}></div>
                                         <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7a3a0a' }}>Penilaian Tengah & Akhir Semester</p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(k => {
                                             const nilai = selectedSiswa.nilai[k.id_komponen];
                                             const isPTS = /PTS/i.test(k.nama_komponen);
@@ -1082,7 +1100,7 @@ export default function InputNilaiGBSClient() {
                                     <div className="w-1 h-5 rounded-full" style={{ background: '#fbbf24' }}></div>
                                     <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Ulangan Harian</h3>
                                 </div>
-                                <div className="grid grid-cols-5 gap-3">
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                     {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(komponen => {
                                         const isDisabled = jenisPenilaianAktif === 'PTS';
                                         const nilai = editingNilai[komponen.id_komponen];
@@ -1126,7 +1144,7 @@ export default function InputNilaiGBSClient() {
                                     <div className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></div>
                                     <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Penilaian Tengah & Akhir Semester</h3>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(komponen => {
                                         const isPTS = /PTS/i.test(komponen.nama_komponen);
                                         const isActive = (jenisPenilaianAktif === 'PTS' && isPTS) || (jenisPenilaianAktif === 'PAS' && !isPTS);

@@ -633,9 +633,13 @@ const adminOrGuruKelasDitugaskan = [
     authorize(['admin', 'guru kelas']),
     (req, res, next) => {
         if (req.user.role === 'admin') {
-            return cekPenilaianStatus(false)(req, res, next);
+            req.idTahunAjaranInduk = null;
+            req.idSemesterAktif = null;
+            req.penilaianContext = {};
+            return next();
         }
-        cekPenilaianStatus(true)(req, res, next);
+
+        cekPenilaianStatus(req, res, next); 
     },
     (req, res, next) => {
         if (req.user.role === 'admin') return next();

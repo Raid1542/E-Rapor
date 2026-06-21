@@ -6,6 +6,14 @@
  * - PTS Aktif: Hanya Mutaba'ah yang bisa diinput
  * - PAS Aktif: Semua aspek bisa diinput + Judul Proyek bisa diatur
  * - Belum Aktif: Tidak ada yang bisa diinput
+ * 
+ * VALIDASI:
+ * - Nilai 0-100 (real-time)
+ * - Nilai harus integer
+ * - Semua aspek wajib terisi
+ * - Judul proyek max 255 karakter
+ * - Session expired handling
+ * - Network timeout handling
  */
 
 'use client';
@@ -209,6 +217,13 @@ export default function KokurikulerClient() {
 
         const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
 
+        // ✅ Handle session expired
+        if (taRes.status === 401) {
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
+
         if (!taRes.ok) {
           const errData = await taRes.json().catch(() => ({ code: 'UNKNOWN' }));
           if (errData.code === 'NOT_ASSIGNED') {
@@ -301,6 +316,13 @@ export default function KokurikulerClient() {
         const headers = { Authorization: `Bearer ${token}` };
 
         const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler`, { headers });
+
+        // ✅ Handle session expired
+        if (res.status === 401) {
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({ message: 'Gagal memuat' }));
@@ -479,7 +501,31 @@ export default function KokurikulerClient() {
     }, 200);
   };
 
+  // ✅ PERBAIKAN: Validasi nilai real-time
   const handleNilaiChange = (aspekId: number, nilai: number | null) => {
+    // Validasi nilai
+    if (nilai !== null) {
+      // Validasi range 0-100
+      if (nilai < 0 || nilai > 100) {
+        showModal({
+          type: 'warning',
+          title: 'Nilai Tidak Valid',
+          message: 'Nilai harus antara 0 dan 100.'
+        });
+        return;
+      }
+      
+      // Validasi integer
+      if (!Number.isInteger(nilai)) {
+        showModal({
+          type: 'warning',
+          title: 'Nilai Tidak Valid',
+          message: 'Nilai harus bilangan bulat (integer).'
+        });
+        return;
+      }
+    }
+
     setEditingNilai(prev => {
       const { grade, deskripsi } = getGradeByNilai(nilai, aspekId);
       return {
@@ -493,8 +539,25 @@ export default function KokurikulerClient() {
     });
   };
 
+  // ✅ PERBAIKAN: Validasi semua aspek terisi
   const openConfirmSimpan = () => {
     if (!selectedSiswa) return;
+
+    // ✅ Validasi semua aspek yang bisa diedit sudah terisi
+    const aspekBelumTerisi = DAFTAR_ASPEK.filter(aspek => {
+      if (!canEditAspek(aspek.id)) return false; // Skip yang terkunci
+      const nilaiData = editingNilai[aspek.id];
+      return !nilaiData || nilaiData.nilai === null || nilaiData.nilai === undefined;
+    });
+
+    if (aspekBelumTerisi.length > 0) {
+      showModal({
+        type: 'warning',
+        title: 'Nilai Belum Lengkap',
+        message: `Aspek berikut belum diisi:\n${aspekBelumTerisi.map(a => `• ${a.nama}`).join('\n')}`
+      });
+      return;
+    }
 
     const hasChanges = Object.keys(editingNilai).some(aspekIdStr => {
       const aspekId = Number(aspekIdStr);
@@ -519,10 +582,16 @@ export default function KokurikulerClient() {
     setShowConfirmModal(true);
   };
 
+  // ✅ PERBAIKAN: Error handling & timeout
   const executeSimpanNilai = async () => {
     if (!selectedSiswa) return;
 
     setSaving(true);
+    
+    // ✅ Buat AbortController untuk timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 detik
+
     try {
       const token = localStorage.getItem('token');
 
@@ -546,7 +615,15 @@ export default function KokurikulerClient() {
               grade,
               deskripsi,
             }),
+            signal: controller.signal, // ✅ Tambah signal
           });
+
+          // ✅ Handle session expired
+          if (res.status === 401) {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+            throw new Error('Sesi berakhir');
+          }
 
           if (!res.ok) {
             const errData = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
@@ -556,6 +633,7 @@ export default function KokurikulerClient() {
       });
 
       await Promise.all(promises);
+      clearTimeout(timeoutId); // ✅ Clear timeout
 
       const updated: SiswaKokurikuler = {
         ...selectedSiswa,
@@ -575,6 +653,21 @@ export default function KokurikulerClient() {
         message: `Nilai ${updated.nama} berhasil disimpan.`
       });
     } catch (err: any) {
+      clearTimeout(timeoutId); // ✅ Clear timeout
+      
+      // ✅ Handle timeout
+      if (err.name === 'AbortError') {
+        showModal({
+          type: 'error',
+          title: 'Request Timeout',
+          message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
+        });
+        return;
+      }
+      
+      // ✅ Jangan show error jika session expired
+      if (err.message === 'Sesi berakhir') return;
+      
       setShowConfirmModal(false);
       showModal({
         type: 'error',
@@ -609,9 +702,20 @@ export default function KokurikulerClient() {
     setEditingProyek({ id_judul_proyek: null, judul: '', deskripsi: '' });
   };
 
+  // ✅ PERBAIKAN: Validasi panjang judul
   const openConfirmSaveProyek = () => {
     if (!editingProyek.judul.trim()) {
       showModal({ type: 'warning', title: 'Judul Kosong', message: 'Judul proyek tidak boleh kosong.' });
+      return;
+    }
+
+    // ✅ Validasi panjang judul
+    if (editingProyek.judul.length > 255) {
+      showModal({
+        type: 'warning',
+        title: 'Judul Terlalu Panjang',
+        message: 'Judul proyek maksimal 255 karakter.'
+      });
       return;
     }
 
@@ -619,8 +723,14 @@ export default function KokurikulerClient() {
     setShowConfirmModal(true);
   };
 
+  // ✅ PERBAIKAN: Error handling & timeout
   const executeSaveProyek = async () => {
     setSavingProyek(true);
+    
+    // ✅ Buat AbortController untuk timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 detik
+    
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/judul-proyek`, {
@@ -630,7 +740,17 @@ export default function KokurikulerClient() {
           judul: editingProyek.judul.trim(),
           deskripsi: editingProyek.deskripsi?.trim() || null,
         }),
+        signal: controller.signal, // ✅ Tambah signal
       });
+
+      clearTimeout(timeoutId); // ✅ Clear timeout
+
+      // ✅ Handle session expired
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -648,6 +768,21 @@ export default function KokurikulerClient() {
         throw new Error(err.message || 'Gagal menyimpan judul proyek');
       }
     } catch (err: any) {
+      clearTimeout(timeoutId); // ✅ Clear timeout
+      
+      // ✅ Handle timeout
+      if (err.name === 'AbortError') {
+        showModal({
+          type: 'error',
+          title: 'Request Timeout',
+          message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
+        });
+        return;
+      }
+      
+      // ✅ Jangan show error jika session expired
+      if (err.message === 'Sesi berakhir') return;
+      
       setShowConfirmModal(false);
       showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan judul proyek.' });
     } finally {
@@ -1356,6 +1491,7 @@ export default function KokurikulerClient() {
                   onChange={(e) => setEditingProyek({ ...editingProyek, judul: e.target.value })}
                   placeholder="Contoh: Proyek Kebersihan Lingkungan"
                   className={inputCls}
+                  maxLength={255}
                 />
               </div>
 

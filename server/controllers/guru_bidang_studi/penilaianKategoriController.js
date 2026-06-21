@@ -124,12 +124,14 @@ exports.createKategoriAkademik = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
+        
+        // ✅ FIX: Cek overlap dengan kelas_id spesifik
         const overlaps = await kategoriModel.cekRangeOverlap(
             mapelIdNum,
             semesterId,
             min_nilai,
             max_nilai,
-            kelasIdNum,
+            kelasIdNum,  // ✅ kelas_id spesifik
             null
         );
 
@@ -150,13 +152,14 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
+        // ✅ FIX: Simpan dengan kelas_id spesifik
         const result = await kategoriModel.createKategori({
             mapel_id: mapelIdNum,
             semester_id: semesterId,
             min_nilai,
             max_nilai,
             deskripsi,
-            kelas_id: null
+            kelas_id: kelasIdNum  
         });
 
         res.json({
@@ -243,7 +246,7 @@ exports.updateKategoriAkademik = async (req, res) => {
             semesterId,
             min_nilai,
             max_nilai,
-            exixting.kelas_id,
+            existing.kelas_id,
             id
         );
 

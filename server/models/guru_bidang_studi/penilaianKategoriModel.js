@@ -1,7 +1,7 @@
 /**
  * Nama File: penilaianKategoriModel.js
  * Fungsi: Model untuk mengelola kategori nilai akademik
- * UPDATE: Fix bug validateGuruMapel, tambah dukungan kelas_id
+ * UPDATE: Fix bug kelas_id, pastikan semua query per kelas spesifik
  */
 
 const db = require('../../config/db');
@@ -19,32 +19,24 @@ const getTahunAjaranAktif = async () => {
 const validateGuruMapel = async (userId, mapelId, semesterId) => {
     const [rows] = await db.execute(
         `SELECT 1 FROM pembelajaran 
-            WHERE user_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
-        [userId, mapelId, semesterId] 
+         WHERE user_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
+        [userId, mapelId, semesterId]
     );
     return rows.length > 0;
 };
 
-const getKategoriByMapel = async (mapelId, semesterId, kelasId = null) => {
-    let query = `
+// ✅ FIX: Hanya ambil kategori untuk kelas spesifik
+const getKategoriByMapel = async (mapelId, semesterId, kelasId) => {
+    const query = `
         SELECT id_config AS id, min_nilai, max_nilai, deskripsi, urutan, kelas_id
         FROM konfigurasi_nilai_rapor
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
+        WHERE mapel_id = ? 
+        AND tahun_ajaran_id = ?
+        AND kelas_id = ?
+        ORDER BY urutan ASC
     `;
-    const params = [mapelId, semesterId];
     
-    if (kelasId) {
-        // Jika kelasId diberikan, ambil yang spesifik untuk kelas itu
-        query += ` AND (kelas_id = ? OR kelas_id IS NULL)`;
-        params.push(kelasId);
-    } else {
-        // Jika tidak, ambil yang global (kelas_id IS NULL)
-        query += ` AND kelas_id IS NULL`;
-    }
-    
-    query += ` ORDER BY urutan ASC`;
-    
-    const [rows] = await db.execute(query, params);
+    const [rows] = await db.execute(query, [mapelId, semesterId, kelasId]);
     return rows;
 };
 
@@ -58,40 +50,31 @@ const getKategoriById = async (id) => {
     return rows.length > 0 ? rows[0] : null;
 };
 
-const getLastUrutan = async (mapelId, semesterId, kelasId = null) => {
-    let query = `
+// ✅ FIX: Hitung urutan hanya untuk kelas spesifik
+const getLastUrutan = async (mapelId, semesterId, kelasId) => {
+    const query = `
         SELECT IFNULL(MAX(urutan), 0) as max_urutan
         FROM konfigurasi_nilai_rapor 
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
+        WHERE mapel_id = ? 
+        AND tahun_ajaran_id = ?
+        AND kelas_id = ?
     `;
-    const params = [mapelId, semesterId];
     
-    if (kelasId) {
-        query += ` AND (kelas_id = ? OR kelas_id IS NULL)`;
-        params.push(kelasId);
-    } else {
-        query += ` AND kelas_id IS NULL`;
-    }
-    
-    const [rows] = await db.execute(query, params);
+    const [rows] = await db.execute(query, [mapelId, semesterId, kelasId]);
     return rows[0]?.max_urutan || 0;
 };
 
-const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId = null, excludeId = null) => {
+// ✅ FIX: Cek overlap hanya untuk kelas spesifik
+const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId, excludeId = null) => {
     let query = `
         SELECT id_config, min_nilai, max_nilai, deskripsi
         FROM konfigurasi_nilai_rapor
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
+        WHERE mapel_id = ? 
+        AND tahun_ajaran_id = ?
+        AND kelas_id = ?
         AND (? <= max_nilai AND ? >= min_nilai)
     `;
-    const params = [mapelId, semesterId, minNilai, maxNilai];
-    
-    if (kelasId) {
-        query += ` AND (kelas_id = ? OR kelas_id IS NULL)`;
-        params.push(kelasId);
-    } else {
-        query += ` AND kelas_id IS NULL`;
-    }
+    const params = [mapelId, semesterId, kelasId, minNilai, maxNilai];
     
     if (excludeId) {
         query += ` AND id_config != ?`;
@@ -106,24 +89,18 @@ const formatOverlapInfo = (overlaps) => {
     return overlaps.map(o => `${o.deskripsi} (${o.min_nilai}-${o.max_nilai})`).join(', ');
 };
 
-const cekCoverage0to100 = async (mapelId, semesterId, kelasId = null) => {
-    let query = `
+// ✅ FIX: Hitung coverage hanya untuk kelas spesifik
+const cekCoverage0to100 = async (mapelId, semesterId, kelasId) => {
+    const query = `
         SELECT min_nilai, max_nilai 
         FROM konfigurasi_nilai_rapor 
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
+        WHERE mapel_id = ? 
+        AND tahun_ajaran_id = ?
+        AND kelas_id = ?
+        ORDER BY min_nilai ASC
     `;
-    const params = [mapelId, semesterId];
     
-    if (kelasId) {
-        query += ` AND (kelas_id = ? OR kelas_id IS NULL)`;
-        params.push(kelasId);
-    } else {
-        query += ` AND kelas_id IS NULL`;
-    }
-    
-    query += ` ORDER BY min_nilai ASC`;
-    
-    const [kategoriRows] = await db.execute(query, params);
+    const [kategoriRows] = await db.execute(query, [mapelId, semesterId, kelasId]);
     
     if (kategoriRows.length === 0) {
         return { covered: false, gap: '0-100' };
@@ -149,8 +126,9 @@ const cekCoverage0to100 = async (mapelId, semesterId, kelasId = null) => {
     return { covered: true };
 };
 
+// ✅ FIX: Simpan dengan kelas_id spesifik
 const createKategori = async (data) => {
-    const { mapel_id, semester_id, min_nilai, max_nilai, deskripsi, kelas_id = null } = data;
+    const { mapel_id, semester_id, min_nilai, max_nilai, deskripsi, kelas_id } = data;
     
     const lastUrutan = await getLastUrutan(mapel_id, semester_id, kelas_id);
     const urutan = lastUrutan + 1;
@@ -186,21 +164,18 @@ const deleteKategori = async (id) => {
     return result.affectedRows;
 };
 
-const cekNilaiSiswaInRange = async (mapelId, semesterId, minNilai, maxNilai, kelasId = null) => {
-    let query = `
+// ✅ FIX: Cek nilai siswa dengan kelas_id spesifik
+const cekNilaiSiswaInRange = async (mapelId, semesterId, minNilai, maxNilai, kelasId) => {
+    const query = `
         SELECT COUNT(*) as total 
         FROM nilai_rapor 
-        WHERE mapel_id = ? AND tahun_ajaran_id = ?
+        WHERE mapel_id = ? 
+        AND tahun_ajaran_id = ?
+        AND kelas_id = ?
         AND nilai_rapor BETWEEN ? AND ?
     `;
-    const params = [mapelId, semesterId, minNilai, maxNilai];
     
-    if (kelasId) {
-        query += ` AND kelas_id = ?`;
-        params.push(kelasId);
-    }
-    
-    const [rows] = await db.execute(query, params);
+    const [rows] = await db.execute(query, [mapelId, semesterId, kelasId, minNilai, maxNilai]);
     return rows[0]?.total || 0;
 };
 

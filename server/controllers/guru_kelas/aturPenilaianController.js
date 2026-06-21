@@ -32,7 +32,7 @@ const ASPEK_MUTABAAH_ID = 5;
 const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
     const isPtsActive = status_pts === 'aktif';
     const isPasActive = status_pas === 'aktif';
-    
+
     // Belum ada periode aktif
     if (!isPtsActive && !isPasActive) {
         return {
@@ -41,7 +41,7 @@ const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
             message: 'Periode penilaian belum aktif. Silakan tunggu admin membuka periode penilaian.'
         };
     }
-    
+
     // PTS aktif: hanya Mutaba'ah
     if (isPtsActive) {
         if (aspekId !== ASPEK_MUTABAAH_ID) {
@@ -52,13 +52,35 @@ const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
             };
         }
     }
-    
+
     // PAS aktif: semua aspek boleh
     if (isPasActive) {
         return { allowed: true, reason: 'pas_active' };
     }
-    
+
     return { allowed: true, reason: 'default' };
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  HELPER: Validasi Akses Deskripsi Rata-rata (HANYA saat PTS aktif)
+// ═════════════════════════════════════════════════════════════════════════════
+const validateDeskripsiRataRataAccess = (status_pts, status_pas) => {
+    // Rule: Hanya bisa diakses saat PTS aktif
+    if (status_pts === 'aktif') {
+        return { allowed: true };
+    }
+
+    if (status_pas === 'aktif') {
+        return {
+            allowed: false,
+            message: 'Deskripsi rata-rata hanya dapat diatur saat periode PTS aktif. Saat ini periode PAS sedang aktif.'
+        };
+    }
+
+    return {
+        allowed: false,
+        message: 'Periode penilaian belum aktif. Deskripsi rata-rata hanya dapat diatur saat periode PTS aktif.'
+    };
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -91,81 +113,81 @@ exports.getKomponenPenilaian = async (req, res) => {
 };
 
 exports.createAspekKokurikuler = async (req, res) => {
-  try {
-    const { nama, kode } = req.body;
-    
-    if (!nama || nama.trim().length < 3) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nama aspek minimal 3 karakter.'
-      });
+    try {
+        const { nama, kode } = req.body;
+
+        if (!nama || nama.trim().length < 3) {
+            return res.status(400).json({
+                success: false,
+                message: 'Nama aspek minimal 3 karakter.'
+            });
+        }
+
+        let kodeAspek = kode;
+        if (!kodeAspek) {
+            kodeAspek = nama.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+
+            const [existing] = await db.execute(
+                `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE kode = ?`,
+                [kodeAspek]
+            );
+
+            if (existing.length > 0) {
+                kodeAspek = `${kodeAspek}_${Date.now().toString().slice(-4)}`;
+            }
+        }
+
+        const [existingNama] = await db.execute(
+            `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE nama = ?`,
+            [nama.trim()]
+        );
+
+        if (existingNama.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aspek dengan nama ini sudah ada.'
+            });
+        }
+
+        const [existingKode] = await db.execute(
+            `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE kode = ?`,
+            [kodeAspek]
+        );
+
+        if (existingKode.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Kode aspek sudah digunakan. Silakan gunakan nama atau kode lain.'
+            });
+        }
+
+        const [maxUrutan] = await db.execute(
+            `SELECT COALESCE(MAX(urutan), 0) + 1 AS next_urutan FROM aspek_kokurikuler`
+        );
+        const nextUrutan = maxUrutan[0].next_urutan;
+
+        const [result] = await db.execute(
+            `INSERT INTO aspek_kokurikuler (kode, nama, urutan, created_at) VALUES (?, ?, ?, NOW())`,
+            [kodeAspek, nama.trim(), nextUrutan]
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Aspek kokurikuler berhasil dibuat.',
+            data: {
+                id_aspek_kokurikuler: result.insertId,
+                kode: kodeAspek,
+                nama: nama.trim(),
+                urutan: nextUrutan
+            }
+        });
+    } catch (err) {
+        console.error('Error createAspekKokurikuler:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal membuat aspek kokurikuler: ' + err.message
+        });
     }
-
-    let kodeAspek = kode;
-    if (!kodeAspek) {
-      kodeAspek = nama.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
-      
-      const [existing] = await db.execute(
-        `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE kode = ?`,
-        [kodeAspek]
-      );
-      
-      if (existing.length > 0) {
-        kodeAspek = `${kodeAspek}_${Date.now().toString().slice(-4)}`;
-      }
-    }
-
-    const [existingNama] = await db.execute(
-      `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE nama = ?`,
-      [nama.trim()]
-    );
-
-    if (existingNama.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Aspek dengan nama ini sudah ada.'
-      });
-    }
-
-    const [existingKode] = await db.execute(
-      `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE kode = ?`,
-      [kodeAspek]
-    );
-
-    if (existingKode.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Kode aspek sudah digunakan. Silakan gunakan nama atau kode lain.'
-      });
-    }
-
-    const [maxUrutan] = await db.execute(
-      `SELECT COALESCE(MAX(urutan), 0) + 1 AS next_urutan FROM aspek_kokurikuler`
-    );
-    const nextUrutan = maxUrutan[0].next_urutan;
-
-    const [result] = await db.execute(
-      `INSERT INTO aspek_kokurikuler (kode, nama, urutan, created_at) VALUES (?, ?, ?, NOW())`,
-      [kodeAspek, nama.trim(), nextUrutan]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Aspek kokurikuler berhasil dibuat.',
-      data: { 
-        id_aspek_kokurikuler: result.insertId, 
-        kode: kodeAspek,
-        nama: nama.trim(),
-        urutan: nextUrutan
-      }
-    });
-  } catch (err) {
-    console.error('Error createAspekKokurikuler:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Gagal membuat aspek kokurikuler: ' + err.message
-    });
-  }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -183,13 +205,13 @@ exports.getKategoriNilaiAkademik = async (req, res) => {
         }
 
         const kategori = await model.getKategoriAkademik(mapelId, taAktif.id_tahun_ajaran, kelasId);
-        
+
         const kategoriParsed = kategori.map(k => ({
             ...k,
             min_nilai: Math.floor(parseFloat(k.min_nilai)),
             max_nilai: Math.floor(parseFloat(k.max_nilai))
         }));
-        
+
         const coverage = await model.cekCoverage0to100(mapelId, taAktif.id_tahun_ajaran, kelasId);
 
         res.json({
@@ -912,6 +934,15 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
+        if (!accessCheck.allowed) {
+            return res.status(403).json({
+                success: false,
+                code: 'DESKRIPSI_LOCKED',
+                message: accessCheck.message
+            });
+        }
+
         const kategori = await model.getKategoriDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId);
 
         const kategoriParsed = kategori.map(k => ({
@@ -938,6 +969,23 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
         const { min_nilai, max_nilai, deskripsi } = req.body;
         const kelasId = getKelasId(req);
 
+        // ✅ Ambil taAktif HANYA SEKALI di awal
+        const taAktif = await model.getTahunAjaranAktif();
+        if (!taAktif) {
+            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        }
+
+        // ✅ Validasi akses (pakai taAktif yang sudah ada)
+        const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
+        if (!accessCheck.allowed) {
+            return res.status(403).json({
+                success: false,
+                code: 'DESKRIPSI_LOCKED',
+                message: accessCheck.message
+            });
+        }
+
+        // Validasi nilai
         const minNilai = Math.floor(parseFloat(min_nilai));
         const maxNilai = Math.floor(parseFloat(max_nilai));
 
@@ -966,11 +1014,7 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
-        const taAktif = await model.getTahunAjaranAktif();
-        if (!taAktif) {
-            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
-        }
-
+        // ✅ CEK OVERLAP (pakai taAktif yang sudah ada)
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai);
         if (overlaps.length > 0) {
             const overlapInfo = overlaps.map(o => `${o.deskripsi} (${o.rentang_min}-${o.rentang_max})`).join(', ');
@@ -981,6 +1025,7 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // ✅ SIMPAN (pakai taAktif yang sudah ada)
         const newId = await model.createKategoriDeskripsiRataRata(
             taAktif.id_tahun_ajaran,
             taAktif.semester,
@@ -1007,6 +1052,23 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
         const { min_nilai, max_nilai, deskripsi } = req.body;
         const kelasId = getKelasId(req);
 
+        // ✅ Ambil taAktif HANYA SEKALI di awal
+        const taAktif = await model.getTahunAjaranAktif();
+        if (!taAktif) {
+            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        }
+
+        // ✅ Validasi akses (pakai taAktif yang sudah ada)
+        const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
+        if (!accessCheck.allowed) {
+            return res.status(403).json({
+                success: false,
+                code: 'DESKRIPSI_LOCKED',
+                message: accessCheck.message
+            });
+        }
+
+        // Validasi nilai
         const minNilai = Math.floor(parseFloat(min_nilai));
         const maxNilai = Math.floor(parseFloat(max_nilai));
 
@@ -1035,11 +1097,7 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
-        const taAktif = await model.getTahunAjaranAktif();
-        if (!taAktif) {
-            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
-        }
-
+        // ✅ Ambil existing (pakai taAktif yang sudah ada)
         const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
@@ -1049,6 +1107,7 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tidak ada perubahan data' });
         }
 
+        // ✅ CEK OVERLAP (pakai taAktif yang sudah ada)
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, id);
         if (overlaps.length > 0) {
             const overlapInfo = overlaps.map(o => `${o.deskripsi} (${o.rentang_min}-${o.rentang_max})`).join(', ');
@@ -1059,6 +1118,7 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // ✅ UPDATE (pakai taAktif yang sudah ada)
         await model.updateKategoriDeskripsiRataRata(id, minNilai, maxNilai, deskripsi.trim());
 
         res.json({ success: true, message: 'Kategori deskripsi rata-rata berhasil diperbarui' });
@@ -1073,16 +1133,29 @@ exports.deleteKategoriDeskripsiRataRata = async (req, res) => {
         const { id } = req.params;
         const kelasId = getKelasId(req);
 
+        // ✅ Ambil taAktif HANYA SEKALI di awal
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // ✅ Validasi akses (pakai taAktif yang sudah ada)
+        const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
+        if (!accessCheck.allowed) {
+            return res.status(403).json({
+                success: false,
+                code: 'DESKRIPSI_LOCKED',
+                message: accessCheck.message
+            });
+        }
+
+        // ✅ Ambil existing (pakai taAktif yang sudah ada)
         const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
+        // ✅ DELETE
         await model.deleteKategoriDeskripsiRataRata(id, kelasId);
 
         res.json({ success: true, message: 'Kategori deskripsi rata-rata berhasil dihapus' });

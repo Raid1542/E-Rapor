@@ -22,24 +22,23 @@ exports.getMapelForGuruKelas = async (req, res) => {
         const userId = req.user.id;
         const semesterId = req.idSemesterAktif;
 
-        if (!semesterId) {
-            return res.status(400).json({ success: false, message: 'ID Semester aktif tidak ditemukan' });
-        }
-
         const [rows] = await db.execute(`
             SELECT
                 mp.id_mata_pelajaran,
                 mp.nama_mapel,
                 mp.jenis,
                 p.user_id AS pengajar_id,
-                CASE WHEN p.user_id = ? THEN TRUE ELSE FALSE END AS bisa_input
+                CASE 
+                    WHEN p.user_id = ? AND mp.jenis = 'wajib' THEN TRUE 
+                    ELSE FALSE 
+                END AS bisa_input
             FROM pembelajaran p
             JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
             JOIN guru_kelas gk ON p.kelas_id = gk.kelas_id
             WHERE gk.user_id = ?
             AND gk.tahun_ajaran_id = ?  
             AND p.tahun_ajaran_id = ? 
-            ORDER BY mp.jenis, mp.nama_mapel
+            ORDER BY mp.jenis DESC, mp.nama_mapel  
         `, [userId, userId, semesterId, semesterId]);
 
         res.json({
@@ -48,13 +47,13 @@ exports.getMapelForGuruKelas = async (req, res) => {
                 mata_pelajaran_id: r.id_mata_pelajaran,
                 nama_mapel: r.nama_mapel,
                 jenis: r.jenis,
-                bisa_input: Boolean(r.bisa_input),
+                bisa_input: Boolean(r.bisa_input),  
             })),
             pilihan: rows.filter(r => r.jenis === 'pilihan').map(r => ({
                 mata_pelajaran_id: r.id_mata_pelajaran,
                 nama_mapel: r.nama_mapel,
                 jenis: r.jenis,
-                bisa_input: Boolean(r.bisa_input),
+                bisa_input: false, 
             })),
         });
     } catch (err) {

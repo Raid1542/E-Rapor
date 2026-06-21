@@ -671,14 +671,17 @@ export default function AturPenilaianGBSClient() {
                     });
                 }, 50);
 
+                // ✅ RELOAD DATA dari backend
                 const reloadRes = await fetch(
-                    `${endpoint}?mapel_id=${selectedMapelAkademik}&kelas_id=${selectedKelasAkademik}`,
+                    `${API}/atur-penilaian/kategori?mapel_id=${selectedMapelAkademik}&kelas_id=${selectedKelasAkademik}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
-                const reloadData = await reloadRes.json();
-                setKategoriList(reloadData.data || []);
-                if (reloadData.coverage) {
-                    setCoverageInfo(reloadData.coverage);
+
+                if (reloadRes.ok) {
+                    const reloadData = await reloadRes.json();
+                    setKategoriList(reloadData.data || []);
+                    setCoverageInfo(reloadData.coverage || null);
+                    console.log('✅ Coverage setelah save:', reloadData.coverage);
                 }
             } else {
                 const errorCode = result.code;
@@ -721,7 +724,18 @@ export default function AturPenilaianGBSClient() {
                     const result = await res.json();
 
                     if (res.ok) {
-                        setKategoriList(kategoriList.filter((k) => k.id !== id));
+                        // ✅ RELOAD DATA dari backend untuk update coverage
+                        const reloadRes = await fetch(
+                            `${API}/atur-penilaian/kategori?mapel_id=${selectedMapelAkademik}&kelas_id=${selectedKelasAkademik}`,
+                            { headers: { Authorization: `Bearer ${token}` } }
+                        );
+
+                        if (reloadRes.ok) {
+                            const reloadData = await reloadRes.json();
+                            setKategoriList(reloadData.data || []);
+                            setCoverageInfo(reloadData.coverage || null);
+                        }
+
                         showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Kategori berhasil dihapus.' });
                     } else {
                         const errorCode = result.code;
@@ -1286,39 +1300,51 @@ export default function AturPenilaianGBSClient() {
                                                 const komponen = komponenList.find((k) => k.id_komponen === bobot.komponen_id);
                                                 const isPTS = komponen && /^PTS$/i.test(komponen.nama_komponen);
                                                 const displayBobot = isPTSActive ? (isPTS ? 100 : 0) : bobot.bobot;
-                                                // ✅ UBAH: Tambahkan kondisi isReadOnly
                                                 const isEditable = !isPTSActive && !isReadOnly;
 
                                                 return (
                                                     <div
                                                         key={bobot.komponen_id}
-                                                        className="flex items-center gap-4 p-4 rounded-xl"
+                                                        className="flex items-center justify-between gap-4 p-4 rounded-xl"
                                                         style={{
                                                             background: isPTSActive && isPTS ? '#fff7ed' : isEditable ? '#fffaf6' : '#f9fafb',
                                                             border: `1px solid ${isPTSActive && isPTS ? '#fdba74' : isEditable ? '#fde0c8' : '#e5e7eb'}`,
                                                         }}
                                                     >
-                                                        <span className="font-semibold min-w-[150px] text-sm" style={{ color: '#7a3a0a' }}>
-                                                            {komponen?.nama_komponen || 'Komponen'}
-                                                        </span>
-                                                        <div className="flex items-center gap-2 flex-1 justify-end">
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                max="100"
-                                                                step="0.01"
-                                                                value={displayBobot}
-                                                                onChange={(e) => {
-                                                                    if (isEditable) {
-                                                                        handleBobotChange(bobot.komponen_id, e.target.value);
-                                                                    }
-                                                                }}
-                                                                disabled={!isEditable}
-                                                                className={`${isEditable ? inputCls : inputDisabledCls} text-right`}
-                                                                style={{ maxWidth: '120px' }}
-                                                                readOnly={!isEditable}
-                                                            />
-                                                            <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>%</span>
+                                                        {/* Label Komponen - Left Side */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="font-semibold text-sm block truncate" style={{ color: '#7a3a0a' }}>
+                                                                {komponen?.nama_komponen || 'Komponen'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Input Bobot - Right Side */}
+                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                            <div className="relative w-24">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max="100"
+                                                                    step="0.01"
+                                                                    value={displayBobot}
+                                                                    onChange={(e) => {
+                                                                        if (isEditable) {
+                                                                            handleBobotChange(bobot.komponen_id, e.target.value);
+                                                                        }
+                                                                    }}
+                                                                    disabled={!isEditable}
+                                                                    className={`w-full h-11 px-3 text-center font-bold text-base rounded-xl border-2 transition-all outline-none
+                                ${isEditable
+                                                                            ? 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                                            : 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'
+                                                                        }`}
+                                                                    readOnly={!isEditable}
+                                                                    placeholder="0"
+                                                                />
+                                                            </div>
+                                                            <span className="text-base font-bold" style={{ color: '#7a3a0a' }}>
+                                                                %
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 );

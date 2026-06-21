@@ -232,10 +232,48 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 
         console.log('🔍 [BACKEND] updateNilaiKokurikuler:', { siswaId, aspek_id, nilai, status_pts, status_pas });
 
+        // ✅ VALIDASI 1: Input wajib
         if (!aspek_id || nilai === undefined) {
             return res.status(400).json({
                 success: false,
                 message: 'aspek_id dan nilai wajib diisi'
+            });
+        }
+
+        // ✅ VALIDASI 2: Nilai harus angka
+        if (typeof nilai !== 'number' || isNaN(nilai)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Nilai harus berupa angka'
+            });
+        }
+
+        // ✅ VALIDASI 3: Nilai harus integer
+        if (!Number.isInteger(nilai)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Nilai harus bilangan bulat (integer)'
+            });
+        }
+
+        // ✅ VALIDASI 4: Nilai harus 0-100
+        if (nilai < 0 || nilai > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Nilai harus antara 0 dan 100'
+            });
+        }
+
+        // ✅ VALIDASI 5: Aspek harus valid
+        const [aspekCheck] = await db.execute(
+            `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE id_aspek_kokurikuler = ?`,
+            [aspek_id]
+        );
+        
+        if (aspekCheck.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aspek kokurikuler tidak valid'
             });
         }
 
@@ -258,14 +296,38 @@ exports.updateNilaiKokurikuler = async (req, res) => {
                 });
             }
         }
-        
-        // ✅ RULE: PAS aktif → semua aspek bisa diisi (termasuk Mutaba'ah)
-        // Tidak ada validasi khusus untuk PAS
+
+        // ✅ FIX: Ambil tahun ajaran aktif
+        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        if (!taAktif) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tahun ajaran aktif belum diatur'
+            });
+        }
 
         const kelas_id = await kokurikulerModel.getKelasByGuru(userId, semesterId);
 
         if (!kelas_id) {
             return res.status(403).json({ success: false, message: 'Anda belum ditugaskan sebagai wali kelas' });
+        }
+
+        // ✅ VALIDASI 6: Siswa harus ada di kelas guru
+        const [siswaCheck] = await db.execute(
+            `SELECT s.id_siswa 
+             FROM siswa s
+             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+             WHERE s.id_siswa = ? 
+             AND sk.kelas_id = ? 
+             AND sk.id_tahun_ajaran_induk = ?`,
+            [siswaId, kelas_id, taAktif.id_tahun_ajaran_induk]  // ✅ Sekarang taAktif sudah didefinisikan
+        );
+
+        if (siswaCheck.length === 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'Siswa tidak ditemukan di kelas Anda'
+            });
         }
 
         // ✅ Hitung grade & deskripsi dari konfigurasi

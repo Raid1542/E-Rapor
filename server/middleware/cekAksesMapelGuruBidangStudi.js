@@ -1,21 +1,53 @@
 /**
- * Nama File: cekAksesMapelGuruBidangStudi.js
- * Fungsi: Validasi apakah guru bidang studi mengajar mapel tertentu
- *         Support: URL param, query param, atau body
+ * Middleware: Cek apakah guru bidang studi punya akses ke mata pelajaran
+ * Support 3 kasus:
+ * 1. GET/POST/PUT dengan mapelId di params atau mapel_id di body/query
+ * 2. DELETE dengan id kategori di params → fetch data kategori dulu
  */
 
 const db = require('../config/db');
 
 const cekAksesMapelGuruBidangStudi = async (req, res, next) => {
     try {
-        const mapelId = req.params.mapelId || req.query.mapel_id || req.body.mapel_id;
         const userId = req.user.id;
         const semesterId = req.idSemesterAktif;
+        let mapelId = null;
 
+        // CASE 1: mapelId ada di params (untuk route /bobot/:mapelId, /nilai-komponen/:mapelId)
+        if (req.params && req.params.mapelId) {
+            mapelId = req.params.mapelId;
+        }
+        // CASE 2: mapel_id ada di query (untuk GET /kategori?mapel_id=X)
+        else if (req.query && req.query.mapel_id) {
+            mapelId = req.query.mapel_id;
+        }
+        // CASE 3: mapel_id ada di body (untuk POST /kategori)
+        else if (req.body && req.body.mapel_id) {
+            mapelId = req.body.mapel_id;
+        }
+        // CASE 4: DELETE /kategori/:id - perlu fetch data kategori dulu
+        else if (req.params && req.params.id && req.method === 'DELETE') {
+            const [kategoriRows] = await db.execute(`
+                SELECT mapel_id 
+                FROM konfigurasi_nilai_rapor 
+                WHERE id_config = ?
+            `, [req.params.id]);
+
+            if (!kategoriRows || kategoriRows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Kategori tidak ditemukan'
+                });
+            }
+
+            mapelId = kategoriRows[0].mapel_id;
+        }
+
+        // Jika tidak ada mapelId yang bisa diambil
         if (!mapelId) {
             return res.status(400).json({
                 success: false,
-                message: 'ID mata pelajaran tidak ditemukan. Kirim via URL param, query (?mapel_id=), atau body.'
+                message: 'ID mata pelajaran tidak ditemukan dalam request'
             });
         }
 
@@ -29,16 +61,16 @@ const cekAksesMapelGuruBidangStudi = async (req, res, next) => {
         // Cek apakah guru mengajar mapel ini di semester aktif
         const [rows] = await db.execute(
             `SELECT p.id, p.kelas_id, k.nama_kelas, mp.nama_mapel, mp.jenis
-                FROM pembelajaran p
-                INNER JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
-                INNER JOIN kelas k ON p.kelas_id = k.id_kelas
-                WHERE p.user_id = ? 
-                AND p.mapel_id = ? 
-                AND p.tahun_ajaran_id = ?`,
+             FROM pembelajaran p
+             INNER JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
+             INNER JOIN kelas k ON p.kelas_id = k.id_kelas
+             WHERE p.user_id = ? 
+             AND p.mapel_id = ? 
+             AND p.tahun_ajaran_id = ?`,
             [userId, mapelId, semesterId]
         );
 
-        if (rows.length === 0) {
+        if (!rows || rows.length === 0) {
             return res.status(403).json({
                 success: false,
                 message: 'Anda tidak mengajar mata pelajaran ini di semester aktif.',
@@ -63,7 +95,7 @@ const cekAksesMapelGuruBidangStudi = async (req, res, next) => {
         console.error('Error di middleware cekAksesMapelGuruBidangStudi:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Terjadi kesalahan server.' 
+            message: 'Terjadi kesalahan server: ' + error.message 
         });
     }
 };
