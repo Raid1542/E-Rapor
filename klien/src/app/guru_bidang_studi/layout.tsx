@@ -2,12 +2,14 @@
  * Nama File: layout.tsx
  * Fungsi: Layout utama untuk halaman guru bidang studi.
  *         Menyediakan struktur dasar dengan metadata dinamis dan wrapper komponen layout klien.
+ *         ✅ UPDATED: Tambah AuthGuard untuk proteksi route
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
  */
 
 import type { Metadata } from "next";
 import GuruBidangStudiLayout from './components/Layout';
+import AuthGuard from '@/components/AuthGuard'; // ✅ TAMBAH BARIS INI
 
 export const metadata: Metadata = {
     title: {
@@ -22,5 +24,12 @@ export default function GuruBidangStudiRootLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return <GuruBidangStudiLayout>{children}</GuruBidangStudiLayout>;
+    return (
+        // ✅ WRAP DENGAN AUTHGUARD
+        <AuthGuard allowedRoles={['guru_bidang_studi']}>
+            <GuruBidangStudiLayout>
+                {children}
+            </GuruBidangStudiLayout>
+        </AuthGuard>
+    );
 }

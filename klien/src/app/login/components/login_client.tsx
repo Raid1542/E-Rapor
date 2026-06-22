@@ -1,10 +1,9 @@
 /**
  * Nama File: login_client.tsx
- * Fungsi: Komponen klien untuk halaman login E-Rapor.
- *         Menangani formulir login, validasi input, komunikasi API,
- *         dan navigasi berdasarkan role pengguna.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
+ * ✅ UPDATED: 
+ *   - Value select pakai underscore (sesuai database)
+ *   - Hapus normalizeRole (tidak diperlukan)
+ *   - Hard redirect pakai window.location
  */
 
 "use client";
@@ -23,15 +22,15 @@ interface PopupConfig {
     onClose?: () => void;
 }
 
-// ─── LOGIN POPUP ──────────────────────────────────────────────────────────────
+// ─── LOGIN POPUP (TETAP SAMA) ─────────────────────────────────────────────────
 
 const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => void }) => {
     const handleClose = () => { popup.onClose?.(); onClose(); };
 
     const cfg = {
         success: {
-            bg:       'linear-gradient(135deg, #ea580c 0%, #f97316 55%, #fb923c 100%)',
-            iconBg:   'rgba(255,255,255,0.18)',
+            bg: 'linear-gradient(135deg, #ea580c 0%, #f97316 55%, #fb923c 100%)',
+            iconBg: 'rgba(255,255,255,0.18)',
             iconBorder: 'rgba(255,255,255,0.35)',
             icon: (
                 <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
@@ -39,18 +38,18 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <path d="M13 22l7 7 11-14" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             ),
-            titleColor:   '#fff',
-            msgColor:     'rgba(255,237,213,0.92)',
-            btnBg:        'rgba(255,255,255,0.22)',
-            btnBorder:    'rgba(255,255,255,0.4)',
-            btnColor:     '#fff',
-            btnHoverBg:   'rgba(255,255,255,0.32)',
+            titleColor: '#fff',
+            msgColor: 'rgba(255,237,213,0.92)',
+            btnBg: 'rgba(255,255,255,0.22)',
+            btnBorder: 'rgba(255,255,255,0.4)',
+            btnColor: '#fff',
+            btnHoverBg: 'rgba(255,255,255,0.32)',
             deco1: 'rgba(255,255,255,0.08)',
             deco2: 'rgba(255,255,255,0.05)',
         },
         error: {
-            bg:       'linear-gradient(135deg, #991b1b 0%, #dc2626 55%, #ef4444 100%)',
-            iconBg:   'rgba(255,255,255,0.15)',
+            bg: 'linear-gradient(135deg, #991b1b 0%, #dc2626 55%, #ef4444 100%)',
+            iconBg: 'rgba(255,255,255,0.15)',
             iconBorder: 'rgba(255,255,255,0.3)',
             icon: (
                 <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
@@ -58,18 +57,18 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <path d="M15 15l14 14M29 15L15 29" stroke="white" strokeWidth="3" strokeLinecap="round" />
                 </svg>
             ),
-            titleColor:   '#fff',
-            msgColor:     'rgba(254,226,226,0.9)',
-            btnBg:        'rgba(255,255,255,0.18)',
-            btnBorder:    'rgba(255,255,255,0.35)',
-            btnColor:     '#fff',
-            btnHoverBg:   'rgba(255,255,255,0.28)',
+            titleColor: '#fff',
+            msgColor: 'rgba(254,226,226,0.9)',
+            btnBg: 'rgba(255,255,255,0.18)',
+            btnBorder: 'rgba(255,255,255,0.35)',
+            btnColor: '#fff',
+            btnHoverBg: 'rgba(255,255,255,0.28)',
             deco1: 'rgba(255,255,255,0.07)',
             deco2: 'rgba(255,255,255,0.04)',
         },
         warning: {
-            bg:       'linear-gradient(135deg, #92400e 0%, #d97706 55%, #f59e0b 100%)',
-            iconBg:   'rgba(255,255,255,0.15)',
+            bg: 'linear-gradient(135deg, #92400e 0%, #d97706 55%, #f59e0b 100%)',
+            iconBg: 'rgba(255,255,255,0.15)',
             iconBorder: 'rgba(255,255,255,0.3)',
             icon: (
                 <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
@@ -77,12 +76,12 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <path d="M22 14v10M22 28v2" stroke="white" strokeWidth="3" strokeLinecap="round" />
                 </svg>
             ),
-            titleColor:   '#fff',
-            msgColor:     'rgba(254,243,199,0.9)',
-            btnBg:        'rgba(255,255,255,0.18)',
-            btnBorder:    'rgba(255,255,255,0.35)',
-            btnColor:     '#fff',
-            btnHoverBg:   'rgba(255,255,255,0.28)',
+            titleColor: '#fff',
+            msgColor: 'rgba(254,243,199,0.9)',
+            btnBg: 'rgba(255,255,255,0.18)',
+            btnBorder: 'rgba(255,255,255,0.35)',
+            btnColor: '#fff',
+            btnHoverBg: 'rgba(255,255,255,0.28)',
             deco1: 'rgba(255,255,255,0.07)',
             deco2: 'rgba(255,255,255,0.04)',
         },
@@ -143,7 +142,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                 ${popup.type === 'success' ? `.lp-dots { animation: lp-pulse 1.6s ease-in-out infinite; }` : ''}
             `}</style>
 
-            {/* Backdrop */}
             <div
                 className="lp-backdrop"
                 style={{
@@ -156,7 +154,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                 }}
                 onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
             >
-                {/* Card */}
                 <div
                     className="lp-card"
                     style={{
@@ -171,11 +168,9 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         textAlign: 'center',
                     }}
                 >
-                    {/* Dekorasi lingkaran */}
                     <div className="lp-deco1" style={{ background: cfg.deco1 }} />
                     <div className="lp-deco2" style={{ background: cfg.deco2 }} />
 
-                    {/* Icon */}
                     <div
                         className="lp-icon"
                         style={{
@@ -192,7 +187,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         {cfg.icon}
                     </div>
 
-                    {/* Label kecil */}
                     <p
                         className="lp-label-shimmer"
                         style={{
@@ -205,7 +199,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         {label}
                     </p>
 
-                    {/* Title */}
                     <h3
                         style={{
                             color: cfg.titleColor,
@@ -218,7 +211,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         {popup.title}
                     </h3>
 
-                    {/* Garis pembatas */}
                     <div style={{
                         width: 40, height: 2.5,
                         background: 'rgba(255,255,255,0.35)',
@@ -227,7 +219,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         position: 'relative', zIndex: 1,
                     }} />
 
-                    {/* Message */}
                     <p
                         style={{
                             color: cfg.msgColor,
@@ -240,7 +231,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         {popup.message}
                     </p>
 
-                    {/* Loading dots — hanya saat success (sedang redirect) */}
                     {popup.type === 'success' && (
                         <div className="lp-dots" style={{
                             display: 'flex', gap: 6, marginBottom: 20,
@@ -256,7 +246,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                         </div>
                     )}
 
-                    {/* Tombol — hanya tampil jika bukan success redirect otomatis */}
                     {popup.type !== 'success' && (
                         <button
                             className="lp-btn"
@@ -296,18 +285,16 @@ export default function LoginClient() {
         password: "",
         role: "",
     });
-    const [loading,      setLoading]      = useState(false);
+    const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [namaSekolah,  setNamaSekolah]  = useState("Sekolah");
-    const [logoSekolah,  setLogoSekolah]  = useState<string | null>(null);
-    const [logoError,    setLogoError]    = useState(false);
+    const [namaSekolah, setNamaSekolah] = useState("Sekolah");
+    const [logoSekolah, setLogoSekolah] = useState<string | null>(null);
+    const [logoError, setLogoError] = useState(false);
 
-    // Popup state
-    const [popup,    setPopup]    = useState<PopupConfig | null>(null);
-    const showPopup  = useCallback((cfg: PopupConfig) => setPopup(cfg), []);
+    const [popup, setPopup] = useState<PopupConfig | null>(null);
+    const showPopup = useCallback((cfg: PopupConfig) => setPopup(cfg), []);
     const closePopup = useCallback(() => setPopup(null), []);
 
-    // Fetch data sekolah publik
     useEffect(() => {
         const fetchSekolah = async () => {
             try {
@@ -322,10 +309,11 @@ export default function LoginClient() {
         fetchSekolah();
     }, []);
 
-    // Submit login
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const { email_sekolah, password, role } = formData;
+
+        console.log('🔐 [Login] Attempting login...', { email_sekolah, role });
 
         if (!email_sekolah.trim() || !password || !role) {
             showPopup({
@@ -346,69 +334,85 @@ export default function LoginClient() {
             });
 
             const data = await res.json();
+            console.log('📥 [Login] Response:', { status: res.status, data });
 
             if (!res.ok) {
                 setLoading(false);
 
-                // Tentukan pesan yang lebih deskriptif berdasarkan status
                 const msg = data.message || "Login gagal";
                 const isWrongPass = msg.toLowerCase().includes('password') || msg.toLowerCase().includes('sandi') || res.status === 401;
-                const isNotFound  = msg.toLowerCase().includes('tidak ditemukan') || msg.toLowerCase().includes('not found') || res.status === 404;
-                const isRoleErr   = msg.toLowerCase().includes('role') || msg.toLowerCase().includes('akses');
+                const isNotFound = msg.toLowerCase().includes('tidak ditemukan') || msg.toLowerCase().includes('not found') || res.status === 404;
+                const isRoleErr = msg.toLowerCase().includes('role') || msg.toLowerCase().includes('akses');
 
                 showPopup({
                     type: 'error',
                     title: isWrongPass ? 'Password Salah'
-                         : isNotFound  ? 'Akun Tidak Ditemukan'
-                         : isRoleErr   ? 'Role Tidak Sesuai'
-                         :               'Login Gagal',
+                        : isNotFound ? 'Akun Tidak Ditemukan'
+                            : isRoleErr ? 'Role Tidak Sesuai'
+                                : 'Login Gagal',
                     message: isWrongPass
                         ? 'Password yang Anda masukkan tidak sesuai. Periksa kembali dan coba lagi.'
                         : isNotFound
-                        ? 'Email yang Anda masukkan tidak terdaftar. Periksa kembali.'
-                        : isRoleErr
-                        ? 'Anda tidak memiliki akses untuk role yang dipilih.'
-                        : msg,
+                            ? 'Email yang Anda masukkan tidak terdaftar. Periksa kembali.'
+                            : isRoleErr
+                                ? 'Anda tidak memiliki akses untuk role yang dipilih.'
+                                : msg,
                 });
                 return;
             }
 
+            // ✅ LANGSUNG PAKAI role (tidak perlu normalisasi)
+            console.log('✅ [Login] Role:', role);
+
             // Simpan data user
             if (data.user) {
-                const normalizedUser = {
+                const userData = {
                     ...data.user,
-                    role: formData.role,
+                    role: role,  // ✅ Langsung pakai, tidak perlu normalisasi
                     profileImage: data.user.profileImage || data.user.foto_path || null,
                 };
-                localStorage.setItem("currentUser", JSON.stringify(normalizedUser));
+                localStorage.setItem("currentUser", JSON.stringify(userData));
                 localStorage.setItem("token", data.token);
                 window.dispatchEvent(new Event("userDataUpdated"));
+
+                console.log('💾 [Login] User data saved');
+                console.log('🔑 Token:', data.token.substring(0, 50) + '...');
             }
 
             const roleLabel = role === 'admin' ? 'Admin'
-                : role === 'guru kelas' ? 'Wali Kelas'
-                : 'Guru Bidang Studi';
+                : role === 'guru_kelas' ? 'Wali Kelas'
+                    : 'Guru Bidang Studi';
 
-            // Tampilkan popup sukses lalu redirect
+            // Ambil redirect parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirect = urlParams.get('redirect');
+
+            const defaultDashboard = role === "admin"
+                ? "/admin/dashboard"
+                : role === "guru_kelas"
+                    ? "/guru_kelas/dashboard"
+                    : "/guru_bidang_studi/dashboard";
+
+            const redirectPath = redirect || defaultDashboard;
+            console.log('🎯 [Login] Will redirect to:', redirectPath);
+
+            // Tampilkan popup sukses
             showPopup({
                 type: 'success',
                 title: 'Login Berhasil!',
                 message: `Selamat datang kembali. Anda masuk sebagai ${roleLabel}. Mengalihkan ke dashboard...`,
-                onClose: () => {
-                    if (role === "admin")               router.push("/admin/dashboard");
-                    else if (role === "guru kelas")      router.push("/guru_kelas/dashboard");
-                    else if (role === "guru bidang studi") router.push("/guru_bidang_studi/dashboard");
-                },
             });
 
-            // Auto-redirect setelah 2 detik
+            // ✅ HARD REDIRECT
             setTimeout(() => {
-                if (role === "admin")               router.push("/admin/dashboard");
-                else if (role === "guru kelas")      router.push("/guru_kelas/dashboard");
-                else if (role === "guru bidang studi") router.push("/guru_bidang_studi/dashboard");
-            }, 2000);
+                console.log('🚀 [Login] HARD REDIRECT to:', redirectPath);
+                console.log('🚀 [Login] Token saved:', !!localStorage.getItem('token'));
+                console.log('🚀 [Login] User saved:', localStorage.getItem('currentUser'));
+                window.location.href = redirectPath;
+            }, 1500);
 
-        } catch {
+        } catch (error) {
+            console.error('❌ [Login] Error:', error);
             setLoading(false);
             showPopup({
                 type: 'error',
@@ -451,7 +455,6 @@ export default function LoginClient() {
                     box-shadow: 0 12px 48px rgba(234,88,12,0.18);
                 }
 
-                /* ── Panel Kiri ── */
                 .left-panel {
                     width: 42%;
                     background: linear-gradient(160deg, #ea580c 0%, #f97316 55%, #fb923c 100%);
@@ -488,7 +491,6 @@ export default function LoginClient() {
                 .brand-nama   { font-size: 20px; font-weight: 700; font-style: italic; color: #c2410c; text-shadow: 0 1px 8px rgba(0,0,0,0.18); line-height: 1.3; margin: 0 0 8px; word-break: break-word; }
                 .brand-sub    { font-size: 11.5px; color: rgba(255,255,255,0.7); font-weight: 400; line-height: 1.6; margin: 0; }
 
-                /* ── Panel Kanan ── */
                 .right-panel { flex: 1; background: #fff; padding: 44px 38px; display: flex; flex-direction: column; justify-content: center; }
                 .right-label  { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; color: #f97316; text-transform: uppercase; margin: 0 0 8px; }
                 .right-title  { font-size: 28px; font-weight: 700; color: #1c0f07; margin: 0 0 8px; }
@@ -551,7 +553,6 @@ export default function LoginClient() {
                 <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
                     <div className="login-card">
 
-                        {/* ── Panel Kiri ── */}
                         <div className="left-panel">
                             <div className="logo-box">
                                 {logoSekolah && !logoError ? (
@@ -569,7 +570,6 @@ export default function LoginClient() {
                             </div>
                         </div>
 
-                        {/* ── Panel Kanan ── */}
                         <div className="right-panel">
                             <p className="right-label">Masuk ke akun</p>
                             <p className="right-title">Selamat Datang</p>
@@ -577,7 +577,6 @@ export default function LoginClient() {
 
                             <form onSubmit={handleSubmit}>
 
-                                {/* Email */}
                                 <div className="fg">
                                     <div className="field-label">
                                         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -593,7 +592,6 @@ export default function LoginClient() {
                                     />
                                 </div>
 
-                                {/* Password */}
                                 <div className="fg">
                                     <div className="field-label">
                                         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -624,7 +622,6 @@ export default function LoginClient() {
                                     </div>
                                 </div>
 
-                                {/* Role */}
                                 <div className="fg">
                                     <div className="field-label">
                                         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -637,9 +634,10 @@ export default function LoginClient() {
                                         style={{ color: formData.role ? "#1c0f07" : "#c4a882" }}
                                         required>
                                         <option value="" disabled style={{ color: "#c4a882" }}>Pilih role Anda</option>
+                                        {/* ✅ UBAH: Pakai underscore sesuai database */}
                                         <option value="admin">Admin</option>
-                                        <option value="guru kelas">Guru Kelas</option>
-                                        <option value="guru bidang studi">Guru Bidang Studi</option>
+                                        <option value="guru_kelas">Guru Kelas</option>
+                                        <option value="guru_bidang_studi">Guru Bidang Studi</option>
                                     </select>
                                 </div>
 

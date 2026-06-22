@@ -1,9 +1,6 @@
 /**
  * Nama File: authController.js
- * Fungsi: Mengelola logika autentikasi pengguna, termasuk proses login,
- *         validasi kredensial, pengecekan peran (role), dan pembuatan token JWT.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * ✅ UPDATED: Role langsung pakai underscore (sudah konsisten dengan database)
  */
 
 const jwt = require('jsonwebtoken');
@@ -11,14 +8,11 @@ const { comparePassword } = require('../utils/hash');
 const db = require('../config/db');
 const userModel = require('../models/authModel');
 
-/**
- * Melakukan autentikasi pengguna berdasarkan email, password, dan role yang dipilih.
- * Jika kredensial valid dan role sesuai, mengembalikan token JWT dan data pengguna.
- */
 const login = async (req, res) => {
   const { email_sekolah, password, role: selectedRole } = req.body;
 
-  // Validasi input wajib
+  console.log('🔐 [Backend] Login attempt:', { email_sekolah, selectedRole });
+
   if (!email_sekolah || !password || !selectedRole) {
     return res.status(400).json({
       success: false,
@@ -27,16 +21,16 @@ const login = async (req, res) => {
   }
 
   try {
-    // Ambil data pengguna berdasarkan email
     const [userRows] = await db.execute(
       `SELECT u.id_user, u.email_sekolah, u.password, u.nama_lengkap, u.status, ur.role
-            FROM user u
-            JOIN user_role ur ON u.id_user = ur.id_user
-            WHERE u.email_sekolah = ?`,
+       FROM user u
+       JOIN user_role ur ON u.id_user = ur.id_user
+       WHERE u.email_sekolah = ?`,
       [email_sekolah]
     );
 
     if (userRows.length === 0) {
+      console.log('❌ [Backend] User not found:', email_sekolah);
       return res.status(401).json({
         success: false,
         message: 'Email atau password salah',
@@ -45,7 +39,6 @@ const login = async (req, res) => {
 
     const user = userRows[0];
 
-    // Periksa status akun
     if (user.status !== 'aktif') {
       return res.status(403).json({
         success: false,
@@ -53,41 +46,46 @@ const login = async (req, res) => {
       });
     }
 
-    // Verifikasi password
     const isMatch = await comparePassword(password, user.password);
     if (!isMatch) {
+      console.log('❌ [Backend] Password mismatch for:', email_sekolah);
       return res.status(401).json({
         success: false,
         message: 'Email atau password salah',
       });
     }
 
-    // Ambil semua role pengguna
     const roles = await userModel.getRolesByUserId(user.id_user);
+    console.log('📋 [Backend] User roles from DB:', roles);
+    console.log('🔍 [Backend] Checking if includes:', selectedRole);
+    
     if (!roles.includes(selectedRole)) {
+      console.log('❌ [Backend] Role mismatch! DB roles:', roles, 'Requested:', selectedRole);
       return res.status(403).json({
         success: false,
         message: `Anda tidak memiliki akses sebagai ${selectedRole}`,
       });
     }
 
-    // Buat token JWT dengan role yang dipilih
+    // ✅ FIX: Tambah penutup } di expiresIn
     const token = jwt.sign(
       { id: user.id_user, role: selectedRole },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: '8h' }  // ← SUDAH BENAR
     );
 
-    // Ambil data tambahan dari tabel guru (jika ada)
+    console.log('🔑 [Backend] Token created with role:', selectedRole);
+
     const [guruRows] = await db.execute(
       `SELECT niy, nuptk, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, no_telepon, foto_path 
-            FROM guru 
-            WHERE user_id = ?`,
+       FROM guru 
+       WHERE user_id = ?`,
       [user.id_user]
     );
     const guruData = guruRows[0] || {};
 
-    // Respons sukses
+    console.log('✅ [Backend] Login success for:', email_sekolah);
+
     return res.status(200).json({
       success: true,
       token,
@@ -108,13 +106,12 @@ const login = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Error login:', err);
+    console.error('❌ [Backend] Error login:', err);
     return res.status(500).json({
       success: false,
-      message: 'Terjadi kesalahan server',
+      message: 'Terjadi kesalahan server: ' + err.message,
     });
   }
 };
 
-// Ekspor controller
 module.exports = { login };

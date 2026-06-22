@@ -52,7 +52,7 @@ const uploadFoto = multer({
 });
 
 // ─── HELPER MIDDLEWARE ───────────────────────────────────────────────────────
-const guruKelasOnly = authorize(['guru kelas']);
+const guruKelasOnly = authorize(['guru_kelas']);
 
 const validateJenisSemester = (req, res, next) => {
     const { jenis, semester } = req.params;

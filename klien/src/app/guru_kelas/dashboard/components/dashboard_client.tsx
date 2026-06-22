@@ -234,7 +234,7 @@ export default function GuruKelasDashboard() {
 
         try {
             const parsedUser: UserData = JSON.parse(userData);
-            if (parsedUser.role !== 'guru kelas') { router.push('/login'); return; }
+            if (parsedUser.role !== 'guru_kelas') { router.push('/login'); return; }
             setUser(parsedUser);
 
             const fetchDashboard = async () => {

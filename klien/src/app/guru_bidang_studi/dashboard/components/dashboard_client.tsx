@@ -234,7 +234,7 @@ export default function DashboardClient() {
 
         try {
             const parsedUser: UserData = JSON.parse(userData);
-            if (parsedUser.role !== 'guru bidang studi') {
+            if (parsedUser.role !== 'guru_bidang_studi') {
                 router.push('/login');
                 return;
             }

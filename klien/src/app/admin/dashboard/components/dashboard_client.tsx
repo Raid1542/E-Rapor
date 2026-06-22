@@ -88,11 +88,14 @@ export default function DashboardClient() {
 
     const [kelasList, setKelasList] = useState<KelasWithSiswa[]>([]);
     const [kelasLoading, setKelasLoading] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     const router = useRouter();
     const { showSessionExpired, handleLogout } = useSession();
 
     useEffect(() => {
+        setMounted(true);
+
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
 
@@ -305,7 +308,7 @@ export default function DashboardClient() {
                             onClick={() => router.push(card.path)}
                         >
                             {/* Background decoration */}
-                            
+
 
                             <div className="relative z-10">
                                 {/* Icon */}
@@ -443,48 +446,72 @@ export default function DashboardClient() {
                                 </div>
 
                                 {/* Horizontal Bar Chart */}
-                                <div style={{ height: `${Math.max(300, kelasList.length * 60)}px` }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart
-                                            data={barData}
-                                            layout="vertical"
-                                            margin={{ top: 20, right: 40, left: 0, bottom: 20 }}
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#fde0c8" horizontal={false} />
-                                            <XAxis
-                                                type="number"
-                                                stroke="#7a3a0a"
-                                                fontSize={11}
-                                                fontWeight={600}
-                                                tick={{ fill: '#7a3a0a' }}
-                                            />
-                                            <YAxis
-                                                type="category"
-                                                dataKey="name"
-                                                stroke="#7a3a0a"
-                                                fontSize={12}
-                                                fontWeight={700}
-                                                width={60}
-                                                tick={{ fill: '#7a3a0a' }}
-                                            />
-                                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(232,105,10,0.05)' }} />
-                                            <Bar
-                                                dataKey="siswa"
-                                                radius={[0, 12, 12, 0]}
-                                                maxBarSize={45}
-                                                barSize={30}
-                                            >
-                                                {barData.map((entry, index) => (
-                                                    <Cell
-                                                        key={`cell-${index}`}
-                                                        fill={BAR_COLORS[index % BAR_COLORS.length]}
-                                                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                                {mounted && kelasList.length > 0 && (
+                                    <div
+                                        className="w-full relative"
+                                        style={{
+                                            height: `${Math.max(350, kelasList.length * 65)}px`,
+                                            minHeight: '350px'
+                                        }}
+                                    >
+                                        {/* Horizontal Bar Chart - FIXED VERSION */}
+                                        {kelasList.length > 0 ? (
+                                            <div style={{ width: '100%', overflowX: 'auto', padding: '20px 0' }}>
+                                                <BarChart
+                                                    width={730}
+                                                    height={Math.max(400, kelasList.length * 70)}
+                                                    data={barData}
+                                                    layout="vertical"
+                                                    margin={{ top: 20, right: 40, left: 20, bottom: 20 }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#fde0c8" horizontal={false} />
+                                                    <XAxis
+                                                        type="number"
+                                                        stroke="#7a3a0a"
+                                                        fontSize={11}
+                                                        fontWeight={600}
+                                                        tick={{ fill: '#7a3a0a' }}
                                                     />
-                                                ))}
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
+                                                    <YAxis
+                                                        type="category"
+                                                        dataKey="name"
+                                                        stroke="#7a3a0a"
+                                                        fontSize={12}
+                                                        fontWeight={700}
+                                                        width={80}
+                                                        tick={{ fill: '#7a3a0a' }}
+                                                    />
+                                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(232,105,10,0.05)' }} />
+                                                    <Bar
+                                                        dataKey="siswa"
+                                                        radius={[0, 12, 12, 0]}
+                                                        maxBarSize={45}
+                                                        barSize={30}
+                                                        fill="#e8690a"
+                                                    >
+                                                        {barData.map((entry, index) => (
+                                                            <Cell
+                                                                key={`cell-${index}`}
+                                                                fill={BAR_COLORS[index % BAR_COLORS.length]}
+                                                            />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-10">
+                                                <p className="text-gray-500">Belum ada data kelas</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Loading Chart State */}
+                                {mounted && kelasList.length === 0 && (
+                                    <div className="flex items-center justify-center py-10">
+                                        <p className="text-sm text-gray-500">Belum ada data untuk ditampilkan</p>
+                                    </div>
+                                )}
 
                                 {/* Class List */}
                                 <div className="mt-6 pt-6 border-t" style={{ borderColor: '#fde0c8' }}>

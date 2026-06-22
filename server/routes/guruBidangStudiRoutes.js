@@ -44,7 +44,7 @@ const upload = multer({
   },
 });
 
-const guruBidangStudiOnly = authorize(['guru bidang studi']);
+const guruBidangStudiOnly = authorize(['guru_bidang_studi']);
 
 // --- Profil Guru ---
 router.get('/profil', authenticate, guruBidangStudiOnly, controller.getProfil);

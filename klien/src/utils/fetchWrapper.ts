@@ -1,4 +1,9 @@
-import { logout, isTokenExpired, getToken } from '@/lib/auth';
+/**
+ * File: fetchWrapper.ts
+ * ✅ UPDATED: Handle 401 dengan aman, hindari double logout
+ */
+
+import { getToken } from '@/lib/auth';
 
 interface FetchOptions extends RequestInit {
     skipAuthCheck?: boolean;
@@ -10,16 +15,6 @@ export async function fetchWithAuth(
 ): Promise<Response> {
     const { skipAuthCheck = false, ...fetchOptions } = options;
     const token = getToken();
-
-    if (!token && !url.includes('/auth/') && !skipAuthCheck) {
-        logout();
-        throw new Error('No authentication token');
-    }
-
-    if (token && isTokenExpired(token) && !skipAuthCheck) {
-        logout();
-        throw new Error('Token expired');
-    }
 
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
@@ -33,13 +28,21 @@ export async function fetchWithAuth(
             headers,
         });
 
+        // ✅ Hanya trigger logout jika server merespon 401
         if (response.status === 401 && !skipAuthCheck) {
             const data = await response.json().catch(() => ({}));
-
-            // Check jika error code adalah TOKEN_EXPIRED
-            if (data.code === 'TOKEN_EXPIRED') {
-                logout();
-                throw new Error('Session expired');
+            
+            // Cek apakah pesan dari server memang tentang expired
+            if (data.code === 'TOKEN_EXPIRED' || data.message?.toLowerCase().includes('expired')) {
+                console.log('🔒 [fetchWrapper] Token expired from server');
+                localStorage.removeItem('token');
+                localStorage.removeItem('currentUser');
+                
+                // Trigger event agar useSession menampilkan modal
+                window.dispatchEvent(new CustomEvent('sessionExpired'));
+                
+                // Redirect ke login
+                window.location.href = '/login';
             }
         }
 

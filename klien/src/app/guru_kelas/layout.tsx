@@ -1,11 +1,13 @@
 // File: layout.tsx
 // Fungsi: Layout utama untuk seluruh halaman di rute guru kelas.
 //         Menyediakan struktur dasar seperti navbar, sidebar, dan konten dinamis.
+//         ✅ UPDATED: Tambah AuthGuard untuk proteksi route
 // Pembuat: Frima Rizky Lianda - NIM: 3312401016
 // Tanggal: 15 September 2025
 
 import type { Metadata } from "next";
 import GuruKelasLayout from './components/Layout';
+import AuthGuard from '@/components/AuthGuard'; // ✅ TAMBAH BARIS INI
 
 export const metadata: Metadata = {
     title: {
@@ -20,5 +22,12 @@ export default function GuruKelasRootLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return <GuruKelasLayout>{children}</GuruKelasLayout>;
+    return (
+        // ✅ WRAP DENGAN AUTHGUARD
+        <AuthGuard allowedRoles={['guru_kelas']}>
+            <GuruKelasLayout>
+                {children}
+            </GuruKelasLayout>
+        </AuthGuard>
+    );
 }

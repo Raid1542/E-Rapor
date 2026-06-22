@@ -12,7 +12,6 @@ const getIdSemester = async (idInduk, semester) => {
     return rows.length > 0 ? rows[0] : null;
 };
 
-// Helper lama (untuk backward compatibility)
 const getIdTahunAjaranAktif = async (idInduk) => {
     const [rows] = await db.execute(
         `SELECT id_tahun_ajaran, semester 
@@ -61,7 +60,6 @@ const getKelasByTahunAjaran = async (req, res) => {
             });
         }
 
-        // Ambil kelas berdasarkan id_tahun_ajaran spesifik
         const [rows] = await db.execute(
             `SELECT id_kelas, nama_kelas 
                 FROM kelas 
@@ -117,7 +115,7 @@ const getDaftarSiswaUntukRapor = async (req, res) => {
         INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
         WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
         ORDER BY s.nama_lengkap`,
-            [kelasId, tahunAjaranIdInduk]  
+            [kelasId, tahunAjaranIdInduk]
         );
 
         res.json({
@@ -245,7 +243,8 @@ const aturStatusPenilaian = async (req, res) => {
     }
 };
 
-const ambilDataRaporLengkap = async (siswaId, taId, semester) => {
+// ✅ UPDATED: Tambah parameter 'jenis' untuk filter PTS/PAS
+const ambilDataRaporLengkap = async (siswaId, taId, semester, jenis = 'PTS') => {
     const data = {};
 
     // Data Akademik
@@ -268,27 +267,76 @@ const ambilDataRaporLengkap = async (siswaId, taId, semester) => {
         deskripsi: row.deskripsi,
     }));
 
-    // Data Kokurikuler
+    // ✅ Data Kokurikuler - SESUAI STRUKTUR DB
     const [kokurRows] = await db.execute(
-        `SELECT
-            nilai_mutabaah, nilai_bpi, nilai_literasi, nilai_proyek,
-            (SELECT judul FROM judul_proyek_per_tahun_ajaran jpt WHERE jpt.id_judul_proyek = nk.id_judul_proyek) AS nama_judul_proyek
-        FROM nilai_kokurikuler nk
-        WHERE id_siswa = ? AND id_tahun_ajaran = ? AND semester = ?`,
-        [siswaId, taId, semester]
+        `SELECT 
+        ak.kode AS kode_aspek,
+        ak.nama AS nama_aspek,
+        nk.nilai,
+        nk.grade,
+        nk.deskripsi,
+        nk.jenis_penilaian,
+        jp.judul AS nama_judul_proyek
+    FROM nilai_kokurikuler nk
+    LEFT JOIN aspek_kokurikuler ak ON nk.id_aspek_kokurikuler = ak.id_aspek_kokurikuler
+    LEFT JOIN judul_proyek_per_tahun_ajaran jp ON nk.id_judul_proyek = jp.id_judul_proyek
+    WHERE nk.id_siswa = ? 
+      AND nk.id_tahun_ajaran = ? 
+      AND nk.semester = ?
+      AND nk.jenis_penilaian = ?`,
+        [siswaId, taId, semester, jenis]
     );
 
-    data.kokurikuler = kokurRows[0] || {
+    const kokurikulerData = {
         nilai_mutabaah: null,
         nilai_bpi: null,
         nilai_literasi: null,
         nilai_proyek: null,
         nama_judul_proyek: null,
+        detail: []
     };
 
-    // Data Absensi
+    kokurRows.forEach(row => {
+        const kodeAspek = (row.kode_aspek || '').toUpperCase().trim();
+
+        switch (kodeAspek) {
+            case 'MUTABAAH':
+                kokurikulerData.nilai_mutabaah = row.nilai;
+                break;
+            case 'BPI':
+                kokurikulerData.nilai_bpi = row.nilai;
+                break;
+            case 'LITERASI':
+                kokurikulerData.nilai_literasi = row.nilai;
+                break;
+            case 'PROYEK':
+                kokurikulerData.nilai_proyek = row.nilai;
+                break;
+        }
+
+        if (row.nama_judul_proyek && !kokurikulerData.nama_judul_proyek) {
+            kokurikulerData.nama_judul_proyek = row.nama_judul_proyek;
+        }
+
+        kokurikulerData.detail.push({
+            kode_aspek: kodeAspek,
+            nama_aspek: row.nama_aspek,
+            nilai: row.nilai,
+            grade: row.grade,
+            deskripsi: row.deskripsi,
+            judul_proyek: row.nama_judul_proyek
+        });
+    });
+
+    data.kokurikuler = kokurikulerData;
+
+    // ✅ Data Absensi - SESUAI STRUKTUR DB (pilih kolom berdasarkan jenis)
+    const absensiFields = jenis === 'PTS' 
+        ? 'sakit_pts AS sakit, izin_pts AS izin, alpha_pts AS alpha'
+        : 'sakit_total AS sakit, izin_total AS izin, alpha_total AS alpha';
+
     const [absensiRows] = await db.execute(
-        `SELECT sakit, izin, alpha FROM absensi WHERE siswa_id = ? AND tahun_ajaran_id = ?`,
+        `SELECT ${absensiFields} FROM absensi WHERE siswa_id = ? AND id_tahun_ajaran = ?`,
         [siswaId, taId]
     );
 
@@ -345,7 +393,6 @@ const arsipkanRapor = async (req, res) => {
             });
         }
 
-        // Cari semester spesifik (bukan semester aktif)
         const semesterData = await getIdSemester(tahun_ajaran_id, semester);
 
         if (!semesterData) {
@@ -357,7 +404,6 @@ const arsipkanRapor = async (req, res) => {
 
         const taId = semesterData.id_tahun_ajaran;
 
-        // Validasi: status harus 'aktif' dulu baru bisa diarsipkan
         const statusField = jenis === 'PTS' ? 'status_pts' : 'status_pas';
         if (semesterData[statusField] !== 'aktif') {
             return res.status(400).json({
@@ -366,11 +412,10 @@ const arsipkanRapor = async (req, res) => {
             });
         }
 
-        // 1. Ambil semua siswa di semua kelas untuk semester ini
         const [siswaList] = await db.execute(
             `SELECT sk.siswa_id, sk.kelas_id FROM siswa_kelas sk
-                WHERE sk.tahun_ajaran_id = ?`,
-            [taId]
+            WHERE sk.id_tahun_ajaran_induk = ?`,
+            [tahun_ajaran_id]
         );
 
         if (siswaList.length === 0) {
@@ -380,12 +425,12 @@ const arsipkanRapor = async (req, res) => {
             });
         }
 
-        // Ambil semua data rapor lengkap dan simpan ke arsip
         for (const siswa of siswaList) {
             const dataRapor = await ambilDataRaporLengkap(
                 siswa.siswa_id,
                 taId,
-                semester
+                semester,
+                jenis
             );
 
             await db.execute(
@@ -399,7 +444,6 @@ const arsipkanRapor = async (req, res) => {
             );
         }
 
-        // Update status menjadi 'selesai'
         const query = `UPDATE tahun_ajaran SET ${statusField} = 'selesai' WHERE id_tahun_ajaran = ?`;
         await db.execute(query, [taId]);
 
