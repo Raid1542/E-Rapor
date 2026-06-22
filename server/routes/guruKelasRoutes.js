@@ -631,14 +631,29 @@ const validateRaporParamsWithTA = (req, res, next) => {
 const adminOrGuruKelasDitugaskan = [
     authenticate,
     authorize(['admin', 'guru kelas']),
-    (req, res, next) => {
+    async (req, res, next) => {
         if (req.user.role === 'admin') {
-            req.idTahunAjaranInduk = null;
+            // Ambil id_tahun_ajaran_induk dari tahunAjaranId param
+            const tahunAjaranId = parseInt(req.params.tahunAjaranId, 10);
+            
+            if (tahunAjaranId) {
+                try {
+                    const [taRows] = await db.execute(
+                        `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+                        [tahunAjaranId]
+                    );
+                    req.idTahunAjaranInduk = taRows[0]?.id_tahun_ajaran_induk || null;
+                } catch (err) {
+                    req.idTahunAjaranInduk = null;
+                }
+            } else {
+                req.idTahunAjaranInduk = null;
+            }
+
             req.idSemesterAktif = null;
             req.penilaianContext = {};
             return next();
         }
-
         cekPenilaianStatus(req, res, next); 
     },
     (req, res, next) => {

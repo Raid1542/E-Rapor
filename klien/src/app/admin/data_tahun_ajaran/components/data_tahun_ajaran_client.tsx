@@ -1,15 +1,16 @@
 /**
  * Nama File: DataTahunAjaranClient.tsx
- * Fungsi: Komponen klien untuk mengelola data tahun ajaran,
- *         mencakup fitur tambah, edit, ganti semester, filter,
- *         pencarian, dan pagination.
- * UI: Tema oranye elegan, konsisten dengan DataGuruClient
+ * Fungsi: Komponen klien untuk mengelola data tahun ajaran
+ * UPDATE: 
+ *   - Modal ganti semester baru dengan field alasan wajib
+ *   - Tampilan lebih simple dan user-friendly
+ *   - Warna konsisten dengan tema oranye
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
-import { Pencil, Plus, X, RotateCw, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { Pencil, Plus, X, RotateCw, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, ArrowRight, Calendar } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -25,16 +26,31 @@ const GlobalStyles = () => (
     @keyframes ta-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
     @keyframes ta-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
     @keyframes ta-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    @keyframes ta-slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     .ta-fadeIn  { animation: ta-fadeIn  0.2s ease; }
     .ta-scaleIn { animation: ta-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .ta-pulse   { animation: ta-pulse   0.6s ease 0.15s; }
+    .ta-slideUp { animation: ta-slideUp 0.4s ease-out forwards; }
   `}</style>
 );
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
+// ─── NOTIF MODAL (UPDATED) ────────────────────────────────────────────────────
+
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    success: {
+        iconBg: 'bg-green-50',
+        ring: 'ring-green-100',
+        icon: (
+            <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                    <CheckCircle2 size={64} className="text-green-500" />
+                </div>
+            </div>
+        ),
+        btn: 'bg-green-500 hover:bg-green-600'
+    },
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
     warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
     network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
@@ -42,17 +58,62 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
+    const isConfirm = modal.type === 'confirm';
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ta-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ta-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ta-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 ta-fadeIn">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-0 flex flex-col items-center ta-scaleIn overflow-hidden">
+                {/* Close button */}
+                {!isConfirm && (
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
+                        <X size={20} />
+                    </button>
+                )}
+
+                {/* Content */}
+                <div className="p-8 flex flex-col items-center gap-4 w-full">
+                    {/* Icon */}
+                    <div className="mt-2">
+                        {s.icon}
+                    </div>
+
+                    {/* Title & Message */}
+                    <div className="text-center">
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">{modal.title}</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">
+                            {modal.message}
+                        </p>
+                    </div>
+
+                    {/* Button */}
+                    {isConfirm ? (
+                        <div className="flex gap-3 w-full mt-2">
+                            <button onClick={onClose}
+                                className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button onClick={() => { modal.onConfirm?.(); onClose(); }}
+                                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+                            >
+                                Ya, Lanjutkan
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={onClose}
+                            className={`w-full mt-4 ${s.btn} text-white font-bold py-3.5 rounded-xl transition-all text-sm shadow-lg hover:shadow-xl`}
+                            style={modal.type === 'success' ? {
+                                background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                                boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)'
+                            } : {}}
+                        >
+                            OK, Mengerti
+                        </button>
+                    )}
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
             </div>
         </div>
     );
@@ -132,6 +193,11 @@ export default function DataTahunAjaranClient() {
     const [showConfirmGantiSemester, setShowConfirmGantiSemester] = useState(false);
     const [selectedItemForSemester, setSelectedItemForSemester] = useState<TahunAjaran | null>(null);
     const [confirmClosing, setConfirmClosing] = useState(false);
+
+    // ✅ STATE BARU untuk alasan ganti semester
+    const [alasanKoreksi, setAlasanKoreksi] = useState('');
+    const [showAlasanLainnya, setShowAlasanLainnya] = useState(false);
+    const [alasanCustom, setAlasanCustom] = useState('');
 
     const [showConfirmTambah, setShowConfirmTambah] = useState(false);
     const [confirmTambahClosing, setConfirmTambahClosing] = useState(false);
@@ -316,6 +382,10 @@ export default function DataTahunAjaranClient() {
     const openConfirmGantiSemester = (item: TahunAjaran) => {
         setSelectedItemForSemester(item);
         setShowConfirmGantiSemester(true);
+        // Reset form alasan
+        setAlasanKoreksi('');
+        setAlasanCustom('');
+        setShowAlasanLainnya(false);
     };
 
     // ── Tutup Modal Konfirmasi ─────────────────────────────────────────────────
@@ -325,12 +395,26 @@ export default function DataTahunAjaranClient() {
             setShowConfirmGantiSemester(false);
             setConfirmClosing(false);
             setSelectedItemForSemester(null);
+            setAlasanKoreksi('');
+            setAlasanCustom('');
+            setShowAlasanLainnya(false);
         }, 200);
     };
 
-    // ── Eksekusi Ganti Semester (dipanggil setelah konfirmasi) ─────────────────
+    // ── Eksekusi Ganti Semester (dengan alasan) ────────────────────────────────
     const executeGantiSemester = async () => {
         if (!selectedItemForSemester) return;
+
+        // ✅ Validasi alasan
+        const alasanFinal = showAlasanLainnya ? alasanCustom.trim() : alasanKoreksi;
+        if (!alasanFinal) {
+            showModal({
+                type: 'warning',
+                title: 'Alasan Wajib Diisi',
+                message: 'Silakan pilih atau isi alasan pergantian semester.'
+            });
+            return;
+        }
 
         const item = selectedItemForSemester;
         const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
@@ -348,44 +432,45 @@ export default function DataTahunAjaranClient() {
             const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${item.id_induk}/semester`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ semester_baru: semesterBaru }),
+                body: JSON.stringify({
+                    semester_baru: semesterBaru,
+                    alasan: alasanFinal
+                }),
             });
 
             const data = await res.json();
 
             if (res.ok && data.success) {
                 await fetchTahunAjaran();
-                showModal({
-                    type: 'success',
-                    title: 'Semester Berhasil Diganti!',
-                    message: data.message || `Semester aktif tahun ajaran ${item.tahun_ajaran} berhasil diubah ke ${semesterBaru}.`
-                });
-            } else {
-                if (data.warning === true) {
-                    // Tampilkan modal konfirmasi khusus
-                    showModal({
-                        type: 'warning',
-                        title: 'Konfirmasi Ganti Semester',
-                        message: `${data.message}\n\n${data.detail}\n\nApakah Anda yakin ingin melanjutkan ganti semester ke ${semesterBaru}?`,
-                    });
-                    return;
+
+                // Reset form
+                setAlasanKoreksi('');
+                setAlasanCustom('');
+                setShowAlasanLainnya(false);
+
+                // Tampilkan success dengan info lengkap
+                let successMessage = data.message || `Semester berhasil diganti ke ${semesterBaru}.`;
+                if (data.data?.catatan) {
+                    successMessage += `\n\n${data.data.catatan}`;
                 }
 
-                // Error biasa
+                showModal({
+                    type: 'success',
+                    title: '✅ Semester Berhasil Diganti!',
+                    message: successMessage
+                });
+            } else {
                 showModal({
                     type: 'error',
                     title: 'Gagal Ganti Semester',
-                    message: data.message || 'Terjadi kesalahan saat mengganti semester.\n\n' +
-                        (data.detail ? `Detail: ${data.detail}` : '') +
-                        (data.error ? `\nError: ${data.error}` : '')
+                    message: data.message || 'Terjadi kesalahan saat mengganti semester.'
                 });
             }
         } catch (err: any) {
             showModal({
                 type: 'network',
                 title: 'Koneksi Gagal',
-                message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.\n\n' +
-                    (err.message || '')
+                message: 'Tidak dapat terhubung ke server.'
             });
         }
     };
@@ -708,9 +793,9 @@ export default function DataTahunAjaranClient() {
                                                 {item.status === 'AKTIF' && (
                                                     <button onClick={() => openConfirmGantiSemester(item)}
                                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                        style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1' }}
-                                                        onMouseEnter={e => (e.currentTarget.style.background = '#bae6fd')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}
+                                                        style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                                        onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
                                                     >
                                                         <RotateCw size={13} /> Ganti {item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
                                                     </button>
@@ -736,7 +821,9 @@ export default function DataTahunAjaranClient() {
                 </div>
             </div>
 
-            {/* ── Modal Konfirmasi Ganti Semester ─────────────────────────────── */}
+            {/* ═══════════════════════════════════════════════════════════════════
+                MODAL KONFIRMASI GANTI SEMESTER (UPDATED)
+            ═══════════════════════════════════════════════════════════════════ */}
             {showConfirmGantiSemester && selectedItemForSemester && (
                 <div
                     className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${confirmClosing ? 'opacity-0' : 'opacity-100'}`}
@@ -750,51 +837,120 @@ export default function DataTahunAjaranClient() {
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                            <h2 className="text-base font-bold text-white">Konfirmasi Ganti Semester</h2>
+                            <div>
+                                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                    Ganti Semester
+                                </h2>
+                                <p className="text-xs text-white/80 mt-0.5">Konfirmasi pergantian semester aktif</p>
+                            </div>
                             <button onClick={closeConfirmGantiSemester} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
 
                         {/* Body */}
-                        <div className="p-6">
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                                <p className="text-sm font-bold text-red-800 mb-2">PERINGATAN PENTING!</p>
-                                <p className="text-sm text-red-700">
-                                    Anda akan mengubah semester tahun ajaran <strong>{selectedItemForSemester.tahun_ajaran}</strong> dari{' '}
-                                    <span className="font-bold px-2 py-0.5 rounded" style={{ background: '#dbeafe', color: '#1e40af' }}>{selectedItemForSemester.semester_aktif}</span>{' '}
-                                    ke{' '}
-                                    <span className="font-bold px-2 py-0.5 rounded" style={{ background: '#fef3c7', color: '#92400e' }}>{selectedItemForSemester.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}</span>.
+                        <div className="p-6 space-y-4">
+                            {/* Info Pergantian */}
+                            <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="text-center flex-1">
+                                        <span className="inline-block px-3 py-1.5 rounded-lg font-bold bg-white border border-gray-200">
+                                            {selectedItemForSemester.semester_aktif}
+                                        </span>
+                                    </div>
+                                    <div className="text-2xl px-2">→</div>
+                                    <div className="text-center flex-1">
+                                        <span className="inline-block px-3 py-1.5 rounded-lg font-bold"
+                                            style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#c95b08' }}>
+                                            {selectedItemForSemester.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-center text-gray-600">
+                                    Tahun Ajaran: <strong>{selectedItemForSemester.tahun_ajaran}</strong>
                                 </p>
                             </div>
 
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                                <h3 className="font-bold text-yellow-800 mb-3 text-sm">SEBELUM MELANJUTKAN, PASTIKAN:</h3>
-                                <ul className="space-y-2 text-sm text-yellow-900">
-                                    <li className="flex items-start gap-2"><span className="font-bold">1.</span> Semua nilai PTS/PAS semester {selectedItemForSemester.semester_aktif} sudah diinput</li>
-                                    <li className="flex items-start gap-2"><span className="font-bold">2.</span> Semua rapor sudah dicetak dan dibagikan ke orang tua</li>
-                                    <li className="flex items-start gap-2"><span className="font-bold">3.</span> Tidak ada nilai yang tertunda dari guru mata pelajaran</li>
+                            {/* Info Penting */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <h4 className="text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
+                                    <AlertCircle size={16} />
+                                    Informasi Penting
+                                </h4>
+                                <ul className="text-xs text-blue-800 space-y-1.5">
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-500 font-bold">✓</span>
+                                        <span>Data nilai siswa <strong>TIDAK hilang</strong>, tetap tersimpan di semester asal</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-500 font-bold">✓</span>
+                                        <span>Guru kelas dapat <strong>melanjutkan input</strong> di semester yang dipilih</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-500 font-bold">✓</span>
+                                        <span>Dapat <strong>bolak-balik</strong> untuk koreksi nilai jika diperlukan</span>
+                                    </li>
                                 </ul>
                             </div>
 
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                                <p className="text-xs text-blue-900">
-                                    <strong>Yang TETAP SAMA:</strong> Data guru, siswa, kelas, wali kelas, dan guru bidang studi TIDAK berubah.<br /><br />
-                                    <strong>Yang BERUBAH:</strong> Input nilai & absensi dimulai dari awal untuk semester baru.
-                                </p>
+                            {/* Field Alasan */}
+                            <div>
+                                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
+                                    Alasan Ganti Semester <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    value={showAlasanLainnya ? 'lainnya' : alasanKoreksi}
+                                    onChange={(e) => {
+                                        if (e.target.value === 'lainnya') {
+                                            setShowAlasanLainnya(true);
+                                            setAlasanKoreksi('');
+                                        } else {
+                                            setShowAlasanLainnya(false);
+                                            setAlasanKoreksi(e.target.value);
+                                            setAlasanCustom('');
+                                        }
+                                    }}
+                                    className={inputCls}
+                                >
+                                    <option value="">-- Pilih Alasan --</option>
+                                    <option value="Koreksi nilai siswa">Koreksi nilai siswa yang keliru</option>
+                                    <option value="Input nilai belum selesai">Input nilai belum selesai</option>
+                                    <option value="Pindah ke semester baru">Pindah ke semester baru</option>
+                                    <option value="Revisi rapor">Revisi rapor sebelum dibagikan</option>
+                                    <option value="lainnya">Lainnya (isi manual)</option>
+                                </select>
+
+                                {showAlasanLainnya && (
+                                    <input
+                                        type="text"
+                                        value={alasanCustom}
+                                        onChange={(e) => setAlasanCustom(e.target.value)}
+                                        placeholder="Tulis alasan Anda..."
+                                        className={`${inputCls} mt-2`}
+                                        maxLength={200}
+                                    />
+                                )}
                             </div>
 
-                            <div className="flex gap-3">
-                                <button onClick={closeConfirmGantiSemester} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                            {/* Tombol Aksi */}
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={closeConfirmGantiSemester}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
                                     style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
                                     onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                                    Batal, Cek Dulu
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                                >
+                                    Batal
                                 </button>
-                                <button onClick={executeGantiSemester} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                <button
+                                    onClick={executeGantiSemester}
+                                    disabled={!alasanKoreksi && !(showAlasanLainnya && alasanCustom.trim())}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
+                                    onMouseEnter={e => { if (!e.currentTarget.disabled) (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'); }}
+                                    onMouseLeave={e => { if (!e.currentTarget.disabled) (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'); }}
+                                >
                                     Ganti Semester
                                 </button>
                             </div>

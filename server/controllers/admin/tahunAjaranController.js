@@ -324,15 +324,35 @@ const updateTahunAjaran = async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // PUT /api/admin/tahun-ajaran/:id_induk/semester
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// PUT /api/admin/tahun-ajaran/:id_induk/semester
+// ✅ UPDATED: Fleksibel + Riwayat Ganti Semester + Alasan Wajib
+// ═══════════════════════════════════════════════════════════════
 const gantiSemester = async (req, res) => {
     try {
         const { id_induk } = req.params;
-        const { semester_baru } = req.body;
+        const { semester_baru, alasan } = req.body;
+        const adminId = req.user?.id;
 
+        console.log('🔄 [gantiSemester] START');
+        console.log('🔄 ID TA:', id_induk);
+        console.log('🔄 Semester baru:', semester_baru);
+        console.log('🔄 Alasan:', alasan);
+        console.log('🔄 Admin ID:', adminId);
+
+        // ═══ VALIDASI 1: Semester harus valid ═══
         if (!['Ganjil', 'Genap'].includes(semester_baru)) {
             return res.status(400).json({
                 success: false,
                 message: 'Semester harus Ganjil atau Genap'
+            });
+        }
+
+        // ═══ VALIDASI 2: Alasan wajib diisi ═══
+        if (!alasan || alasan.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Alasan pergantian semester wajib diisi'
             });
         }
 
@@ -341,8 +361,11 @@ const gantiSemester = async (req, res) => {
         try {
             await connection.beginTransaction();
 
+            // ═══ Ambil data TA induk ═══
             const [cekInduk] = await connection.execute(
-                `SELECT id_tahun_ajaran_induk, tahun_ajaran FROM tahun_ajaran_induk WHERE id_tahun_ajaran_induk = ?`,
+                `SELECT id_tahun_ajaran_induk, tahun_ajaran 
+                 FROM tahun_ajaran_induk 
+                 WHERE id_tahun_ajaran_induk = ?`,
                 [id_induk]
             );
 
@@ -354,12 +377,15 @@ const gantiSemester = async (req, res) => {
                 });
             }
 
+            const tahunAjaran = cekInduk[0].tahun_ajaran;
             const semesterLama = semester_baru === 'Ganjil' ? 'Genap' : 'Ganjil';
 
-            const [idSemesterLama] = await connection.execute(`
-                SELECT id_tahun_ajaran FROM tahun_ajaran 
-                WHERE id_tahun_ajaran_induk = ? AND semester = ?
-            `, [id_induk, semesterLama]);
+            // ═══ Cek semester lama ada ═══
+            const [idSemesterLama] = await connection.execute(
+                `SELECT id_tahun_ajaran FROM tahun_ajaran 
+                 WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
+                [id_induk, semesterLama]
+            );
 
             if (idSemesterLama.length === 0) {
                 await connection.rollback();
@@ -371,106 +397,142 @@ const gantiSemester = async (req, res) => {
 
             const id_ta_lama = idSemesterLama[0].id_tahun_ajaran;
 
-            // Validasi data (SKIP jika tabel belum ada)
-            let totalSiswa = 0;
-            let totalKelas = 0;
-            let siswaSudahInput = 0;
+            // ═══ INFO NILAI (untuk response informatif, TIDAK BLOCKING) ═══
+            let infoNilai = {
+                total_siswa: 0,
+                total_kelas: 0,
+                siswa_sudah_input: 0,
+                siswa_belum_lengkap: 0,
+                status_pts: 'nonaktif',
+                status_pas: 'nonaktif'
+            };
 
             try {
+                // Hitung total siswa di TA ini
                 const [cekSiswa] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.siswa_id) as total_siswa
                     FROM siswa_kelas sk
-                    WHERE sk.tahun_ajaran_id = ?
+                    WHERE sk.id_tahun_ajaran_induk = ?
                 `, [id_induk]);
-                totalSiswa = cekSiswa[0]?.total_siswa || 0;
+                infoNilai.total_siswa = cekSiswa[0]?.total_siswa || 0;
 
                 const [cekKelas] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.kelas_id) as total_kelas
                     FROM siswa_kelas sk
-                    WHERE sk.tahun_ajaran_id = ?
+                    WHERE sk.id_tahun_ajaran_induk = ?
                 `, [id_induk]);
-                totalKelas = cekKelas[0]?.total_kelas || 0;
+                infoNilai.total_kelas = cekKelas[0]?.total_kelas || 0;
 
+                // Hitung siswa yang sudah input nilai di semester lama
                 const [cekAdaNilai] = await connection.execute(`
                     SELECT COUNT(DISTINCT nr.siswa_id) as siswa_sudah_input
                     FROM nilai_rapor nr
-                    WHERE nr.id_tahun_ajaran = ?
+                    WHERE nr.tahun_ajaran_id = ?
                 `, [id_ta_lama]);
-                siswaSudahInput = cekAdaNilai[0]?.siswa_sudah_input || 0;
+                infoNilai.siswa_sudah_input = cekAdaNilai[0]?.siswa_sudah_input || 0;
 
-            } catch (queryErr) {
-                console.warn('⚠️ Warning: Tabel siswa_kelas/nilai_rapor belum ada, skip validasi');
-            }
-
-            if (totalSiswa > 0 && siswaSudahInput === 0) {
-                await connection.rollback();
-                return res.status(400).json({
-                    success: false,
-                    message: `⚠️ Belum Ada Nilai untuk Semester ${semesterLama}`,
-                    detail: `Terdapat ${totalSiswa} siswa di ${totalKelas} kelas, namun belum ada input nilai rapor untuk semester ${semesterLama}.\n\nPastikan semua nilai sudah diinput sebelum mengganti semester.`,
-                    warning: true
-                });
-            }
-
-            if (siswaSudahInput > 0) {
-                const [cekNilai] = await connection.execute(`
+                // Hitung siswa yang belum lengkap (kurang PTS atau PAS)
+                const [cekBelumLengkap] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.siswa_id) as siswa_belum_lengkap
                     FROM siswa_kelas sk
-                    WHERE sk.tahun_ajaran_id = ?
+                    WHERE sk.id_tahun_ajaran_induk = ?
                     AND (
                         sk.siswa_id NOT IN (
-                            SELECT siswa_id FROM nilai_rapor 
-                            WHERE id_tahun_ajaran = ? AND jenis_penilaian = 'PTS'
+                            SELECT DISTINCT siswa_id FROM nilai_rapor 
+                            WHERE tahun_ajaran_id = ? AND jenis_penilaian = 'PTS' AND nilai_rapor IS NOT NULL
                         )
                         OR
                         sk.siswa_id NOT IN (
-                            SELECT siswa_id FROM nilai_rapor 
-                            WHERE id_tahun_ajaran = ? AND jenis_penilaian = 'PAS'
+                            SELECT DISTINCT siswa_id FROM nilai_rapor 
+                            WHERE tahun_ajaran_id = ? AND jenis_penilaian = 'PAS' AND nilai_rapor IS NOT NULL
                         )
                     )
                 `, [id_induk, id_ta_lama, id_ta_lama]);
+                infoNilai.siswa_belum_lengkap = cekBelumLengkap[0]?.siswa_belum_lengkap || 0;
 
-                if (cekNilai[0].siswa_belum_lengkap > 0) {
-                    await connection.rollback();
-                    return res.status(400).json({
-                        success: false,
-                        message: `⚠️ Ada Nilai yang Belum Lengkap`,
-                        detail: `Masih ada ${cekNilai[0].siswa_belum_lengkap} siswa yang nilainya belum lengkap di semester ${semesterLama}. Harap lengkapi nilai PTS dan PAS terlebih dahulu.`,
-                        warning: true
-                    });
+                // Cek status PTS/PAS di semester lama
+                const [cekStatus] = await connection.execute(`
+                    SELECT status_pts, status_pas FROM tahun_ajaran 
+                    WHERE id_tahun_ajaran = ?
+                `, [id_ta_lama]);
+                if (cekStatus.length > 0) {
+                    infoNilai.status_pts = cekStatus[0].status_pts;
+                    infoNilai.status_pas = cekStatus[0].status_pas;
                 }
+
+            } catch (queryErr) {
+                console.warn('⚠️ Warning: Query info nilai error:', queryErr.message);
             }
 
-            await connection.execute(`
-                UPDATE tahun_ajaran 
-                SET status = 'nonaktif' 
-                WHERE id_tahun_ajaran_induk = ? AND semester = ?
-            `, [id_induk, semesterLama]);
+            // ═══ UPDATE: Ganti status semester ═══
+            // Nonaktifkan semester lama
+            await connection.execute(
+                `UPDATE tahun_ajaran 
+                 SET status = 'nonaktif' 
+                 WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
+                [id_induk, semesterLama]
+            );
 
-            await connection.execute(`
-                UPDATE tahun_ajaran 
-                SET status = 'aktif' 
-                WHERE id_tahun_ajaran_induk = ? AND semester = ?
-            `, [id_induk, semester_baru]);
+            // Aktifkan semester baru
+            await connection.execute(
+                `UPDATE tahun_ajaran 
+                 SET status = 'aktif' 
+                 WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
+                [id_induk, semester_baru]
+            );
+
+            // ═══ RIWAYAT GANTI SEMESTER: Catat pergantian ═══
+            await connection.execute(
+                `INSERT INTO riwayat_ganti_semester 
+                 (tahun_ajaran_induk_id, tahun_ajaran, semester_lama, semester_baru, alasan, admin_id)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [id_induk, tahunAjaran, semesterLama, semester_baru, alasan.trim(), adminId]
+            );
 
             await connection.commit();
 
+            console.log('✅ [gantiSemester] Berhasil ganti semester');
+
+            // ═══ Response dengan info lengkap ═══
+            const kelengkapan = infoNilai.total_siswa > 0 
+                ? Math.round((infoNilai.siswa_sudah_input / infoNilai.total_siswa) * 100)
+                : 0;
+
+            let catatan = '';
+            if (infoNilai.total_siswa === 0) {
+                catatan = 'Belum ada siswa di tahun ajaran ini.';
+            } else if (infoNilai.siswa_belum_lengkap > 0) {
+                catatan = `⚠️ Masih ada ${infoNilai.siswa_belum_lengkap} siswa dengan nilai belum lengkap di semester ${semesterLama}. Data nilai TIDAK hilang dan dapat dilanjutkan kapan saja.`;
+            } else if (infoNilai.siswa_sudah_input > 0) {
+                catatan = `✅ Semua nilai di semester ${semesterLama} sudah lengkap (${kelengkapan}%). Data nilai tetap tersimpan.`;
+            } else {
+                catatan = 'Data nilai sebelumnya masih tersimpan, guru dapat melanjutkan input di semester yang baru.';
+            }
+
             res.json({
                 success: true,
-                message: `Semester berhasil diganti ke ${semester_baru}.`,
-                semester_aktif: semester_baru
+                message: `Semester berhasil diganti dari ${semesterLama} ke ${semester_baru}`,
+                data: {
+                    tahun_ajaran: tahunAjaran,
+                    semester_lama: semesterLama,
+                    semester_baru: semester_baru,
+                    alasan: alasan.trim(),
+                    info_nilai: infoNilai,
+                    kelengkapan_persen: kelengkapan,
+                    catatan: catatan
+                }
             });
 
         } catch (err) {
             await connection.rollback();
-            console.error('Error transaction:', err);
+            console.error('❌ Error transaction:', err);
             throw err;
         } finally {
             connection.release();
         }
 
     } catch (err) {
-        console.error('Error ganti semester:', err);
+        console.error('❌ Error ganti semester:', err);
         res.status(500).json({
             success: false,
             message: `Gagal mengganti semester: ${err.message}`,

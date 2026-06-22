@@ -110,43 +110,41 @@ export default function Sidebar() {
   };
 
   useEffect(() => {
-  fetchSchoolData();
-  fetchTahunAjaranAktif();
-
-  const handleLogoUpdate = (e: Event) => {
-    const customEvent = e as CustomEvent;
-    const logoPath = customEvent.detail?.logoPath;
-    if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
-    else fetchSchoolData();
-  };
-
-  const handleTAUpdate = () => fetchTahunAjaranAktif();
-
-  const pollingInterval = setInterval(() => {
+    fetchSchoolData();
     fetchTahunAjaranAktif();
-  }, 3000); 
 
-  const handleStorageChange = (e: StorageEvent) => {
-    if (e.key === 'tahunAjaranUpdated' || e.key === 'semesterUpdated') {
-      fetchTahunAjaranAktif();
-    }
-  };
+    // ✅ Handler untuk event custom
+    const handleLogoUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const logoPath = customEvent.detail?.logoPath;
+      if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
+      else fetchSchoolData();
+    };
 
-  window.addEventListener('logoUpdated', handleLogoUpdate);
-  window.addEventListener('schoolUpdated', fetchSchoolData);
-  window.addEventListener('tahunAjaranUpdated', handleTAUpdate);
-  window.addEventListener('semesterUpdated', handleTAUpdate); 
-  window.addEventListener('storage', handleStorageChange);
+    const handleTAUpdate = () => fetchTahunAjaranAktif();
 
-  return () => {
-    clearInterval(pollingInterval); 
-    window.removeEventListener('logoUpdated', handleLogoUpdate);
-    window.removeEventListener('schoolUpdated', fetchSchoolData);
-    window.removeEventListener('tahunAjaranUpdated', handleTAUpdate);
-    window.removeEventListener('semesterUpdated', handleTAUpdate);
-    window.removeEventListener('storage', handleStorageChange);
-  };
-}, []);
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'tahunAjaranUpdated' || e.key === 'semesterUpdated') {
+        fetchTahunAjaranAktif();
+      }
+    };
+
+    // ✅ Hanya gunakan event listener, TANPA polling
+    window.addEventListener('logoUpdated', handleLogoUpdate);
+    window.addEventListener('schoolUpdated', fetchSchoolData);
+    window.addEventListener('tahunAjaranUpdated', handleTAUpdate);
+    window.addEventListener('semesterUpdated', handleTAUpdate);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      // ✅ Hapus polling interval dari cleanup
+      window.removeEventListener('logoUpdated', handleLogoUpdate);
+      window.removeEventListener('schoolUpdated', fetchSchoolData);
+      window.removeEventListener('tahunAjaranUpdated', handleTAUpdate);
+      window.removeEventListener('semesterUpdated', handleTAUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   // ── Submenu data ───────────────────────────────────────────────────────────
 
@@ -409,10 +407,10 @@ export default function Sidebar() {
           <button
             onClick={() => toggleDropdown('akademik')}
             className={`${navBase} mb-0 justify-between ${!taAktif
-                ? navDisabled
-                : isAkademikActive
-                  ? navActive
-                  : navInactive
+              ? navDisabled
+              : isAkademikActive
+                ? navActive
+                : navInactive
               }`}
             title={!taAktif ? 'Aktifkan Tahun Ajaran terlebih dahulu' : ''}
           >
