@@ -8,29 +8,29 @@ const db = require('../../config/db');
 const ekstrakurikulerModel = {
 
   // Mengambil semua ekskul berdasarkan tahun ajaran (JOIN dengan pembina)
-  async getAllByTahunAjaran(tahun_ajaran_id) {
-    const [rows] = await db.execute(
-      `SELECT 
-          e.id_ekskul,
-          e.nama_ekskul,
-          e.pembina_id,
-          p.nama_lengkap AS nama_pembina,
-          e.keterangan,
-          e.tahun_ajaran_id,
-          COUNT(pe.siswa_id) AS jumlah_anggota
-      FROM ekstrakurikuler e
-      LEFT JOIN pembina_ekstrakurikuler p 
-          ON e.pembina_id = p.id_pembina_ekstrakurikuler
-      LEFT JOIN peserta_ekstrakurikuler pe 
-          ON e.id_ekskul = pe.ekskul_id 
-          AND pe.tahun_ajaran_id = ?
-      WHERE e.tahun_ajaran_id = ?
-      GROUP BY e.id_ekskul
-      ORDER BY e.nama_ekskul ASC`,
-      [tahun_ajaran_id, tahun_ajaran_id]
-    );
-    return rows;
-  },
+async getAllByTahunAjaran(tahun_ajaran_id) {
+  const [rows] = await db.execute(
+    `SELECT 
+        e.id_ekskul,
+        e.nama_ekskul,
+        e.pembina_id,
+        p.nama_lengkap AS nama_pembina,
+        e.keterangan,
+        e.tahun_ajaran_id,
+        COUNT(pe.siswa_id) AS jumlah_siswa
+    FROM ekstrakurikuler e
+    LEFT JOIN pembina_ekstrakurikuler p 
+        ON e.pembina_id = p.id_pembina_ekstrakurikuler
+    LEFT JOIN peserta_ekstrakurikuler pe 
+        ON e.id_ekskul = pe.ekskul_id 
+        AND pe.tahun_ajaran_id = ?
+    WHERE e.tahun_ajaran_id = ?
+    GROUP BY e.id_ekskul
+    ORDER BY e.nama_ekskul ASC`,
+    [tahun_ajaran_id, tahun_ajaran_id]
+  );
+  return rows;
+},
 
   // Menambahkan ekskul baru
   async create(data) {

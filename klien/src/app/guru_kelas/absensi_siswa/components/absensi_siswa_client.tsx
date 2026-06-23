@@ -152,7 +152,7 @@ export default function AbsensiClient() {
                 const ta = result.data;
                 const ptsStatus = ta.status_pts || 'nonaktif';
                 const pasStatus = ta.status_pas || 'nonaktif';
-                
+
                 setStatusPTS(ptsStatus);
                 setStatusPAS(pasStatus);
                 setSemesterAktif(ta.semester || 'Ganjil');
@@ -166,31 +166,12 @@ export default function AbsensiClient() {
                     setJenisPenilaian('PAS');
                     setIsReadOnly(false);
                     setReadOnlyReason(null);
-                } else if (ptsStatus === 'selesai' || pasStatus === 'selesai') {
-                    // Salah satu sudah selesai → read-only
-                    setIsReadOnly(true);
-                    setReadOnlyReason('locked');
-                    // Default ke yang selesai
-                    setJenisPenilaian(ptsStatus === 'selesai' ? 'PTS' : 'PAS');
-                    setTimeout(() => {
-                        showModal({
-                            type: 'warning',
-                            title: 'Periode Penilaian Selesai',
-                            message: 'Periode penilaian telah selesai dan data sudah dikunci.\n\nAnda dapat melihat data absensi dalam mode baca saja (read only), tetapi tidak dapat mengedit.'
-                        });
-                    }, 500);
-                } else {
-                    // Keduanya nonaktif → read-only
-                    setIsReadOnly(true);
-                    setReadOnlyReason('not_open');
+                }
+                else {
+                    // Default ke PTS jika tidak ada yang aktif
                     setJenisPenilaian('PTS');
-                    setTimeout(() => {
-                        showModal({
-                            type: 'warning',
-                            title: '⏳ Periode Penilaian Belum Aktif',
-                            message: 'Baik PTS maupun PAS belum dibuka oleh admin.\n\nAnda dapat melihat data absensi dalam mode baca saja (read only), tetapi belum dapat mengedit.\n\nSilakan hubungi admin untuk membuka periode penilaian.'
-                        });
-                    }, 500);
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
                 }
 
                 return true;
@@ -220,7 +201,7 @@ export default function AbsensiClient() {
 
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({ code: 'UNKNOWN', message: 'Gagal memuat data' }));
-                
+
                 if (errData.code === 'NOT_ASSIGNED') {
                     setIsNotAssigned(true);
                     return;
@@ -236,7 +217,7 @@ export default function AbsensiClient() {
                     setAbsensiData(null);
                     return;
                 }
-                
+
                 showModal({
                     type: 'error',
                     title: 'Gagal Memuat Data',
@@ -454,7 +435,7 @@ export default function AbsensiClient() {
             }
 
             const semester = semesterAktif;
-            const res = await fetch(`${API_BASE}/absensi/${jenisPenilaian}/${semester}`, {
+            const res = await fetch(`${API_BASE}/absensi`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -465,7 +446,9 @@ export default function AbsensiClient() {
                     kelas_id: absensiData?.kelas_id,
                     sakit: data.sakit,
                     izin: data.izin,
-                    alpha: data.alpha
+                    alpha: data.alpha,
+                    jenis: jenisPenilaian,  // ✅ TAMBAH
+                    semester: semesterAktif  // ✅ TAMBAH
                 })
             });
 
@@ -531,26 +514,44 @@ export default function AbsensiClient() {
 
     const handleTabChange = (jenis: 'PTS' | 'PAS') => {
         const status = getTabStatus(jenis);
-        
-        // Tidak bisa klik tab yang nonaktif atau selesai
-        if (status !== 'aktif') {
-            if (status === 'selesai') {
-                showModal({
-                    type: 'warning',
-                    title: 'Periode Selesai',
-                    message: `Periode ${jenis} sudah selesai dan data sudah dikunci.\n\nAnda hanya dapat melihat data dalam mode baca saja.`
-                });
-            } else {
-                showModal({
-                    type: 'warning',
-                    title: '⏳ Periode Belum Aktif',
-                    message: `Periode ${jenis} belum dibuka oleh admin.\n\nSilakan tunggu admin membuka periode ${jenis}.`
-                });
-            }
+
+        console.log(`🔄 [Tab Change] Pindah ke ${jenis}, status: ${status}`);
+
+        // ✅ CLEAR editing rows sebelum pindah tab
+        if (editingRows.size > 0) {
+            setEditingRows(new Set());
+            setEditedData({});
+            console.log('🗑️ [Tab Change] Clear editing rows');
+        }
+
+        // Cek apakah periode ini bisa diakses
+        if (status === 'nonaktif') {
+            showModal({
+                type: 'warning',
+                title: '⏳ Periode Belum Aktif',
+                message: `Periode ${jenis} belum dibuka oleh admin.\n\nSilakan tunggu admin membuka periode ${jenis}.`
+            });
             return;
         }
-        
+
+        // Jika selesai, tetap bisa lihat tapi tidak bisa edit
+        if (status === 'selesai') {
+            setJenisPenilaian(jenis);
+            setIsReadOnly(true);
+            setReadOnlyReason('locked');
+            showModal({
+                type: 'warning',
+                title: 'Periode Selesai',
+                message: `Periode ${jenis} sudah selesai.\n\nAnda hanya dapat melihat data dalam mode baca saja.`
+            });
+            return;
+        }
+
+        // Jika aktif, bisa edit
+        console.log(`✅ [Tab Change] ${jenis} aktif, enable edit mode`);
         setJenisPenilaian(jenis);
+        setIsReadOnly(false);
+        setReadOnlyReason(null);
     };
 
     // ── Render: Akses Ditolak ──────────────────────────────────────────────
@@ -656,47 +657,56 @@ export default function AbsensiClient() {
                                 onClick={() => handleTabChange('PTS')}
                                 className="px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
                                 style={{
-                                    background: jenisPenilaian === 'PTS' && statusPTS === 'aktif' 
-                                        ? '#c95b08' 
-                                        : statusPTS === 'aktif' 
-                                            ? 'rgba(201,91,8,0.1)' 
-                                            : 'transparent',
-                                    color: jenisPenilaian === 'PTS' && statusPTS === 'aktif'
+                                    background: jenisPenilaian === 'PTS'
+                                        ? '#c95b08'
+                                        : statusPTS === 'aktif'
+                                            ? 'rgba(201,91,8,0.1)'
+                                            : statusPTS === 'selesai'
+                                                ? 'rgba(156,163,175,0.1)'
+                                                : 'transparent',
+                                    color: jenisPenilaian === 'PTS'
                                         ? '#fff'
                                         : statusPTS === 'aktif'
                                             ? '#c95b08'
-                                            : '#9ca3af',
-                                    cursor: statusPTS === 'aktif' ? 'pointer' : 'not-allowed',
-                                    opacity: statusPTS === 'aktif' ? 1 : 0.6
+                                            : statusPTS === 'selesai'
+                                                ? '#6b7280'
+                                                : '#9ca3af',
+                                    cursor: statusPTS !== 'nonaktif' ? 'pointer' : 'not-allowed',
+                                    opacity: statusPTS === 'nonaktif' ? 0.6 : 1
                                 }}
                             >
                                 <span>PTS</span>
                                 <span className="text-[9px] font-normal">
-                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '✓ Selesai' : '⏳ Menunggu'}
                                 </span>
                             </button>
+
                             {/* Tab PAS */}
                             <button
                                 onClick={() => handleTabChange('PAS')}
                                 className="px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
                                 style={{
-                                    background: jenisPenilaian === 'PAS' && statusPAS === 'aktif' 
-                                        ? '#c95b08' 
-                                        : statusPAS === 'aktif' 
-                                            ? 'rgba(201,91,8,0.1)' 
-                                            : 'transparent',
-                                    color: jenisPenilaian === 'PAS' && statusPAS === 'aktif'
+                                    background: jenisPenilaian === 'PAS'
+                                        ? '#c95b08'
+                                        : statusPAS === 'aktif'
+                                            ? 'rgba(201,91,8,0.1)'
+                                            : statusPAS === 'selesai'
+                                                ? 'rgba(156,163,175,0.1)'
+                                                : 'transparent',
+                                    color: jenisPenilaian === 'PAS'
                                         ? '#fff'
                                         : statusPAS === 'aktif'
                                             ? '#c95b08'
-                                            : '#9ca3af',
-                                    cursor: statusPAS === 'aktif' ? 'pointer' : 'not-allowed',
-                                    opacity: statusPAS === 'aktif' ? 1 : 0.6
+                                            : statusPAS === 'selesai'
+                                                ? '#6b7280'
+                                                : '#9ca3af',
+                                    cursor: statusPAS !== 'nonaktif' ? 'pointer' : 'not-allowed',
+                                    opacity: statusPAS === 'nonaktif' ? 0.6 : 1
                                 }}
                             >
                                 <span>PAS</span>
                                 <span className="text-[9px] font-normal">
-                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '✓ Selesai' : '⏳ Menunggu'}
                                 </span>
                             </button>
                         </div>

@@ -113,16 +113,16 @@ exports.generateRaporPDF = async (req, res) => {
             const status_pas_db = taAktif.status_pas;
 
             if (req.user.role !== 'admin') {
-                if (jenisNorm === 'PTS' && status_pts_db !== 'aktif') {
+                if (jenisNorm === 'PTS' && status_pts_db === 'nonaktif') {
                     return res.status(403).json({
                         success: false,
-                        message: status_pts_db === 'nonaktif' ? 'Rapor PTS belum dibuka' : 'Rapor PTS sudah dikunci'
+                        message: 'Rapor PTS belum dibuka oleh admin'
                     });
                 }
-                if (jenisNorm === 'PAS' && status_pas_db !== 'aktif') {
+                if (jenisNorm === 'PAS' && status_pas_db === 'nonaktif') {
                     return res.status(403).json({
                         success: false,
-                        message: status_pas_db === 'nonaktif' ? 'Rapor PAS belum dibuka' : 'Rapor PAS sudah dikunci'
+                        message: 'Rapor PAS belum dibuka oleh admin'
                     });
                 }
             }
@@ -139,7 +139,7 @@ exports.generateRaporPDF = async (req, res) => {
         const rawDbSem = (semester_db || '').trim();
         const normalizedDbSem = rawDbSem.toLowerCase() === 'ganjil' ? 'Ganjil'
             : rawDbSem.toLowerCase() === 'genap' ? 'Genap'
-            : rawDbSem;
+                : rawDbSem;
 
         if (semesterNorm !== normalizedDbSem) {
             return res.status(400).json({
@@ -328,22 +328,22 @@ exports.generateRaporPDF = async (req, res) => {
 
         const aspekMutabaah = getAspek(5);
         const aspekLiterasi = getAspek(2);
-        const aspekBPI      = getAspek(4);
-        const aspekProyek   = getAspek(3);
+        const aspekBPI = getAspek(4);
+        const aspekProyek = getAspek(3);
 
-        const my     = aspekMutabaah.nilai;
-        const gmy    = aspekMutabaah.grade;
-        const dmy    = aspekMutabaah.deskripsi;
+        const my = aspekMutabaah.nilai;
+        const gmy = aspekMutabaah.grade;
+        const dmy = aspekMutabaah.deskripsi;
 
-        const bpi    = aspekBPI.nilai;
-        const gbpi   = aspekBPI.grade;
-        const dbpi   = aspekBPI.deskripsi;
+        const bpi = aspekBPI.nilai;
+        const gbpi = aspekBPI.grade;
+        const dbpi = aspekBPI.deskripsi;
 
-        const li     = aspekLiterasi.nilai;
-        const gli    = aspekLiterasi.grade;
-        const dli    = aspekLiterasi.deskripsi;
+        const li = aspekLiterasi.nilai;
+        const gli = aspekLiterasi.grade;
+        const dli = aspekLiterasi.deskripsi;
 
-        const proyek  = aspekProyek.nilai;
+        const proyek = aspekProyek.nilai;
         const gproyek = aspekProyek.grade;
         const dproyek = aspekProyek.deskripsi;
         const namaproyek = aspekProyek.namaJudulProyek;
@@ -361,11 +361,11 @@ exports.generateRaporPDF = async (req, res) => {
         let s, i, a;
         if (jenisNorm === 'PTS') {
             s = abs[0]?.sakit_pts || 0;
-            i = abs[0]?.izin_pts  || 0;
+            i = abs[0]?.izin_pts || 0;
             a = abs[0]?.alpha_pts || 0;
         } else {
             s = abs[0]?.sakit_total || 0;
-            i = abs[0]?.izin_total  || 0;
+            i = abs[0]?.izin_total || 0;
             a = abs[0]?.alpha_total || 0;
         }
 
@@ -379,14 +379,14 @@ exports.generateRaporPDF = async (req, res) => {
             [siswaId, semesterId]
         );
 
-        const ekskul1  = ekskulRows[0]?.nama_ekskul || '–';
-        const dekskul1 = ekskulRows[0]?.deskripsi   || '–';
-        const ekskul2  = ekskulRows[1]?.nama_ekskul || '–';
-        const dekskul2 = ekskulRows[1]?.deskripsi   || '–';
-        const ekskul3  = ekskulRows[2]?.nama_ekskul || '–';
-        const dekskul3 = ekskulRows[2]?.deskripsi   || '–';
-        const ekskul4  = ekskulRows[3]?.nama_ekskul || '–';
-        const dekskul4 = ekskulRows[3]?.deskripsi   || '–';
+        const ekskul1 = ekskulRows[0]?.nama_ekskul || '–';
+        const dekskul1 = ekskulRows[0]?.deskripsi || '–';
+        const ekskul2 = ekskulRows[1]?.nama_ekskul || '–';
+        const dekskul2 = ekskulRows[1]?.deskripsi || '–';
+        const ekskul3 = ekskulRows[2]?.nama_ekskul || '–';
+        const dekskul3 = ekskulRows[2]?.deskripsi || '–';
+        const ekskul4 = ekskulRows[3]?.nama_ekskul || '–';
+        const dekskul4 = ekskulRows[3]?.deskripsi || '–';
 
         // ── Catatan Wali Kelas ───────────────────────────────────────────────
         const [catatan] = await db.execute(
@@ -407,11 +407,11 @@ exports.generateRaporPDF = async (req, res) => {
         };
 
         const tanggalSah = jenisNorm === 'PTS'
-            ? (tanggal_pembagian_pts ? formatTanggalIndonesia(tanggal_pembagian_pts) : formatTanggalIndonesia(new Date()))
-            : (tanggal_pembagian_pas ? formatTanggalIndonesia(tanggal_pembagian_pas) : formatTanggalIndonesia(new Date()));
+    ? (tanggal_pembagian_pts ? formatTanggalIndonesia(tanggal_pembagian_pts) : '–')
+    : (tanggal_pembagian_pas ? formatTanggalIndonesia(tanggal_pembagian_pas) : '–');
 
         // ── Kenaikan Kelas (PAS Genap) ───────────────────────────────────────
-        let tingkat  = '–';
+        let tingkat = '–';
         let naikKelas = '–';
 
         if (jenisNorm === 'PAS' && semesterNorm === 'Genap') {
@@ -427,15 +427,15 @@ exports.generateRaporPDF = async (req, res) => {
             if (statusNaik === 'ya') {
                 const kelasAngka = parseInt(nama_kelas.match(/\d+/)?.[0] || '1');
                 const tingkatBerikutnya = kelasAngka + 1;
-                const romawi    = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+                const romawi = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
                 const terbilang = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam'];
-                tingkat   = 'Naik';
+                tingkat = 'Naik';
                 naikKelas = `${romawi[tingkatBerikutnya] || tingkatBerikutnya} (${terbilang[tingkatBerikutnya] || tingkatBerikutnya})`;
             } else if (statusNaik === 'tidak') {
-                tingkat   = 'Tidak Naik';
+                tingkat = 'Tidak Naik';
                 naikKelas = '–';
             } else {
-                tingkat   = 'Belum ditentukan';
+                tingkat = 'Belum ditentukan';
                 naikKelas = '–';
             }
         }
@@ -505,7 +505,7 @@ exports.generateRaporPDF = async (req, res) => {
 
         // ── Nama File ────────────────────────────────────────────────────────
         const cleanNisn = (nisn || 'NISN').toString().replace(/[^0-9]/g, '');
-        const fileName  = `rapor_${jenisNorm.toLowerCase()}_${semesterNorm.toLowerCase()}_${cleanNisn}.docx`;
+        const fileName = `rapor_${jenisNorm.toLowerCase()}_${semesterNorm.toLowerCase()}_${cleanNisn}.docx`;
 
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

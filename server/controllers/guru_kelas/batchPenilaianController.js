@@ -1,80 +1,81 @@
 /**
  * Nama File: batchPenilaianController.js
- * Fungsi: Handle batch operations untuk kategori penilaian
- * UPDATE: ✅ Validasi periode PTS/PAS untuk Kategori Kokurikuler
- *   - PTS aktif → hanya Mutaba'ah (id=5) yang boleh
- *   - PAS aktif → semua aspek boleh
- *   - Belum aktif → semua terkunci
+ * ✅ FIXED: 
+ *   - validateAspekKokurikulerAccess sekarang cek jenis_penilaian
+ *   - Query DELETE/INSERT filter by jenis_penilaian
+ *   - Ambil jenis_penilaian dari middleware
  */
 
 const db = require('../../config/db');
 const model = require('../../models/guru_kelas/aturPenilaianModel');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ✅ KONSTANTA: ID Aspek Mutaba'ah (sesuai database)
-// ═════════════════════════════════════════════════════════════════════════════
 const ASPEK_MUTABAAH_ID = 5;
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ✅ HELPER: Validasi Akses Aspek Kokurikuler Berdasarkan Periode
-// ═════════════════════════════════════════════════════════════════════════════
-/**
- * Cek apakah aspek kokurikuler boleh dikelola berdasarkan periode aktif
- * 
- * @param {number} aspekId - ID aspek yang akan dikelola
- * @param {string} status_pts - Status PTS ('aktif' | 'nonaktif' | 'selesai')
- * @param {string} status_pas - Status PAS ('aktif' | 'nonaktif' | 'selesai')
- * @returns {Object} { allowed: boolean, reason: string, message: string }
- */
-const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
-    const isPtsActive = status_pts === 'aktif';
-    const isPasActive = status_pas === 'aktif';
-    const isLocked = status_pts === 'selesai' || status_pas === 'selesai';
+// ✅ HELPER: Ambil jenis penilaian dari request
+const getJenisPenilaian = (req) => {
+    return req.jenis_penilaian       // ✅ dari middleware (underscore)
+        || req.query?.jenis 
+        || req.body?.jenis 
+        || 'PTS';
+};
+
+// ✅ FIXED: Validasi akses berdasarkan jenis_penilaian yang aktif
+const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas, jenis_penilaian) => {
+    console.log(`🔍 [validateAspek] aspekId: ${aspekId}, jenis: ${jenis_penilaian}, status_pts: ${status_pts}, status_pas: ${status_pas}`);
     
-    // Periode selesai → semua terkunci
-    if (isLocked) {
+    // ✅ CEK apakah periode yang diminta sudah selesai
+    if (jenis_penilaian === 'PTS' && status_pts === 'selesai') {
         return {
             allowed: false,
             reason: 'period_locked',
-            message: 'Periode penilaian telah selesai. Data tidak dapat diubah.'
+            message: 'Rapor PTS sudah dikunci. Data tidak dapat diubah.'
+        };
+    }
+    if (jenis_penilaian === 'PAS' && status_pas === 'selesai') {
+        return {
+            allowed: false,
+            reason: 'period_locked',
+            message: 'Rapor PAS sudah dikunci. Data tidak dapat diubah.'
         };
     }
     
-    // Belum ada periode aktif
-    if (!isPtsActive && !isPasActive) {
+    // ✅ CEK apakah periode yang diminta belum dibuka
+    if (jenis_penilaian === 'PTS' && status_pts !== 'aktif') {
         return {
             allowed: false,
             reason: 'not_open',
-            message: 'Periode penilaian belum aktif. Silakan tunggu admin membuka periode penilaian.'
+            message: 'Periode PTS belum dibuka oleh admin.'
+        };
+    }
+    if (jenis_penilaian === 'PAS' && status_pas !== 'aktif') {
+        return {
+            allowed: false,
+            reason: 'not_open',
+            message: 'Periode PAS belum dibuka oleh admin.'
         };
     }
     
-    // PTS aktif: hanya Mutaba'ah
-    if (isPtsActive && aspekId !== ASPEK_MUTABAAH_ID) {
+    // ✅ RULE: PTS aktif → hanya Mutaba'ah
+    if (jenis_penilaian === 'PTS' && aspekId !== ASPEK_MUTABAAH_ID) {
         return {
             allowed: false,
             reason: 'locked_pts',
-            message: `Saat periode PTS aktif, hanya aspek Mutaba'ah Yaumiyah yang dapat dikelola kategorinya. Aspek lain (BPI, Literasi, Proyek) akan dibuka saat periode PAS.`
+            message: `Saat periode PTS aktif, hanya aspek Mutaba'ah Yaumiyah yang dapat dikelola. Aspek lain akan dibuka saat periode PAS.`
         };
     }
     
-    // PAS aktif: semua aspek boleh
-    if (isPasActive) {
+    // ✅ PAS aktif → semua aspek boleh
+    if (jenis_penilaian === 'PAS') {
         return { allowed: true, reason: 'pas_active' };
     }
     
     return { allowed: true, reason: 'default' };
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// HELPER: Ambil kelas_id dari request
-// ═════════════════════════════════════════════════════════════════════════════
 const getKelasId = (req) => req.infoKelasWali?.kelas_id;
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 1. BATCH SAVE KATEGORI KOKURIKULER
-// POST /atur-penilaian/kategori-kokurikuler-batch
-// ✅ DENGAN VALIDASI PERIODE PTS/PAS
+// BATCH SAVE KATEGORI KOKURIKULER
 // ═════════════════════════════════════════════════════════════════════════════
 exports.saveBatchKategoriKokurikuler = async (req, res) => {
     const connection = await db.getConnection();
@@ -84,16 +85,24 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
 
         const { id_aspek_kokurikuler, grades } = req.body;
         const kelasId = getKelasId(req);
+        
+        // ✅ AMBIL jenis_penilaian dari middleware
+        const jenis_penilaian = getJenisPenilaian(req);
+        
+        console.log(`🔍 [BATCH] jenis_penilaian: ${jenis_penilaian}`);
+        console.log(`🔍 [BATCH] kelasId: ${kelasId}`);
+        console.log(`🔍 [BATCH] id_aspek: ${id_aspek_kokurikuler}`);
 
         if (!kelasId) {
+            await connection.query('ROLLBACK');
             return res.status(403).json({
                 success: false,
                 message: 'Anda belum ditugaskan sebagai guru kelas'
             });
         }
 
-        // ✅ VALIDASI INPUT DASAR
         if (!id_aspek_kokurikuler) {
+            await connection.query('ROLLBACK');
             return res.status(400).json({
                 success: false,
                 message: 'Aspek kokurikuler harus dipilih',
@@ -102,6 +111,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
         }
 
         if (!grades || !Array.isArray(grades) || grades.length === 0) {
+            await connection.query('ROLLBACK');
             return res.status(400).json({
                 success: false,
                 message: 'Minimal harus ada 1 grade',
@@ -109,16 +119,18 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI PERIODE: Cek apakah aspek ini boleh dikelola
+        // ✅ Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             throw new Error('Tahun ajaran aktif belum diatur');
         }
 
+        // ✅ VALIDASI PERIODE dengan jenis_penilaian
         const accessCheck = validateAspekKokurikulerAccess(
             id_aspek_kokurikuler,
             taAktif.status_pts,
-            taAktif.status_pas
+            taAktif.status_pas,
+            jenis_penilaian  // ✅ TAMBAH parameter
         );
 
         if (!accessCheck.allowed) {
@@ -168,7 +180,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             throw new Error(`Grade duplikat dalam batch: ${[...new Set(duplicates)].join(', ')}`);
         }
 
-        // ✅ Cek "Tidak Ada Perubahan"
+        // ✅ Cek "Tidak Ada Perubahan" - DENGAN FILTER JENIS
         const [existingGrades] = await connection.query(
             `SELECT rentang_min, rentang_max, grade, deskripsi
              FROM kategori_grade_kokurikuler
@@ -176,8 +188,9 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
              AND tahun_ajaran_id = ?
              AND semester = ?
              AND kelas_id = ?
+             AND jenis_penilaian = ?
              ORDER BY rentang_min DESC`,
-            [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId]
+            [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, jenis_penilaian]
         );
 
         if (existingGrades.length === grades.length) {
@@ -233,17 +246,18 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             }
         }
 
-        // Hapus semua grade lama untuk aspek ini
+        // ✅ Hapus semua grade lama untuk aspek ini + JENIS INI
         await connection.query(
             `DELETE FROM kategori_grade_kokurikuler 
              WHERE id_aspek_kokurikuler = ? 
                AND tahun_ajaran_id = ? 
                AND semester = ? 
-               AND kelas_id = ?`,
-            [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId]
+               AND kelas_id = ?
+               AND jenis_penilaian = ?`,
+            [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, jenis_penilaian]
         );
 
-        // Insert semua grade baru
+        // ✅ Insert semua grade baru DENGAN jenis_penilaian
         const nilaiInsert = grades.map(g => [
             taAktif.id_tahun_ajaran,
             taAktif.semester,
@@ -253,26 +267,28 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             Math.floor(parseFloat(g.max_nilai)),
             g.grade.toUpperCase().trim(),
             g.deskripsi.trim(),
-            0
+            0,
+            jenis_penilaian  // ✅ TAMBAH
         ]);
 
         await connection.query(
             `INSERT INTO kategori_grade_kokurikuler 
-             (tahun_ajaran_id, semester, kelas_id, id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi, urutan)
+             (tahun_ajaran_id, semester, kelas_id, id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi, urutan, jenis_penilaian)
              VALUES ?`,
             [nilaiInsert]
         );
 
         await connection.query('COMMIT');
 
-        console.log(`✅ [BATCH] ${grades.length} grade berhasil disimpan untuk aspek ${id_aspek_kokurikuler}`);
+        console.log(`✅ [BATCH] ${grades.length} grade berhasil disimpan untuk aspek ${id_aspek_kokurikuler} (jenis: ${jenis_penilaian})`);
 
         res.json({
             success: true,
-            message: `${grades.length} grade berhasil disimpan untuk aspek ini`,
+            message: `${grades.length} grade berhasil disimpan untuk aspek ini (${jenis_penilaian})`,
             data: {
                 jumlah_grade: grades.length,
-                id_aspek_kokurikuler
+                id_aspek_kokurikuler,
+                jenis_penilaian
             }
         });
 

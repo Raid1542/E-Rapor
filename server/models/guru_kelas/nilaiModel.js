@@ -111,7 +111,7 @@ const nilaiModel = {
   LEFT JOIN komponen_penilaian kp ON nd.komponen_id = kp.id_komponen
   WHERE sk.kelas_id = ? 
   AND sk.id_tahun_ajaran_induk = ?
-  AND s.status = 'aktif' I
+  AND s.status = 'aktif' 
   ORDER BY s.nama_lengkap, kp.urutan
 `;
     const [results] = await db.execute(query, [

@@ -86,7 +86,7 @@ exports.getEkskulSiswa = async (req, res) => {
             daftar_ekskul,
             kelas: nama_kelas,
             semester: semester,
-            pasStatus: pasStatus  
+            pasStatus: pasStatus
         });
     } catch (err) {
         console.error('Error getEkskulSiswa:', err);
@@ -97,6 +97,7 @@ exports.getEkskulSiswa = async (req, res) => {
 
 /**
  * PUT /ekskul/:siswaId
+ * ✅ FIXED: Dynamic placeholder untuk NOT IN
  */
 exports.updateEkskulSiswa = async (req, res) => {
     try {
@@ -111,7 +112,7 @@ exports.updateEkskulSiswa = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Cek duplikat ekskul_id
+        // ✅ VALIDASI: Cek duplikat ekskul_id
         const ekskulIds = ekskulList.map(e => parseInt(e.ekskul_id)).filter(id => id > 0);
         if (new Set(ekskulIds).size !== ekskulIds.length) {
             return res.status(400).json({
@@ -120,7 +121,7 @@ exports.updateEkskulSiswa = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Cek deskripsi tidak kosong
+        // ✅ VALIDASI: Cek deskripsi tidak kosong
         for (let i = 0; i < ekskulList.length; i++) {
             const item = ekskulList[i];
             if (!item.ekskul_id || item.ekskul_id <= 0) {
@@ -157,7 +158,7 @@ exports.updateEkskulSiswa = async (req, res) => {
         }
         const { kelas_id } = guruKelasRows[0];
 
-        // 2. Validasi siswa (✅ FIX: id_tahun_ajaran_induk)
+        // 2. Validasi siswa
         const [valid] = await db.execute(
             `SELECT 1 FROM siswa_kelas 
              WHERE siswa_id = ? 
@@ -170,14 +171,16 @@ exports.updateEkskulSiswa = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Siswa tidak terdaftar di kelas Anda' });
         }
 
-        // 3. ✅ VALIDASI BARU: Hapus ekskul lama yang tidak dipilih lagi
+        // 3. ✅ FIXED: Hapus ekskul lama dengan dynamic placeholder
         if (ekskulIds.length > 0) {
+            // ✅ Buat placeholder dinamis: ?, ?, ?
+            const placeholders = ekskulIds.map(() => '?').join(',');
             await db.execute(
                 `DELETE FROM peserta_ekstrakurikuler 
                  WHERE siswa_id = ? 
                  AND tahun_ajaran_id = ? 
-                 AND ekskul_id NOT IN (?)`,
-                [siswaId, semesterId, ekskulIds]
+                 AND ekskul_id NOT IN (${placeholders})`,
+                [siswaId, semesterId, ...ekskulIds]  // ✅ Spread array
             );
         } else {
             // Jika semua dihapus
@@ -209,6 +212,6 @@ exports.updateEkskulSiswa = async (req, res) => {
         res.json({ success: true, message: 'Ekstrakurikuler berhasil diperbarui' });
     } catch (err) {
         console.error('Error updateEkskulSiswa:', err);
-        res.status(500).json({ success: false, message: 'Gagal memperbarui ekstrakurikuler' });
+        res.status(500).json({ success: false, message: 'Gagal memperbarui ekstrakurikuler: ' + err.message });
     }
 };

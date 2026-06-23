@@ -80,12 +80,12 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
         const { kelas_id } = gkRows[0];
 
         const [siswaRows] = await db.execute(
-            `SELECT id_siswa FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
+            `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelas_id, tahunAjaranIndukId]
         );
 
         const [komponenRows] = await db.execute(`SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`);
-        
+
         const [bobotRows] = await db.execute(
             `SELECT komponen_id, bobot, kelas_id FROM konfigurasi_mapel_komponen 
                 WHERE mapel_id = ? AND is_active = 1
@@ -118,7 +118,7 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
         });
 
         for (const siswa of siswaRows) {
-            const siswaId = siswa.id_siswa;
+            const siswaId = siswa.siswa_id;
             const nilai = nilaiDetailMap.get(siswaId) || {};
 
             let nilaiPTSFinal = 0;
@@ -187,7 +187,7 @@ exports.getRekapanData = async (userId, req) => {
     const [kelasRows] = await db.query(
         `SELECT k.id_kelas FROM kelas k 
             JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-            WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`, 
+            WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
         [userId, semesterId]
     );
     if (kelasRows.length === 0) throw new Error('Kelas tidak ditemukan');
@@ -198,7 +198,7 @@ exports.getRekapanData = async (userId, req) => {
             FROM siswa s 
             JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
-            ORDER BY s.nama_lengkap`, 
+            ORDER BY s.nama_lengkap`,
         [kelasId, tahunAjaranIndukId]
     );
 
@@ -206,7 +206,7 @@ exports.getRekapanData = async (userId, req) => {
         `SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai 
             FROM nilai_rapor nr 
             JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran 
-            WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ?`, 
+            WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ?`,
         [kelasId, semesterId, semester]
     );
 
@@ -240,7 +240,7 @@ exports.getRekapanData = async (userId, req) => {
 exports.validateGradeOrder = async (idAspek, tahunAjaranId, semester, kelasId, grade, minNilai, maxNilai, excludeId = null) => {
     const gradeOrder = { 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'E': 0 };
     const newGradeValue = gradeOrder[grade.toUpperCase()];
-    
+
     if (newGradeValue === undefined) return { valid: true };
 
     let query = `

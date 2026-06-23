@@ -1,6 +1,7 @@
 /**
  * Nama File: proyekKokurikulerModel.js
  * Fungsi: Handle query database untuk judul proyek kokurikuler per kelas
+ * ✅ FIXED: Hapus kolom deskripsi
  */
 
 const db = require('../../config/db');
@@ -14,8 +15,7 @@ exports.getJudulProyekByKelas = async (kelasId, tahunAjaranId) => {
             id_judul_proyek,
             id_tahun_ajaran,
             kelas_id,
-            judul,
-            deskripsi
+            judul
         FROM judul_proyek_per_tahun_ajaran
         WHERE kelas_id = ? AND id_tahun_ajaran = ?
         LIMIT 1
@@ -26,8 +26,9 @@ exports.getJudulProyekByKelas = async (kelasId, tahunAjaranId) => {
 
 /**
  * Simpan atau update judul proyek (UPSERT)
+ * ✅ FIXED: Hapus parameter deskripsi
  */
-exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul, deskripsi = null) => {
+exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul) => {
     const [existing] = await db.execute(`
         SELECT id_judul_proyek 
         FROM judul_proyek_per_tahun_ajaran 
@@ -38,18 +39,18 @@ exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul, deskripsi = null
         // Update jika sudah ada
         await db.execute(`
             UPDATE judul_proyek_per_tahun_ajaran 
-            SET judul = ?, deskripsi = ?, updated_at = NOW()
+            SET judul = ?, updated_at = NOW()
             WHERE kelas_id = ? AND id_tahun_ajaran = ?
-        `, [judul, deskripsi, kelasId, tahunAjaranId]);
+        `, [judul, kelasId, tahunAjaranId]);
         
         return { id: existing[0].id_judul_proyek, action: 'updated' };
     } else {
         // Insert jika belum ada
         const [result] = await db.execute(`
             INSERT INTO judul_proyek_per_tahun_ajaran 
-            (id_tahun_ajaran, kelas_id, judul, deskripsi, created_at, updated_at)
-            VALUES (?, ?, ?, ?, NOW(), NOW())
-        `, [tahunAjaranId, kelasId, judul, deskripsi]);
+            (id_tahun_ajaran, kelas_id, judul, created_at, updated_at)
+            VALUES (?, ?, ?, NOW(), NOW())
+        `, [tahunAjaranId, kelasId, judul]);
         
         return { id: result.insertId, action: 'created' };
     }

@@ -1,13 +1,3 @@
-/**
- * Nama File: input_nilai_gbs_client.tsx
- * Fungsi: Input nilai siswa per mata pelajaran untuk guru bidang studi
- * UPDATE: 
- *   - ✅ Tampilan konsisten dengan guru kelas
- *   - ✅ Fix z-index NotifModal (z-[200])
- *   - ✅ Fix executeSimpanNilai (tutup modal edit sebelum show error)
- *   - ✅ Layout toolbar responsive
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode } from 'react';
@@ -18,7 +8,7 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 // ─── KONSTANTA API ──────────────────────────────────────────────────────────
 const API = 'http://localhost:5000/api/guru-bidang-studi';
 
-// ─── TYPES ──────────────────────────────────────────────────────────────────
+// ─── TYPES ────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
@@ -143,6 +133,10 @@ export default function InputNilaiGBSClient() {
     const [currentMapel, setCurrentMapel] = useState<MapelItem | null>(null);
     const [currentKelas, setCurrentKelas] = useState<KelasItem | null>(null);
 
+    // ✅ NEW: Kelas filtered berdasarkan mapel
+    const [kelasFiltered, setKelasFiltered] = useState<KelasItem[]>([]);
+    const [kelasLoading, setKelasLoading] = useState(false);
+
     // Data siswa
     const [siswaList, setSiswaList] = useState<SiswaNilai[]>([]);
     const [filteredSiswa, setFilteredSiswa] = useState<SiswaNilai[]>([]);
@@ -228,6 +222,56 @@ export default function InputNilaiGBSClient() {
         fetchData();
     }, [showModal]);
 
+    // ── FETCH KELAS BERDASARKAN MAPEL ───────────────────────────────────────────
+
+    useEffect(() => {
+        if (selectedMapelId === null) {
+            setKelasFiltered([]);
+            setSelectedKelasId(null);
+            return;
+        }
+
+        const fetchKelasByMapel = async () => {
+            setKelasLoading(true);
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const res = await fetch(
+                    `${API}/atur-penilaian/kelas-by-mapel?mapel_id=${selectedMapelId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const kelasData = (data.data || []).map((k: any) => ({
+                        kelas_id: k.kelas_id,
+                        nama_kelas: k.nama_kelas,
+                    }));
+                    setKelasFiltered(kelasData);
+                    
+                    // Auto-select kelas pertama jika hanya ada 1
+                    if (kelasData.length === 1) {
+                        setSelectedKelasId(kelasData[0].kelas_id);
+                    } else {
+                        setSelectedKelasId(null);
+                    }
+                } else {
+                    setKelasFiltered([]);
+                    setSelectedKelasId(null);
+                }
+            } catch (err) {
+                console.error('Error fetch kelas by mapel:', err);
+                setKelasFiltered([]);
+                setSelectedKelasId(null);
+            } finally {
+                setKelasLoading(false);
+            }
+        };
+
+        fetchKelasByMapel();
+    }, [selectedMapelId]);
+
     // ── FETCH NILAI SAAT MAPEL & KELAS DIPILIH ──────────────────────────────────
 
     useEffect(() => {
@@ -304,7 +348,7 @@ export default function InputNilaiGBSClient() {
                 setSiswaList(mapped);
                 setFilteredSiswa(mapped);
                 setCurrentMapel(mapelList.find(m => m.mata_pelajaran_id === selectedMapelId) || null);
-                setCurrentKelas(kelasList.find(k => k.kelas_id === selectedKelasId) || null);
+                setCurrentKelas(kelasFiltered.find(k => k.kelas_id === selectedKelasId) || null);
                 setCurrentPage(1);
             } catch (err: any) {
                 showModal({
@@ -317,7 +361,7 @@ export default function InputNilaiGBSClient() {
             }
         };
         fetchNilai();
-    }, [selectedMapelId, selectedKelasId, mapelList, kelasList, showModal]);
+    }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal]);
 
     // ── FILTER & PAGINATION ─────────────────────────────────────────────────────
 
@@ -382,7 +426,7 @@ export default function InputNilaiGBSClient() {
 
     // ✅ State Read Only - konsisten dengan guru kelas
     const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
-    const isPeriodLocked = statusPTS === 'selesai' || statusPAS === 'selesai';
+    const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
     const isReadOnly = isPeriodNotActive || isPeriodLocked;
     const readOnlyReason: 'not_open' | 'locked' | null = isPeriodLocked ? 'locked' : (isPeriodNotActive ? 'not_open' : null);
 
@@ -637,36 +681,38 @@ export default function InputNilaiGBSClient() {
             </div>
 
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Toolbar - Responsive Layout */}
+                {/* Toolbar - Sequential Dropdown Layout */}
                 <div className="px-5 py-4 space-y-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    {/* Row 1: Dropdown Mapel & Kelas */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
-                                Mata Pelajaran
-                            </label>
-                            <select
-                                value={selectedMapelId === null ? '' : String(selectedMapelId)}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    setSelectedMapelId(val ? Number(val) : null);
-                                    setSelectedKelasId(null);
-                                    setSearchQuery('');
-                                }}
-                                className={inputCls}
-                            >
-                                <option value="">-- Pilih Mata Pelajaran --</option>
-                                {mapelList.map(mapel => (
-                                    <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
-                                        {mapel.nama_mapel}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                    
+                    {/* Step 1: Dropdown Mapel */}
+                    <div className="max-w-md">
+                        <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                            1. Pilih Mata Pelajaran
+                        </label>
+                        <select
+                            value={selectedMapelId === null ? '' : String(selectedMapelId)}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setSelectedMapelId(val ? Number(val) : null);
+                                setSelectedKelasId(null);
+                                setSearchQuery('');
+                            }}
+                            className={inputCls}
+                        >
+                            <option value="">-- Pilih Mata Pelajaran --</option>
+                            {mapelList.map(mapel => (
+                                <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>
+                                    {mapel.nama_mapel}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                        <div>
+                    {/* Step 2: Dropdown Kelas (muncul setelah mapel dipilih) */}
+                    {selectedMapelId && (
+                        <div className="max-w-md animate-[dg-scaleIn_0.3s_ease]">
                             <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
-                                Kelas
+                                2. Pilih Kelas
                             </label>
                             <select
                                 value={selectedKelasId === null ? '' : String(selectedKelasId)}
@@ -676,39 +722,52 @@ export default function InputNilaiGBSClient() {
                                     setSearchQuery('');
                                 }}
                                 className={inputCls}
-                                disabled={!selectedMapelId}
+                                disabled={kelasLoading || kelasFiltered.length === 0}
                             >
-                                <option value="">-- Pilih Kelas --</option>
-                                {kelasList.map(kelas => (
+                                <option value="">
+                                    {kelasLoading 
+                                        ? '⏳ Memuat kelas...' 
+                                        : kelasFiltered.length === 0
+                                            ? '❌ Tidak ada kelas untuk mapel ini'
+                                            : '-- Pilih Kelas --'}
+                                </option>
+                                {kelasFiltered.map(kelas => (
                                     <option key={kelas.kelas_id} value={kelas.kelas_id}>
                                         {kelas.nama_kelas}
                                     </option>
                                 ))}
                             </select>
+                            
+                            {/* Info helper: jumlah kelas yang tersedia */}
+                            {kelasFiltered.length > 0 && (
+                                <p className="text-xs mt-1.5" style={{ color: '#c95b08' }}>
+                                    Tersedia {kelasFiltered.length} kelas untuk mata pelajaran ini
+                                </p>
+                            )}
                         </div>
-                    </div>
+                    )}
 
-                    {/* Row 2: Search, Badge, dan Items Per Page */}
+                    {/* Row 2: Search, Badge, dan Items Per Page (muncul setelah kelas dipilih) */}
                     {selectedMapelId && selectedKelasId && (
-                        <div className="pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
+                        <div className="pt-4 border-t animate-[dg-fadeIn_0.3s_ease]" style={{ borderColor: '#fde0c8' }}>
                             <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between">
                                 {/* Search Bar */}
                                 <div className="relative w-full xl:w-96">
                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                         <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
                                     </div>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Cari berdasarkan nama, NIS, atau NISN..." 
+                                    <input
+                                        type="text"
+                                        placeholder="Cari berdasarkan nama, NIS, atau NISN..."
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full border rounded-xl pl-10 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200 placeholder:text-gray-400" 
+                                        className="w-full border rounded-xl pl-10 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200 placeholder:text-gray-400"
                                     />
                                     {searchQuery && (
-                                        <button 
-                                            type="button" 
+                                        <button
+                                            type="button"
                                             onClick={() => setSearchQuery('')}
-                                            className="absolute inset-y-0 right-3 flex items-center justify-center w-6 h-6 rounded-full hover:bg-orange-100 transition-colors" 
+                                            className="absolute inset-y-0 right-3 flex items-center justify-center w-6 h-6 rounded-full hover:bg-orange-100 transition-colors"
                                             style={{ color: '#c95b08' }}
                                         >
                                             <X className="w-4 h-4" />
@@ -722,10 +781,10 @@ export default function InputNilaiGBSClient() {
                                         style={{ background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }}>
                                         <CheckCircle2 size={14} /> Dapat Input Nilai
                                     </span>
-                                    
+
                                     <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-orange-200">
                                         <span className="text-sm font-medium whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                        <select 
+                                        <select
                                             value={itemsPerPage}
                                             onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                                             className="text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-400 bg-transparent"
@@ -753,8 +812,13 @@ export default function InputNilaiGBSClient() {
                     <div className="m-6 text-center py-10 rounded-2xl" style={{ background: '#fff7f0', border: '2px dashed #fde0c8' }}>
                         <p className="font-bold" style={{ color: '#c95b08' }}>
                             {!selectedMapelId
-                                ? 'Pilih Mata Pelajaran Terlebih Dahulu'
-                                : 'Pilih Kelas Terlebih Dahulu'}
+                                ? 'Silakan pilih mata pelajaran terlebih dahulu'
+                                : 'Silakan pilih kelas terlebih dahulu'}
+                        </p>
+                        <p className="text-sm mt-2" style={{ color: '#c95b08' }}>
+                            {!selectedMapelId
+                                ? 'Dropdown kelas akan muncul setelah Anda memilih mata pelajaran'
+                                : 'Data siswa akan muncul setelah Anda memilih kelas'}
                         </p>
                     </div>
                 ) : (

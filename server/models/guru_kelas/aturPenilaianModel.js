@@ -1,7 +1,8 @@
 /**
  * Nama File: aturPenilaianModel.js
  * Fungsi: Handle semua query database untuk fitur Atur Penilaian
- *         UPDATE: Semua query difilter by KELAS_ID (per guru kelas)
+ *         ✅ UPDATED: Query untuk 3 tabel difilter by jenis_penilaian (PTS/PAS)
+ *         ✅ TIDAK DIUBAH: kategori_deskripsi_rata_rata (hanya PTS, validasi di controller)
  */
 
 const db = require('../../config/db');
@@ -68,17 +69,18 @@ exports.cekGuruMengajarMapelDiKelas = async (userId, mapelId, kelasId, tahunAjar
 };
 
 /**
- * ✅ UPDATED: Cek Range Overlapping di konfigurasi_nilai_rapor PER KELAS
+ * ✅ UPDATED: Cek Range Overlapping di konfigurasi_nilai_rapor PER KELAS + JENIS
  */
-exports.cekOverlapAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, excludeId = null) => {
+exports.cekOverlapAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, jenis = 'PTS', excludeId = null) => {
     let query = `
         SELECT id_config, min_nilai, max_nilai, deskripsi
         FROM konfigurasi_nilai_rapor
         WHERE tahun_ajaran_id = ?
         AND kelas_id = ?
+        AND jenis_penilaian = ?
         AND (? <= max_nilai AND ? >= min_nilai)
     `;
-    const params = [tahunAjaranId, kelasId, minNilai, maxNilai];
+    const params = [tahunAjaranId, kelasId, jenis, minNilai, maxNilai];
 
     if (mapelId === null) {
         query += ` AND mapel_id IS NULL`;
@@ -97,9 +99,9 @@ exports.cekOverlapAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, m
 };
 
 /**
- * ✅ UPDATED: Cek Range Overlapping di kategori_grade_kokurikuler PER KELAS
+ * ✅ UPDATED: Cek Range Overlapping di kategori_grade_kokurikuler PER KELAS + JENIS
  */
-exports.cekOverlapKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, excludeId = null) => {
+exports.cekOverlapKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, jenis = 'PTS', excludeId = null) => {
     let query = `
         SELECT id_kategori_grade_kokurikuler, rentang_min, rentang_max, grade, deskripsi
         FROM kategori_grade_kokurikuler
@@ -107,9 +109,10 @@ exports.cekOverlapKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId
         AND tahun_ajaran_id = ?
         AND semester = ?
         AND kelas_id = ?
+        AND jenis_penilaian = ?
         AND (? <= rentang_max AND ? >= rentang_min)
     `;
-    const params = [idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai];
+    const params = [idAspek, tahunAjaranId, semester, kelasId, jenis, minNilai, maxNilai];
 
     if (excludeId) {
         query += ` AND id_kategori_grade_kokurikuler != ?`;
@@ -121,9 +124,9 @@ exports.cekOverlapKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId
 };
 
 /**
- * ✅ UPDATED: Cek Duplikasi Grade Kokurikuler PER KELAS
+ * ✅ UPDATED: Cek Duplikasi Grade Kokurikuler PER KELAS + JENIS
  */
-exports.cekDuplikasiGrade = async (idAspek, tahunAjaranId, semester, kelasId, grade, excludeId = null) => {
+exports.cekDuplikasiGrade = async (idAspek, tahunAjaranId, semester, kelasId, grade, jenis = 'PTS', excludeId = null) => {
     let query = `
         SELECT id_kategori_grade_kokurikuler, grade, rentang_min, rentang_max
         FROM kategori_grade_kokurikuler
@@ -131,9 +134,10 @@ exports.cekDuplikasiGrade = async (idAspek, tahunAjaranId, semester, kelasId, gr
         AND tahun_ajaran_id = ?
         AND semester = ?
         AND kelas_id = ?
+        AND jenis_penilaian = ?
         AND grade = ?
     `;
-    const params = [idAspek, tahunAjaranId, semester, kelasId, grade];
+    const params = [idAspek, tahunAjaranId, semester, kelasId, jenis, grade];
 
     if (excludeId) {
         query += ` AND id_kategori_grade_kokurikuler != ?`;
@@ -145,16 +149,17 @@ exports.cekDuplikasiGrade = async (idAspek, tahunAjaranId, semester, kelasId, gr
 };
 
 /**
- * ✅ UPDATED: Cek Coverage 0-100 di konfigurasi_nilai_rapor PER KELAS
+ * ✅ UPDATED: Cek Coverage 0-100 di konfigurasi_nilai_rapor PER KELAS + JENIS
  */
-exports.cekCoverage0to100 = async (mapelId, tahunAjaranId, kelasId) => {
+exports.cekCoverage0to100 = async (mapelId, tahunAjaranId, kelasId, jenis = 'PTS') => {
     let query = `
         SELECT min_nilai, max_nilai 
         FROM konfigurasi_nilai_rapor 
         WHERE tahun_ajaran_id = ?
         AND kelas_id = ?
+        AND jenis_penilaian = ?
     `;
-    const params = [tahunAjaranId, kelasId];
+    const params = [tahunAjaranId, kelasId, jenis];
 
     if (mapelId === null) {
         query += ` AND mapel_id IS NULL`;
@@ -192,9 +197,9 @@ exports.cekCoverage0to100 = async (mapelId, tahunAjaranId, kelasId) => {
 };
 
 /**
- * ✅ UPDATED: Cek Apakah Kategori Sedang Dipakai di nilai_rapor PER KELAS
+ * ✅ UPDATED: Cek Apakah Kategori Sedang Dipakai di nilai_rapor PER KELAS + JENIS
  */
-exports.cekKategoriDipakai = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai) => {
+exports.cekKategoriDipakai = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, jenis = 'PTS') => {
     if (mapelId === null) {
         return { total: 0 };
     }
@@ -206,7 +211,8 @@ exports.cekKategoriDipakai = async (mapelId, tahunAjaranId, kelasId, minNilai, m
         AND kelas_id = ?
         AND nilai_rapor BETWEEN ? AND ?
         AND mapel_id = ?
-    `, [tahunAjaranId, kelasId, minNilai, maxNilai, mapelId]);
+        AND jenis_penilaian = ?
+    `, [tahunAjaranId, kelasId, minNilai, maxNilai, mapelId, jenis]);
 
     return rows[0];
 };
@@ -229,13 +235,13 @@ exports.cekKomponenValid = async (komponenIds) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// KATEGORI AKADEMIK (PER MAPEL + PER KELAS)
+// KATEGORI AKADEMIK (PER MAPEL + PER KELAS + PER JENIS)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * ✅ UPDATED: Ambil kategori akademik per mapel + per kelas
+ * ✅ UPDATED: Ambil kategori akademik per mapel + per kelas + per jenis
  */
-exports.getKategoriAkademik = async (mapelId, tahunAjaranId, kelasId) => {
+exports.getKategoriAkademik = async (mapelId, tahunAjaranId, kelasId, jenis = 'PTS') => {
     const [kategori] = await db.execute(`
         SELECT 
             id_config AS id, 
@@ -247,24 +253,25 @@ exports.getKategoriAkademik = async (mapelId, tahunAjaranId, kelasId) => {
         WHERE mapel_id = ? 
         AND tahun_ajaran_id = ? 
         AND kelas_id = ?
+        AND jenis_penilaian = ?
         ORDER BY urutan ASC, min_nilai ASC
-    `, [mapelId, tahunAjaranId, kelasId]);
+    `, [mapelId, tahunAjaranId, kelasId, jenis]);
     return kategori;
 };
 
 /**
- * ✅ UPDATED: Buat kategori akademik baru dengan kelas_id
+ * ✅ UPDATED: Buat kategori akademik baru dengan kelas_id + jenis_penilaian
  */
-exports.createKategoriAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, deskripsi) => {
+exports.createKategoriAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, deskripsi, jenis = 'PTS') => {
     const [result] = await db.execute(`
         INSERT INTO konfigurasi_nilai_rapor 
-        (mapel_id, kelas_id, tahun_ajaran_id, min_nilai, max_nilai, deskripsi, urutan)
-        VALUES (?, ?, ?, ?, ?, ?, 
+        (mapel_id, kelas_id, tahun_ajaran_id, jenis_penilaian, min_nilai, max_nilai, deskripsi, urutan)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 
             (SELECT IFNULL(MAX(urutan), 0) + 1 
             FROM (SELECT urutan FROM konfigurasi_nilai_rapor 
-                WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?) AS tmp)
+                WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ?) AS tmp)
         )
-    `, [mapelId, kelasId, tahunAjaranId, minNilai, maxNilai, deskripsi, mapelId, kelasId, tahunAjaranId]);
+    `, [mapelId, kelasId, tahunAjaranId, jenis, minNilai, maxNilai, deskripsi, mapelId, kelasId, tahunAjaranId, jenis]);
     return result.insertId;
 };
 
@@ -284,7 +291,7 @@ exports.updateKategoriAkademik = async (id, minNilai, maxNilai, deskripsi) => {
  */
 exports.getKategoriByIdAndKelas = async (id, kelasId) => {
     const [existing] = await db.execute(`
-        SELECT id_config, mapel_id, kelas_id, min_nilai, max_nilai, deskripsi
+        SELECT id_config, mapel_id, kelas_id, min_nilai, max_nilai, deskripsi, jenis_penilaian
         FROM konfigurasi_nilai_rapor
         WHERE id_config = ? AND kelas_id = ?
     `, [id, kelasId]);
@@ -299,13 +306,13 @@ exports.deleteKategoriAkademik = async (id, kelasId) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// KATEGORI KOKURIKULER (PER KELAS)
+// KATEGORI KOKURIKULER (PER KELAS + PER JENIS)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * ✅ UPDATED: Ambil kategori kokurikuler per kelas
+ * ✅ UPDATED: Ambil kategori kokurikuler per kelas + per jenis
  */
-exports.getKategoriKokurikuler = async (tahunAjaranId, semester, kelasId) => {
+exports.getKategoriKokurikuler = async (tahunAjaranId, semester, kelasId, jenis = 'PTS') => {
     const [kategori] = await db.execute(`
         SELECT 
             id_kategori_grade_kokurikuler AS id,
@@ -319,24 +326,26 @@ exports.getKategoriKokurikuler = async (tahunAjaranId, semester, kelasId) => {
         WHERE tahun_ajaran_id = ? 
         AND semester = ? 
         AND kelas_id = ?
+        AND jenis_penilaian = ?
         ORDER BY id_aspek_kokurikuler, urutan ASC, rentang_min ASC
-    `, [tahunAjaranId, semester, kelasId]);
+    `, [tahunAjaranId, semester, kelasId, jenis]);
     return kategori;
 };
 
 /**
- * ✅ UPDATED: Buat kategori kokurikuler baru dengan kelas_id
+ * ✅ UPDATED: Buat kategori kokurikuler baru dengan kelas_id + jenis_penilaian
  */
-exports.createKategoriKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi) => {
+exports.createKategoriKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi, jenis = 'PTS') => {
     const [result] = await db.execute(`
         INSERT INTO kategori_grade_kokurikuler 
-        (id_aspek_kokurikuler, tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, grade, deskripsi, urutan)
+        (id_aspek_kokurikuler, tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, grade, deskripsi, urutan, jenis_penilaian)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 
             (SELECT IFNULL(MAX(urutan), 0) + 1 
             FROM (SELECT urutan FROM kategori_grade_kokurikuler 
-                WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND semester = ?) AS tmp)
+                WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?) AS tmp),
+            ?
         )
-    `, [idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi, idAspek, kelasId, tahunAjaranId, semester]);
+    `, [idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi, idAspek, kelasId, tahunAjaranId, semester, jenis, jenis]);
     return result.insertId;
 };
 
@@ -360,7 +369,8 @@ exports.getKategoriKokurikulerByIdAndKelas = async (id, kelasId) => {
             id_kategori_grade_kokurikuler,
             id_aspek_kokurikuler,
             kelas_id,
-            rentang_min, rentang_max, grade, deskripsi
+            rentang_min, rentang_max, grade, deskripsi,
+            jenis_penilaian
         FROM kategori_grade_kokurikuler
         WHERE id_kategori_grade_kokurikuler = ? AND kelas_id = ?
     `, [id, kelasId]);
@@ -375,42 +385,42 @@ exports.deleteKategoriKokurikuler = async (id, kelasId) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// BOBOT AKADEMIK (PER MAPEL + PER KELAS)
+// BOBOT AKADEMIK (PER MAPEL + PER KELAS + PER JENIS)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * ✅ UPDATED: Ambil bobot per mapel + per kelas
+ * ✅ UPDATED: Ambil bobot per mapel + per kelas + per jenis
  */
-exports.getBobotByMapel = async (mapelId, kelasId) => {
+exports.getBobotByMapel = async (mapelId, kelasId, jenis = 'PTS') => {
     const [bobot] = await db.execute(`
         SELECT komponen_id, bobot
         FROM konfigurasi_mapel_komponen
-        WHERE mapel_id = ? AND kelas_id = ? AND is_active = 1
-    `, [mapelId, kelasId]);
+        WHERE mapel_id = ? AND kelas_id = ? AND jenis_penilaian = ? AND is_active = 1
+    `, [mapelId, kelasId, jenis]);
     return bobot;
 };
 
 /**
- * ✅ UPDATED: Simpan bobot dengan kelas_id (transaction)
+ * ✅ UPDATED: Simpan bobot dengan kelas_id + jenis_penilaian (transaction)
  */
-exports.saveBobot = async (mapelId, kelasId, bobotList) => {
+exports.saveBobot = async (mapelId, kelasId, tahunAjaranId, bobotList, jenis = 'PTS') => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        // Delete bobot lama untuk mapel + kelas ini
+        // Delete bobot lama untuk mapel + kelas + jenis ini
         await connection.execute(`
             DELETE FROM konfigurasi_mapel_komponen 
-            WHERE mapel_id = ? AND kelas_id = ?
-        `, [mapelId, kelasId]);
+            WHERE mapel_id = ? AND kelas_id = ? AND jenis_penilaian = ?
+        `, [mapelId, kelasId, jenis]);
 
-        // Insert bobot baru dengan kelas_id
+        // Insert bobot baru dengan kelas_id + jenis_penilaian
         for (const b of bobotList) {
             await connection.execute(`
                 INSERT INTO konfigurasi_mapel_komponen 
-                (mapel_id, kelas_id, komponen_id, bobot, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 1, NOW(), NOW())
-            `, [mapelId, kelasId, b.komponen_id, parseFloat(b.bobot)]);
+                (mapel_id, kelas_id, tahun_ajaran_id, komponen_id, bobot, is_active, jenis_penilaian, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 1, ?, NOW(), NOW())
+            `, [mapelId, kelasId, tahunAjaranId, b.komponen_id, parseFloat(b.bobot), jenis]);
         }
 
         await connection.commit();
@@ -427,9 +437,9 @@ exports.saveBobot = async (mapelId, kelasId, bobotList) => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * ✅ UPDATED: Cek Coverage 0-100 untuk SETIAP aspek kokurikuler PER KELAS
+ * ✅ UPDATED: Cek Coverage 0-100 untuk SETIAP aspek kokurikuler PER KELAS + JENIS
  */
-exports.cekCoverageKokurikuler = async (tahunAjaranId, semester, kelasId) => {
+exports.cekCoverageKokurikuler = async (tahunAjaranId, semester, kelasId, jenis = 'PTS') => {
     const [aspekRows] = await db.execute(`
         SELECT id_aspek_kokurikuler, nama 
         FROM aspek_kokurikuler 
@@ -446,8 +456,9 @@ exports.cekCoverageKokurikuler = async (tahunAjaranId, semester, kelasId) => {
             AND tahun_ajaran_id = ? 
             AND semester = ?
             AND kelas_id = ?
+            AND jenis_penilaian = ?
             ORDER BY rentang_min ASC
-        `, [aspek.id_aspek_kokurikuler, tahunAjaranId, semester, kelasId]);
+        `, [aspek.id_aspek_kokurikuler, tahunAjaranId, semester, kelasId, jenis]);
 
         if (kategoriRows.length === 0) {
             result.covered = false;
@@ -567,7 +578,6 @@ exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul, deskripsi = null
     `, [kelasId, tahunAjaranId]);
 
     if (existing.length > 0) {
-        // Update jika sudah ada
         await db.execute(`
             UPDATE judul_proyek_per_tahun_ajaran 
             SET judul = ?, deskripsi = ?, updated_at = NOW()
@@ -576,7 +586,6 @@ exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul, deskripsi = null
         
         return { id: existing[0].id_judul_proyek, action: 'updated' };
     } else {
-        // Insert jika belum ada
         const [result] = await db.execute(`
             INSERT INTO judul_proyek_per_tahun_ajaran 
             (id_tahun_ajaran, kelas_id, judul, deskripsi, created_at, updated_at)
@@ -589,6 +598,7 @@ exports.saveJudulProyek = async (kelasId, tahunAjaranId, judul, deskripsi = null
 
 // ═════════════════════════════════════════════════════════════════════════════
 // KATEGORI DESKRIPSI RATA-RATA (PER KELAS)
+// ✅ TIDAK PERLU FILTER JENIS (hanya untuk PTS, validasi akses di controller)
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.getKategoriDeskripsiRataRata = async (tahunAjaranId, semester, kelasId) => {

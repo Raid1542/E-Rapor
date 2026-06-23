@@ -3,17 +3,18 @@
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian
  *         oleh guru kelas, mencakup kategori kokurikuler, akademik, deskripsi rata-rata, dan bobot.
  * 
- * UPDATE: 
+ * ✅ UPDATED: 
+ *   - ✅ Semua API call mengirim parameter `jenis` (PTS/PAS)
+ *   - ✅ Semua save payload mengirim field `jenis`
+ *   - ✅ Banner periode aktif yang jelas
  *   - ✅ Kategori Kokurikuler: PTS → hanya Mutaba'ah, PAS → semua aspek
- *   - ✅ Tab baru: Deskripsi Rata-rata
- *   - ✅ Auto-reload data setelah save/delete
- *   - ✅ Coverage warning otomatis update
- *   - ✅ Tab layout responsive (2 kolom di mobile)
+ *   - ✅ Tab Deskripsi Rata-rata: HANYA PTS
+ *   - ✅ Bobot: PTS = auto 100%, PAS = editable
  */
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut, Layers, Lock, Calendar, Unlock } from 'lucide-react';
+import { Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, AlertTriangle, LogOut, Layers, Lock, Calendar, Unlock, Award } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -22,6 +23,11 @@ const API = 'http://localhost:5000/api/guru-kelas';
 
 // ====== ID ASPEK MUTABA'AH (untuk rules PTS) ======
 const ASPEK_MUTABAAH_ID = 5;
+
+// ✅ HELPER: Generate parameter jenis untuk API call
+const getJenisParam = (jenis: 'PTS' | 'PAS' | null): string => {
+  return jenis ? `jenis=${jenis}` : '';
+};
 
 // ====== HELPER: Parse Error dari Backend ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
@@ -202,7 +208,6 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
 
   if (gaps.length === 0) return null;
 
-  // Filter out invalid gaps (where min > max)
   const validGaps = gaps.filter(g => {
     const parts = g.gap.split('-');
     if (parts.length !== 2) return true;
@@ -279,22 +284,18 @@ export default function AturPenilaianGuruKelasClient() {
   const [activeTab, setActiveTab] = useState<'kokurikuler' | 'akademik' | 'bobot' | 'deskripsi-rata-rata'>('kokurikuler');
   const [loading, setLoading] = useState(true);
 
-  // Data pendukung
   const [aspekList, setAspekList] = useState<AspekKokurikuler[]>([]);
   const [mapelList, setMapelList] = useState<MapelItem[]>([]);
   const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
 
-  // Kategori
   const [kategoriList, setKategoriList] = useState<(KategoriAkademik | KategoriKokurikuler)[]>([]);
   const [kategoriLoading, setKategoriLoading] = useState(false);
   const [coverageInfo, setCoverageInfo] = useState<CoverageInfo | null>(null);
 
-  // Deskripsi Rata-rata
   const [deskripsiRataRataList, setDeskripsiRataRataList] = useState<any[]>([]);
   const [deskripsiRataRataLoading, setDeskripsiRataRataLoading] = useState(false);
   const [deskripsiRataRataCoverage, setDeskripsiRataRataCoverage] = useState<CoverageInfo | null>(null);
 
-  // ====== BATCH EDIT STATE ======
   const [showBatchEdit, setShowBatchEdit] = useState(false);
   const [batchEditClosing, setBatchEditClosing] = useState(false);
   const [batchEditAspekId, setBatchEditAspekId] = useState<number | null>(null);
@@ -302,7 +303,6 @@ export default function AturPenilaianGuruKelasClient() {
   const [originalBatchGrades, setOriginalBatchGrades] = useState<BatchGradeItem[]>([]);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
-  // Modal edit/tambah kategori (untuk akademik)
   const [showEditKategori, setShowEditKategori] = useState(false);
   const [editKategoriId, setEditKategoriId] = useState<number | null>(null);
   const [editKategoriClosing, setEditKategoriClosing] = useState(false);
@@ -312,7 +312,6 @@ export default function AturPenilaianGuruKelasClient() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const initialEditKategoriDataRef = useRef<typeof editKategoriData | null>(null);
 
-  // Modal edit deskripsi rata-rata
   const [showEditDeskripsiRataRata, setShowEditDeskripsiRataRata] = useState(false);
   const [editDeskripsiRataRataId, setEditDeskripsiRataRataId] = useState<number | null>(null);
   const [deskripsiEditClosing, setDeskripsiEditClosing] = useState(false);
@@ -323,25 +322,20 @@ export default function AturPenilaianGuruKelasClient() {
   const initialDeskripsiDataRef = useRef<typeof editDeskripsiRataRataData | null>(null);
   const [isSavingDeskripsiRataRata, setIsSavingDeskripsiRataRata] = useState(false);
 
-  // Mapel selection (akademik)
   const [selectedMapelAkademik, setSelectedMapelAkademik] = useState<number | null>(null);
 
-  // Bobot
   const [selectedMapelId, setSelectedMapelId] = useState<number | null>(null);
   const [bobotList, setBobotList] = useState<BobotItem[]>([]);
   const [bobotLoading, setBobotLoading] = useState(false);
   const [isBobotLocked, setIsBobotLocked] = useState(false);
   const initialBobotListRef = useRef<BobotItem[]>([]);
 
-  // Saving state
   const [isSavingBobot, setIsSavingBobot] = useState(false);
   const [isSavingKategori, setIsSavingKategori] = useState(false);
 
-  // Modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'save-kategori' | 'save-bobot' | 'save-batch' | 'save-deskripsi-rata-rata' | null>(null);
 
-  // Modals
   const [modal, setModal] = useState<ModalConfig | null>(null);
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
@@ -349,10 +343,6 @@ export default function AturPenilaianGuruKelasClient() {
   const closeModal = useCallback(() => setModal(null), []);
 
   const [isNotAssigned, setIsNotAssigned] = useState(false);
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ HELPER: Rules Kategori Kokurikuler berdasarkan periode
-  // ═══════════════════════════════════════════════════════════════════════════
 
   const canEditAspekKokurikuler = useCallback((aspekId: number): boolean => {
     if (isReadOnly) return false;
@@ -372,14 +362,9 @@ export default function AturPenilaianGuruKelasClient() {
     return '';
   }, [jenisPenilaianAktif, isReadOnly, readOnlyReason]);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ HELPER: Rules Deskripsi Rata-rata (HANYA saat PTS aktif)
-  // ═══════════════════════════════════════════════════════════════════════════
-
   const canEditDeskripsiRataRata = useCallback((): boolean => {
     if (isReadOnly) return false;
     if (!jenisPenilaianAktif) return false;
-    // Hanya bisa diakses saat PTS aktif
     return jenisPenilaianAktif === 'PTS';
   }, [jenisPenilaianAktif, isReadOnly]);
 
@@ -393,17 +378,16 @@ export default function AturPenilaianGuruKelasClient() {
     return '';
   }, [jenisPenilaianAktif, isReadOnly, readOnlyReason]);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ HELPER: RELOAD DATA (untuk auto-update coverage)
-  // ═══════════════════════════════════════════════════════════════════════════
-
+  // ✅ UPDATED: reloadData dengan parameter jenis
   const reloadData = useCallback(async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token || !jenisPenilaianAktif) return;
+
+    const jenisParam = getJenisParam(jenisPenilaianAktif);
 
     try {
       if (activeTab === 'kokurikuler') {
-        const res = await fetch(`${API}/atur-penilaian/kategori-kokurikuler`, {
+        const res = await fetch(`${API}/atur-penilaian/kategori-kokurikuler?${jenisParam}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -416,7 +400,7 @@ export default function AturPenilaianGuruKelasClient() {
           setCoverageInfo(data.coverage || null);
         }
       } else if (activeTab === 'akademik' && selectedMapelAkademik !== null) {
-        const res = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}`, {
+        const res = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -445,9 +429,8 @@ export default function AturPenilaianGuruKelasClient() {
     } catch (err) {
       console.error('Error reloading data:', err);
     }
-  }, [activeTab, selectedMapelAkademik]);
+  }, [activeTab, selectedMapelAkademik, jenisPenilaianAktif]);
 
-  // ====== FETCH DATA DUKUNGAN ======
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -547,27 +530,27 @@ export default function AturPenilaianGuruKelasClient() {
     fetchData();
   }, [showModal, handleLogout]);
 
-  // ====== FETCH KATEGORI ======
+  // ✅ UPDATED: fetchKategori dengan parameter jenis
   useEffect(() => {
-    // Skip jika masih loading initial atau di tab bobot
     if (loading) return;
     if (activeTab === 'bobot') return;
 
     const fetchKategori = async () => {
       setKategoriLoading(true);
-      setCoverageInfo(null); // Reset coverage saat fetch baru
+      setCoverageInfo(null);
 
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
 
+        const jenisParam = getJenisParam(jenisPenilaianAktif);
         let endpoint = '';
 
         if (activeTab === 'kokurikuler') {
-          endpoint = `${API}/atur-penilaian/kategori-kokurikuler`;
+          endpoint = `${API}/atur-penilaian/kategori-kokurikuler?${jenisParam}`;
         } else if (activeTab === 'akademik') {
           if (selectedMapelAkademik !== null) {
-            endpoint = `${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}`;
+            endpoint = `${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`;
           } else {
             setKategoriList([]);
             setCoverageInfo(null);
@@ -650,7 +633,6 @@ export default function AturPenilaianGuruKelasClient() {
           setDeskripsiRataRataCoverage(data.coverage || null);
         } else {
           setKategoriList(formattedData);
-          // ✅ PENTING: Pastikan coverage di-set dari response
           setCoverageInfo(data.coverage || null);
           console.log('✅ Coverage di-update:', data.coverage);
         }
@@ -663,10 +645,9 @@ export default function AturPenilaianGuruKelasClient() {
     };
 
     fetchKategori();
-    // ✅ DEPENDENCY YANG JELAS: Hanya trigger saat tab atau mapel berubah
-  }, [activeTab, selectedMapelAkademik]);
+  }, [activeTab, selectedMapelAkademik, jenisPenilaianAktif]);
 
-  // ====== FETCH BOBOT ======
+  // ✅ UPDATED: fetchBobot dengan parameter jenis
   useEffect(() => {
     if (selectedMapelId === null || activeTab !== 'bobot') {
       setBobotList([]);
@@ -679,8 +660,9 @@ export default function AturPenilaianGuruKelasClient() {
       setBobotLoading(true);
       try {
         const token = localStorage.getItem('token');
+        const jenisParam = getJenisParam(jenisPenilaianAktif);
         const res = await fetch(
-          `${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`,
+          `${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -755,9 +737,8 @@ export default function AturPenilaianGuruKelasClient() {
     };
 
     fetchBobot();
-  }, [selectedMapelId, komponenList, activeTab, showModal, handleLogout]);
+  }, [selectedMapelId, komponenList, activeTab, showModal, handleLogout, jenisPenilaianAktif]);
 
-  // ====== TAB CHANGE HANDLER ======
   const handleTabChange = (tab: 'kokurikuler' | 'akademik' | 'bobot' | 'deskripsi-rata-rata') => {
     if (tab !== 'akademik') {
       setSelectedMapelAkademik(null);
@@ -775,7 +756,6 @@ export default function AturPenilaianGuruKelasClient() {
     setActiveTab(tab);
   };
 
-  // ====== HELPER: Load grade untuk aspek tertentu ======
   const loadGradesForAspek = (aspekId: number | null) => {
     if (!aspekId) {
       const defaultGrades = [
@@ -817,7 +797,6 @@ export default function AturPenilaianGuruKelasClient() {
     }
   };
 
-  // ====== BATCH EDIT HANDLERS ======
   const openBatchEdit = (aspekId: number | null = null) => {
     if (aspekId !== null && !canEditAspekKokurikuler(aspekId)) {
       const reason = getAspekKokurikulerLockReason(aspekId);
@@ -986,6 +965,7 @@ export default function AturPenilaianGuruKelasClient() {
     setShowConfirmModal(true);
   };
 
+  // ✅ UPDATED: executeSaveBatch dengan field jenis
   const executeSaveBatch = async () => {
     setIsSavingBatch(true);
     try {
@@ -993,6 +973,7 @@ export default function AturPenilaianGuruKelasClient() {
 
       const payload = {
         id_aspek_kokurikuler: batchEditAspekId,
+        jenis: jenisPenilaianAktif, // ✅ TAMBAH
         grades: batchGrades.map(g => ({
           id: g.id,
           grade: g.grade.toUpperCase(),
@@ -1016,7 +997,6 @@ export default function AturPenilaianGuruKelasClient() {
         closeBatchEdit();
         showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchGrades.length} grade berhasil disimpan.` });
 
-        // ✅ RELOAD DATA untuk update coverage
         await reloadData();
       } else {
         setShowConfirmModal(false);
@@ -1030,7 +1010,6 @@ export default function AturPenilaianGuruKelasClient() {
     }
   };
 
-  // ====== DESKRIPSI RATA-RATA HANDLERS ======
   const openEditDeskripsiRataRata = (kategori: any | null = null) => {
     setDeskripsiErrors({});
     if (kategori) {
@@ -1155,7 +1134,6 @@ export default function AturPenilaianGuruKelasClient() {
           });
         }, 50);
 
-        // ✅ RELOAD DATA untuk update coverage
         await reloadData();
       } else {
         showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Terjadi kesalahan.' });
@@ -1188,7 +1166,6 @@ export default function AturPenilaianGuruKelasClient() {
           if (res.ok) {
             showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Kategori berhasil dihapus.' });
 
-            // ✅ RELOAD DATA untuk update coverage
             await reloadData();
           } else {
             showModal({ type: 'error', title: 'Gagal Menghapus', message: result.message || 'Gagal menghapus kategori.' });
@@ -1200,7 +1177,6 @@ export default function AturPenilaianGuruKelasClient() {
     });
   };
 
-  // ====== MODAL KATEGORI (untuk akademik) ======
   const openEditKategori = (kategori: KategoriAkademik | KategoriKokurikuler | null = null) => {
     setErrors({});
     if (kategori) {
@@ -1304,6 +1280,7 @@ export default function AturPenilaianGuruKelasClient() {
     }, 200);
   };
 
+  // ✅ UPDATED: executeSaveKategori dengan field jenis
   const executeSaveKategori = async () => {
     setIsSavingKategori(true);
     try {
@@ -1315,6 +1292,7 @@ export default function AturPenilaianGuruKelasClient() {
         deskripsi: editKategoriData.deskripsi.trim(),
         urutan: 0,
         mapel_id: selectedMapelAkademik,
+        jenis: jenisPenilaianAktif, // ✅ TAMBAH
       };
 
       const url = editKategoriId ? `${endpoint}/${editKategoriId}` : endpoint;
@@ -1343,7 +1321,6 @@ export default function AturPenilaianGuruKelasClient() {
           });
         }, 50);
 
-        // ✅ RELOAD DATA untuk update coverage
         await reloadData();
       } else {
         showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Terjadi kesalahan.' });
@@ -1382,7 +1359,6 @@ export default function AturPenilaianGuruKelasClient() {
           if (res.ok) {
             showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Kategori berhasil dihapus.' });
 
-            // ✅ RELOAD DATA untuk update coverage
             await reloadData();
           } else {
             showModal({ type: 'error', title: 'Gagal Menghapus', message: result.message || 'Gagal menghapus kategori.' });
@@ -1394,7 +1370,6 @@ export default function AturPenilaianGuruKelasClient() {
     });
   };
 
-  // ====== BOBOT HANDLERS ======
   const isPTSActive = jenisPenilaianAktif === 'PTS';
 
   const handleBobotChange = (komponenId: number, value: string) => {
@@ -1456,21 +1431,27 @@ export default function AturPenilaianGuruKelasClient() {
     setShowConfirmModal(true);
   };
 
+  // ✅ UPDATED: executeSaveBobot dengan field jenis dan URL parameter
   const executeSaveBobot = async () => {
     if (!selectedMapelId) return;
 
     setIsSavingBobot(true);
     try {
       const token = localStorage.getItem('token');
+      const jenisParam = getJenisParam(jenisPenilaianAktif);
+      
       const res = await fetch(
-        `${API}/atur-penilaian/bobot-akademik/${selectedMapelId}`,
+        `${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`,
         {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(bobotList),
+          body: JSON.stringify({
+            bobot: bobotList,
+            jenis: jenisPenilaianAktif, // ✅ TAMBAH
+          }),
         }
       );
 
@@ -1490,7 +1471,6 @@ export default function AturPenilaianGuruKelasClient() {
     }
   };
 
-  // ====== LOADING STATE ======
   if (loading) {
     return (
       <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
@@ -1627,7 +1607,6 @@ export default function AturPenilaianGuruKelasClient() {
     );
   };
 
-  // ====== RENDER ======
   return (
     <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
       <GlobalStyles />
@@ -1661,6 +1640,41 @@ export default function AturPenilaianGuruKelasClient() {
               {readOnlyReason === 'locked'
                 ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat konfigurasi, tetapi tidak dapat mengedit.'
                 : 'Periode penilaian belum aktif. Anda dapat melihat konfigurasi, tetapi belum dapat mengedit. Silakan hubungi admin untuk membuka periode penilaian.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ BANNER: Periode Aktif yang Jelas */}
+      {jenisPenilaianAktif && (
+        <div className="mb-5 p-4 rounded-xl flex items-center gap-3"
+          style={{
+            background: jenisPenilaianAktif === 'PTS' 
+              ? 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)' 
+              : 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+            border: `2px solid ${jenisPenilaianAktif === 'PTS' ? '#fdba74' : '#86efac'}`
+          }}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+            jenisPenilaianAktif === 'PTS' ? 'bg-orange-200' : 'bg-green-200'
+          }`}>
+            {jenisPenilaianAktif === 'PTS' ? (
+              <Award className="w-6 h-6 text-orange-700" />
+            ) : (
+              <CheckCircle2 className="w-6 h-6 text-green-700" />
+            )}
+          </div>
+          <div className="flex-1">
+            <p className={`text-base font-bold ${
+              jenisPenilaianAktif === 'PTS' ? 'text-orange-900' : 'text-green-900'
+            }`}>
+              📋 Mode Konfigurasi: {jenisPenilaianAktif === 'PTS' ? 'PTS (Penilaian Tengah Semester)' : 'PAS (Penilaian Akhir Semester)'}
+            </p>
+            <p className={`text-xs mt-0.5 ${
+              jenisPenilaianAktif === 'PTS' ? 'text-orange-700' : 'text-green-700'
+            }`}>
+              {jenisPenilaianAktif === 'PTS' 
+                ? 'Anda sedang mengatur konfigurasi untuk PTS. Data PAS tidak akan terpengaruh.'
+                : 'Anda sedang mengatur konfigurasi untuk PAS. Data PTS sudah dikunci dan tidak dapat diubah.'}
             </p>
           </div>
         </div>

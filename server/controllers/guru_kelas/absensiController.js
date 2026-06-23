@@ -122,12 +122,15 @@ exports.getAbsensiSiswa = async (req, res) => {
 };
 
 /**
- * POST /absensi/:jenis/:semester
+ * POST /absensi
+ * ✅ FIXED: Ambil jenis dari body, bukan dari URL
  */
 exports.upsertAbsensi = async (req, res) => {
     try {
         const userId = req.user?.id;
-        const { jenis, semester } = req.penilaianContext || {};
+        // ✅ FIXED: Ambil jenis dari body atau penilaianContext
+        const jenis = req.body.jenis?.toUpperCase() || req.penilaianContext?.jenis;
+        const semester = req.body.semester || req.penilaianContext?.semester;
         const { siswa_id, sakit, izin, alpha } = req.body;
 
         console.log('📥 POST absensi:', { userId, jenis, semester, siswa_id, sakit, izin, alpha });
@@ -136,6 +139,13 @@ exports.upsertAbsensi = async (req, res) => {
             return res.status(401).json({
                 success: false,
                 message: 'User tidak terautentikasi'
+            });
+        }
+
+        if (!jenis || !['PTS', 'PAS'].includes(jenis)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Jenis harus PTS atau PAS'
             });
         }
 
@@ -150,7 +160,7 @@ exports.upsertAbsensi = async (req, res) => {
         const nilaiIzin = parseInt(izin) || 0;
         const nilaiAlpha = parseInt(alpha) || 0;
 
-        // ✅ Validasi tidak negatif
+        // Validasi tidak negatif
         if (nilaiSakit < 0 || nilaiIzin < 0 || nilaiAlpha < 0) {
             return res.status(400).json({
                 success: false,
@@ -158,7 +168,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Maksimal absensi per kategori (90 hari)
+        // Validasi maksimal absensi
         const MAX_ABSEN = 90;
         if (nilaiSakit > MAX_ABSEN || nilaiIzin > MAX_ABSEN || nilaiAlpha > MAX_ABSEN) {
             return res.status(400).json({
@@ -167,7 +177,6 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Total absensi tidak boleh melebihi hari efektif
         const totalHari = nilaiSakit + nilaiIzin + nilaiAlpha;
         if (totalHari > MAX_ABSEN) {
             return res.status(400).json({
@@ -229,6 +238,7 @@ exports.upsertAbsensi = async (req, res) => {
             }
         }
 
+        // Validasi siswa terdaftar
         const [siswaCheck] = await db.execute(
             `SELECT 1 FROM siswa_kelas sk
             WHERE sk.siswa_id = ? 

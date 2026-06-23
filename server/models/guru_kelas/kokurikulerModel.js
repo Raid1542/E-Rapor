@@ -1,7 +1,7 @@
 /**
  * Nama File: kokurikulerModel.js
- * Fungsi: Model untuk mengelola nilai kokurikuler siswa (struktur normalized)
- * Disesuaikan dengan struktur database yang sebenarnya
+ * Fungsi: Model untuk mengelola nilai kokurikuler siswa
+ * ✅ FIXED: Semua query filter by jenis_penilaian (PTS/PAS)
  */
 
 const db = require('../../config/db');
@@ -23,23 +23,23 @@ const kokurikulerModel = {
   },
 
   /**
-   * Ambil semua nilai kokurikuler untuk kelas tertentu
+   * ✅ FIXED: Ambil semua nilai kokurikuler untuk kelas tertentu + filter jenis
    */
-  async getNilaiByKelas(kelasId, tahunAjaranId, semester) {
+  async getNilaiByKelas(kelasId, tahunAjaranId, semester, jenisPenilaian) {
     const [rows] = await db.execute(
       `SELECT id_nilai_kokurikuler, id_siswa, id_aspek_kokurikuler, 
-              nilai, grade, deskripsi, id_judul_proyek
+              nilai, grade, deskripsi, id_judul_proyek, jenis_penilaian
         FROM nilai_kokurikuler
-        WHERE id_kelas = ? AND id_tahun_ajaran = ? AND semester = ?`,
-      [kelasId, tahunAjaranId, semester]
+        WHERE id_kelas = ? AND id_tahun_ajaran = ? AND semester = ? AND jenis_penilaian = ?`,
+      [kelasId, tahunAjaranId, semester, jenisPenilaian]
     );
     return rows;
   },
 
   /**
-   * Ambil nilai kokurikuler untuk satu siswa
+   * ✅ FIXED: Ambil nilai kokurikuler untuk satu siswa + filter jenis
    */
-  async getNilaiBySiswa(siswaId, kelasId, tahunAjaranId, semester) {
+  async getNilaiBySiswa(siswaId, kelasId, tahunAjaranId, semester, jenisPenilaian) {
     const [rows] = await db.execute(
       `SELECT 
           id_nilai_kokurikuler,
@@ -47,17 +47,18 @@ const kokurikulerModel = {
           nilai,
           grade,
           deskripsi,
-          id_judul_proyek
+          id_judul_proyek,
+          jenis_penilaian
         FROM nilai_kokurikuler
         WHERE id_siswa = ? AND id_kelas = ? AND id_tahun_ajaran = ?
-          AND semester = ?`,
-      [siswaId, kelasId, tahunAjaranId, semester]
+          AND semester = ? AND jenis_penilaian = ?`,
+      [siswaId, kelasId, tahunAjaranId, semester, jenisPenilaian]
     );
     return rows;
   },
 
   /**
-   * Cek apakah nilai sudah ada untuk siswa + aspek tertentu
+   * ✅ BENAR: Cek apakah nilai sudah ada (sudah filter jenis_penilaian)
    */
   async checkExistingNilai(siswaId, aspekId, kelasId, tahunAjaranId, semester, jenisPenilaian) {
     const [rows] = await db.execute(
@@ -70,7 +71,7 @@ const kokurikulerModel = {
   },
 
   /**
-   * Update nilai kokurikuler yang sudah ada
+   * ✅ BENAR: Update nilai kokurikuler yang sudah ada
    */
   async updateNilai(idNilaiKokurikuler, nilai, grade, deskripsi, idJudulProyek = null) {
     await db.execute(
@@ -82,7 +83,7 @@ const kokurikulerModel = {
   },
 
   /**
-   * Insert nilai kokurikuler baru
+   * ✅ BENAR: Insert nilai kokurikuler baru dengan jenis_penilaian
    */
   async insertNilai(siswaId, aspekId, kelasId, tahunAjaranId, semester, jenisPenilaian, nilai, grade, deskripsi, idJudulProyek = null) {
     const [result] = await db.execute(
@@ -111,7 +112,7 @@ const kokurikulerModel = {
    */
   async getTahunAjaranAktif() {
     const [rows] = await db.execute(`
-      SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester
+      SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status_pts, status_pas
       FROM tahun_ajaran
       WHERE status = 'aktif'
       LIMIT 1
@@ -120,31 +121,9 @@ const kokurikulerModel = {
   },
 
   /**
-   * Group nilai berdasarkan siswa
+   * ✅ FIXED: Ambil konfigurasi grade untuk aspek tertentu + filter jenis
    */
-  groupNilaiBySiswa(nilaiRows) {
-    const nilaiMap = new Map();
-    nilaiRows.forEach(row => {
-      if (!nilaiMap.has(row.id_siswa)) {
-        nilaiMap.set(row.id_siswa, []);
-      }
-      nilaiMap.get(row.id_siswa).push({
-        id_nilai_kokurikuler: row.id_nilai_kokurikuler,
-        aspek_id: row.id_aspek_kokurikuler,
-        nilai: row.nilai,
-        grade: row.grade,
-        deskripsi: row.deskripsi,
-        id_judul_proyek: row.id_judul_proyek
-      });
-    });
-    return nilaiMap;
-  },
-
-  /**
-   * Ambil konfigurasi grade untuk aspek tertentu
-   * ✅ Disesuaikan: pakai rentang_min/rentang_max
-   */
-  async getKonfigurasiGradeByAspek(aspekId, kelasId, tahunAjaranId, semester) {
+  async getKonfigurasiGradeByAspek(aspekId, kelasId, tahunAjaranId, semester, jenisPenilaian) {
     const [rows] = await db.execute(
       `SELECT 
           id_kategori_grade_kokurikuler,
@@ -158,8 +137,9 @@ const kokurikulerModel = {
           AND kelas_id = ? 
           AND tahun_ajaran_id = ? 
           AND semester = ?
+          AND jenis_penilaian = ?
         ORDER BY rentang_min DESC`,
-      [aspekId, kelasId, tahunAjaranId, semester]
+      [aspekId, kelasId, tahunAjaranId, semester, jenisPenilaian]
     );
     return rows;
   },

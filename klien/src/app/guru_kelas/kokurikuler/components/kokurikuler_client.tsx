@@ -56,7 +56,6 @@ interface SiswaKokurikuler {
 interface JudulProyek {
   id_judul_proyek: number | null;
   judul: string;
-  deskripsi: string | null;
 }
 
 // Mapping ID aspek (sesuai database)
@@ -66,6 +65,13 @@ const ASPEK_ID = {
   literasi: 4,
   mutabaah: 5,
 };
+
+const DAFTAR_ASPEK = [
+  { id: ASPEK_ID.mutabaah, nama: "Mutaba'ah Yaumiyah", kode: 'MUTABAAH' },
+  { id: ASPEK_ID.bpi, nama: 'Mentoring BPI', kode: 'BPI' },
+  { id: ASPEK_ID.literasi, nama: 'Literasi', kode: 'LITERASI' },
+  { id: ASPEK_ID.proyek, nama: 'Penilaian Proyek', kode: 'PROYEK' },
+];
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
 
@@ -172,7 +178,7 @@ export default function KokurikulerClient() {
   const [saving, setSaving] = useState(false);
 
   const [showProyekModal, setShowProyekModal] = useState(false);
-  const [editingProyek, setEditingProyek] = useState<JudulProyek>({ id_judul_proyek: null, judul: '', deskripsi: '' });
+  const [editingProyek, setEditingProyek] = useState<JudulProyek>({ id_judul_proyek: null, judul: '' });
   const [savingProyek, setSavingProyek] = useState(false);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -724,71 +730,68 @@ export default function KokurikulerClient() {
   };
 
   // ✅ PERBAIKAN: Error handling & timeout
-  const executeSaveProyek = async () => {
-    setSavingProyek(true);
-    
-    // ✅ Buat AbortController untuk timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 detik
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/judul-proyek`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          judul: editingProyek.judul.trim(),
-          deskripsi: editingProyek.deskripsi?.trim() || null,
-        }),
-        signal: controller.signal, // ✅ Tambah signal
+  // Cari fungsi executeSaveProyek (line ~650)
+const executeSaveProyek = async () => {
+  setSavingProyek(true);
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/judul-proyek`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        judul: editingProyek.judul.trim(),
+        // deskripsi dihapus
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (res.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+      return;
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      setJudulProyek({
+        id_judul_proyek: data.data?.id || editingProyek.id_judul_proyek,
+        judul: editingProyek.judul.trim(),
+        // deskripsi dihapus
       });
 
-      clearTimeout(timeoutId); // ✅ Clear timeout
-
-      // ✅ Handle session expired
-      if (res.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-        return;
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        setJudulProyek({
-          id_judul_proyek: data.data?.id || editingProyek.id_judul_proyek,
-          judul: editingProyek.judul.trim(),
-          deskripsi: editingProyek.deskripsi?.trim() || null
-        });
-
-        setShowConfirmModal(false);
-        closeProyekModal();
-        showModal({ type: 'success', title: 'Berhasil!', message: 'Judul proyek berhasil disimpan.' });
-      } else {
-        const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
-        throw new Error(err.message || 'Gagal menyimpan judul proyek');
-      }
-    } catch (err: any) {
-      clearTimeout(timeoutId); // ✅ Clear timeout
-      
-      // ✅ Handle timeout
-      if (err.name === 'AbortError') {
-        showModal({
-          type: 'error',
-          title: 'Request Timeout',
-          message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
-        });
-        return;
-      }
-      
-      // ✅ Jangan show error jika session expired
-      if (err.message === 'Sesi berakhir') return;
-      
       setShowConfirmModal(false);
-      showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan judul proyek.' });
-    } finally {
-      setSavingProyek(false);
+      closeProyekModal();
+      showModal({ type: 'success', title: 'Berhasil!', message: 'Judul proyek berhasil disimpan.' });
+    } else {
+      const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+      throw new Error(err.message || 'Gagal menyimpan judul proyek');
     }
-  };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    
+    if (err.name === 'AbortError') {
+      showModal({
+        type: 'error',
+        title: 'Request Timeout',
+        message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
+      });
+      return;
+    }
+    
+    if (err.message === 'Sesi berakhir') return;
+    
+    setShowConfirmModal(false);
+    showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan judul proyek.' });
+  } finally {
+    setSavingProyek(false);
+  }
+};
 
   // ═══════════════════════════════════════════════════════════════════════════
   // BADGE NILAI
@@ -866,13 +869,6 @@ export default function KokurikulerClient() {
   const canEditNilai = !isReadOnly && jenisPenilaianAktif !== null;
   const isPasActive = jenisPenilaianAktif === 'PAS';
   const isPtsActive = jenisPenilaianAktif === 'PTS';
-
-  const DAFTAR_ASPEK = [
-    { id: ASPEK_ID.mutabaah, nama: "Mutaba'ah Yaumiyah", kode: 'MUTABAAH' },
-    { id: ASPEK_ID.bpi, nama: 'Mentoring BPI', kode: 'BPI' },
-    { id: ASPEK_ID.literasi, nama: 'Literasi', kode: 'LITERASI' },
-    { id: ASPEK_ID.proyek, nama: 'Penilaian Proyek', kode: 'PROYEK' },
-  ];
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ✅ BANNER INFO - LEBIH VISUAL
@@ -1454,86 +1450,74 @@ export default function KokurikulerClient() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* MODAL JUDUL PROYEK */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {showProyekModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 dg-fadeIn"
-          onClick={e => { if (e.target === e.currentTarget) closeProyekModal(); }}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md dg-scaleIn" style={CARD_STYLE}>
-            <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <BookOpen size={18} />
-                {editingProyek.id_judul_proyek ? 'Edit Judul Proyek' : 'Atur Judul Proyek'}
-              </h2>
-              <button onClick={closeProyekModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                <X size={16} className="text-white" />
-              </button>
-            </div>
+{/* MODAL JUDUL PROYEK */}
+{/* ═══════════════════════════════════════════════════════════════════════ */}
+{showProyekModal && (
+  <div className="fixed inset-0 flex items-center justify-center z-50 p-4 dg-fadeIn"
+    onClick={e => { if (e.target === e.currentTarget) closeProyekModal(); }}>
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md dg-scaleIn" style={CARD_STYLE}>
+      <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <BookOpen size={18} />
+          {editingProyek.id_judul_proyek ? 'Edit Judul Proyek' : 'Atur Judul Proyek'}
+        </h2>
+        <button onClick={closeProyekModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+          style={{ background: 'rgba(255,255,255,0.2)' }}>
+          <X size={16} className="text-white" />
+        </button>
+      </div>
 
-            <div className="p-6 space-y-5">
-              <div className="p-4 rounded-lg border space-y-2" style={{ backgroundColor: '#fff7ed', borderColor: '#fed7aa' }}>
-                <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>Informasi</p>
-                <p className="text-sm text-gray-700">
-                  Judul proyek ini akan digunakan untuk semua siswa di kelas {kelasNama}.
-                  Nilai proyek akan diberikan kepada setiap siswa secara individual.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-gray-900">
-                  Judul Proyek <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editingProyek.judul}
-                  onChange={(e) => setEditingProyek({ ...editingProyek, judul: e.target.value })}
-                  placeholder="Contoh: Proyek Kebersihan Lingkungan"
-                  className={inputCls}
-                  maxLength={255}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-gray-900">
-                  Deskripsi <span className="text-gray-400 font-normal">(Opsional)</span>
-                </label>
-                <textarea
-                  value={editingProyek.deskripsi || ''}
-                  onChange={(e) => setEditingProyek({ ...editingProyek, deskripsi: e.target.value })}
-                  placeholder="Deskripsi singkat tentang proyek ini..."
-                  rows={3}
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
-              <BtnSecondary onClick={closeProyekModal} disabled={savingProyek}>Batal</BtnSecondary>
-              <button
-                onClick={openConfirmSaveProyek}
-                disabled={savingProyek || !editingProyek.judul.trim()}
-                className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
-                style={btnPrimary.style}
-                onMouseEnter={btnPrimary.hover}
-                onMouseLeave={btnPrimary.leave}
-              >
-                {savingProyek ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  <>
-                    <Save size={16} /> Simpan
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+      <div className="p-6 space-y-5">
+        <div className="p-4 rounded-lg border space-y-2" style={{ backgroundColor: '#fff7ed', borderColor: '#fed7aa' }}>
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>Informasi</p>
+          <p className="text-sm text-gray-700">
+            Judul proyek ini akan digunakan untuk semua siswa di kelas {kelasNama}.
+            Nilai proyek akan diberikan kepada setiap siswa secara individual.
+          </p>
         </div>
-      )}
+
+        {/* ✅ HANYA JUDUL - Deskripsi Dihapus */}
+        <div className="space-y-2">
+          <label className="block text-sm font-bold text-gray-900">
+            Judul Proyek <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={editingProyek.judul}
+            onChange={(e) => setEditingProyek({ ...editingProyek, judul: e.target.value })}
+            placeholder="Contoh: Proyek Kebersihan Lingkungan"
+            className={inputCls}
+            maxLength={255}
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+        <BtnSecondary onClick={closeProyekModal} disabled={savingProyek}>Batal</BtnSecondary>
+        <button
+          onClick={openConfirmSaveProyek}
+          disabled={savingProyek || !editingProyek.judul.trim()}
+          className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
+          style={btnPrimary.style}
+          onMouseEnter={btnPrimary.hover}
+          onMouseLeave={btnPrimary.leave}
+        >
+          {savingProyek ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+              Menyimpan...
+            </>
+          ) : (
+            <>
+              <Save size={16} /> Simpan
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL KONFIRMASI */}

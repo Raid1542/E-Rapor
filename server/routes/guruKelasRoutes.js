@@ -179,19 +179,96 @@ router.put('/upload_foto',
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. ABSENSI
 // ═════════════════════════════════════════════════════════════════════════════
+
+// ✅ Middleware khusus absensi: ambil jenis dari body (POST) atau params (GET)
+const validateAbsensiJenis = (req, res, next) => {
+    // Untuk POST: ambil dari body
+    if (req.method === 'POST') {
+        const { jenis } = req.body;
+        if (!jenis || !['PTS', 'PAS'].includes(jenis.toUpperCase())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Jenis harus PTS atau PAS'
+            });
+        }
+        req.penilaianContext = {
+            ...req.penilaianContext,
+            jenis: jenis.toUpperCase()
+        };
+    }
+    next();
+};
+
+// ✅ Middleware khusus absensi: cek status periode (tidak block GET)
+const cekStatusAbsensi = async (req, res, next) => {
+    try {
+        const { jenis } = req.penilaianContext || {};
+        
+        const [taRows] = await db.execute(`
+            SELECT status_pts, status_pas
+            FROM tahun_ajaran
+            WHERE status = 'aktif'
+            LIMIT 1
+        `);
+
+        if (taRows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tahun ajaran aktif belum diatur'
+            });
+        }
+
+        const { status_pts, status_pas } = taRows[0];
+        const status = jenis === 'PTS' ? status_pts : status_pas;
+
+        // ✅ Untuk POST: Block jika periode selesai
+        if (req.method === 'POST' && status === 'selesai') {
+            return res.status(403).json({
+                success: false,
+                message: `Periode ${jenis} sudah selesai. Data tidak dapat diubah.`,
+                code: 'PERIOD_LOCKED'
+            });
+        }
+
+        // ✅ Untuk POST: Block jika periode belum aktif
+        if (req.method === 'POST' && status === 'nonaktif') {
+            return res.status(403).json({
+                success: false,
+                message: `Periode ${jenis} belum dibuka.`,
+                code: 'PERIOD_NOT_OPEN'
+            });
+        }
+
+        // ✅ Untuk GET: Tidak block, tetap lanjut (frontend yang handle read-only)
+        // Set flag untuk controller
+        req.absensiStatus = status; // 'aktif' | 'selesai' | 'nonaktif'
+        
+        next();
+    } catch (err) {
+        console.error('Error cekStatusAbsensi:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengecek status absensi'
+        });
+    }
+};
+
+// GET absensi - boleh akses walau periode selesai
 router.get('/absensi/:jenis/:semester',
     authenticate,
     guruKelasOnly,
     validateJenisSemester,
-    cekPenilaianStatus,
+    cekStatusAbsensi,  // ✅ Pakai middleware baru
     cekGuruKelasDitugaskan,
     safeHandler(guruKelasControllers.getAbsensiSiswa)
 );
 
+// POST absensi - harus aktif
 router.post('/absensi',
     authenticate,
     guruKelasOnly,
-    cekPenilaianStatus,
+    validateAbsensiJenis,  // ✅ Ambil jenis dari body
+    cekStatusAbsensi,      // ✅ Cek status periode
     cekGuruKelasDitugaskan,
     safeHandler(guruKelasControllers.upsertAbsensi)
 );
@@ -630,7 +707,7 @@ const validateRaporParamsWithTA = (req, res, next) => {
 
 const adminOrGuruKelasDitugaskan = [
     authenticate,
-    authorize(['admin', 'guru kelas']),
+    authorize(['admin', 'guru_kelas']),
     async (req, res, next) => {
         if (req.user.role === 'admin') {
             // Ambil id_tahun_ajaran_induk dari tahunAjaranId param

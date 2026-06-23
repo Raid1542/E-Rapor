@@ -6,6 +6,7 @@
  *   - Auto-update tanpa refresh
  *   - Hapus statistik tertinggi/terendah
  *   - Hapus indikator Lulus/Remedial
+ *   - ✅ FIX: Deskripsi Capaian hanya untuk PTS, PAS cukup tanda "-"
  */
 
 'use client';
@@ -509,36 +510,48 @@ export default function RekapanNilaiClient() {
                                 </div>
                             </div>
 
-                            {/* ✅ Deskripsi - Full Width */}
-                            <div className="p-5 rounded-2xl border-2 border-orange-200 bg-gradient-to-br from-orange-50/50 via-white to-white shadow-sm">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                                        style={{ background: 'linear-gradient(135deg, #fdba74, #fb923c)' }}>
-                                        <BookOpen size={20} className="text-white" />
+                            {/* ✅ Deskripsi Capaian - CONDITIONAL: PTS = deskripsi, PAS = tanda "-" */}
+                            {jenisPenilaian === 'PTS' ? (
+                                // PTS: Tampilkan deskripsi dari database
+                                <div className="p-5 rounded-2xl border-2 border-orange-200 bg-gradient-to-br from-orange-50/50 via-white to-white shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                                            style={{ background: 'linear-gradient(135deg, #fdba74, #fb923c)' }}>
+                                            <BookOpen size={20} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-bold" style={{ color: '#7a3a0a' }}>Deskripsi Capaian</h3>
+                                            <p className="text-xs text-gray-600">Penilaian keseluruhan berdasarkan rata-rata nilai</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="text-base font-bold" style={{ color: '#7a3a0a' }}>Deskripsi Capaian</h3>
-                                        <p className="text-xs text-gray-600">Penilaian keseluruhan berdasarkan rata-rata nilai</p>
+                                    <div className="p-4 rounded-xl bg-white border-2 border-orange-100 min-h-[100px]">
+                                        <p className="text-sm leading-relaxed" style={{ color: '#7a3a0a' }}>
+                                            {selectedSiswa.deskripsi || (
+                                                <span className="italic text-gray-500">
+                                                    Deskripsi belum diatur untuk rentang nilai ini.
+                                                </span>
+                                            )}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="p-4 rounded-xl bg-white border-2 border-orange-100 min-h-[100px]">
-                                    <p className="text-sm leading-relaxed" style={{ color: '#7a3a0a' }}>
-                                        {selectedSiswa.deskripsi || (
-                                            <span className="italic text-gray-500">
-                                                Siswa menunjukkan performa yang {' '}
-                                                {selectedSiswa.rataRata != null && (
-                                                    selectedSiswa.rataRata >= 85 ? 'sangat baik' :
-                                                    selectedSiswa.rataRata >= 75 ? 'baik' :
-                                                    selectedSiswa.rataRata >= 65 ? 'cukup baik' :
-                                                    'perlu ditingkatkan'
-                                                )}.
-                                                {selectedSiswa.rataRata != null && selectedSiswa.rataRata < 75 && 
-                                                    ' Disarankan untuk lebih giat belajar dan meningkatkan pemahaman pada mata pelajaran yang nilainya masih rendah.'}
-                                            </span>
-                                        )}
-                                    </p>
+                            ) : (
+                                // PAS: Cukup tanda "-" saja
+                                <div className="p-5 rounded-2xl border-2 border-gray-200 bg-gradient-to-br from-gray-50 via-white to-white shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                                            style={{ background: 'linear-gradient(135deg, #d1d5db, #9ca3af)' }}>
+                                            <BookOpen size={20} className="text-white" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-bold" style={{ color: '#7a3a0a' }}>Deskripsi Capaian</h3>
+                                            <p className="text-xs text-gray-600">Periode PAS tidak menggunakan deskripsi</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 rounded-xl bg-white border-2 border-gray-100 min-h-[100px] flex items-center justify-center">
+                                        <span className="text-4xl font-bold text-gray-400">-</span>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* ✅ Nilai per Mata Pelajaran - TANPA LULUS/REMEDIAL */}
                             <div>

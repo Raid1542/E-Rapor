@@ -1,10 +1,16 @@
 /**
  * Nama File: penilaianKategoriController.js
- * UPDATE: Fix bug indukId → semesterId, urutan parameter, dan response
+ * UPDATE: 
+ *   - Fix bug indukId → semesterId
+ *   - ✅ FIX: Filter kategori & overlap berdasarkan jenis_penilaian (PTS/PAS)
+ *   - ✅ FIX: Simpan jenis_penilaian saat create
  */
 
 const kategoriModel = require('../../models/guru_bidang_studi/penilaianKategoriModel');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /atur-penilaian/kategori
+// ═════════════════════════════════════════════════════════════════════════════
 exports.getKategoriAkademik = async (req, res) => {
     try {
         const { mapel_id, kelas_id } = req.query;
@@ -42,8 +48,22 @@ exports.getKategoriAkademik = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
+        
+        // ✅ TENTUKAN jenis penilaian aktif
+        const statusPTS = taAktif.status_pts;
+        const statusPAS = taAktif.status_pas;
+        const jenisPenilaianAktif = statusPTS === 'aktif' ? 'PTS' : statusPAS === 'aktif' ? 'PAS' : null;
+        
+        console.log(`📊 [GET Kategori] Jenis aktif: ${jenisPenilaianAktif}`);
 
-        const kategori = await kategoriModel.getKategoriByMapel(mapelIdNum, semesterId, kelasIdNum);
+        // ✅ AMBIL kategori sesuai jenis penilaian aktif
+        const kategori = await kategoriModel.getKategoriByMapel(
+            mapelIdNum, 
+            semesterId, 
+            kelasIdNum,
+            jenisPenilaianAktif  // ✅ Filter berdasarkan jenis aktif
+        );
+        
         const coverage = await kategoriModel.cekCoverage0to100(mapelIdNum, semesterId, kelasIdNum);
 
         res.json({
@@ -51,7 +71,8 @@ exports.getKategoriAkademik = async (req, res) => {
             data: kategori,
             coverage: coverage,
             mapel: req.penugasanMapel?.nama_mapel || 'Mata Pelajaran',
-            kelas_id: kelasIdNum
+            kelas_id: kelasIdNum,
+            jenis_penilaian: jenisPenilaianAktif
         });
 
     } catch (err) {
@@ -63,6 +84,9 @@ exports.getKategoriAkademik = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /atur-penilaian/kategori
+// ═════════════════════════════════════════════════════════════════════════════
 exports.createKategoriAkademik = async (req, res) => {
     try {
         let { min_nilai, max_nilai, deskripsi, mapel_id, kelas_id } = req.body;
@@ -125,14 +149,20 @@ exports.createKategoriAkademik = async (req, res) => {
 
         const semesterId = taAktif.id_tahun_ajaran;
         
-        // ✅ FIX: Cek overlap dengan kelas_id spesifik
+        // ✅ TENTUKAN jenis penilaian aktif
+        const jenisPenilaianAktif = taAktif.status_pts === 'aktif' ? 'PTS' : taAktif.status_pas === 'aktif' ? 'PAS' : null;
+        
+        console.log(`📊 [Create Kategori] Jenis aktif: ${jenisPenilaianAktif}`);
+        
+        // ✅ FIX: Cek overlap HANYA untuk jenis penilaian yang sama
         const overlaps = await kategoriModel.cekRangeOverlap(
             mapelIdNum,
             semesterId,
             min_nilai,
             max_nilai,
-            kelasIdNum,  // ✅ kelas_id spesifik
-            null
+            kelasIdNum,
+            null,
+            jenisPenilaianAktif  // ✅ TAMBAH parameter
         );
 
         if (overlaps.length > 0) {
@@ -152,21 +182,23 @@ exports.createKategoriAkademik = async (req, res) => {
             });
         }
 
-        // ✅ FIX: Simpan dengan kelas_id spesifik
+        // ✅ FIX: Simpan dengan jenis_penilaian
         const result = await kategoriModel.createKategori({
             mapel_id: mapelIdNum,
             semester_id: semesterId,
             min_nilai,
             max_nilai,
             deskripsi,
-            kelas_id: kelasIdNum  
+            kelas_id: kelasIdNum,
+            jenis_penilaian: jenisPenilaianAktif  // ✅ TAMBAH
         });
 
         res.json({
             success: true,
             message: 'Kategori berhasil ditambahkan',
             id: result.insertId,
-            mapel: req.penugasanMapel?.nama_mapel
+            mapel: req.penugasanMapel?.nama_mapel,
+            jenis_penilaian: jenisPenilaianAktif
         });
 
     } catch (err) {
@@ -178,10 +210,13 @@ exports.createKategoriAkademik = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// PUT /atur-penilaian/kategori/:id
+// ═════════════════════════════════════════════════════════════════════════════
 exports.updateKategoriAkademik = async (req, res) => {
     try {
         const { id } = req.params;
-        let { min_nilai, max_nilai, deskripsi, urutan, mapel_id } = req.body;
+        let { min_nilai, max_nilai, deskripsi, urutan } = req.body;
 
         min_nilai = Math.floor(parseFloat(min_nilai));
         max_nilai = Math.floor(parseFloat(max_nilai));
@@ -225,6 +260,9 @@ exports.updateKategoriAkademik = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
+        
+        // ✅ TENTUKAN jenis penilaian aktif
+        const jenisPenilaianAktif = taAktif.status_pts === 'aktif' ? 'PTS' : taAktif.status_pas === 'aktif' ? 'PAS' : null;
 
         const existing = await kategoriModel.getKategoriById(id);
         if (!existing) {
@@ -241,13 +279,15 @@ exports.updateKategoriAkademik = async (req, res) => {
             });
         }
 
+        // ✅ FIX: Cek overlap dengan filter jenis_penilaian
         const overlaps = await kategoriModel.cekRangeOverlap(
             existing.mapel_id,
             semesterId,
             min_nilai,
             max_nilai,
             existing.kelas_id,
-            id
+            id,
+            jenisPenilaianAktif  // ✅ TAMBAH parameter
         );
 
         if (overlaps.length > 0) {
@@ -296,6 +336,9 @@ exports.updateKategoriAkademik = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// DELETE /atur-penilaian/kategori/:id
+// ═════════════════════════════════════════════════════════════════════════════
 exports.deleteKategoriAkademik = async (req, res) => {
     try {
         const { id } = req.params;

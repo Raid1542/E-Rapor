@@ -47,13 +47,13 @@ exports.getMapelForGuruKelas = async (req, res) => {
                 mata_pelajaran_id: r.id_mata_pelajaran,
                 nama_mapel: r.nama_mapel,
                 jenis: r.jenis,
-                bisa_input: Boolean(r.bisa_input),  
+                bisa_input: Boolean(r.bisa_input),
             })),
             pilihan: rows.filter(r => r.jenis === 'pilihan').map(r => ({
                 mata_pelajaran_id: r.id_mata_pelajaran,
                 nama_mapel: r.nama_mapel,
                 jenis: r.jenis,
-                bisa_input: false, 
+                bisa_input: false,
             })),
         });
     } catch (err) {
@@ -123,7 +123,7 @@ exports.getNilaiByMapel = async (req, res) => {
         // 4. Ambil Data Pendukung
         const siswaIds = siswaRows.map(s => s.id_siswa);
         const placeholders = siswaIds.map(() => '?').join(',');
-        
+
         const [nilaiRows] = await db.execute(
             `SELECT siswa_id, komponen_id, nilai FROM nilai_detail 
              WHERE mapel_id = ? AND tahun_ajaran_id = ? 
@@ -140,12 +140,25 @@ exports.getNilaiByMapel = async (req, res) => {
             ORDER BY kelas_id DESC
         `, [mapelId, kelas_id]);
 
-        const [kategoriRows] = await db.execute(
-            `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor
-             WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND is_active = 1
-             ORDER BY min_nilai DESC`,
-            [mapelId, semesterId]
-        );
+        const [kategoriPTSRows] = await db.execute(
+    `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor
+     WHERE (mapel_id = ? OR mapel_id IS NULL) 
+     AND tahun_ajaran_id = ? 
+     AND jenis_penilaian = 'PTS'
+     AND is_active = 1
+     ORDER BY min_nilai DESC`,
+    [mapelId, semesterId]
+);
+
+const [kategoriPASRows] = await db.execute(
+    `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor
+     WHERE (mapel_id = ? OR mapel_id IS NULL) 
+     AND tahun_ajaran_id = ? 
+     AND jenis_penilaian = 'PAS'
+     AND is_active = 1
+     ORDER BY min_nilai DESC`,
+    [mapelId, semesterId]
+);
 
         const [allRaporRows] = await db.execute(
             `SELECT siswa_id, nilai_rapor, jenis_penilaian FROM nilai_rapor
@@ -188,35 +201,37 @@ exports.getNilaiByMapel = async (req, res) => {
 
         // 5. Proses Perhitungan Nilai
         const siswaList = siswaRows.map(s => {
-            const nilai = nilaiMap[s.id_siswa] || {};
-            const ptsData = ptsRaporMap.get(s.id_siswa);
-            const raporPTS = ptsData?.nilai ?? 0;
-            const deskripsiPTS = ptsData
-                ? getDeskripsiFromKategori(raporPTS, kategoriRows)
-                : '';
+             const nilai = nilaiMap[s.id_siswa] || {};
+    const ptsData = ptsRaporMap.get(s.id_siswa);
+    const raporPTS = ptsData?.nilai ?? 0;
+    // ✅ FIXED: Gunakan kategoriPTSRows untuk deskripsi PTS
+    const deskripsiPTS = ptsData
+        ? getDeskripsiFromKategori(raporPTS, kategoriPTSRows)
+        : '';
 
-            let raporPAS = 0;
-            let deskripsiPAS = '';
+    let raporPAS = 0;
+    let deskripsiPAS = '';
 
-            if (jenis_penilaian === 'PAS') {
-                const nilaiUH = uhKomponenIds.map(id => nilai[id]).filter(v => v != null && !isNaN(v));
-                const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
-                const nilaiPAS = pasKomponenId ? (nilai[pasKomponenId] || 0) : 0;
-                const nilaiPTSUntukPAS = raporPTS;
+    if (jenis_penilaian === 'PAS') {
+        const nilaiUH = uhKomponenIds.map(id => nilai[id]).filter(v => v != null && !isNaN(v));
+        const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
+        const nilaiPAS = pasKomponenId ? (nilai[pasKomponenId] || 0) : 0;
+        const nilaiPTSUntukPAS = raporPTS;
 
-                const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
-                const bobotPTS = ptsKomponenId ? bobotMap.get(ptsKomponenId) || 0 : 0;
-                const bobotPAS = pasKomponenId ? bobotMap.get(pasKomponenId) || 0 : 0;
-                const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
+        const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
+        const bobotPTS = ptsKomponenId ? bobotMap.get(ptsKomponenId) || 0 : 0;
+        const bobotPAS = pasKomponenId ? bobotMap.get(pasKomponenId) || 0 : 0;
+        const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
 
-                if (totalBobot > 0) {
-                    raporPAS = ((rataUH * totalBobotUH) + (nilaiPTSUntukPAS * bobotPTS) + (nilaiPAS * bobotPAS)) / totalBobot;
-                } else {
-                    raporPAS = (rataUH + nilaiPTSUntukPAS + nilaiPAS) / 3;
-                }
-                raporPAS = Math.round(raporPAS);
-                deskripsiPAS = getDeskripsiFromKategori(raporPAS, kategoriRows);
-            }
+        if (totalBobot > 0) {
+            raporPAS = ((rataUH * totalBobotUH) + (nilaiPTSUntukPAS * bobotPTS) + (nilaiPAS * bobotPAS)) / totalBobot;
+        } else {
+            raporPAS = (rataUH + nilaiPTSUntukPAS + nilaiPAS) / 3;
+        }
+        raporPAS = Math.round(raporPAS);
+        // ✅ FIXED: Gunakan kategoriPASRows untuk deskripsi PAS
+        deskripsiPAS = getDeskripsiFromKategori(raporPAS, kategoriPASRows);
+    }
 
             return {
                 id: s.id_siswa,
@@ -244,10 +259,6 @@ exports.getNilaiByMapel = async (req, res) => {
     }
 };
 
-/**
- * PUT /nilai-komponen/:mapelId/:siswaId
- * ✅ UPDATE: Validasi status siswa aktif
- */
 exports.updateNilaiKomponen = async (req, res) => {
     try {
         const { mapelId, siswaId } = req.params;
@@ -263,7 +274,10 @@ exports.updateNilaiKomponen = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Data konteks tidak lengkap' });
         }
 
-        // ✅ PERBAIKAN: Validasi status siswa aktif
+        console.log(`🔍 [Update Nilai] Siswa: ${siswaId}, Mapel: ${mapelId}, Jenis: ${jenis}`);
+        console.log(`🔍 [Update Nilai] Nilai yang diterima:`, nilai);
+
+        // ✅ Validasi status siswa aktif
         const [siswaStatus] = await db.execute(
             `SELECT status FROM siswa WHERE id_siswa = ?`,
             [siswaId]
@@ -274,9 +288,9 @@ exports.updateNilaiKomponen = async (req, res) => {
         }
 
         if (siswaStatus[0].status !== 'aktif') {
-            return res.status(403).json({ 
-                success: false, 
-                message: `Siswa tidak aktif (status: ${siswaStatus[0].status}). Nilai tidak dapat diubah.` 
+            return res.status(403).json({
+                success: false,
+                message: `Siswa tidak aktif (status: ${siswaStatus[0].status}). Nilai tidak dapat diubah.`
             });
         }
 
@@ -311,34 +325,49 @@ exports.updateNilaiKomponen = async (req, res) => {
         const ptsKomponen = komponenList.find(k => /^PTS$/i.test(k.nama_komponen));
         const pasKomponen = komponenList.find(k => /^PAS$/i.test(k.nama_komponen));
 
-        // Validasi Input Berdasarkan Periode
+        // ✅ FIXED: Validasi yang lebih cerdas
         if (jenis === 'PTS') {
+            // Saat PTS aktif: HANYA boleh isi PTS (UH tidak boleh, PAS tidak boleh)
             for (const [komponenIdStr, nilaiSiswa] of Object.entries(nilai)) {
                 const komponenId = parseInt(komponenIdStr, 10);
-                if (komponenId !== ptsKomponen?.id_komponen && nilaiSiswa != null) {
+                const komponen = komponenList.find(k => k.id_komponen === komponenId);
+
+                // Skip jika nilai null (tidak diisi)
+                if (nilaiSiswa == null) continue;
+
+                // Tolak jika BUKAN komponen PTS
+                if (ptsKomponen && komponenId !== ptsKomponen.id_komponen) {
                     return res.status(400).json({
                         success: false,
-                        message: `Periode PTS aktif. Hanya nilai ${ptsKomponen?.nama_komponen || 'PTS'} yang boleh diisi.`
+                        message: `Periode PTS aktif. Hanya nilai ${ptsKomponen.nama_komponen} yang boleh diisi. Komponen "${komponen?.nama_komponen || komponenId}" tidak boleh diubah.`
                     });
                 }
             }
         }
 
         if (jenis === 'PAS') {
-            for (const [komponenIdStr, nilaiSiswa] of Object.entries(nilai)) {
-                const komponenId = parseInt(komponenIdStr, 10);
-                if (ptsKomponen && komponenId === ptsKomponen.id_komponen && nilaiSiswa != null) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `Nilai ${ptsKomponen.nama_komponen} tidak dapat diubah saat periode PAS.`
-                    });
-                }
-            }
+            // ✅ FIXED: Saat PAS aktif, SKIP nilai PTS (jangan error, just skip)
+            // Karena frontend kirim semua nilai termasuk PTS yang disabled
+            console.log(`🔍 [PAS Mode] Mengecek nilai yang dikirim...`);
         }
 
-        // Simpan Nilai Detail
+        // ✅ Simpan Nilai Detail - dengan filter berdasarkan periode
+        let savedCount = 0;
         for (const [komponenIdStr, nilaiSiswa] of Object.entries(nilai)) {
             const komponenId = parseInt(komponenIdStr, 10);
+
+            // ✅ SKIP: Jangan simpan nilai PTS saat PAS aktif
+            if (jenis === 'PAS' && ptsKomponen && komponenId === ptsKomponen.id_komponen) {
+                console.log(`⏭️ [Skip] Komponen PTS di-skip saat periode PAS`);
+                continue;
+            }
+
+            // ✅ SKIP: Jangan simpan nilai PAS saat PTS aktif
+            if (jenis === 'PTS' && pasKomponen && komponenId === pasKomponen.id_komponen) {
+                console.log(`⏭️ [Skip] Komponen PAS di-skip saat periode PTS`);
+                continue;
+            }
+
             let nilaiBulat = null;
             if (nilaiSiswa != null && nilaiSiswa !== '' && !isNaN(nilaiSiswa)) {
                 nilaiBulat = Math.round(parseFloat(nilaiSiswa));
@@ -352,7 +381,10 @@ exports.updateNilaiKomponen = async (req, res) => {
                  ON DUPLICATE KEY UPDATE nilai = VALUES(nilai), updated_at = NOW()`,
                 [siswaId, mapelId, komponenId, nilaiBulat, semesterId, userId]
             );
+            savedCount++;
         }
+
+        console.log(`✅ [Save] ${savedCount} komponen berhasil disimpan`);
 
         // Hitung Ulang Nilai Rapor
         const [nilaiDetailRows] = await db.execute(
@@ -422,6 +454,8 @@ exports.updateNilaiKomponen = async (req, res) => {
             [siswaId, mapelId, kelas_id, semesterId, semester, jenis, nilaiRaporBulat, deskripsi, userId]
         );
 
+        console.log(`✅ [Rapor] Nilai rapor ${jenis}: ${nilaiRaporBulat}`);
+
         res.json({
             success: true,
             message: `Nilai komponen (${jenis}) berhasil disimpan`,
@@ -461,9 +495,9 @@ exports.simpanNilai = async (req, res) => {
         }
 
         if (siswaStatus[0].status !== 'aktif') {
-            return res.status(403).json({ 
-                success: false, 
-                message: `Siswa tidak aktif (status: ${siswaStatus[0].status}). Nilai tidak dapat disimpan.` 
+            return res.status(403).json({
+                success: false,
+                message: `Siswa tidak aktif (status: ${siswaStatus[0].status}). Nilai tidak dapat disimpan.`
             });
         }
 
@@ -543,9 +577,9 @@ exports.updateNilaiRapor = async (req, res) => {
         }
 
         if (siswaStatus[0].status !== 'aktif') {
-            return res.status(403).json({ 
-                success: false, 
-                message: `Siswa tidak aktif (status: ${siswaStatus[0].status}). Nilai rapor tidak dapat diubah.` 
+            return res.status(403).json({
+                success: false,
+                message: `Siswa tidak aktif (status: ${siswaStatus[0].status}). Nilai rapor tidak dapat diubah.`
             });
         }
 
@@ -558,6 +592,7 @@ exports.updateNilaiRapor = async (req, res) => {
         }
 
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
+        const semesterId = req.idSemesterAktif;
         const { semester, jenis: jenis_penilaian } = req.penilaianContext || {};
 
         if (!tahunAjaranIndukId || !semester) {

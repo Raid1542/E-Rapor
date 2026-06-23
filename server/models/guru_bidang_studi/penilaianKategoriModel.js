@@ -1,14 +1,22 @@
 /**
  * Nama File: penilaianKategoriModel.js
  * Fungsi: Model untuk mengelola kategori nilai akademik
- * UPDATE: Fix bug kelas_id, pastikan semua query per kelas spesifik
+ * UPDATE: 
+ *   - Fix bug kelas_id, pastikan semua query per kelas spesifik
+ *   - ✅ FIX: Tambah status_pts, status_pas di getTahunAjaranAktif
  */
 
 const db = require('../../config/db');
 
+// ✅ FIXED: Tambah status_pts dan status_pas
 const getTahunAjaranAktif = async () => {
     const [taRows] = await db.execute(`
-        SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester
+        SELECT 
+            id_tahun_ajaran, 
+            id_tahun_ajaran_induk, 
+            semester,
+            status_pts,
+            status_pas
         FROM tahun_ajaran 
         WHERE status = 'aktif' 
         LIMIT 1
@@ -25,20 +33,29 @@ const validateGuruMapel = async (userId, mapelId, semesterId) => {
     return rows.length > 0;
 };
 
-// ✅ FIX: Hanya ambil kategori untuk kelas spesifik
-const getKategoriByMapel = async (mapelId, semesterId, kelasId) => {
-    const query = `
-        SELECT id_config AS id, min_nilai, max_nilai, deskripsi, urutan, kelas_id
+// ✅ FIX: Filter berdasarkan jenis penilaian aktif
+const getKategoriByMapel = async (mapelId, semesterId, kelasId, jenisPenilaian = null) => {
+    let query = `
+        SELECT id_config AS id, min_nilai, max_nilai, deskripsi, urutan, kelas_id, jenis_penilaian
         FROM konfigurasi_nilai_rapor
         WHERE mapel_id = ? 
         AND tahun_ajaran_id = ?
         AND kelas_id = ?
-        ORDER BY urutan ASC
     `;
     
-    const [rows] = await db.execute(query, [mapelId, semesterId, kelasId]);
+    const params = [mapelId, semesterId, kelasId];
+    
+    // ✅ TAMBAH filter jenis_penilaian jika ada
+    if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
+        query += ` AND jenis_penilaian = ?`;
+        params.push(jenisPenilaian);
+    }
+    
+    query += ` ORDER BY urutan ASC`;
+    
+    const [rows] = await db.execute(query, params);
     return rows;
-};
+}
 
 const getKategoriById = async (id) => {
     const [rows] = await db.execute(
@@ -64,8 +81,8 @@ const getLastUrutan = async (mapelId, semesterId, kelasId) => {
     return rows[0]?.max_urutan || 0;
 };
 
-// ✅ FIX: Cek overlap hanya untuk kelas spesifik
-const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId, excludeId = null) => {
+// ✅ FIXED: Tambah parameter jenis_penilaian
+const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId, excludeId = null, jenisPenilaian = null) => {
     let query = `
         SELECT id_config, min_nilai, max_nilai, deskripsi
         FROM konfigurasi_nilai_rapor
@@ -75,6 +92,12 @@ const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId,
         AND (? <= max_nilai AND ? >= min_nilai)
     `;
     const params = [mapelId, semesterId, kelasId, minNilai, maxNilai];
+    
+    // ✅ TAMBAH filter jenis_penilaian
+    if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
+        query += ` AND jenis_penilaian = ?`;
+        params.push(jenisPenilaian);
+    }
     
     if (excludeId) {
         query += ` AND id_config != ?`;
@@ -126,18 +149,18 @@ const cekCoverage0to100 = async (mapelId, semesterId, kelasId) => {
     return { covered: true };
 };
 
-// ✅ FIX: Simpan dengan kelas_id spesifik
+// ✅ FIXED: Simpan dengan jenis_penilaian
 const createKategori = async (data) => {
-    const { mapel_id, semester_id, min_nilai, max_nilai, deskripsi, kelas_id } = data;
+    const { mapel_id, semester_id, min_nilai, max_nilai, deskripsi, kelas_id, jenis_penilaian } = data;
     
     const lastUrutan = await getLastUrutan(mapel_id, semester_id, kelas_id);
     const urutan = lastUrutan + 1;
     
     const [result] = await db.execute(
         `INSERT INTO konfigurasi_nilai_rapor 
-         (mapel_id, kelas_id, tahun_ajaran_id, min_nilai, max_nilai, deskripsi, urutan)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [mapel_id, kelas_id, semester_id, min_nilai, max_nilai, deskripsi, urutan]
+         (mapel_id, kelas_id, tahun_ajaran_id, jenis_penilaian, min_nilai, max_nilai, deskripsi, urutan)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [mapel_id, kelas_id, semester_id, jenis_penilaian, min_nilai, max_nilai, deskripsi, urutan]
     );
     
     return { insertId: result.insertId };
