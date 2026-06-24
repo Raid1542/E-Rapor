@@ -18,46 +18,28 @@ const getKelas = async (req, res) => {
         let { tahun_ajaran_id } = req.query;
 
         if (!tahun_ajaran_id) {
-            return res.status(400).json({ success: false, message: 'Tahun ajaran wajib dipilih' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Tahun ajaran wajib dipilih' 
+            });
         }
 
-        const [cekInduk] = await db.execute(
-            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran_induk WHERE id_tahun_ajaran_induk = ?`,
-            [tahun_ajaran_id]
+        // ✅ tahun_ajaran_id sekarang = id_tahun_ajaran_induk
+        const idInduk = Number(tahun_ajaran_id);
+
+        // ✅ Ambil semester aktif untuk info tambahan (wali kelas, dll)
+        const [activeSemester] = await db.execute(
+            `SELECT id_tahun_ajaran FROM tahun_ajaran 
+             WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
+             LIMIT 1`,
+            [idInduk]
         );
+        
+        const semesterAktifId = activeSemester.length > 0 
+            ? activeSemester[0].id_tahun_ajaran 
+            : null;
 
-        if (cekInduk.length > 0) {
-            const activeSemester = await getIdTahunAjaranAktif(tahun_ajaran_id);
-            if (!activeSemester) {
-                const [firstSemester] = await db.execute(
-                    `SELECT id_tahun_ajaran FROM tahun_ajaran 
-                        WHERE id_tahun_ajaran_induk = ? 
-                        ORDER BY semester ASC 
-                        LIMIT 1`,
-                    [tahun_ajaran_id]
-                );
-
-                if (firstSemester.length === 0) {
-                    return res.json({ success: true, data: [] });
-                }
-
-                tahun_ajaran_id = firstSemester[0].id_tahun_ajaran;
-            } else {
-                tahun_ajaran_id = activeSemester;
-            }
-        }
-
-        const [taInfo] = await db.execute(
-            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-            [tahun_ajaran_id]
-        );
-
-        if (taInfo.length === 0) {
-            return res.json({ success: true, data: [] });
-        }
-
-        const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
-
+        // ✅ Query kelas by TA INDUK (bukan semester!)
         const [rows] = await db.execute(
             `
             SELECT 
@@ -72,15 +54,17 @@ const getKelas = async (req, res) => {
                 SELECT gk.kelas_id, u.nama_lengkap, gk.user_id
                 FROM guru_kelas gk
                 JOIN user u ON gk.user_id = u.id_user
-                WHERE gk.tahun_ajaran_id = ?
+                WHERE gk.tahun_ajaran_id = ?  -- Pakai id_induk
             ) wk ON k.id_kelas = wk.kelas_id
-            LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = ?
-            WHERE k.tahun_ajaran_id = ?  
+            LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
+                AND sk.id_tahun_ajaran_induk = ?  -- Pakai id_induk
+            WHERE k.tahun_ajaran_id = ?  -- Pakai id_induk
             GROUP BY k.id_kelas, k.nama_kelas, k.fase, wk.nama_lengkap, wk.user_id
             ORDER BY k.nama_kelas ASC
             `,
-            [tahun_ajaran_id, idTahunAjaranInduk, tahun_ajaran_id]
+            [idInduk, idInduk, idInduk]  // ✅ Semua pakai id_induk
         );
+        
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get kelas:', err);
