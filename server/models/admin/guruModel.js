@@ -31,7 +31,7 @@ const guruModel = {
       FROM user u
       INNER JOIN guru g ON u.id_user = g.user_id
       INNER JOIN user_role ur ON u.id_user = ur.id_user
-      WHERE ur.role IN ('guru kelas', 'guru bidang studi')
+      WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')  -- ✅ UBAH KE UNDERSCORE
       GROUP BY u.id_user
       ORDER BY u.nama_lengkap ASC
     `);
@@ -41,7 +41,7 @@ const guruModel = {
       roles: row.roles ? row.roles.split(',') : [],
       profileImage: row.foto_path || null,
     }));
-  },
+},
 
   // Mengambil detail guru berdasarkan ID
   async getGuruById(id) {
@@ -200,7 +200,7 @@ const guruModel = {
       if (Array.isArray(roles) && roles.length > 0) {
         await connection.execute('DELETE FROM user_role WHERE id_user = ?', [id]);
         for (const role of roles) {
-          if (['guru kelas', 'guru bidang studi'].includes(role)) {
+          if (['guru_kelas', 'guru_bidang_studi'].includes(role)) {
             await connection.execute(
               'INSERT INTO user_role (id_user, role) VALUES (?, ?)',
               [id, role]

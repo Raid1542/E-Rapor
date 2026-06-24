@@ -23,7 +23,7 @@ const getGuru = async (req, res) => {
         FROM user u
         INNER JOIN guru g ON u.id_user = g.user_id
         INNER JOIN user_role ur ON u.id_user = ur.id_user
-        WHERE ur.role IN ('guru kelas', 'guru bidang studi')
+        WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')  
         GROUP BY u.id_user
         ORDER BY u.nama_lengkap ASC
     `);
@@ -80,7 +80,7 @@ const tambahGuru = async (req, res) => {
     const normalizedRoles = roles
         .map(role => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
         .filter(Boolean);
-    const allowedRoles = ['guru kelas', 'guru bidang studi'];
+    const allowedRoles = ['guru_kelas', 'guru_bidang_studi'];
     const validRoles = normalizedRoles.filter(role => allowedRoles.includes(role));
 
     if (validRoles.length === 0) {
@@ -157,7 +157,7 @@ const editGuru = async (req, res) => {
     const normalizedRoles = roles
         .map(role => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
         .filter(Boolean);
-    const allowedRoles = ['guru kelas', 'guru bidang studi'];
+    const allowedRoles = ['guru_kelas', 'guru_bidang_studi'];
     const validRoles = normalizedRoles.filter(role => allowedRoles.includes(role));
 
     if (validRoles.length === 0) {
@@ -220,7 +220,7 @@ const importGuru = async (req, res) => {
         await connection.beginTransaction();
 
         const duplicates = [];
-        const validRolesList = ['guru kelas', 'guru bidang studi'];
+        const validRolesList = ['guru_kelas', 'guru_bidang_studi'];
 
         for (let i = 0; i < data.length; i++) {
             const row = data[i];

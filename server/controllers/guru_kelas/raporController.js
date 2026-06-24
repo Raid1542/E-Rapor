@@ -300,21 +300,26 @@ exports.generateRaporPDF = async (req, res) => {
         const ckratarata = deskRata[0]?.deskripsi || '–';
 
         // ── Kokurikuler ──────────────────────────────────────────────────────
-        // Struktur baru: per baris per aspek (id_aspek_kokurikuler)
-        // id_aspek: 1=Mutabaah, 2=Literasi, 3=BPI, 4=Proyek
+        // ✅ KODE BARU - tambah fallback judul proyek
         const [kokurRows] = await db.execute(`
-            SELECT 
-                nk.id_aspek_kokurikuler,
-                nk.nilai,
-                nk.grade,
-                nk.deskripsi,
-                jpt.judul AS nama_judul_proyek
-            FROM nilai_kokurikuler nk
-            LEFT JOIN judul_proyek_per_tahun_ajaran jpt 
-                ON nk.id_judul_proyek = jpt.id_judul_proyek
-            WHERE nk.id_siswa = ? AND nk.id_tahun_ajaran = ? 
-            AND nk.semester = ? AND nk.jenis_penilaian = ?
-        `, [siswaId, semesterId, semesterNorm, jenisNorm]);
+        SELECT 
+            nk.id_aspek_kokurikuler,
+            nk.nilai,
+            nk.grade,
+            nk.deskripsi,
+            COALESCE(
+                jpt.judul,
+                (SELECT judul FROM judul_proyek_per_tahun_ajaran 
+                WHERE id_tahun_ajaran = nk.id_tahun_ajaran 
+                AND kelas_id = nk.id_kelas 
+                LIMIT 1)
+            ) AS nama_judul_proyek
+        FROM nilai_kokurikuler nk
+        LEFT JOIN judul_proyek_per_tahun_ajaran jpt 
+            ON nk.id_judul_proyek = jpt.id_judul_proyek
+        WHERE nk.id_siswa = ? AND nk.id_tahun_ajaran = ? 
+        AND nk.semester = ? AND nk.jenis_penilaian = ?
+    `, [siswaId, semesterId, semesterNorm, jenisNorm]);
 
         const getAspek = (idAspek) => {
             const row = kokurRows.find(r => r.id_aspek_kokurikuler === idAspek);
@@ -327,8 +332,8 @@ exports.generateRaporPDF = async (req, res) => {
         };
 
         const aspekMutabaah = getAspek(5);
-        const aspekLiterasi = getAspek(2);
-        const aspekBPI = getAspek(4);
+        const aspekBPI = getAspek(2);
+        const aspekLiterasi = getAspek(4);
         const aspekProyek = getAspek(3);
 
         const my = aspekMutabaah.nilai;
@@ -407,8 +412,8 @@ exports.generateRaporPDF = async (req, res) => {
         };
 
         const tanggalSah = jenisNorm === 'PTS'
-    ? (tanggal_pembagian_pts ? formatTanggalIndonesia(tanggal_pembagian_pts) : '–')
-    : (tanggal_pembagian_pas ? formatTanggalIndonesia(tanggal_pembagian_pas) : '–');
+            ? (tanggal_pembagian_pts ? formatTanggalIndonesia(tanggal_pembagian_pts) : '–')
+            : (tanggal_pembagian_pas ? formatTanggalIndonesia(tanggal_pembagian_pas) : '–');
 
         // ── Kenaikan Kelas (PAS Genap) ───────────────────────────────────────
         let tingkat = '–';

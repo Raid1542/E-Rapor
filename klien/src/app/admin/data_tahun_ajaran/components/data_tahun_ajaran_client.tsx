@@ -310,6 +310,13 @@ export default function DataTahunAjaranClient() {
                 setShowTambah(false);
                 resetForm();
                 await fetchTahunAjaran();
+
+                // ✅ TAMBAHKAN: Dispatch event untuk update Header & Sidebar
+                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
+                window.dispatchEvent(new CustomEvent('semesterUpdated'));
+                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
+                localStorage.setItem('semesterUpdated', Date.now().toString());
+
                 showModal({
                     type: 'success',
                     title: 'Berhasil Ditambahkan!',
@@ -367,7 +374,14 @@ export default function DataTahunAjaranClient() {
                 }),
             });
             if (res.ok) {
-                setShowEdit(false); setEditId(null); await fetchTahunAjaran();
+                setShowEdit(false);
+                setEditId(null);
+                await fetchTahunAjaran();
+
+                // ✅ TAMBAHKAN: Dispatch event untuk update Header & Sidebar
+                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
+                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
+
                 showModal({ type: 'success', title: 'Data Diperbarui!', message: 'Tahun ajaran berhasil diperbarui.' });
             } else {
                 const err = await res.json();
@@ -443,6 +457,14 @@ export default function DataTahunAjaranClient() {
             if (res.ok && data.success) {
                 await fetchTahunAjaran();
 
+                // ✅ TAMBAHKAN: Dispatch event untuk update Header & Sidebar
+                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
+                window.dispatchEvent(new CustomEvent('semesterUpdated'));
+
+                // ✅ Update localStorage untuk trigger storage event
+                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
+                localStorage.setItem('semesterUpdated', Date.now().toString());
+
                 // Reset form
                 setAlasanKoreksi('');
                 setAlasanCustom('');
@@ -459,6 +481,7 @@ export default function DataTahunAjaranClient() {
                     title: '✅ Semester Berhasil Diganti!',
                     message: successMessage
                 });
+
             } else {
                 showModal({
                     type: 'error',

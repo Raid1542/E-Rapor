@@ -62,7 +62,7 @@ const setWaliKelas = async (req, res) => {
             SELECT u.id_user 
             FROM user u
             INNER JOIN user_role ur ON u.id_user = ur.id_user
-            WHERE u.id_user = ? AND ur.role = 'guru kelas' AND u.status = 'aktif'
+            WHERE u.id_user = ? AND ur.role = 'guru_kelas' AND u.status = 'aktif'
         `,
             [user_id]
         );
@@ -93,15 +93,15 @@ const setWaliKelas = async (req, res) => {
 const getGuruKelasList = async (req, res) => {
     try {
         const [rows] = await db.execute(`
-            SELECT 
-                u.id_user AS user_id,
-                u.nama_lengkap AS nama
-            FROM user u
-            INNER JOIN user_role ur ON u.id_user = ur.id_user
-            WHERE u.status = 'aktif'
-                AND ur.role = 'guru kelas'
-            ORDER BY u.nama_lengkap ASC
-        `);
+    SELECT 
+        u.id_user AS user_id,
+        u.nama_lengkap AS nama
+    FROM user u
+    INNER JOIN user_role ur ON u.id_user = ur.id_user
+    WHERE u.status = 'aktif'
+        AND ur.role = 'guru_kelas'  
+    ORDER BY u.nama_lengkap ASC
+`);
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error get guru kelas list:', err);
