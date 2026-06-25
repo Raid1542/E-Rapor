@@ -5,6 +5,7 @@
  *   - Modal ganti semester baru dengan field alasan wajib
  *   - Tampilan lebih simple dan user-friendly
  *   - Warna konsisten dengan tema oranye
+ *   - ✅ TAMBAHAN: Popup konfirmasi untuk EDIT Tahun Ajaran
  */
 
 'use client';
@@ -34,8 +35,6 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
-
 // ─── NOTIF MODAL (UPDATED) ────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
@@ -64,21 +63,17 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 ta-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-0 flex flex-col items-center ta-scaleIn overflow-hidden">
-                {/* Close button */}
                 {!isConfirm && (
                     <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
                         <X size={20} />
                     </button>
                 )}
 
-                {/* Content */}
                 <div className="p-8 flex flex-col items-center gap-4 w-full">
-                    {/* Icon */}
                     <div className="mt-2">
                         {s.icon}
                     </div>
 
-                    {/* Title & Message */}
                     <div className="text-center">
                         <h3 className="text-xl font-bold text-gray-900 mb-2">{modal.title}</h3>
                         <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">
@@ -86,7 +81,6 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                         </p>
                     </div>
 
-                    {/* Button */}
                     {isConfirm ? (
                         <div className="flex gap-3 w-full mt-2">
                             <button onClick={onClose}
@@ -194,13 +188,16 @@ export default function DataTahunAjaranClient() {
     const [selectedItemForSemester, setSelectedItemForSemester] = useState<TahunAjaran | null>(null);
     const [confirmClosing, setConfirmClosing] = useState(false);
 
-    // ✅ STATE BARU untuk alasan ganti semester
     const [alasanKoreksi, setAlasanKoreksi] = useState('');
     const [showAlasanLainnya, setShowAlasanLainnya] = useState(false);
     const [alasanCustom, setAlasanCustom] = useState('');
 
     const [showConfirmTambah, setShowConfirmTambah] = useState(false);
     const [confirmTambahClosing, setConfirmTambahClosing] = useState(false);
+
+    // ✅ STATE BARU: Popup konfirmasi untuk EDIT
+    const [showConfirmEdit, setShowConfirmEdit] = useState(false);
+    const [confirmEditClosing, setConfirmEditClosing] = useState(false);
 
     // ── Fetch Data ─────────────────────────────────────────────────────────────
     const fetchTahunAjaran = useCallback(async () => {
@@ -280,13 +277,76 @@ export default function DataTahunAjaranClient() {
         setShowConfirmTambah(true);
     };
 
-    // Tutup Modal Konfirmasi
+    // Tutup Modal Konfirmasi Tambah
     const closeConfirmTambah = () => {
         setConfirmTambahClosing(true);
         setTimeout(() => {
             setShowConfirmTambah(false);
             setConfirmTambahClosing(false);
         }, 200);
+    };
+
+    // ✅ Buka Modal Konfirmasi EDIT
+    const openConfirmEdit = () => {
+        if (!validate() || !editId) return;
+        if (!hasChanges()) {
+            showModal({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Tidak ada tanggal PTS/PAS yang berubah. Tidak perlu menyimpan.'
+            });
+            return;
+        }
+        setShowConfirmEdit(true);
+    };
+
+    // ✅ Tutup Modal Konfirmasi EDIT
+    const closeConfirmEdit = () => {
+        setConfirmEditClosing(true);
+        setTimeout(() => {
+            setShowConfirmEdit(false);
+            setConfirmEditClosing(false);
+        }, 200);
+    };
+
+    // ✅ Eksekusi Edit (setelah konfirmasi)
+    const executeEdit = async () => {
+        if (!editId) return;
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+            closeConfirmEdit();
+            return;
+        }
+
+        closeConfirmEdit();
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    pts_ganjil: formData.pts_ganjil || null, pas_ganjil: formData.pas_ganjil,
+                    pts_genap: formData.pts_genap || null, pas_genap: formData.pas_genap,
+                }),
+            });
+            if (res.ok) {
+                setShowEdit(false);
+                setEditId(null);
+                await fetchTahunAjaran();
+
+                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
+                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
+
+                showModal({ type: 'success', title: 'Data Diperbarui!', message: 'Tahun ajaran berhasil diperbarui.' });
+            } else {
+                const err = await res.json();
+                showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        }
     };
 
     // Tambah Tahun Ajaran 
@@ -311,7 +371,6 @@ export default function DataTahunAjaranClient() {
                 resetForm();
                 await fetchTahunAjaran();
 
-                // ✅ TAMBAHKAN: Dispatch event untuk update Header & Sidebar
                 window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
                 window.dispatchEvent(new CustomEvent('semesterUpdated'));
                 localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
@@ -348,55 +407,10 @@ export default function DataTahunAjaranClient() {
         setShowEdit(true);
     };
 
-    const handleEdit = async () => {
-        if (!validate() || !editId) return;
-        if (!hasChanges()) {
-            showModal({
-                type: 'warning',
-                title: 'Tidak Ada Perubahan',
-                message: 'Tidak ada tanggal PTS/PAS yang berubah. Tidak perlu menyimpan.'
-            });
-            return;
-        }
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-            return;
-        }
-        try {
-            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${editId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    pts_ganjil: formData.pts_ganjil || null, pas_ganjil: formData.pas_ganjil,
-                    pts_genap: formData.pts_genap || null, pas_genap: formData.pas_genap,
-                }),
-            });
-            if (res.ok) {
-                setShowEdit(false);
-                setEditId(null);
-                await fetchTahunAjaran();
-
-                // ✅ TAMBAHKAN: Dispatch event untuk update Header & Sidebar
-                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
-                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
-
-                showModal({ type: 'success', title: 'Data Diperbarui!', message: 'Tahun ajaran berhasil diperbarui.' });
-            } else {
-                const err = await res.json();
-                showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan.' });
-            }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        }
-    };
-
     // ── Buka Modal Konfirmasi Ganti Semester ───────────────────────────────────
     const openConfirmGantiSemester = (item: TahunAjaran) => {
         setSelectedItemForSemester(item);
         setShowConfirmGantiSemester(true);
-        // Reset form alasan
         setAlasanKoreksi('');
         setAlasanCustom('');
         setShowAlasanLainnya(false);
@@ -419,7 +433,6 @@ export default function DataTahunAjaranClient() {
     const executeGantiSemester = async () => {
         if (!selectedItemForSemester) return;
 
-        // ✅ Validasi alasan
         const alasanFinal = showAlasanLainnya ? alasanCustom.trim() : alasanKoreksi;
         if (!alasanFinal) {
             showModal({
@@ -457,20 +470,16 @@ export default function DataTahunAjaranClient() {
             if (res.ok && data.success) {
                 await fetchTahunAjaran();
 
-                // ✅ TAMBAHKAN: Dispatch event untuk update Header & Sidebar
                 window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
                 window.dispatchEvent(new CustomEvent('semesterUpdated'));
 
-                // ✅ Update localStorage untuk trigger storage event
                 localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
                 localStorage.setItem('semesterUpdated', Date.now().toString());
 
-                // Reset form
                 setAlasanKoreksi('');
                 setAlasanCustom('');
                 setShowAlasanLainnya(false);
 
-                // Tampilkan success dengan info lengkap
                 let successMessage = data.message || `Semester berhasil diganti ke ${semesterBaru}.`;
                 if (data.data?.catatan) {
                     successMessage += `\n\n${data.data.catatan}`;
@@ -571,7 +580,6 @@ export default function DataTahunAjaranClient() {
                 </div>
 
                 <div className="p-6">
-                    {/* Tahun Ajaran */}
                     <div className="mb-6">
                         <label className={labelCls} style={labelColor}>Tahun Ajaran <span className="text-red-500">*</span></label>
                         <div className="flex items-center gap-3">
@@ -584,7 +592,6 @@ export default function DataTahunAjaranClient() {
                         {errors.tahun && <p className="text-red-500 text-xs mt-1">{errors.tahun}</p>}
                     </div>
 
-                    {/* Semester Ganjil */}
                     <div className="mb-6 p-4 rounded-lg border" style={{ background: '#fff7ed', borderColor: '#fdba74' }}>
                         <h3 className="text-lg font-bold mb-3" style={{ color: '#c2410c' }}>📚 Semester Ganjil</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -599,7 +606,6 @@ export default function DataTahunAjaranClient() {
                         </div>
                     </div>
 
-                    {/* Semester Genap */}
                     <div className="mb-6 p-4 rounded-lg border" style={{ background: '#f0fdf4', borderColor: '#86efac' }}>
                         <h3 className="text-lg font-bold mb-3" style={{ color: '#15803d' }}>📗 Semester Genap</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -614,12 +620,11 @@ export default function DataTahunAjaranClient() {
                         </div>
                     </div>
 
-                    {/* Buttons */}
                     <div className="flex justify-end gap-3 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                         <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}>Batal</BtnSecondary>
                         <BtnSecondary onClick={resetForm}>Reset</BtnSecondary>
                         <button
-                            onClick={isEdit ? handleEdit : openConfirmTambah}
+                            onClick={isEdit ? openConfirmEdit : openConfirmTambah}
                             className={btnPrimary.base}
                             style={btnPrimary.style}
                             onMouseEnter={btnPrimary.hover}
@@ -631,6 +636,7 @@ export default function DataTahunAjaranClient() {
                 </div>
             </div>
 
+            {/* ═══ MODAL KONFIRMASI TAMBAH ═══ */}
             {!isEdit && showConfirmTambah && (
                 <div
                     className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${confirmTambahClosing ? 'opacity-0' : 'opacity-100'}`}
@@ -689,6 +695,99 @@ export default function DataTahunAjaranClient() {
                                     onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
                                     Tambah & Aktifkan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════════
+                ✅ MODAL BARU: KONFIRMASI EDIT TAHUN AJARAN
+            ═══════════════════════════════════════════════════════════════════ */}
+            {isEdit && showConfirmEdit && (
+                <div
+                    className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${confirmEditClosing ? 'opacity-0' : 'opacity-100'}`}
+                    onClick={e => { if (e.target === e.currentTarget) closeConfirmEdit(); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+                    <div
+                        className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-200 ${confirmEditClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                        style={CARD_STYLE}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                            <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                <Pencil size={16} />
+                                Konfirmasi Edit Tahun Ajaran
+                            </h2>
+                            <button onClick={closeConfirmEdit} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                <X size={16} className="text-white" />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                <p className="text-sm font-bold text-blue-800 mb-2">INFO PERUBAHAN</p>
+                                <p className="text-sm text-blue-900">
+                                    Anda akan memperbarui tahun ajaran <strong className="text-lg">{formData.tahun1}/{formData.tahun2}</strong>.
+                                </p>
+                            </div>
+
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                                <h3 className="font-bold text-orange-800 mb-3 text-sm">PERUBAHAN YANG AKAN DILAKUKAN:</h3>
+                                <ul className="space-y-2 text-sm text-orange-900">
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">📅</span>
+                                        <span>
+                                            <strong>PTS Ganjil:</strong>{' '}
+                                            {formData.pts_ganjil ? formatTanggalIndonesia(formData.pts_ganjil) : <em className="text-gray-500">belum diatur</em>}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">📅</span>
+                                        <span>
+                                            <strong>PAS Ganjil:</strong>{' '}
+                                            {formData.pas_ganjil ? formatTanggalIndonesia(formData.pas_ganjil) : <em className="text-gray-500">belum diatur</em>}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">📅</span>
+                                        <span>
+                                            <strong>PTS Genap:</strong>{' '}
+                                            {formData.pts_genap ? formatTanggalIndonesia(formData.pts_genap) : <em className="text-gray-500">belum diatur</em>}
+                                        </span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="font-bold text-orange-600">📅</span>
+                                        <span>
+                                            <strong>PAS Genap:</strong>{' '}
+                                            {formData.pas_genap ? formatTanggalIndonesia(formData.pas_genap) : <em className="text-gray-500">belum diatur</em>}
+                                        </span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                                <p className="text-xs text-yellow-900">
+                                    💡 <strong>Catatan:</strong> Perubahan tanggal pembagian akan mempengaruhi jadwal pembagian rapor siswa.
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button onClick={closeConfirmEdit} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                    style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                    Batal, Cek Lagi
+                                </button>
+                                <button
+                                    onClick={executeEdit}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}>
+                                    Ya, Simpan Perubahan
                                 </button>
                             </div>
                         </div>
@@ -812,7 +911,6 @@ export default function DataTahunAjaranClient() {
                                                     </button>
                                                 )}
 
-                                                {/* Tombol Ganti Semester hanya untuk TA AKTIF */}
                                                 {item.status === 'AKTIF' && (
                                                     <button onClick={() => openConfirmGantiSemester(item)}
                                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
@@ -824,7 +922,6 @@ export default function DataTahunAjaranClient() {
                                                     </button>
                                                 )}
 
-                                                {/* Indikator Read-Only untuk TA Non-Aktif */}
                                                 {item.status !== 'AKTIF' && (
                                                     <span className="text-xs text-gray-700">-</span>
                                                 )}
@@ -844,9 +941,7 @@ export default function DataTahunAjaranClient() {
                 </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════════
-                MODAL KONFIRMASI GANTI SEMESTER (UPDATED)
-            ═══════════════════════════════════════════════════════════════════ */}
+            {/* ═══ MODAL KONFIRMASI GANTI SEMESTER ═══ */}
             {showConfirmGantiSemester && selectedItemForSemester && (
                 <div
                     className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${confirmClosing ? 'opacity-0' : 'opacity-100'}`}
@@ -858,7 +953,6 @@ export default function DataTahunAjaranClient() {
                         className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-200 ${confirmClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}
                     >
-                        {/* Header */}
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
                             <div>
                                 <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -871,9 +965,7 @@ export default function DataTahunAjaranClient() {
                             </button>
                         </div>
 
-                        {/* Body */}
                         <div className="p-6 space-y-4">
-                            {/* Info Pergantian */}
                             <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="text-center flex-1">
@@ -894,7 +986,6 @@ export default function DataTahunAjaranClient() {
                                 </p>
                             </div>
 
-                            {/* Info Penting */}
                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                                 <h4 className="text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
                                     <AlertCircle size={16} />
@@ -916,7 +1007,6 @@ export default function DataTahunAjaranClient() {
                                 </ul>
                             </div>
 
-                            {/* Field Alasan */}
                             <div>
                                 <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
                                     Alasan Ganti Semester <span className="text-red-500">*</span>
@@ -955,7 +1045,6 @@ export default function DataTahunAjaranClient() {
                                 )}
                             </div>
 
-                            {/* Tombol Aksi */}
                             <div className="flex gap-3 pt-2">
                                 <button
                                     onClick={closeConfirmGantiSemester}

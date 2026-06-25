@@ -5,6 +5,7 @@
  *   - Fix error "Incorrect date value" - konversi '' → null
  *   - Tambah validasi hasChanges untuk edit
  *   - Perkuat validasi duplikasi untuk tambah
+ *   - ✅ TAMBAHAN: Validasi field yang sudah dikunci (status = 'selesai')
  */
 
 const tahunAjaranModel = require('../../models/admin/tahunAjaranModel');
@@ -248,6 +249,9 @@ const tambahTahunAjaran = async (req, res) => {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ UPDATED: Hanya validasi field yang BENAR-BENAR dikirim user
+// ═══════════════════════════════════════════════════════════════
 const updateTahunAjaran = async (req, res) => {
     try {
         const { id_induk } = req.params;
@@ -266,6 +270,81 @@ const updateTahunAjaran = async (req, res) => {
             });
         }
 
+        // ═══ ✅ VALIDASI BARU: Cek apakah ada field yang sudah dikunci ═══
+        const [statusCheck] = await db.execute(
+            `SELECT 
+                g.status_pts AS status_pts_ganjil,
+                g.status_pas AS status_pas_ganjil,
+                g.tanggal_pembagian_pts AS pts_ganjil_current,
+                g.tanggal_pembagian_pas AS pas_ganjil_current,
+                ge.status_pts AS status_pts_genap,
+                ge.status_pas AS status_pas_genap,
+                ge.tanggal_pembagian_pts AS pts_genap_current,
+                ge.tanggal_pembagian_pas AS pas_genap_current
+            FROM tahun_ajaran_induk tai
+            LEFT JOIN tahun_ajaran g ON tai.id_tahun_ajaran_induk = g.id_tahun_ajaran_induk AND g.semester = 'Ganjil'
+            LEFT JOIN tahun_ajaran ge ON tai.id_tahun_ajaran_induk = ge.id_tahun_ajaran_induk AND ge.semester = 'Genap'
+            WHERE tai.id_tahun_ajaran_induk = ?`,
+            [id_induk]
+        );
+
+        if (statusCheck.length > 0) {
+            const status = statusCheck[0];
+            const lockedFields = [];
+
+            // Helper untuk format tanggal
+            const formatDate = (date) => {
+                if (!date) return null;
+                if (typeof date === 'string') return date.split(' ')[0];
+                return date.toISOString().split('T')[0];
+            };
+
+            // ✅ HANYA CEK jika user MENGIRIM field tersebut
+            // Cek PTS Ganjil
+            if (pts_ganjil !== undefined && status.status_pts_ganjil === 'selesai') {
+                const currentPtsGanjil = formatDate(status.pts_ganjil_current);
+                const newPtsGanjil = sanitizeDate(pts_ganjil);
+                if (currentPtsGanjil !== newPtsGanjil) {
+                    lockedFields.push('PTS Ganjil');
+                }
+            }
+
+            // Cek PAS Ganjil
+            if (pas_ganjil !== undefined && status.status_pas_ganjil === 'selesai') {
+                const currentPasGanjil = formatDate(status.pas_ganjil_current);
+                const newPasGanjil = sanitizeDate(pas_ganjil);
+                if (currentPasGanjil !== newPasGanjil) {
+                    lockedFields.push('PAS Ganjil');
+                }
+            }
+
+            // Cek PTS Genap
+            if (pts_genap !== undefined && status.status_pts_genap === 'selesai') {
+                const currentPtsGenap = formatDate(status.pts_genap_current);
+                const newPtsGenap = sanitizeDate(pts_genap);
+                if (currentPtsGenap !== newPtsGenap) {
+                    lockedFields.push('PTS Genap');
+                }
+            }
+
+            // Cek PAS Genap
+            if (pas_genap !== undefined && status.status_pas_genap === 'selesai') {
+                const currentPasGenap = formatDate(status.pas_genap_current);
+                const newPasGenap = sanitizeDate(pas_genap);
+                if (currentPasGenap !== newPasGenap) {
+                    lockedFields.push('PAS Genap');
+                }
+            }
+
+            // Jika ada field yang terkunci dan user mencoba mengubah
+            if (lockedFields.length > 0) {
+                return res.status(403).json({
+                    success: false,
+                    message: `Tidak dapat mengubah tanggal ${lockedFields.join(', ')} karena penilaian sudah diarsipkan dan dikunci.`
+                });
+            }
+        }
+
         // ═══ VALIDASI 2: Ambil data lama untuk perbandingan ═══
         const dataLama = await tahunAjaranModel.getTahunAjaranById(id_induk);
         if (!dataLama) {
@@ -277,18 +356,18 @@ const updateTahunAjaran = async (req, res) => {
 
         // ═══ SANITASI data baru ═══
         const dataBaru = {
-            pts_ganjil: sanitizeDate(pts_ganjil),
-            pas_ganjil: sanitizeDate(pas_ganjil),
-            pts_genap: sanitizeDate(pts_genap),
-            pas_genap: sanitizeDate(pas_genap)
+            pts_ganjil: pts_ganjil !== undefined ? sanitizeDate(pts_ganjil) : undefined,
+            pas_ganjil: pas_ganjil !== undefined ? sanitizeDate(pas_ganjil) : undefined,
+            pts_genap: pts_genap !== undefined ? sanitizeDate(pts_genap) : undefined,
+            pas_genap: pas_genap !== undefined ? sanitizeDate(pas_genap) : undefined
         };
 
         // ═══ VALIDASI 3: Cek apakah ada perubahan (hasChanges) ═══
         const hasChanges =
-            formatDateForCompare(dataLama.pts_ganjil) !== (dataBaru.pts_ganjil || '') ||
-            formatDateForCompare(dataLama.pas_ganjil) !== (dataBaru.pas_ganjil || '') ||
-            formatDateForCompare(dataLama.pts_genap) !== (dataBaru.pts_genap || '') ||
-            formatDateForCompare(dataLama.pas_genap) !== (dataBaru.pas_genap || '');
+            (pts_ganjil !== undefined && formatDateForCompare(dataLama.pts_ganjil) !== (dataBaru.pts_ganjil || '')) ||
+            (pas_ganjil !== undefined && formatDateForCompare(dataLama.pas_ganjil) !== (dataBaru.pas_ganjil || '')) ||
+            (pts_genap !== undefined && formatDateForCompare(dataLama.pts_genap) !== (dataBaru.pts_genap || '')) ||
+            (pas_genap !== undefined && formatDateForCompare(dataLama.pas_genap) !== (dataBaru.pas_genap || ''));
 
         if (!hasChanges) {
             return res.status(400).json({
@@ -321,9 +400,6 @@ const updateTahunAjaran = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// PUT /api/admin/tahun-ajaran/:id_induk/semester
-// ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
 // PUT /api/admin/tahun-ajaran/:id_induk/semester
 // ✅ UPDATED: Fleksibel + Riwayat Ganti Semester + Alasan Wajib

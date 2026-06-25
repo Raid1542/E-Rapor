@@ -5,14 +5,17 @@
  *         edit, hapus, pemilihan tahun ajaran, dan penetapan wali kelas.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ * Update: 
+ *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ *   - ✅ TAMBAHAN: Fitur READ-ONLY saat PTS/PAS dikunci di Arsip Rapor
+ *   - ✅ TAMBAHAN: Badge warning yang jelas saat data terkunci
  */
 
 'use client';
 
 import Link from 'next/link';
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
-import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users } from 'lucide-react';
+import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, Lock } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -163,6 +166,11 @@ export default function DataKelasClient() {
   const [guruList, setGuruList] = useState<GuruOption[]>([]);
   const [loadingGuru, setLoadingGuru] = useState(false);
 
+  // ✅ STATE BARU: Untuk fitur READ-ONLY saat PTS/PAS dikunci
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [lockedBy, setLockedBy] = useState<string | null>(null);
+  const [lockedSemester, setLockedSemester] = useState<string | null>(null);
+
   // ✅ TAMBAHAN: State untuk modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
@@ -226,6 +234,9 @@ export default function DataKelasClient() {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ UPDATED: Ambil status read-only dari response backend
+  // ═══════════════════════════════════════════════════════════════
   const fetchKelas = async (tahunAjaranId: number) => {
     try {
       const token = localStorage.getItem('token');
@@ -234,6 +245,11 @@ export default function DataKelasClient() {
       const data = await res.json();
       if (res.ok && data.success) {
         setKelasList(data.data.map((k: any) => ({ ...k, wali_kelas_id: k.wali_kelas === '-' ? null : k.wali_kelas_id })));
+        
+        // ✅ AMBIL status read-only dari response
+        setIsReadOnly(data.is_read_only || false);
+        setLockedBy(data.locked_by || null);
+        setLockedSemester(data.locked_semester || null);
       } else {
         showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan saat memuat data kelas.' });
       }
@@ -273,7 +289,6 @@ export default function DataKelasClient() {
     const ne: Record<string, string> = {};
     if (!formData.nama_kelas?.trim()) ne.nama_kelas = 'Nama kelas wajib diisi';
     if (!formData.fase?.trim()) ne.fase = 'Fase wajib diisi';
-    // ✅ HAPUS validasi confirmData
     setErrors(ne);
     if (Object.keys(ne).length > 0) {
       showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai merah sebelum melanjutkan.' });
@@ -282,7 +297,6 @@ export default function DataKelasClient() {
     return true;
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi
   const openConfirmModal = (action: 'add' | 'edit') => {
     if (!validate()) return;
 
@@ -309,7 +323,6 @@ export default function DataKelasClient() {
     setShowConfirmModal(true);
   };
 
-  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
   const executeTambah = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -346,7 +359,6 @@ export default function DataKelasClient() {
     }
   };
 
-  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
   const executeEdit = async () => {
     const token = localStorage.getItem('token');
     if (!token || !editId || !selectedTahunAjaranId) {
@@ -481,7 +493,6 @@ export default function DataKelasClient() {
       </div>
 
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
           <h2 className="text-base font-bold text-white">{isEdit ? 'Edit Data Kelas' : 'Tambah Data Kelas'}</h2>
           <button onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
@@ -491,10 +502,8 @@ export default function DataKelasClient() {
           </button>
         </div>
 
-        {/* Fields */}
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
 
-          {/* Nama Kelas */}
           <div className="flex flex-col gap-1.5">
             <label className={labelCls} style={labelColor}>
               Nama Kelas <span className="text-red-500">*</span>
@@ -510,7 +519,6 @@ export default function DataKelasClient() {
             {errors.nama_kelas && <p className="text-red-500 text-xs">{errors.nama_kelas}</p>}
           </div>
 
-          {/* Fase */}
           <div className="flex flex-col gap-1.5">
             <label className={labelCls} style={labelColor}>
               Fase <span className="text-red-500">*</span>
@@ -526,7 +534,6 @@ export default function DataKelasClient() {
             {errors.fase && <p className="text-red-500 text-xs">{errors.fase}</p>}
           </div>
 
-          {/* Wali Kelas */}
           <div className="md:col-span-2 flex flex-col gap-1.5">
             <label className={labelCls} style={labelColor}>
               Wali Kelas
@@ -560,9 +567,6 @@ export default function DataKelasClient() {
           </div>
         </div>
 
-        {/* ✅ HAPUS bagian checkbox konfirmasi */}
-
-        {/* Actions */}
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
           <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>
             Batal
@@ -580,7 +584,6 @@ export default function DataKelasClient() {
         </div>
       </div>
 
-      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
       {showConfirmModal && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 dk-fadeIn"
@@ -673,6 +676,10 @@ export default function DataKelasClient() {
                   setSelectedTahunAjaranAktif(false);
                   setLoading(false);
                   setKelasList([]);
+                  // ✅ RESET status read-only saat ganti TA
+                  setIsReadOnly(false);
+                  setLockedBy(null);
+                  setLockedSemester(null);
                   localStorage.removeItem('selectedTahunAjaranId');
                   return;
                 }
@@ -702,11 +709,39 @@ export default function DataKelasClient() {
           </div>
         ) : (
           <>
+            {/* ═══════════════════════════════════════════════════════════════
+                ✅ BADGE READ-ONLY - Tampil jika data terkunci
+            ═══════════════════════════════════════════════════════════════ */}
+            {isReadOnly && (
+              <div 
+                className="mx-5 mt-4 p-4 rounded-xl flex items-start gap-3"
+                style={{ 
+                  background: 'linear-gradient(135deg, #fef3c7, #fde68a)', 
+                  border: '2px solid #f59e0b'
+                }}
+              >
+                <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-amber-900 mb-1">
+                    🔒 Data Kelas Terkunci (Read-Only)
+                  </h3>
+                  <p className="text-xs text-amber-800 mb-2">
+                    Penilaian <strong>{lockedBy}</strong> semester <strong>{lockedSemester}</strong> telah diarsipkan dan dikunci. 
+                    Data kelas tidak dapat diubah sampai tahun ajaran berakhir.
+                  </p>
+                  <p className="text-xs text-amber-700 italic">
+                    💡 Untuk membuka kunci, silakan hubungi administrator atau gunakan halaman Arsip Rapor.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Toolbar */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  {selectedTahunAjaranAktif && (
+                  {/* ✅ Tombol Tambah - DISABLE jika read-only */}
+                  {selectedTahunAjaranAktif && !isReadOnly && (
                     <button
                       onClick={() => setShowTambah(true)}
                       className={btnPrimary.base}
@@ -832,7 +867,8 @@ export default function DataKelasClient() {
                             <Users size={13} /> Lihat Siswa
                           </Link>
 
-                          {selectedTahunAjaranAktif && (
+                          {/* ✅ Tombol Edit & Hapus - DISABLE jika read-only */}
+                          {selectedTahunAjaranAktif && !isReadOnly && (
                             <>
                               <button
                                 onClick={() => handleEdit(kelas)}
@@ -853,6 +889,17 @@ export default function DataKelasClient() {
                                 <Trash2 size={13} /> Hapus
                               </button>
                             </>
+                          )}
+
+                          {/* ✅ Badge terkunci di setiap baris jika read-only */}
+                          {isReadOnly && (
+                            <span 
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold"
+                              style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                              title="Data terkunci karena penilaian telah diarsipkan"
+                            >
+                              <Lock size={10} /> Terkunci
+                            </span>
                           )}
                         </div>
                       </td>
