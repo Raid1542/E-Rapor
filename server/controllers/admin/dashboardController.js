@@ -27,12 +27,12 @@ const getDashboardStats = async (req, res) => {
         const semesterAktif = taAktif[0].semester;
         const tahunAjaran = taAktif[0].tahun_ajaran;
 
-        // Count Guru
+        // ✅ FIXED: Count Guru dengan role underscore
         const [guruRows] = await db.execute(`
             SELECT COUNT(DISTINCT u.id_user) AS total
             FROM user u
             INNER JOIN user_role ur ON u.id_user = ur.id_user
-            WHERE ur.role IN ('guru kelas', 'guru bidang studi')
+            WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')
                 AND u.status = 'aktif'
         `);
         const guruCount = Number(guruRows[0].total) || 0;

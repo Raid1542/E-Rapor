@@ -1,10 +1,11 @@
 /**
  * Nama File: data_pembelajaran_client.tsx
  * Update: 
+ *   - ✅ FIXED: Race condition saat load dari localStorage
+ *   - ✅ FIXED: fetchDataPerKelas terima parameter semesterId
+ *   - ✅ FIXED: Disable dropdown kelas jika semester belum dipilih
  *   - Dropdown Semester (TA → Semester → Kelas)
  *   - Kirim semester_id ke semua endpoint
- *   - Tombol Tambah selalu muncul (modal handle jika kosong)
- *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
  */
 
 'use client';
@@ -48,7 +49,6 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
   network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
   const s = MODAL_STYLES[modal.type];
   return (
@@ -181,7 +181,6 @@ interface DropdownItem {
   nama: string;
 }
 
-// ✅ HAPUS confirmData dari FormDataPilihan
 interface FormDataPilihan {
   user_id: string;
   mapel_id: string;
@@ -193,17 +192,14 @@ export default function DataPembelajaranPage() {
   const [dataPerKelas, setDataPerKelas] = useState<DataPerKelas | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // State untuk form EDIT mapel pilihan
   const [showFormEdit, setShowFormEdit] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [editData, setEditData] = useState<Pembelajaran | null>(null);
 
-  // State untuk MODAL TAMBAH MAPEL WAJIB
   const [showModalWajib, setShowModalWajib] = useState(false);
   const [selectedMapelWajibIds, setSelectedMapelWajibIds] = useState<number[]>([]);
   const [submittingWajib, setSubmittingWajib] = useState(false);
 
-  // State untuk MODAL TAMBAH MAPEL PILIHAN
   const [showModalPilihan, setShowModalPilihan] = useState(false);
   const [formDataPilihan, setFormDataPilihan] = useState<FormDataPilihan>({
     user_id: '', mapel_id: ''
@@ -228,7 +224,6 @@ export default function DataPembelajaranPage() {
 
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
-  // ✅ TAMBAHAN: State untuk modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'add-pilihan' | 'edit-pilihan' | 'add-wajib' | null>(null);
 
@@ -267,7 +262,7 @@ export default function DataPembelajaranPage() {
   const fetchSemesterByTahunAjaran = useCallback(async (idInduk: number) => {
     try {
       const token = getToken();
-      if (!token) return;
+      if (!token) return [];
 
       const res = await fetch('http://localhost:5000/api/admin/semester-list', {
         headers: { Authorization: `Bearer ${token}` }
@@ -293,11 +288,11 @@ export default function DataPembelajaranPage() {
     }
   }, []);
 
-  const fetchKelasList = useCallback(async (semesterId: number) => {
+  const fetchKelasList = useCallback(async (idInduk: number) => {
     try {
       const token = getToken();
       if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${semesterId}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -330,12 +325,22 @@ export default function DataPembelajaranPage() {
     }
   }, [showModal]);
 
-  const fetchDataPerKelas = useCallback(async (kelasId: number) => {
+  // ✅ FIXED: Terima parameter semesterId opsional untuk hindari race condition
+  const fetchDataPerKelas = useCallback(async (kelasId: number, semesterIdParam?: number) => {
+    // ✅ Gunakan parameter jika ada, fallback ke state
+    const semId = semesterIdParam || selectedSemesterId;
+    
+    if (!semId) {
+      // Silent return - tidak tampilkan modal
+      console.warn('Semester belum dipilih');
+      return;
+    }
+
     setLoading(true);
     try {
       const token = getToken();
       if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/kelas/${kelasId}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/kelas/${kelasId}?semester_id=${semId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -351,13 +356,14 @@ export default function DataPembelajaranPage() {
     } finally {
       setLoading(false);
     }
-  }, [showModal]);
+  }, [showModal, selectedSemesterId]);
 
   // ── useEffect: Load awal ───────────────────────────────────────────────────
   useEffect(() => {
     fetchTahunAjaran();
   }, [fetchTahunAjaran]);
 
+  // ✅ FIXED: useEffect load dari localStorage - kirim semesterId langsung
   useEffect(() => {
     if (tahunAjaranList.length > 0 && selectedTahunAjaranId === null) {
       const savedTA = localStorage.getItem('pembelajaran_selectedTA');
@@ -369,7 +375,6 @@ export default function DataPembelajaranPage() {
         const ta = tahunAjaranList.find(t => t.id === id);
         if (ta) {
           setSelectedTahunAjaranId(id);
-          // Fetch semester untuk TA ini
           fetchSemesterByTahunAjaran(id).then((semesters: SemesterOption[]) => {
             if (savedSemester) {
               const semesterId = Number(savedSemester);
@@ -377,12 +382,18 @@ export default function DataPembelajaranPage() {
               if (sem) {
                 setSelectedSemesterId(semesterId);
                 setIsSemesterActive(sem.is_aktif);
-                fetchKelasList(semesterId);
+                
+                // ✅ Kirim idInduk ke fetchKelasList
+                fetchKelasList(id);
 
                 if (savedKelas) {
                   const kelasId = Number(savedKelas);
                   setSelectedKelasId(kelasId);
-                  fetchDataPerKelas(kelasId);
+                  
+                  // ✅ KIRIM semesterId LANGSUNG sebagai parameter!
+                  // Ini menghindari race condition dengan state selectedSemesterId
+                  fetchDataPerKelas(kelasId, semesterId);
+                  
                   if (sem.is_aktif) fetchDropdowns(semesterId);
                 }
               }
@@ -422,7 +433,6 @@ export default function DataPembelajaranPage() {
     localStorage.removeItem('pembelajaran_selectedSemester');
     localStorage.removeItem('pembelajaran_selectedKelas');
 
-    // Fetch semester untuk TA ini
     await fetchSemesterByTahunAjaran(id);
   };
 
@@ -450,14 +460,26 @@ export default function DataPembelajaranPage() {
     localStorage.setItem('pembelajaran_selectedSemester', id.toString());
     localStorage.removeItem('pembelajaran_selectedKelas');
 
-    await fetchKelasList(id);
+    if (selectedTahunAjaranId) {
+      await fetchKelasList(selectedTahunAjaranId);
+    }
+
     if (selectedSem?.is_aktif) {
       await fetchDropdowns(id);
     }
   };
 
-  // ── Handler: Pilih Kelas ───────────────────────────────────────────────────
+  // ✅ FIXED: Validasi semester sebelum pilih kelas
   const handleKelasChange = (value: string) => {
+    if (!selectedSemesterId) {
+      showModal({ 
+        type: 'warning', 
+        title: 'Semester Belum Dipilih', 
+        message: 'Silakan pilih semester terlebih dahulu sebelum memilih kelas.' 
+      });
+      return;
+    }
+
     if (value === '' || value === 'no-data') {
       setSelectedKelasId(null);
       setDataPerKelas(null);
@@ -471,7 +493,6 @@ export default function DataPembelajaranPage() {
     fetchDataPerKelas(id);
   };
 
-  // ── Handler: TAMBAH MAPEL WAJIB ────────────────────────────────────────────
   const toggleMapelWajib = (mapelId: number) => {
     setSelectedMapelWajibIds(prev =>
       prev.includes(mapelId)
@@ -489,7 +510,6 @@ export default function DataPembelajaranPage() {
     }
   };
 
-  // ✅ TAMBAHAN: Eksekusi tambah mapel wajib (setelah konfirmasi)
   const executeTambahWajib = async () => {
     const token = getToken();
     if (!token || !selectedKelasId || !selectedSemesterId) return;
@@ -523,7 +543,6 @@ export default function DataPembelajaranPage() {
     }
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi untuk tambah wajib
   const openConfirmWajib = () => {
     if (selectedMapelWajibIds.length === 0) {
       showModal({ type: 'warning', title: 'Belum Ada Mapel Dipilih', message: 'Pilih minimal 1 mata pelajaran wajib.' });
@@ -533,14 +552,12 @@ export default function DataPembelajaranPage() {
     setShowConfirmModal(true);
   };
 
-  // ── Handler: TAMBAH MAPEL PILIHAN ──────────────────────────────────────────
   const handlePilihanChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormDataPilihan(prev => ({ ...prev, [name]: value }));
     if (errorsPilihan[name]) setErrorsPilihan(prev => ({ ...prev, [name]: '' }));
   };
 
-  // ✅ HAPUS validasi confirmData
   const validateFormPilihan = (): boolean => {
     const ne: Record<string, string> = {};
     if (!formDataPilihan.mapel_id) ne.mapel_id = 'Pilih mata pelajaran';
@@ -553,7 +570,6 @@ export default function DataPembelajaranPage() {
     return true;
   };
 
-  // ✅ TAMBAHAN: Eksekusi tambah mapel pilihan (setelah konfirmasi)
   const executeTambahPilihan = async () => {
     const token = getToken();
     if (!token || !selectedKelasId || !selectedSemesterId) return;
@@ -589,7 +605,6 @@ export default function DataPembelajaranPage() {
     }
   };
 
-  // ✅ TAMBAHAN: Eksekusi edit mapel pilihan (setelah konfirmasi)
   const executeEditPilihan = async () => {
     if (!editId || !selectedKelasId || !selectedSemesterId) return;
 
@@ -628,7 +643,6 @@ export default function DataPembelajaranPage() {
     }
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi untuk tambah/edit pilihan
   const openConfirmPilihan = (action: 'add-pilihan' | 'edit-pilihan') => {
     if (!validateFormPilihan()) return;
 
@@ -644,7 +658,6 @@ export default function DataPembelajaranPage() {
     setShowConfirmModal(true);
   };
 
-  // ── Handler: EDIT MAPEL PILIHAN ────────────────────────────────────────────
   const openFormEdit = (mp: Pembelajaran) => {
     setEditId(mp.id);
     setEditData(mp);
@@ -761,8 +774,6 @@ export default function DataPembelajaranPage() {
               </select>
               {errorsPilihan.user_id && <p className="text-red-500 text-xs">{errorsPilihan.user_id}</p>}
             </div>
-
-            {/* ✅ HAPUS bagian checkbox konfirmasi */}
           </div>
 
           <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
@@ -779,7 +790,6 @@ export default function DataPembelajaranPage() {
           </div>
         </div>
 
-        {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana untuk Edit */}
         {showConfirmModal && confirmAction === 'edit-pilihan' && (
           <div
             className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dp-fadeIn"
@@ -1020,8 +1030,6 @@ export default function DataPembelajaranPage() {
                     </select>
                     {errorsPilihan.user_id && <p className="text-red-500 text-xs">{errorsPilihan.user_id}</p>}
                   </div>
-
-                  {/* ✅ HAPUS bagian checkbox konfirmasi */}
                 </>
               )}
             </div>
@@ -1052,7 +1060,7 @@ export default function DataPembelajaranPage() {
         </div>
       )}
 
-      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana untuk Tambah Wajib/Pilihan */}
+      {/* ═══ MODAL KONFIRMASI ═══ */}
       {showConfirmModal && (confirmAction === 'add-wajib' || confirmAction === 'add-pilihan') && (
         <div
           className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dp-fadeIn"
@@ -1138,7 +1146,7 @@ export default function DataPembelajaranPage() {
           </div>
         ) : (
           <>
-            {/* ═══ DROPDOWN SEMESTER (BARU!) ═══ */}
+            {/* ═══ DROPDOWN SEMESTER ═══ */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
@@ -1157,7 +1165,6 @@ export default function DataPembelajaranPage() {
                   ))}
                 </select>
 
-                {/* Badge Status */}
                 {selectedSemesterId && (
                   isSemesterActive ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
@@ -1182,20 +1189,27 @@ export default function DataPembelajaranPage() {
               </div>
             ) : (
               <>
-                {/* ═══ DROPDOWN KELAS ═══ */}
+                {/* ═══ DROPDOWN KELAS (DENGAN DISABLE) ═══ */}
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Kelas</label>
                     <select
                       value={selectedKelasId ?? ''}
                       onChange={(e) => handleKelasChange(e.target.value)}
-                      className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
+                      disabled={!selectedSemesterId}
+                      className={`border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px] ${!selectedSemesterId ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}
                     >
                       <option value="">-- Pilih Kelas --</option>
                       {kelasList.map(k => (
                         <option key={k.id} value={k.id}>{k.nama}</option>
                       ))}
                     </select>
+                    
+                    {!selectedSemesterId && (
+                      <span className="text-xs text-gray-500 italic">
+                        Pilih semester terlebih dahulu
+                      </span>
+                    )}
                   </div>
                 </div>
 

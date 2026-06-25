@@ -2,7 +2,10 @@
  * Nama File: siswa_per_kelas_client.tsx
  * Path: /admin/data-kelas/[id]/siswa
  * Fungsi: Menampilkan daftar siswa dalam kelas tertentu (Master-First Concept)
- * Update: Hapus fitur Detail, fokus hanya Assign & Keluarkan
+ * Update: 
+ *   - Hapus fitur Detail, fokus hanya Assign & Keluarkan
+ *   - ✅ TAMBAHAN: Fitur READ-ONLY saat data kelas dikunci (PTS/PAS diarsipkan)
+ *   - ✅ TAMBAHAN: Badge warning yang jelas saat data terkunci
  */
 
 'use client';
@@ -10,7 +13,7 @@ import { useState, useEffect, useCallback, ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
     X, Search, ArrowLeft, CheckCircle2, AlertCircle, 
-    WifiOff, ShieldAlert, Users, Plus, Trash2
+    WifiOff, ShieldAlert, Users, Plus, Trash2, Lock  // ✅ TAMBAH Lock
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -38,6 +41,7 @@ interface Siswa {
     status: string;
 }
 
+// ✅ UPDATED: Tambah field read-only
 interface KelasInfo {
     id_kelas: number;
     nama_kelas: string;
@@ -46,6 +50,9 @@ interface KelasInfo {
     tahun_ajaran_id: number;
     tahun_ajaran?: string;
     is_aktif: boolean;
+    is_read_only?: boolean;
+    locked_by?: string | null;
+    locked_semester?: string | null;
 }
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -195,6 +202,7 @@ export default function SiswaPerKelasClient() {
 
     // ── FETCH FUNCTIONS ──────────────────────────────────────────────────────
 
+    // ✅ UPDATED: Ambil info read-only dari backend
     const fetchKelasInfo = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
@@ -214,6 +222,10 @@ export default function SiswaPerKelasClient() {
                     tahun_ajaran_id: data.data.tahun_ajaran_id,
                     tahun_ajaran: data.data.tahun_ajaran,
                     is_aktif: data.data.is_aktif || false,
+                    // ✅ BARU: Ambil info read-only
+                    is_read_only: data.data.is_read_only || false,
+                    locked_by: data.data.locked_by || null,
+                    locked_semester: data.data.locked_semester || null,
                 });
             } else {
                 showModal({ type: 'error', title: 'Kelas Tidak Ditemukan', message: data.message || 'Data kelas tidak ditemukan.' });
@@ -535,12 +547,37 @@ export default function SiswaPerKelasClient() {
             {/* ── CARD UTAMA ─────────────────────────────────────────────── */}
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
+                {/* ═══ ✅ BADGE READ-ONLY (BARU) ═══ */}
+                {kelasInfo?.is_read_only && (
+                    <div 
+                        className="mx-5 mt-4 p-4 rounded-xl flex items-start gap-3"
+                        style={{ 
+                            background: 'linear-gradient(135deg, #fef3c7, #fde68a)', 
+                            border: '2px solid #f59e0b'
+                        }}
+                    >
+                        <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h3 className="text-sm font-bold text-amber-900 mb-1">
+                                🔒 Data Siswa Terkunci (Read-Only)
+                            </h3>
+                            <p className="text-xs text-amber-800 mb-2">
+                                Penilaian <strong>{kelasInfo.locked_by}</strong> semester <strong>{kelasInfo.locked_semester}</strong> telah diarsipkan dan dikunci. 
+                                Siswa tidak dapat ditambah atau dikeluarkan dari kelas sampai tahun ajaran berakhir.
+                            </p>
+                            <p className="text-xs text-amber-700 italic">
+                                💡 Data siswa yang sudah ada tetap dapat dilihat dan dicari.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* ═══ TOOLBAR ═══ */}
                 <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
 
-                        {/* Kiri: Assign Siswa */}
-                        {kelasInfo?.is_aktif && (
+                        {/* ✅ Kiri: Assign Siswa - DISABLE jika read-only */}
+                        {kelasInfo?.is_aktif && !kelasInfo?.is_read_only && (
                             <button
                                 onClick={openAssignModal}
                                 className={btnPrimary.base}
@@ -670,8 +707,9 @@ export default function SiswaPerKelasClient() {
                                                 {formatGender(siswa.jenis_kelamin) === 'Laki-laki' ? 'L' : 'P'}
                                             </span>
                                         </td>
+                                        {/* ✅ UPDATED: Kolom Aksi - conditional */}
                                         <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                                            {kelasInfo?.is_aktif && (
+                                            {kelasInfo?.is_aktif && !kelasInfo?.is_read_only ? (
                                                 <button onClick={() => handleKeluarkan(siswa)}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                                     style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' }}
@@ -679,7 +717,15 @@ export default function SiswaPerKelasClient() {
                                                     onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}>
                                                         <Trash2 size={13} /> Hapus
                                                 </button>
-                                            )}
+                                            ) : kelasInfo?.is_read_only ? (
+                                                <span 
+                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold"
+                                                    style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                                                    title="Data terkunci karena penilaian telah diarsipkan"
+                                                >
+                                                    <Lock size={10} /> Terkunci
+                                                </span>
+                                            ) : null}
                                         </td>
                                     </tr>
                                 ))

@@ -1,16 +1,15 @@
 /**
  * Nama File: siswaPerKelasController.js
- * Fungsi: Controller untuk mengelola relasi siswa ke kelas (Master-First Concept)
- *         - Mengambil siswa yang sudah terdaftar di kelas
- *         - Mengambil siswa yang belum punya kelas (untuk checklist)
- *         - Assign siswa existing dari master ke kelas
- *         - Keluarkan siswa dari kelas (hapus relasi, bukan master)
- * 
+ * Fungsi: Controller untuk mengelola relasi siswa ke kelas
+ * UPDATE: ✅ TAMBAH validasi read-only di assign & keluarkan siswa
  */
 
 const SiswaPerKelasModel = require('../../models/admin/siswaPerKelasModel');
 const SiswaModel = require('../../models/admin/siswaModel');
 const db = require('../../config/db');
+
+// ✅ Import checkReadOnly dari kelasController
+const { checkReadOnly } = require('./kelasController');
 
 const getTahunAjaranAktif = async () => {
     const [rows] = await db.execute(`
@@ -98,13 +97,15 @@ const getSiswaAvailable = async (req, res) => {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ UPDATED: Validasi read-only sebelum assign siswa
+// ═══════════════════════════════════════════════════════════════
 const assignSiswaKeKelas = async (req, res) => {
     const connection = await db.getConnection();
     try {
         const { id: kelasId } = req.params;
         const { siswa_ids, tahun_ajaran_id } = req.body;
 
-        // Validasi input
         if (!kelasId) {
             return res.status(400).json({
                 success: false,
@@ -127,6 +128,15 @@ const assignSiswaKeKelas = async (req, res) => {
             });
         }
 
+        // ✅ BARU: CEK READ-ONLY
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(tahunAjaranId);
+        if (isReadOnly) {
+            return res.status(403).json({
+                success: false,
+                message: `Tidak dapat menambah siswa karena penilaian ${lockedBy} semester ${lockedSemester} telah diarsipkan. Data siswa dikunci sampai tahun ajaran berakhir.`
+            });
+        }
+
         await connection.beginTransaction();
 
         let assignedCount = 0;
@@ -134,7 +144,6 @@ const assignSiswaKeKelas = async (req, res) => {
 
         for (const siswaId of siswa_ids) {
             try {
-                // Cek apakah siswa ada di master
                 const siswa = await SiswaModel.getSiswaById(siswaId);
                 if (!siswa) {
                     skipped.push({
@@ -144,7 +153,6 @@ const assignSiswaKeKelas = async (req, res) => {
                     continue;
                 }
 
-                // Cek apakah sudah punya kelas di tahun ajaran ini
                 const existingKelas = await SiswaPerKelasModel.checkSiswaPunyaKelas(siswaId, tahunAjaranId);
                 if (existingKelas) {
                     skipped.push({
@@ -155,7 +163,6 @@ const assignSiswaKeKelas = async (req, res) => {
                     continue;
                 }
 
-                // Assign ke kelas
                 await SiswaPerKelasModel.assignSiswaKeKelas(siswaId, kelasId, tahunAjaranId, connection);
                 assignedCount++;
 
@@ -191,6 +198,9 @@ const assignSiswaKeKelas = async (req, res) => {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ UPDATED: Validasi read-only sebelum keluarkan siswa
+// ═══════════════════════════════════════════════════════════════
 const keluarkanSiswaDariKelas = async (req, res) => {
     try {
         const { id: kelasId, siswaId } = req.params;
@@ -204,7 +214,15 @@ const keluarkanSiswaDariKelas = async (req, res) => {
             });
         }
 
-        // Cek apakah siswa ada di kelas ini
+        // ✅ BARU: CEK READ-ONLY
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(tahunAjaranId);
+        if (isReadOnly) {
+            return res.status(403).json({
+                success: false,
+                message: `Tidak dapat mengeluarkan siswa karena penilaian ${lockedBy} semester ${lockedSemester} telah diarsipkan. Data siswa dikunci sampai tahun ajaran berakhir.`
+            });
+        }
+
         const siswaInKelas = await SiswaPerKelasModel.getSiswaByIdInKelas(siswaId, kelasId, tahunAjaranId);
         if (!siswaInKelas) {
             return res.status(404).json({
@@ -213,7 +231,6 @@ const keluarkanSiswaDariKelas = async (req, res) => {
             });
         }
 
-        // Hapus relasi (bukan data master)
         const deleted = await SiswaPerKelasModel.hapusSiswaDariKelas(siswaId, kelasId, tahunAjaranId);
 
         if (!deleted) {

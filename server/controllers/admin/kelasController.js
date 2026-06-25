@@ -13,43 +13,35 @@ const getIdTahunAjaranAktif = async (idInduk) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ BARU: Helper untuk cek apakah kelas dalam mode read-only
-// Read-only jika status_pts = 'selesai' ATAU status_pas = 'selesai'
-// di SEMUA semester dalam TA yang sama
+// ✅ FIXED: Helper untuk cek apakah kelas dalam mode read-only
 // ═══════════════════════════════════════════════════════════════
 const checkReadOnly = async (idInduk) => {
     const [rows] = await db.execute(
-        `SELECT status_pts, status_pas 
+        `SELECT status_pts, status_pas, semester
          FROM tahun_ajaran 
          WHERE id_tahun_ajaran_induk = ?`,
         [idInduk]
     );
 
     if (rows.length === 0) {
-        return { isReadOnly: false, lockedBy: null };
+        return { isReadOnly: false, lockedBy: null, lockedSemester: null };
     }
 
     // Cek apakah ADA semester yang status_pts atau status_pas = 'selesai'
-    const hasLocked = rows.some(row => 
+    const lockedRow = rows.find(row => 
         row.status_pts === 'selesai' || row.status_pas === 'selesai'
     );
 
-    if (hasLocked) {
-        // Cari tahu apa yang mengunci (PTS atau PAS)
-        const lockedBy = rows.find(row => 
-            row.status_pts === 'selesai' || row.status_pas === 'selesai'
-        );
-        
-        const lockType = lockedBy.status_pts === 'selesai' ? 'PTS' : 'PAS';
-        
+    if (lockedRow) {
+        const lockType = lockedRow.status_pts === 'selesai' ? 'PTS' : 'PAS';
         return { 
             isReadOnly: true, 
             lockedBy: lockType,
-            semester: lockedBy.semester
+            lockedSemester: lockedRow.semester
         };
     }
 
-    return { isReadOnly: false, lockedBy: null };
+    return { isReadOnly: false, lockedBy: null, lockedSemester: null };
 };
 
 const getKelas = async (req, res) => {
@@ -66,18 +58,7 @@ const getKelas = async (req, res) => {
         const idInduk = Number(tahun_ajaran_id);
 
         // ✅ CEK STATUS READ-ONLY
-        const { isReadOnly, lockedBy, semester } = await checkReadOnly(idInduk);
-
-        const [activeSemester] = await db.execute(
-            `SELECT id_tahun_ajaran, semester FROM tahun_ajaran 
-             WHERE id_tahun_ajaran_induk = ? AND status = 'aktif'
-             LIMIT 1`,
-            [idInduk]
-        );
-        
-        const semesterAktifId = activeSemester.length > 0 
-            ? activeSemester[0].id_tahun_ajaran 
-            : null;
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
 
         const [rows] = await db.execute(
             `
@@ -104,13 +85,12 @@ const getKelas = async (req, res) => {
             [idInduk, idInduk, idInduk]
         );
         
-        // ✅ RETURN dengan info read-only
         res.json({ 
             success: true, 
             data: rows,
             is_read_only: isReadOnly,
             locked_by: lockedBy,
-            locked_semester: semester
+            locked_semester: lockedSemester
         });
     } catch (err) {
         console.error('Error get kelas:', err);
@@ -118,6 +98,9 @@ const getKelas = async (req, res) => {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════
+// ✅ UPDATED: getKelasById return is_read_only untuk frontend
+// ═══════════════════════════════════════════════════════════════
 const getKelasById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -140,6 +123,23 @@ const getKelasById = async (req, res) => {
 
         kelas.is_aktif = (kelas.status_tahun_ajaran === 'aktif');
         delete kelas.status_tahun_ajaran;
+
+        // ✅ BARU: Ambil id_induk dari tahun_ajaran_id untuk cek read-only
+        const [taInfo] = await db.execute(
+            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            [tahunAjaranId]
+        );
+
+        if (taInfo.length > 0) {
+            const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(taInfo[0].id_tahun_ajaran_induk);
+            kelas.is_read_only = isReadOnly;
+            kelas.locked_by = lockedBy;
+            kelas.locked_semester = lockedSemester;
+        } else {
+            kelas.is_read_only = false;
+            kelas.locked_by = null;
+            kelas.locked_semester = null;
+        }
 
         res.json({ success: true, data: kelas });
 
@@ -175,9 +175,6 @@ const getKelasForDropdown = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Validasi read-only sebelum tambah kelas
-// ═══════════════════════════════════════════════════════════════
 const tambahKelas = async (req, res) => {
     const { nama_kelas, fase, user_id } = req.body;
     const idInduk = req.idTahunAjaranInduk;
@@ -187,13 +184,12 @@ const tambahKelas = async (req, res) => {
     }
 
     try {
-        // ✅ CEK READ-ONLY
-        const { isReadOnly, lockedBy } = await checkReadOnly(idInduk);
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
         
         if (isReadOnly) {
             return res.status(403).json({
                 success: false,
-                message: `Tidak dapat menambah kelas karena penilaian ${lockedBy} telah selesai. Data kelas dikunci sampai tahun ajaran berakhir.`
+                message: `Tidak dapat menambah kelas karena penilaian ${lockedBy} semester ${lockedSemester} telah diarsipkan. Data kelas dikunci sampai tahun ajaran berakhir.`
             });
         }
 
@@ -269,9 +265,6 @@ const tambahKelas = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Validasi read-only sebelum edit kelas
-// ═══════════════════════════════════════════════════════════════
 const editKelas = async (req, res) => {
     try {
         const { id } = req.params;
@@ -282,13 +275,12 @@ const editKelas = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nama kelas, fase, dan tahun ajaran wajib diisi' });
         }
 
-        // ✅ CEK READ-ONLY
-        const { isReadOnly, lockedBy } = await checkReadOnly(idInduk);
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
         
         if (isReadOnly) {
             return res.status(403).json({
                 success: false,
-                message: `Tidak dapat mengedit kelas karena penilaian ${lockedBy} telah selesai. Data kelas dikunci sampai tahun ajaran berakhir.`
+                message: `Tidak dapat mengedit kelas karena penilaian ${lockedBy} semester ${lockedSemester} telah diarsipkan. Data kelas dikunci sampai tahun ajaran berakhir.`
             });
         }
 
@@ -380,9 +372,6 @@ const editKelas = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Validasi read-only sebelum hapus kelas
-// ═══════════════════════════════════════════════════════════════
 const hapusKelas = async (req, res) => {
     try {
         const { id } = req.params;
@@ -392,13 +381,12 @@ const hapusKelas = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
         }
 
-        // ✅ CEK READ-ONLY
-        const { isReadOnly, lockedBy } = await checkReadOnly(idInduk);
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
         
         if (isReadOnly) {
             return res.status(403).json({
                 success: false,
-                message: `Tidak dapat menghapus kelas karena penilaian ${lockedBy} telah selesai. Data kelas dikunci sampai tahun ajaran berakhir.`
+                message: `Tidak dapat menghapus kelas karena penilaian ${lockedBy} semester ${lockedSemester} telah diarsipkan. Data kelas dikunci sampai tahun ajaran berakhir.`
             });
         }
 
@@ -462,9 +450,6 @@ const hapusKelas = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Validasi read-only sebelum set wali kelas
-// ═══════════════════════════════════════════════════════════════
 const setWaliKelas = async (req, res) => {
     try {
         const { id } = req.params;
@@ -475,13 +460,12 @@ const setWaliKelas = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
         }
 
-        // ✅ CEK READ-ONLY
-        const { isReadOnly, lockedBy } = await checkReadOnly(idInduk);
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
         
         if (isReadOnly) {
             return res.status(403).json({
                 success: false,
-                message: `Tidak dapat mengubah wali kelas karena penilaian ${lockedBy} telah selesai. Data kelas dikunci sampai tahun ajaran berakhir.`
+                message: `Tidak dapat mengubah wali kelas karena penilaian ${lockedBy} semester ${lockedSemester} telah diarsipkan. Data kelas dikunci sampai tahun ajaran berakhir.`
             });
         }
 
@@ -549,4 +533,5 @@ module.exports = {
     editKelas,
     hapusKelas,
     setWaliKelas,
+    checkReadOnly 
 };

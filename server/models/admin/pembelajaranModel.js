@@ -1,11 +1,10 @@
 /**
  * Nama File: pembelajaranModel.js
- * Fungsi: Model untuk mengelola data pembelajaran (penugasan guru mengajar),
- *         mencakup operasi CRUD, serta fungsi helper untuk daftar kelas, mapel, dan guru.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
- * Update: Perbaikan nama kolom (mapel_id), tambah method untuk flow baru
- *         (getByKelasId, getWaliKelas, isDuplicate, hasNilaiRapor, dll)
+ * Update: 
+ *   - ✅ FIX: getKelasInfo JOIN ke tahun_ajaran_induk
+ *   - ✅ FIX: getByKelasId tambah filter semester
+ *   - ✅ FIX: getByKelasIdSeparated tambah filter semester
+ *   - ✅ FIX: getGuruAktif role pakai underscore (sesuai database)
  */
 
 const db = require('../../config/db');
@@ -37,9 +36,8 @@ const pembelajaranModel = {
     return rows;
   },
 
-  async getByKelasId(kelasId) {
-    const [rows] = await db.execute(
-      `
+  async getByKelasId(kelasId, tahunAjaranId = null) {
+    let sql = `
         SELECT 
           p.id,
           p.tahun_ajaran_id,
@@ -55,16 +53,22 @@ const pembelajaranModel = {
         JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
         JOIN user u ON p.user_id = u.id_user
         WHERE p.kelas_id = ?
-        ORDER BY mp.jenis ASC, mp.urutan_rapor ASC, mp.nama_mapel ASC
-      `,
-      [kelasId]
-    );
+      `;
+    const params = [kelasId];
+    
+    if (tahunAjaranId) {
+      sql += ` AND p.tahun_ajaran_id = ?`;
+      params.push(tahunAjaranId);
+    }
+    
+    sql += ` ORDER BY mp.jenis ASC, mp.urutan_rapor ASC, mp.nama_mapel ASC`;
+    
+    const [rows] = await db.execute(sql, params);
     return rows;
   },
 
-  async getByKelasIdSeparated(kelasId) {
-    const semuaData = await this.getByKelasId(kelasId);
-
+  async getByKelasIdSeparated(kelasId, tahunAjaranId = null) {
+    const semuaData = await this.getByKelasId(kelasId, tahunAjaranId);
     return {
       mapel_wajib: semuaData.filter(p => p.jenis_mapel === 'wajib'),
       mapel_pilihan: semuaData.filter(p => p.jenis_mapel === 'pilihan')
@@ -160,7 +164,7 @@ const pembelajaranModel = {
     return rows[0] || null;
   },
 
-  async getWaliKelas(kelasId, tahunAjaranId) {
+  async getWaliKelas(kelasId, idInduk) {
     const [rows] = await db.execute(
       `
         SELECT u.id_user, u.nama_lengkap
@@ -168,7 +172,7 @@ const pembelajaranModel = {
         JOIN user u ON gk.user_id = u.id_user
         WHERE gk.kelas_id = ? AND gk.tahun_ajaran_id = ?
       `,
-      [kelasId, tahunAjaranId]
+      [kelasId, idInduk]
     );
     return rows[0] || null;
   },
@@ -192,6 +196,7 @@ const pembelajaranModel = {
     return rows[0].jumlah;
   },
 
+  // ✅ FIXED: Role pakai underscore (sesuai database)
   async getGuruAktif() {
     const [rows] = await db.execute(`
       SELECT 
@@ -200,13 +205,13 @@ const pembelajaranModel = {
       FROM user u
       INNER JOIN user_role ur ON u.id_user = ur.id_user
       WHERE u.status = 'aktif'
-        AND ur.role IN ('guru kelas', 'guru bidang studi')
+        AND ur.role IN ('guru_kelas', 'guru_bidang_studi')
       ORDER BY u.nama_lengkap ASC
     `);
     return rows;
   },
 
-  async getKelasByTahunAjaran(tahunAjaranId) {
+  async getKelasByTahunAjaran(idInduk) {
     const [rows] = await db.execute(
       `
         SELECT 
@@ -216,7 +221,7 @@ const pembelajaranModel = {
         WHERE tahun_ajaran_id = ?
         ORDER BY nama_kelas ASC
       `,
-      [tahunAjaranId]
+      [idInduk]
     );
     return rows;
   },
@@ -244,12 +249,14 @@ const pembelajaranModel = {
       SELECT 
         k.id_kelas,
         k.nama_kelas,
-        k.tahun_ajaran_id,
-        ta.tahun_ajaran,
-        ta.semester,        
-        ta.status AS status_ta
+        k.tahun_ajaran_id AS id_induk,
+        tai.tahun_ajaran,
+        ta_aktif.id_tahun_ajaran AS semester_id,
+        ta_aktif.semester,        
+        ta_aktif.status AS status_ta
       FROM kelas k
-      JOIN tahun_ajaran ta ON k.tahun_ajaran_id = ta.id_tahun_ajaran
+      JOIN tahun_ajaran_induk tai ON k.tahun_ajaran_id = tai.id_tahun_ajaran_induk
+      LEFT JOIN tahun_ajaran ta_aktif ON ta_aktif.id_tahun_ajaran_induk = k.tahun_ajaran_id AND ta_aktif.status = 'aktif'
       WHERE k.id_kelas = ?
     `,
       [kelasId]
@@ -273,7 +280,6 @@ const pembelajaranModel = {
     return rows.length > 0;
   },
 
-  // Ambil mapel wajib yang BELUM ditugaskan di kelas ini
   async getMapelWajibBelumDitugaskan(kelasId, tahunAjaranId) {
     const [rows] = await db.execute(`
       SELECT 
@@ -294,7 +300,6 @@ const pembelajaranModel = {
     return rows;
   },
 
-  // Ambil mapel pilihan yang BELUM ditugaskan di kelas ini
   async getMapelPilihanBelumDitugaskan(kelasId, tahunAjaranId) {
     const [rows] = await db.execute(`
       SELECT 
@@ -314,12 +319,10 @@ const pembelajaranModel = {
     return rows;
   },
 
-  // Bulk insert mapel wajib (otomatis ke guru kelas)
   async bulkInsertMapelWajib(kelasId, mapelIds, guruKelasId, tahunAjaranId, connection) {
     const inserted = [];
     
     for (const mapelId of mapelIds) {
-      // Cek apakah sudah ada (double check)
       const [cek] = await connection.execute(`
         SELECT id FROM pembelajaran 
         WHERE kelas_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?
@@ -338,7 +341,5 @@ const pembelajaranModel = {
     return inserted;
   }
 };
-
-
 
 module.exports = pembelajaranModel;
