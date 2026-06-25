@@ -1,33 +1,79 @@
 /**
  * Nama File: ekstrakurikulerController.js
- * Fungsi: Controller untuk CRUD ekstrakurikuler
+ * Fungsi: Controller untuk CRUD ekstrakurikuler PER SEMESTER
+ * Update: 
+ *   - Gunakan semester_id dari query/body (bukan req.idTahunAjaranInduk)
+ *   - Middleware adminOnlyWithTahunAjaran sudah validasi TA aktif
  */
 
 const ekstrakurikulerModel = require('../../models/admin/ekstrakurikulerModel');
+const db = require('../../config/db');
 
+// ✅ Helper untuk validasi semester
+const validateSemesterId = async (semesterId) => {
+    if (!semesterId || isNaN(Number(semesterId))) {
+        return { valid: false, message: 'Semester wajib dipilih' };
+    }
 
+    const [rows] = await db.execute(`
+        SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status
+        FROM tahun_ajaran 
+        WHERE id_tahun_ajaran = ?
+    `, [Number(semesterId)]);
+
+    if (rows.length === 0) {
+        return { valid: false, message: 'Semester tidak valid' };
+    }
+
+    return {
+        valid: true,
+        data: {
+            semester_id: rows[0].id_tahun_ajaran,
+            semester: rows[0].semester,
+            is_aktif: rows[0].status === 'aktif'
+        }
+    };
+};
+
+// ✅ Gunakan semester_id dari query
 const getEkskul = async (req, res) => {
     try {
-        const { tahun_ajaran_id } = req.query;
-        if (!tahun_ajaran_id) {
-            return res.status(400).json({ message: 'Tahun ajaran wajib dipilih' });
+        const { semester_id } = req.query;
+        
+        const validation = await validateSemesterId(semester_id);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.message });
         }
-        const ekskulList = await ekstrakurikulerModel.getAllByTahunAjaran(tahun_ajaran_id);
-        res.json({ success: true, data: ekskulList });
+
+        const ekskulList = await ekstrakurikulerModel.getAllByTahunAjaran(validation.data.semester_id);
+        
+        res.json({ 
+            success: true, 
+            data: ekskulList,
+            semester_info: validation.data
+        });
     } catch (err) {
         console.error('Error get ekstrakurikuler:', err);
         res.status(500).json({ message: 'Gagal mengambil data ekstrakurikuler' });
     }
 };
 
+// ✅ Gunakan semester_id dari body
 const tambahEkskul = async (req, res) => {
     try {
-        const { nama_ekskul, pembina_id, keterangan } = req.body;
-        const tahun_ajaran_id = req.idTahunAjaranInduk;
+        const { nama_ekskul, pembina_id, keterangan, semester_id } = req.body;
 
-        if (!tahun_ajaran_id) {
-            return res.status(400).json({ message: 'Tidak ada tahun ajaran aktif' });
+        const validation = await validateSemesterId(semester_id);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.message });
         }
+
+        if (!validation.data.is_aktif) {
+            return res.status(403).json({ 
+                message: `Tidak dapat menambah ekskul di semester ${validation.data.semester} yang tidak aktif` 
+            });
+        }
+
         if (!nama_ekskul || !nama_ekskul.trim()) {
             return res.status(400).json({ message: 'Nama ekstrakurikuler wajib diisi' });
         }
@@ -39,21 +85,35 @@ const tambahEkskul = async (req, res) => {
             if (!pembinaValid) {
                 return res.status(400).json({ message: 'Pembina tidak valid atau tidak aktif' });
             }
+
+            // ✅ BARU: Cek apakah pembina sudah mengampu ekskul lain
+            const existingEkskul = await ekstrakurikulerModel.isPembinaAlreadyAssigned(
+                Number(pembina_id),
+                validation.data.semester_id
+            );
+
+            if (existingEkskul) {
+                return res.status(400).json({ 
+                    message: `Pembina "${pembinaValid.nama}" sudah mengampu ekstrakurikuler "${existingEkskul.nama_ekskul}" di semester ini. 1 pembina hanya boleh mengampu 1 ekstrakurikuler.` 
+                });
+            }
         }
 
         const isDuplicate = await ekstrakurikulerModel.isNamaEkskulExist(
             nama_ekskul,
-            tahun_ajaran_id
+            validation.data.semester_id
         );
         if (isDuplicate) {
-            return res.status(400).json({ message: `Ekstrakurikuler "${nama_ekskul}" sudah ada di tahun ajaran ini` });
+            return res.status(400).json({ 
+                message: `Ekstrakurikuler "${nama_ekskul}" sudah ada di semester ini` 
+            });
         }
 
         const ekskulId = await ekstrakurikulerModel.create({
             nama_ekskul: nama_ekskul.trim(),
             pembina_id: pembina_id || null,
             keterangan: keterangan || null,
-            tahun_ajaran_id,
+            tahun_ajaran_id: validation.data.semester_id,
         });
 
         res.status(201).json({
@@ -67,20 +127,27 @@ const tambahEkskul = async (req, res) => {
     }
 };
 
+// ✅ Gunakan semester_id dari body
 const editEkskul = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nama_ekskul, pembina_id, keterangan } = req.body;
-        const tahun_ajaran_id = req.idTahunAjaranInduk;
+        const { nama_ekskul, pembina_id, keterangan, semester_id } = req.body;
 
-        if (!tahun_ajaran_id) {
-            return res.status(400).json({ message: 'Tidak ada tahun ajaran aktif' });
+        const validation = await validateSemesterId(semester_id);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.message });
         }
+
+        if (!validation.data.is_aktif) {
+            return res.status(403).json({ 
+                message: `Tidak dapat mengedit ekskul di semester ${validation.data.semester} yang tidak aktif` 
+            });
+        }
+
         if (!nama_ekskul || !nama_ekskul.trim()) {
             return res.status(400).json({ message: 'Nama ekstrakurikuler wajib diisi' });
         }
 
-        // Validasi ID
         const idNum = Number(id);
         if (isNaN(idNum)) {
             return res.status(400).json({ message: 'ID tidak valid' });
@@ -93,16 +160,29 @@ const editEkskul = async (req, res) => {
             if (!pembinaValid) {
                 return res.status(400).json({ message: 'Pembina tidak valid atau tidak aktif' });
             }
+
+            // ✅ BARU: Cek apakah pembina sudah mengampu ekskul lain (selain yang sedang diedit)
+            const existingEkskul = await ekstrakurikulerModel.isPembinaAlreadyAssigned(
+                Number(pembina_id),
+                validation.data.semester_id,
+                idNum  // Exclude current ekskul
+            );
+
+            if (existingEkskul) {
+                return res.status(400).json({ 
+                    message: `Pembina "${pembinaValid.nama}" sudah mengampu ekstrakurikuler "${existingEkskul.nama_ekskul}" di semester ini. 1 pembina hanya boleh mengampu 1 ekstrakurikuler.` 
+                });
+            }
         }
 
         const ekskulLama = await ekstrakurikulerModel.getById(idNum);
-        if (!ekskulLama || ekskulLama.tahun_ajaran_id !== tahun_ajaran_id) {
+        if (!ekskulLama || ekskulLama.tahun_ajaran_id !== validation.data.semester_id) {
             return res.status(404).json({ message: 'Ekstrakurikuler tidak ditemukan' });
         }
 
         const isDuplicate = await ekstrakurikulerModel.isNamaEkskulExist(
             nama_ekskul,
-            tahun_ajaran_id,
+            validation.data.semester_id,
             idNum
         );
         if (isDuplicate) {
@@ -113,7 +193,7 @@ const editEkskul = async (req, res) => {
             nama_ekskul: nama_ekskul.trim(),
             pembina_id: pembina_id || null,
             keterangan: keterangan || null,
-            tahun_ajaran_id,
+            tahun_ajaran_id: validation.data.semester_id,
         });
 
         if (!success) {
@@ -130,13 +210,15 @@ const editEkskul = async (req, res) => {
     }
 };
 
+// ✅ Gunakan semester_id dari query
 const hapusEkskul = async (req, res) => {
     try {
         const { id } = req.params;
-        const taId = req.idTahunAjaranInduk;
+        const { semester_id } = req.query;
 
-        if (!taId) {
-            return res.status(400).json({ message: 'Tidak ada tahun ajaran aktif' });
+        const validation = await validateSemesterId(semester_id);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.message });
         }
 
         const idNum = Number(id);
@@ -145,7 +227,7 @@ const hapusEkskul = async (req, res) => {
         }
 
         const ekskul = await ekstrakurikulerModel.getById(idNum);
-        if (!ekskul || ekskul.tahun_ajaran_id !== taId) {
+        if (!ekskul || ekskul.tahun_ajaran_id !== validation.data.semester_id) {
             return res.status(404).json({ message: 'Ekstrakurikuler tidak ditemukan' });
         }
 
@@ -164,14 +246,15 @@ const hapusEkskul = async (req, res) => {
     }
 };
 
-
+// ✅ Gunakan semester_id dari query
 const getPesertaByEkskul = async (req, res) => {
     try {
         const { id } = req.params;
-        const { tahun_ajaran_id } = req.query;
+        const { semester_id } = req.query;
 
-        if (!tahun_ajaran_id) {
-            return res.status(400).json({ message: 'Tahun ajaran wajib dipilih' });
+        const validation = await validateSemesterId(semester_id);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.message });
         }
 
         const idNum = Number(id);
@@ -179,13 +262,12 @@ const getPesertaByEkskul = async (req, res) => {
             return res.status(400).json({ message: 'ID ekskul tidak valid' });
         }
 
-        // Verifikasi ekskul ada
         const ekskul = await ekstrakurikulerModel.getById(idNum);
         if (!ekskul) {
             return res.status(404).json({ message: 'Ekstrakurikuler tidak ditemukan' });
         }
 
-        const peserta = await ekstrakurikulerModel.getPesertaByEkskul(idNum, Number(tahun_ajaran_id));
+        const peserta = await ekstrakurikulerModel.getPesertaByEkskul(idNum, validation.data.semester_id);
 
         res.json({
             success: true,
@@ -197,7 +279,8 @@ const getPesertaByEkskul = async (req, res) => {
                     nama_pembina: ekskul.nama_pembina,
                     tahun_ajaran_id: ekskul.tahun_ajaran_id
                 },
-                peserta: peserta
+                peserta: peserta,
+                semester_info: validation.data
             }
         });
     } catch (err) {
@@ -206,13 +289,15 @@ const getPesertaByEkskul = async (req, res) => {
     }
 };
 
+// ✅ Gunakan semester_id dari query
 const getEkskulBySiswa = async (req, res) => {
     try {
         const { siswaId } = req.params;
-        const { tahun_ajaran_id } = req.query;
+        const { semester_id } = req.query;
 
-        if (!tahun_ajaran_id) {
-            return res.status(400).json({ message: 'Tahun ajaran wajib dipilih' });
+        const validation = await validateSemesterId(semester_id);
+        if (!validation.valid) {
+            return res.status(400).json({ message: validation.message });
         }
 
         const siswaIdNum = Number(siswaId);
@@ -220,14 +305,18 @@ const getEkskulBySiswa = async (req, res) => {
             return res.status(400).json({ message: 'ID siswa tidak valid' });
         }
 
-        const ekskulList = await ekstrakurikulerModel.getEkskulSiswa(siswaIdNum, Number(tahun_ajaran_id));
-        res.json({ success: true, data: ekskulList });
+        const ekskulList = await ekstrakurikulerModel.getEkskulSiswa(siswaIdNum, validation.data.semester_id);
+        
+        res.json({ 
+            success: true, 
+            data: ekskulList,
+            semester_info: validation.data
+        });
     } catch (err) {
         console.error('Error get ekskul by siswa:', err);
         res.status(500).json({ message: 'Gagal mengambil data ekstrakurikuler siswa' });
     }
 };
-
 
 const getPembinaDropdown = async (req, res) => {
     try {

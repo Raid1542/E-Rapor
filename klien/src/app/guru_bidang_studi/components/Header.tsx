@@ -1,16 +1,3 @@
-/**
- * Nama File: Header.tsx
- * Fungsi: Komponen header untuk layout guru bidang studi.
- *         Menampilkan:
- *         - Judul statis dengan info Tahun Ajaran & Semester Aktif
- *         - Status jenis penilaian aktif (PTS/PAS)
- *         - Dropdown profil pengguna
- *         - Menu: Profil, Ubah Kata Sandi, Logout
- * Update: 
- *   - Responsive layout + status penilaian aktif
- *   - Badge "Jenis Penilaian Belum Aktif" saat tidak ada PTS/PAS aktif
- */
-
 'use client';
 
 import { LogOut, ChevronDown, User, Lock, X, FileText, AlertCircle } from 'lucide-react';
@@ -40,6 +27,14 @@ const getInitials = (name: string): string => {
         .join('');
 };
 
+// ✅ BARU: Helper untuk format role: "guru_bidang_studi" → "GURU BIDANG STUDI"
+const formatRole = (role: string): string => {
+    if (!role) return '';
+    return role
+        .replace(/_/g, ' ')  // Ganti underscore dengan spasi
+        .toUpperCase();       // Kapital semua
+};
+
 // ─── GLOBAL STYLES ─────────────────────────────────────────────────────────
 
 const GlobalStyles = () => (
@@ -65,7 +60,6 @@ const StatusBadge = ({ jenis, status }: { jenis: string; status: string }) => {
     const isActive = status === 'aktif';
     const isSelesai = status === 'selesai';
 
-    // Style untuk aktif
     if (isActive) {
         return (
             <span
@@ -84,7 +78,6 @@ const StatusBadge = ({ jenis, status }: { jenis: string; status: string }) => {
         );
     }
 
-    // Style untuk selesai
     if (isSelesai) {
         return (
             <span
@@ -194,7 +187,6 @@ export default function Header() {
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // State untuk Tahun Ajaran Aktif
     const [tahunAjaranInfo, setTahunAjaranInfo] = useState<TahunAjaranInfo | null>(null);
     const [taLoading, setTaLoading] = useState(true);
 
@@ -313,11 +305,10 @@ export default function Header() {
     const handleProfile = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/profil'); };
     const handleUbahPassword = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/ubah_password'); };
 
-    // ✅ LOGIKA BARU: Tentukan jenis penilaian yang ditampilkan
+    // ✅ LOGIKA: Tentukan jenis penilaian yang ditampilkan
     const getActiveJenisPenilaian = (): { jenis: string; status: string } | null => {
         if (!tahunAjaranInfo) return null;
 
-        // Prioritas: Aktif > Selesai
         if (tahunAjaranInfo.status_pts === 'aktif') {
             return { jenis: 'PTS', status: 'aktif' };
         }
@@ -331,13 +322,11 @@ export default function Header() {
             return { jenis: 'PAS', status: 'selesai' };
         }
 
-        // ✅ Jika keduanya nonaktif, return null (akan tampilkan "Jenis Penilaian Belum Aktif")
         return null;
     };
 
     const activeJenisInfo = getActiveJenisPenilaian();
 
-    // ✅ Cek apakah ada jenis penilaian yang belum aktif (untuk tampilkan badge warning)
     const isJenisPenilaianBelumAktif = tahunAjaranInfo 
         && tahunAjaranInfo.status_pts === 'nonaktif' 
         && tahunAjaranInfo.status_pas === 'nonaktif';
@@ -405,24 +394,17 @@ export default function Header() {
 
                         {/* KIRI: Title + Info */}
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                            {/* Title */}
                             <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight flex-shrink-0">
                                 E-Rapor SDIT Ulil Albab
                             </h1>
 
-                            {/* Info (Desktop: Inline) - Hidden on mobile */}
                             <div className="hidden lg:flex items-center gap-2 lg:gap-3 ml-2 lg:ml-4">
                                 {tahunAjaranInfo && (
                                     <>
-                                        {/* Tahun Ajaran & Semester */}
                                         <span className="text-xs lg:text-sm font-semibold text-white whitespace-nowrap">
                                             {tahunAjaranInfo.tahun_ajaran} - {tahunAjaranInfo.semester}
                                         </span>
-
-                                        {/* Separator */}
                                         <span style={{ color: 'rgba(255,255,255,0.5)' }}>•</span>
-
-                                        {/* Badge Status Penilaian */}
                                         {renderPenilaianBadge()}
                                     </>
                                 )}
@@ -432,7 +414,7 @@ export default function Header() {
                             </div>
                         </div>
 
-                        {/* KANAN: Profil dropdown (Tetap di pojok kanan) */}
+                        {/* KANAN: Profil dropdown */}
                         <div className="relative flex-shrink-0" ref={dropdownRef}>
                             <button
                                 onClick={() => setDropdownOpen(v => !v)}
@@ -447,7 +429,8 @@ export default function Header() {
                                 <Avatar size="sm" />
                                 <div className="text-left hidden md:block">
                                     <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">{user.nama_lengkap}</p>
-                                    <p className="text-[10px] text-white/90 leading-tight font-medium capitalize">{user.role}</p>
+                                    {/* ✅ FIXED: Gunakan formatRole */}
+                                    <p className="text-[10px] text-white/90 leading-tight font-medium">{formatRole(user.role)}</p>
                                 </div>
                                 <ChevronDown
                                     className="w-3.5 h-3.5 text-white transition-transform duration-200 hidden md:block"
@@ -461,7 +444,6 @@ export default function Header() {
                                     className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gbs-scaleIn"
                                     style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
                                 >
-                                    {/* Info user */}
                                     <div className="p-4" style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
                                         <div className="flex items-center gap-3">
                                             <div
@@ -478,11 +460,12 @@ export default function Header() {
                                             <div className="min-w-0 flex-1">
                                                 <p className="font-bold text-sm text-white truncate leading-tight">{user.nama_lengkap}</p>
                                                 <p className="text-[11px] text-white/65 truncate mt-0.5">{user.email_sekolah}</p>
+                                                {/* ✅ FIXED: Gunakan formatRole */}
                                                 <span
-                                                    className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wide"
+                                                    className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full tracking-wide"
                                                     style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
                                                 >
-                                                    {user.role}
+                                                    {formatRole(user.role)}
                                                 </span>
                                             </div>
                                         </div>
@@ -490,7 +473,6 @@ export default function Header() {
 
                                     {/* Menu items */}
                                     <div className="p-2">
-                                        {/* Profil */}
                                         <button
                                             onClick={handleProfile}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
@@ -504,7 +486,6 @@ export default function Header() {
                                             Profil Saya
                                         </button>
 
-                                        {/* Ubah Password */}
                                         <button
                                             onClick={handleUbahPassword}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
@@ -520,7 +501,6 @@ export default function Header() {
 
                                         <div className="my-1.5 border-t" style={{ borderColor: '#fde0c8' }} />
 
-                                        {/* Logout */}
                                         <button
                                             onClick={handleLogoutClick}
                                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
@@ -543,15 +523,10 @@ export default function Header() {
                     <div className="lg:hidden flex items-center gap-2 mt-2">
                         {tahunAjaranInfo && (
                             <>
-                                {/* Tahun Ajaran & Semester */}
                                 <span className="text-xs font-semibold text-white whitespace-nowrap">
                                     {tahunAjaranInfo.tahun_ajaran} - {tahunAjaranInfo.semester}
                                 </span>
-
-                                {/* Separator */}
                                 <span style={{ color: 'rgba(255,255,255,0.5)' }}>•</span>
-
-                                {/* Badge Status Penilaian */}
                                 {renderPenilaianBadge()}
                             </>
                         )}

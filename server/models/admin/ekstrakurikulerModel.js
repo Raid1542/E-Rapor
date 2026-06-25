@@ -8,9 +8,9 @@ const db = require('../../config/db');
 const ekstrakurikulerModel = {
 
   // Mengambil semua ekskul berdasarkan tahun ajaran (JOIN dengan pembina)
-async getAllByTahunAjaran(tahun_ajaran_id) {
-  const [rows] = await db.execute(
-    `SELECT 
+  async getAllByTahunAjaran(tahun_ajaran_id) {
+    const [rows] = await db.execute(
+      `SELECT 
         e.id_ekskul,
         e.nama_ekskul,
         e.pembina_id,
@@ -27,10 +27,10 @@ async getAllByTahunAjaran(tahun_ajaran_id) {
     WHERE e.tahun_ajaran_id = ?
     GROUP BY e.id_ekskul
     ORDER BY e.nama_ekskul ASC`,
-    [tahun_ajaran_id, tahun_ajaran_id]
-  );
-  return rows;
-},
+      [tahun_ajaran_id, tahun_ajaran_id]
+    );
+    return rows;
+  },
 
   // Menambahkan ekskul baru
   async create(data) {
@@ -234,6 +234,25 @@ async getAllByTahunAjaran(tahun_ajaran_id) {
     );
     return rows.length > 0;
   },
+
+  async isPembinaAlreadyAssigned(pembinaId, semesterId, excludeEkskulId = null) {
+    let query = `
+    SELECT id_ekskul, nama_ekskul 
+    FROM ekstrakurikuler 
+    WHERE pembina_id = ? AND tahun_ajaran_id = ?
+  `;
+    const params = [pembinaId, semesterId];
+
+    if (excludeEkskulId) {
+      query += ' AND id_ekskul != ?';
+      params.push(excludeEkskulId);
+    }
+
+    query += ' LIMIT 1';
+
+    const [rows] = await db.execute(query, params);
+    return rows.length > 0 ? rows[0] : null;
+  }
 };
 
 module.exports = ekstrakurikulerModel;

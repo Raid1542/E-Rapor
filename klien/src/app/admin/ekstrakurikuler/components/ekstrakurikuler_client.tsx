@@ -1,14 +1,16 @@
 /**
  * Nama File: data_ekstrakurikuler_client.tsx
  * Fungsi: Komponen utama halaman Data Ekstrakurikuler untuk admin.
- *         Menyediakan fitur CRUD (Create, Read, Update, Delete) ekstrakurikuler
- *         berdasarkan tahun ajaran, termasuk pencarian, paginasi, dan dropdown pembina.
- * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ *         Menyediakan fitur CRUD ekstrakurikuler PER SEMESTER
+ * Update: 
+ *   - Tambah dropdown Semester (TA → Semester → CRUD)
+ *   - Kirim semester_id ke semua API call
+ *   - Validasi semester aktif
  */
 
 'use client';
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
-import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users } from 'lucide-react';
+import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, Lock } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -38,6 +40,12 @@ interface TahunAjaran {
   is_aktif: boolean;
 }
 
+interface SemesterOption {
+  id: number;
+  semester: string;
+  is_aktif: boolean;
+}
+
 interface Pembina {
   id: number;
   nama: string;
@@ -51,7 +59,6 @@ interface PesertaEkskul {
   nama_kelas: string;
 }
 
-// ✅ HAPUS confirmData dari FormDataType
 interface FormDataType {
   nama_ekskul: string;
   pembina_id: string;
@@ -104,7 +111,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
             >Batal</button>
             <button onClick={() => { modal.onConfirm?.(); onClose(); }}
               className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
-            >Ya, Hapus</button>
+            >Ya, Lanjutkan</button>
           </div>
         ) : (
           <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
@@ -280,9 +287,14 @@ export default function DataEkstrakurikulerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  
+  // ✅ State untuk Tahun Ajaran & Semester
   const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
   const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
-  const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState<boolean>(false);
+  const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
+  const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
+  const [isSemesterActive, setIsSemesterActive] = useState<boolean>(false);
+  
   const [pembinaList, setPembinaList] = useState<Pembina[]>([]);
 
   // Modal Lihat Peserta
@@ -291,11 +303,9 @@ export default function DataEkstrakurikulerPage() {
   const [pesertaList, setPesertaList] = useState<PesertaEkskul[]>([]);
   const [loadingPeserta, setLoadingPeserta] = useState(false);
 
-  // ✅ TAMBAHAN: State untuk modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
 
-  // ✅ HAPUS confirmData dari formData
   const [formData, setFormData] = useState<FormDataType>({
     nama_ekskul: '', pembina_id: ''
   });
@@ -333,6 +343,36 @@ export default function DataEkstrakurikulerPage() {
     }
   };
 
+  // ✅ BARU: Fetch semester berdasarkan tahun ajaran
+  const fetchSemesterByTahunAjaran = async (idInduk: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return [];
+
+      const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const semesters = data.data
+          .filter((sem: any) => sem.id_induk === idInduk)
+          .map((sem: any) => ({
+            id: sem.id,
+            semester: sem.semester,
+            is_aktif: sem.is_aktif
+          }));
+
+        setSemesterOptions(semesters);
+        return semesters;
+      }
+      return [];
+    } catch (err) {
+      console.error('Error fetch semester:', err);
+      return [];
+    }
+  };
+
   const fetchPembinaList = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -349,12 +389,13 @@ export default function DataEkstrakurikulerPage() {
     }
   };
 
-  const fetchEkskul = async (tahunAjaranId: number) => {
+  // ✅ FIXED: Kirim semester_id (bukan tahun_ajaran_id)
+  const fetchEkskul = async (semesterId: number) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler?tahun_ajaran_id=${tahunAjaranId}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler?semester_id=${semesterId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -372,9 +413,10 @@ export default function DataEkstrakurikulerPage() {
     }
   };
 
+  // ✅ FIXED: Kirim semester_id
   const fetchPesertaByEkskul = async (ekskulId: number) => {
-    if (!selectedTahunAjaranId) {
-      showModal({ type: 'warning', title: 'Error', message: 'Tahun ajaran belum dipilih.' });
+    if (!selectedSemesterId) {
+      showModal({ type: 'warning', title: 'Error', message: 'Semester belum dipilih.' });
       return;
     }
 
@@ -387,7 +429,7 @@ export default function DataEkstrakurikulerPage() {
       }
 
       const res = await fetch(
-        `http://localhost:5000/api/admin/ekstrakurikuler/${ekskulId}/anggota?tahun_ajaran_id=${selectedTahunAjaranId}`,
+        `http://localhost:5000/api/admin/ekstrakurikuler/${ekskulId}/anggota?semester_id=${selectedSemesterId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -436,16 +478,28 @@ export default function DataEkstrakurikulerPage() {
     fetchPembinaList();
   }, []);
 
+  // ✅ FIXED: Load dari localStorage dengan semester
   useEffect(() => {
     if (tahunAjaranList.length > 0 && selectedTahunAjaranId === null) {
-      const savedId = localStorage.getItem('ekskul_selectedTA');
-      if (savedId) {
-        const id = Number(savedId);
+      const savedTA = localStorage.getItem('ekskul_selectedTA');
+      const savedSemester = localStorage.getItem('ekskul_selectedSemester');
+
+      if (savedTA) {
+        const id = Number(savedTA);
         const ta = tahunAjaranList.find(t => t.id === id);
         if (ta) {
           setSelectedTahunAjaranId(id);
-          setSelectedTahunAjaranAktif(ta.is_aktif);
-          fetchEkskul(id);
+          fetchSemesterByTahunAjaran(id).then((semesters: SemesterOption[]) => {
+            if (savedSemester) {
+              const semesterId = Number(savedSemester);
+              const sem = semesters.find(s => s.id === semesterId);
+              if (sem) {
+                setSelectedSemesterId(semesterId);
+                setIsSemesterActive(sem.is_aktif);
+                fetchEkskul(semesterId);
+              }
+            }
+          });
         }
       }
     }
@@ -459,7 +513,6 @@ export default function DataEkstrakurikulerPage() {
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  // ✅ HAPUS validasi confirmData
   const validate = (): boolean => {
     const ne: Record<string, string> = {};
     if (!formData.nama_ekskul?.trim()) ne.nama_ekskul = 'Nama ekstrakurikuler wajib diisi';
@@ -471,7 +524,6 @@ export default function DataEkstrakurikulerPage() {
     return true;
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi
   const openConfirmModal = (action: 'add' | 'edit') => {
     if (action === 'edit') {
       const originalEkskul = ekskulList.find(e => e.id_ekskul === editId);
@@ -496,10 +548,10 @@ export default function DataEkstrakurikulerPage() {
     setShowConfirmModal(true);
   };
 
-  // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
+  // ✅ FIXED: Kirim semester_id
   const executeTambah = async () => {
     const token = localStorage.getItem('token');
-    if (!token || !selectedTahunAjaranId) {
+    if (!token || !selectedSemesterId) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi tidak valid.' });
       return;
     }
@@ -510,6 +562,7 @@ export default function DataEkstrakurikulerPage() {
         body: JSON.stringify({
           nama_ekskul: formData.nama_ekskul.trim(),
           pembina_id: formData.pembina_id ? Number(formData.pembina_id) : null,
+          semester_id: selectedSemesterId, // ✅ Kirim semester_id
         }),
       });
 
@@ -517,7 +570,7 @@ export default function DataEkstrakurikulerPage() {
       if (res.ok && (result.success || res.status === 201)) {
         setShowTambah(false);
         handleReset();
-        fetchEkskul(selectedTahunAjaranId);
+        fetchEkskul(selectedSemesterId);
         showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: result.message || 'Ekstrakurikuler berhasil ditambahkan.' });
       } else {
         showModal({ type: 'error', title: 'Gagal Menambahkan', message: result.message || 'Terjadi kesalahan.' });
@@ -527,11 +580,11 @@ export default function DataEkstrakurikulerPage() {
     }
   };
 
-  // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
+  // ✅ FIXED: Kirim semester_id
   const executeEdit = async () => {
     if (!editId) return;
     const token = localStorage.getItem('token');
-    if (!token || !selectedTahunAjaranId) {
+    if (!token || !selectedSemesterId) {
       showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi tidak valid.' });
       return;
     }
@@ -542,6 +595,7 @@ export default function DataEkstrakurikulerPage() {
         body: JSON.stringify({
           nama_ekskul: formData.nama_ekskul.trim(),
           pembina_id: formData.pembina_id ? Number(formData.pembina_id) : null,
+          semester_id: selectedSemesterId, // ✅ Kirim semester_id
         }),
       });
 
@@ -551,7 +605,7 @@ export default function DataEkstrakurikulerPage() {
         setEditId(null);
         setEditData(null);
         handleReset();
-        fetchEkskul(selectedTahunAjaranId);
+        fetchEkskul(selectedSemesterId);
         showModal({ type: 'success', title: 'Data Diperbarui!', message: result.message || 'Data berhasil diperbarui.' });
       } else {
         showModal({ type: 'error', title: 'Gagal Memperbarui', message: result.message || 'Terjadi kesalahan.' });
@@ -571,6 +625,7 @@ export default function DataEkstrakurikulerPage() {
     setShowEdit(true);
   };
 
+  // ✅ FIXED: Kirim semester_id di query
   const handleDelete = (id: number, namaEkskul: string) => {
     showConfirm(
       `Yakin ingin menghapus ekstrakurikuler "${namaEkskul}"?\n\nTindakan ini tidak dapat dibatalkan jika masih memiliki peserta.`,
@@ -581,13 +636,13 @@ export default function DataEkstrakurikulerPage() {
           return;
         }
 
-        if (!selectedTahunAjaranId) {
-          showModal({ type: 'warning', title: 'Error', message: 'Tahun ajaran belum dipilih.' });
+        if (!selectedSemesterId) {
+          showModal({ type: 'warning', title: 'Error', message: 'Semester belum dipilih.' });
           return;
         }
 
         try {
-          const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${id}`, {
+          const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${id}?semester_id=${selectedSemesterId}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -607,7 +662,7 @@ export default function DataEkstrakurikulerPage() {
             throw new Error(result.message || 'Operasi gagal');
           }
 
-          fetchEkskul(selectedTahunAjaranId);
+          fetchEkskul(selectedSemesterId);
           showModal({
             type: 'success',
             title: 'Berhasil Dihapus!',
@@ -753,8 +808,6 @@ export default function DataEkstrakurikulerPage() {
               ))}
             </select>
           </div>
-
-          {/* ✅ HAPUS bagian checkbox konfirmasi */}
         </div>
 
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
@@ -772,7 +825,6 @@ export default function DataEkstrakurikulerPage() {
         </div>
       </div>
 
-      {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
       {showConfirmModal && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 ek-fadeIn"
@@ -854,10 +906,11 @@ export default function DataEkstrakurikulerPage() {
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Ekstrakurikuler</h1>
-        <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data kegiatan ekstrakurikuler per tahun ajaran</p>
+        <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data kegiatan ekstrakurikuler per semester</p>
       </div>
 
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+        {/* ═══ DROPDOWN TAHUN AJARAN ═══ */}
         <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
@@ -867,19 +920,26 @@ export default function DataEkstrakurikulerPage() {
                 const value = e.target.value;
                 if (value === '') {
                   setSelectedTahunAjaranId(null);
-                  setSelectedTahunAjaranAktif(false);
+                  setSelectedSemesterId(null);
+                  setIsSemesterActive(false);
+                  setSemesterOptions([]);
                   setLoading(false);
                   setEkskulList([]);
                   localStorage.removeItem('ekskul_selectedTA');
+                  localStorage.removeItem('ekskul_selectedSemester');
                   return;
                 }
                 const id = Number(value);
-                const selectedTa = tahunAjaranList.find(ta => ta.id === id);
                 setSelectedTahunAjaranId(id);
-                setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
+                setSelectedSemesterId(null);
+                setIsSemesterActive(false);
+                setSemesterOptions([]);
+                setEkskulList([]);
                 localStorage.setItem('ekskul_selectedTA', id.toString());
-                setLoading(true);
-                fetchEkskul(id);
+                localStorage.removeItem('ekskul_selectedSemester');
+                
+                // ✅ Fetch semester untuk TA ini
+                fetchSemesterByTahunAjaran(id);
               }}
               className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
             >
@@ -899,162 +959,223 @@ export default function DataEkstrakurikulerPage() {
           </div>
         ) : (
           <>
+            {/* ═══ DROPDOWN SEMESTER ═══ */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  {selectedTahunAjaranAktif && (
-                    <button
-                      onClick={() => setShowTambah(true)}
-                      className={btnPrimary.base}
-                      style={btnPrimary.style}
-                      onMouseEnter={btnPrimary.hover}
-                      onMouseLeave={btnPrimary.leave}
-                    >
-                      <Plus size={16} /> Tambah Ekstrakurikuler
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                      className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
-                    >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                  </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Semester</label>
+                <select
+                  value={selectedSemesterId ?? ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setSelectedSemesterId(null);
+                      setIsSemesterActive(false);
+                      setLoading(false);
+                      setEkskulList([]);
+                      localStorage.removeItem('ekskul_selectedSemester');
+                      return;
+                    }
+                    const id = Number(value);
+                    const selectedSem = semesterOptions.find(s => s.id === id);
+                    setSelectedSemesterId(id);
+                    setIsSemesterActive(selectedSem?.is_aktif || false);
+                    localStorage.setItem('ekskul_selectedSemester', id.toString());
+                    setLoading(true);
+                    fetchEkskul(id);
+                  }}
+                  className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
+                >
+                  <option value="">-- Pilih Semester --</option>
+                  {semesterOptions.map(sem => (
+                    <option key={sem.id} value={sem.id}>
+                      {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
+                    </option>
+                  ))}
+                </select>
 
-                  <div className="relative min-w-[200px] sm:min-w-[220px]">
-                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                      <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Cari ekskul / pembina..."
-                      value={searchQuery}
-                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                      className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                        className="absolute inset-y-0 right-2 flex items-center"
-                        style={{ color: '#c95b08' }}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                Menampilkan {filteredEkskul.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredEkskul.length)} dari {filteredEkskul.length} data
-              </p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-sm border-collapse">
-                <thead>
-                  <tr style={TH_GRAD}>
-                    {['No.', 'Nama Ekstrakurikuler', 'Pembina', 'Jumlah Siswa', 'Aksi'].map(h => (
-                      <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                          Memuat data...
-                        </div>
-                      </td>
-                    </tr>
-                  ) : currentEkskul.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                        {searchQuery ? 'Tidak ada data yang cocok' : 'Belum ada data ekstrakurikuler'}
-                      </td>
-                    </tr>
+                {/* Badge Status */}
+                {selectedSemesterId && (
+                  isSemesterActive ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                      style={{ background: '#d4f0dd', color: '#1a7a3a', border: '1px solid #86efac' }}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                      Aktif - Bisa Edit
+                    </span>
                   ) : (
-                    currentEkskul.map((ekskul, index) => (
-                      <tr
-                        key={ekskul.id_ekskul}
-                        className="transition-colors"
-                        style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                        onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
-                      >
-                        <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{startIndex + index + 1}</td>
-                        <td className="px-5 py-3.5 font-semibold text-gray-800">{ekskul.nama_ekskul}</td>
-                        <td className="px-5 py-3.5 text-gray-700">
-                          {ekskul.nama_pembina ? ekskul.nama_pembina : (
-                            <span className="text-gray-400 italic text-xs">Belum ditetapkan</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
-                            style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-                            {ekskul.jumlah_siswa || 0} siswa
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => handleLihatPeserta(ekskul)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                              style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = '#bae6fd')}
-                              onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}
-                            >
-                              <Users size={13} /> Lihat Siswa
-                            </button>
-                            {selectedTahunAjaranAktif && (
-                              <>
-                                <button
-                                  onClick={() => handleEdit(ekskul)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                  style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                  onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
-                                  onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
-                                >
-                                  <Pencil size={13} /> Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(ekskul.id_ekskul, ekskul.nama_ekskul)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                  style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
-                                  onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                                  onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
-                                >
-                                  <Trash2 size={13} /> Hapus
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                      style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
+                      <Lock size={12} />
+                      Non-Aktif - Read Only
+                    </span>
+                  )
+                )}
+              </div>
             </div>
 
-            {filteredEkskul.length > 0 && (
-              <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
-                  Halaman {currentPage} dari {totalPages}
-                </span>
-                <div className="flex items-center gap-1">{renderPagination()}</div>
+            {selectedSemesterId === null ? (
+              <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
               </div>
+            ) : (
+              <>
+                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      {isSemesterActive && (
+                        <button
+                          onClick={() => setShowTambah(true)}
+                          className={btnPrimary.base}
+                          style={btnPrimary.style}
+                          onMouseEnter={btnPrimary.hover}
+                          onMouseLeave={btnPrimary.leave}
+                        >
+                          <Plus size={16} /> Tambah Ekstrakurikuler
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                          className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
+                      </div>
+
+                      <div className="relative min-w-[200px] sm:min-w-[220px]">
+                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                          <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Cari ekskul / pembina..."
+                          value={searchQuery}
+                          onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                          className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                            className="absolute inset-y-0 right-2 flex items-center"
+                            style={{ color: '#c95b08' }}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
+                    Menampilkan {filteredEkskul.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredEkskul.length)} dari {filteredEkskul.length} data
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-sm border-collapse">
+                    <thead>
+                      <tr style={TH_GRAD}>
+                        {['No.', 'Nama Ekstrakurikuler', 'Pembina', 'Jumlah Siswa', 'Aksi'].map(h => (
+                          <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                              Memuat data...
+                            </div>
+                          </td>
+                        </tr>
+                      ) : currentEkskul.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
+                            {searchQuery ? 'Tidak ada data yang cocok' : 'Belum ada data ekstrakurikuler'}
+                          </td>
+                        </tr>
+                      ) : (
+                        currentEkskul.map((ekskul, index) => (
+                          <tr
+                            key={ekskul.id_ekskul}
+                            className="transition-colors"
+                            style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                            onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
+                          >
+                            <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{startIndex + index + 1}</td>
+                            <td className="px-5 py-3.5 font-semibold text-gray-800">{ekskul.nama_ekskul}</td>
+                            <td className="px-5 py-3.5 text-gray-700">
+                              {ekskul.nama_pembina ? ekskul.nama_pembina : (
+                                <span className="text-gray-400 italic text-xs">Belum ditetapkan</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
+                                style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                                {ekskul.jumlah_siswa || 0} siswa
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                              <div className="flex justify-center gap-2">
+                                <button
+                                  onClick={() => handleLihatPeserta(ekskul)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                  style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', color: '#0369a1' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#bae6fd')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = '#e0f2fe')}
+                                >
+                                  <Users size={13} /> Lihat Siswa
+                                </button>
+                                {isSemesterActive && (
+                                  <>
+                                    <button
+                                      onClick={() => handleEdit(ekskul)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                      style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                    >
+                                      <Pencil size={13} /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(ekskul.id_ekskul, ekskul.nama_ekskul)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                      style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                    >
+                                      <Trash2 size={13} /> Hapus
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {filteredEkskul.length > 0 && (
+                  <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
+                    <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
+                      Halaman {currentPage} dari {totalPages}
+                    </span>
+                    <div className="flex items-center gap-1">{renderPagination()}</div>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

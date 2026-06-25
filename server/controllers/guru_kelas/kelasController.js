@@ -1,6 +1,9 @@
 /**
  * Nama File: kelasController.js
  * Fungsi: Mengelola data kelas dan siswa untuk guru kelas
+ * 
+ * ✅ FIXED: Gunakan id_tahun_ajaran_induk untuk query guru_kelas
+ *           Gunakan semester_id untuk query nilai_rapor & pembelajaran
  */
 
 const db = require('../../config/db');
@@ -12,9 +15,10 @@ const db = require('../../config/db');
 const getKelasSaya = async (req, res) => {
     try {
         const userId = req.user.id;
-        const semesterId = req.idSemesterAktif;
+        // ✅ PENTING: Gunakan id_tahun_ajaran_induk (bukan semester_id)
+        const idInduk = req.idTahunAjaranInduk;
 
-        console.log('📚 [getKelasSaya] userId:', userId, 'semesterId:', semesterId);
+        console.log('📚 [getKelasSaya] userId:', userId, 'idInduk:', idInduk);
 
         const [rows] = await db.execute(
             `SELECT 
@@ -25,12 +29,13 @@ const getKelasSaya = async (req, res) => {
                 ta.semester
              FROM guru_kelas gk
              INNER JOIN kelas k ON gk.kelas_id = k.id_kelas
-             INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+             INNER JOIN tahun_ajaran_induk tai ON gk.tahun_ajaran_id = tai.id_tahun_ajaran_induk
+             LEFT JOIN tahun_ajaran ta ON ta.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk AND ta.status = 'aktif'
              LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
-                AND sk.id_tahun_ajaran_induk = ta.id_tahun_ajaran_induk
+                AND sk.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?
              GROUP BY k.id_kelas, k.nama_kelas, ta.tahun_ajaran, ta.semester`,
-            [userId, semesterId]
+            [userId, idInduk]  // ← Gunakan idInduk (bukan semesterId)
         );
 
         console.log('📚 [getKelasSaya] Result:', rows);
@@ -68,23 +73,29 @@ const getKelasSaya = async (req, res) => {
 const getSiswaByKelas = async (req, res) => {
     try {
         const userId = req.user.id;
+        // ✅ PENTING: Gunakan id_tahun_ajaran_induk (bukan semester_id)
+        const idInduk = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
 
         console.log('🔍 [getSiswaByKelas] START');
+        console.log('🔍 userId:', userId);
+        console.log('🔍 idInduk:', idInduk);
+        console.log('🔍 semesterId:', semesterId);
 
-        if (!semesterId) {
+        if (!idInduk) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'ID Semester aktif tidak ditemukan' 
+                message: 'ID Tahun Ajaran Induk tidak ditemukan' 
             });
         }
 
+        // ✅ Query guru_kelas dengan id_induk
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas
              FROM guru_kelas gk
              JOIN kelas k ON gk.kelas_id = k.id_kelas
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`, 
-            [userId, semesterId]
+            [userId, idInduk]  // ← Gunakan idInduk (bukan semesterId)
         );
 
         if (guruKelasRows.length === 0) {
@@ -96,13 +107,7 @@ const getSiswaByKelas = async (req, res) => {
 
         const { kelas_id, nama_kelas } = guruKelasRows[0];
 
-        const [taInfo] = await db.execute(
-            `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-            [semesterId]
-        );
-
-        const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
-
+        // ✅ Ambil siswa dengan id_induk
         const [siswaRows] = await db.execute(
             `SELECT
                 s.id_siswa AS id,
@@ -112,7 +117,7 @@ const getSiswaByKelas = async (req, res) => {
             JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
             ORDER BY s.nama_lengkap`,
-            [kelas_id, idTahunAjaranInduk]
+            [kelas_id, idInduk]  // ← idInduk sudah benar
         );
 
         res.json({
@@ -136,20 +141,21 @@ const getSiswaByKelas = async (req, res) => {
 const getProgressPenilaian = async (req, res) => {
     try {
         const userId = req.user.id;
+        // ✅ PENTING: Pisahkan id_induk dan semester_id
+        const idInduk = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;
 
         console.log('═══════════════════════════════════════');
         console.log('📊 [getProgressPenilaian] START');
         console.log('📊 userId:', userId);
+        console.log('📊 idInduk:', idInduk);
         console.log('📊 semesterId:', semesterId);
-        console.log('📊 tahunAjaranIndukId:', tahunAjaranIndukId);
 
-        // 1. Ambil kelas guru
+        // 1. ✅ Ambil kelas guru dengan id_induk
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id FROM guru_kelas gk 
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-            [userId, semesterId]
+            [userId, idInduk]  // ← Gunakan idInduk (bukan semesterId)
         );
 
         console.log('📊 guruKelasRows:', guruKelasRows);
@@ -170,7 +176,7 @@ const getProgressPenilaian = async (req, res) => {
         const semesterAktif = semesterInfo[0]?.semester || 'Ganjil';
         console.log('📊 semesterAktif:', semesterAktif);
 
-        // 3. ✅ Query SIMPLE - Ambil semua mapel di kelas ini
+        // 3. ✅ Query - Campuran id_induk dan semester_id
         const [progressRows] = await db.execute(
             `SELECT 
                 mp.id_mata_pelajaran,
@@ -181,7 +187,7 @@ const getProgressPenilaian = async (req, res) => {
                  WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?) AS total_siswa,
                 (SELECT COUNT(*) FROM nilai_rapor nr 
                  WHERE nr.mapel_id = mp.id_mata_pelajaran 
-                 AND nr.tahun_ajaran_id = ? 
+                 AND nr.tahun_ajaran_id = ?          -- ← semester_id (bukan id_induk!)
                  AND nr.semester = ?
                  AND nr.nilai_rapor IS NOT NULL
                  AND nr.siswa_id IN (
@@ -191,14 +197,14 @@ const getProgressPenilaian = async (req, res) => {
              FROM mata_pelajaran mp
              WHERE mp.id_mata_pelajaran IN (
                  SELECT p.mapel_id FROM pembelajaran p 
-                 WHERE p.kelas_id = ? AND p.tahun_ajaran_id = ?
+                 WHERE p.kelas_id = ? AND p.tahun_ajaran_id = ?  -- ← semester_id (bukan id_induk!)
              )
              ORDER BY mp.id_mata_pelajaran ASC`,
             [
-                kelasId, tahunAjaranIndukId,           // total_siswa
-                semesterId, semesterAktif,             // sudah_dinilai (semester)
-                kelasId, tahunAjaranIndukId,           // sudah_dinilai (siswa filter)
-                kelasId, semesterId                    // WHERE IN
+                kelasId, idInduk,                    // total_siswa (id_induk)
+                semesterId, semesterAktif,           // sudah_dinilai (semester_id)
+                kelasId, idInduk,                    // sudah_dinilai filter (id_induk)
+                kelasId, semesterId                  // WHERE IN (semester_id)
             ]
         );
 
