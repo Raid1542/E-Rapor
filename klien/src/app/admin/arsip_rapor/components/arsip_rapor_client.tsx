@@ -280,31 +280,32 @@ export default function ArsipRaporPage() {
     };
 
     const fetchKelas = async () => {
-        if (!selectedTA || !selectedSemester) return;
+    if (!selectedTA || !selectedSemester) return;  // ✅ Gunakan selectedTA (ID induk)
 
-        setLoadingKelas(true);
-        setKelasList([]);
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+    setLoadingKelas(true);
+    setKelasList([]);
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
-            const res = await fetch(
-                `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${selectedTA}&semester=${selectedSemester}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            const data = await res.json();
+        // ✅ GUNAKAN selectedTA (ID induk = 1), bukan selectedSemesterId
+        const res = await fetch(
+            `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${selectedTA}&semester=${selectedSemester}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
 
-            if (res.ok && data.success) {
-                setKelasList(data.data || []);
-            } else {
-                setKelasList([]);
-            }
-        } catch {
+        if (res.ok && data.success) {
+            setKelasList(data.data || []);
+        } else {
             setKelasList([]);
-        } finally {
-            setLoadingKelas(false);
         }
-    };
+    } catch {
+        setKelasList([]);
+    } finally {
+        setLoadingKelas(false);
+    }
+};
 
     const fetchSiswa = async () => {
         if (!selectedTA || !selectedKelas || !selectedSemester) return;

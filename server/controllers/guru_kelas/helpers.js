@@ -73,9 +73,9 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
         }
 
         const [gkRows] = await db.execute(
-            `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
-            [userId, semesterId]
-        );
+    `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
+    [userId, tahunAjaranIndukId]  // ← tahunAjaranIndukId = 1
+);
         if (gkRows.length === 0) throw new Error('Kelas aktif tidak ditemukan');
         const { kelas_id } = gkRows[0];
 
@@ -185,11 +185,11 @@ exports.getRekapanData = async (userId, req) => {
     if (!tahunAjaranIndukId || !semesterId || !semester) throw new Error('Data tahun ajaran atau semester tidak ditemukan');
 
     const [kelasRows] = await db.query(
-        `SELECT k.id_kelas FROM kelas k 
-            JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-            WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-        [userId, semesterId]
-    );
+    `SELECT k.id_kelas FROM kelas k 
+        JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
+        WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
+    [userId, tahunAjaranIndukId]  // ← tahunAjaranIndukId
+);
     if (kelasRows.length === 0) throw new Error('Kelas tidak ditemukan');
     const kelasId = kelasRows[0].id_kelas;
 

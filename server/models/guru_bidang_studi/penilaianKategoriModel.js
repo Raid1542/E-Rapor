@@ -2,13 +2,12 @@
  * Nama File: penilaianKategoriModel.js
  * Fungsi: Model untuk mengelola kategori nilai akademik
  * UPDATE: 
- *   - Fix bug kelas_id, pastikan semua query per kelas spesifik
- *   - ✅ FIX: Tambah status_pts, status_pas di getTahunAjaranAktif
+ *   - ✅ FIX: cekCoverage0to100 filter by jenis_penilaian
+ *   - ✅ FIX: Return semua gaps (bukan hanya yang pertama)
  */
 
 const db = require('../../config/db');
 
-// ✅ FIXED: Tambah status_pts dan status_pas
 const getTahunAjaranAktif = async () => {
     const [taRows] = await db.execute(`
         SELECT 
@@ -33,7 +32,6 @@ const validateGuruMapel = async (userId, mapelId, semesterId) => {
     return rows.length > 0;
 };
 
-// ✅ FIX: Filter berdasarkan jenis penilaian aktif
 const getKategoriByMapel = async (mapelId, semesterId, kelasId, jenisPenilaian = null) => {
     let query = `
         SELECT id_config AS id, min_nilai, max_nilai, deskripsi, urutan, kelas_id, jenis_penilaian
@@ -45,7 +43,6 @@ const getKategoriByMapel = async (mapelId, semesterId, kelasId, jenisPenilaian =
     
     const params = [mapelId, semesterId, kelasId];
     
-    // ✅ TAMBAH filter jenis_penilaian jika ada
     if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
         query += ` AND jenis_penilaian = ?`;
         params.push(jenisPenilaian);
@@ -67,7 +64,6 @@ const getKategoriById = async (id) => {
     return rows.length > 0 ? rows[0] : null;
 };
 
-// ✅ FIX: Hitung urutan hanya untuk kelas spesifik
 const getLastUrutan = async (mapelId, semesterId, kelasId) => {
     const query = `
         SELECT IFNULL(MAX(urutan), 0) as max_urutan
@@ -81,7 +77,6 @@ const getLastUrutan = async (mapelId, semesterId, kelasId) => {
     return rows[0]?.max_urutan || 0;
 };
 
-// ✅ FIXED: Tambah parameter jenis_penilaian
 const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId, excludeId = null, jenisPenilaian = null) => {
     let query = `
         SELECT id_config, min_nilai, max_nilai, deskripsi
@@ -93,7 +88,6 @@ const cekRangeOverlap = async (mapelId, semesterId, minNilai, maxNilai, kelasId,
     `;
     const params = [mapelId, semesterId, kelasId, minNilai, maxNilai];
     
-    // ✅ TAMBAH filter jenis_penilaian
     if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
         query += ` AND jenis_penilaian = ?`;
         params.push(jenisPenilaian);
@@ -112,44 +106,77 @@ const formatOverlapInfo = (overlaps) => {
     return overlaps.map(o => `${o.deskripsi} (${o.min_nilai}-${o.max_nilai})`).join(', ');
 };
 
-// ✅ FIX: Hitung coverage hanya untuk kelas spesifik
-const cekCoverage0to100 = async (mapelId, semesterId, kelasId) => {
-    const query = `
+// ✅ FIXED: Filter by jenis_penilaian + Return SEMUA gaps
+const cekCoverage0to100 = async (mapelId, semesterId, kelasId, jenisPenilaian = null) => {
+    let query = `
         SELECT min_nilai, max_nilai 
         FROM konfigurasi_nilai_rapor 
         WHERE mapel_id = ? 
         AND tahun_ajaran_id = ?
         AND kelas_id = ?
-        ORDER BY min_nilai ASC
     `;
     
-    const [kategoriRows] = await db.execute(query, [mapelId, semesterId, kelasId]);
+    const params = [mapelId, semesterId, kelasId];
     
+    // ✅ TAMBAH filter jenis_penilaian
+    if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
+        query += ` AND jenis_penilaian = ?`;
+        params.push(jenisPenilaian);
+    }
+    
+    query += ` ORDER BY min_nilai ASC`;
+    
+    const [kategoriRows] = await db.execute(query, params);
+    
+    console.log(`🔍 [Coverage] Mapel: ${mapelId}, Kelas: ${kelasId}, Jenis: ${jenisPenilaian}, Kategori: ${kategoriRows.length}`);
+    
+    const gaps = [];
+    
+    // Jika tidak ada kategori sama sekali
     if (kategoriRows.length === 0) {
-        return { covered: false, gap: '0-100' };
+        return { 
+            covered: false, 
+            gaps: [{ aspek: 'Akademik', gap: '0-100' }] 
+        };
     }
     
+    // ✅ Cek gap dari 0 ke min_nilai pertama
     if (kategoriRows[0].min_nilai > 0) {
-        return { covered: false, gap: `0-${kategoriRows[0].min_nilai - 1}` };
+        gaps.push({ 
+            aspek: 'Akademik', 
+            gap: `0-${kategoriRows[0].min_nilai - 1}` 
+        });
     }
     
+    // ✅ Cek gap antar kategori (kumpulkan SEMUA gap)
     for (let i = 0; i < kategoriRows.length - 1; i++) {
         const currentMax = kategoriRows[i].max_nilai;
         const nextMin = kategoriRows[i + 1].min_nilai;
         if (nextMin > currentMax + 1) {
-            return { covered: false, gap: `${currentMax + 1}-${nextMin - 1}` };
+            gaps.push({ 
+                aspek: 'Akademik', 
+                gap: `${currentMax + 1}-${nextMin - 1}` 
+            });
         }
     }
     
+    // ✅ Cek gap dari max_nilai terakhir ke 100
     const lastMax = kategoriRows[kategoriRows.length - 1].max_nilai;
     if (lastMax < 100) {
-        return { covered: false, gap: `${lastMax + 1}-100` };
+        gaps.push({ 
+            aspek: 'Akademik', 
+            gap: `${lastMax + 1}-100` 
+        });
     }
     
-    return { covered: true };
+    console.log(`🔍 [Coverage] Gaps ditemukan: ${gaps.length}`, gaps);
+    
+    return { 
+        covered: gaps.length === 0, 
+        gaps: gaps  // ✅ Return array gaps
+    };
 };
 
-// ✅ FIXED: Simpan dengan jenis_penilaian
 const createKategori = async (data) => {
     const { mapel_id, semester_id, min_nilai, max_nilai, deskripsi, kelas_id, jenis_penilaian } = data;
     
@@ -187,7 +214,6 @@ const deleteKategori = async (id) => {
     return result.affectedRows;
 };
 
-// ✅ FIX: Cek nilai siswa dengan kelas_id spesifik
 const cekNilaiSiswaInRange = async (mapelId, semesterId, minNilai, maxNilai, kelasId) => {
     const query = `
         SELECT COUNT(*) as total 

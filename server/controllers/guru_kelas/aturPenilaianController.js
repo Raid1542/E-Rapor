@@ -24,9 +24,9 @@ const ASPEK_MUTABAAH_ID = 5;
 // ✅ HELPER: Ambil jenis penilaian aktif dari request (dari middleware)
 // ═════════════════════════════════════════════════════════════════════════════
 const getJenisPenilaian = (req) => {
-    return req.jenis_penilaian 
-        || req.query?.jenis 
-        || req.body?.jenis 
+    return req.jenis_penilaian
+        || req.query?.jenis
+        || req.body?.jenis
         || 'PTS';
 };
 
@@ -284,11 +284,11 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
         // ✅ CEK OVERLAP DENGAN JENIS YANG SAMA
         const overlaps = await model.cekOverlapAkademik(mapel_id, taAktif.id_tahun_ajaran, kelasId, minNilai, maxNilai, jenis);
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => `${o.deskripsi} (${o.min_nilai}-${o.max_nilai})`).join(', ');
+            const overlap = overlaps[0];
             return res.status(400).json({
                 success: false,
                 code: 'RANGE_OVERLAP',
-                message: `Range nilai ${minNilai}-${maxNilai} tumpang tindih dengan: ${overlapInfo}`
+                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${Math.floor(overlap.min_nilai)}-${Math.floor(overlap.max_nilai)}). Silakan gunakan range lain atau edit kategori tersebut.`
             });
         }
 
@@ -372,11 +372,11 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
         // ✅ CEK OVERLAP DENGAN JENIS YANG SAMA
         const overlaps = await model.cekOverlapAkademik(existing.mapel_id, taAktif.id_tahun_ajaran, kelasId, minNilai, maxNilai, jenis, id);
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => `${o.deskripsi} (${o.min_nilai}-${o.max_nilai})`).join(', ');
+            const overlap = overlaps[0];
             return res.status(400).json({
                 success: false,
                 code: 'RANGE_OVERLAP',
-                message: `Range nilai ${minNilai}-${maxNilai} tumpang tindih dengan: ${overlapInfo}`
+                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${Math.floor(overlap.min_nilai)}-${Math.floor(overlap.max_nilai)}). Silakan gunakan range lain atau edit kategori tersebut.`
             });
         }
 
@@ -468,7 +468,7 @@ exports.getKategoriNilaiKokurikuler = async (req, res) => {
 
         // ✅ Hitung coverage hanya untuk aspek yang relevan
         const coverage = { covered: true, gaps: [] };
-        const relevantAspek = jenis === 'PTS' 
+        const relevantAspek = jenis === 'PTS'
             ? aspekRows.filter(a => a.id_aspek_kokurikuler === ASPEK_MUTABAAH_ID)
             : aspekRows;
 
@@ -612,11 +612,11 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
         // ✅ CEK OVERLAP DENGAN JENIS YANG SAMA
         const overlaps = await model.cekOverlapKokurikuler(id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, jenis);
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => `${o.grade} (${o.rentang_min}-${o.rentang_max})`).join(', ');
+            const overlap = overlaps[0];
             return res.status(400).json({
                 success: false,
                 code: 'RANGE_OVERLAP',
-                message: `Range nilai ${minNilai}-${maxNilai} tumpang tindih dengan grade: ${overlapInfo}`
+                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh grade "${overlap.grade}". Silakan gunakan range lain atau edit grade tersebut.`
             });
         }
 
@@ -758,11 +758,11 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
 
         const overlaps = await model.cekOverlapKokurikuler(existing.id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, jenis, id);
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => `${o.grade} (${o.rentang_min}-${o.rentang_max})`).join(', ');
+            const overlap = overlaps[0];
             return res.status(400).json({
                 success: false,
                 code: 'RANGE_OVERLAP',
-                message: `Range nilai ${minNilai}-${maxNilai} tumpang tindih dengan grade: ${overlapInfo}`
+                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh grade "${overlap.grade}". Silakan gunakan range lain atau edit grade tersebut.`
             });
         }
 
@@ -873,9 +873,9 @@ exports.getBobotAkademikByMapel = async (req, res) => {
                 bobot: k.id_komponen === ptsKomponen?.id_komponen ? 100 : 0,
                 locked: true
             }));
-            return res.json({ 
-                success: true, 
-                data: result, 
+            return res.json({
+                success: true,
+                data: result,
                 is_locked: true,
                 jenis_penilaian: 'PTS'
             });
@@ -894,9 +894,9 @@ exports.getBobotAkademikByMapel = async (req, res) => {
             bobot: bobotMap[k.id_komponen] || 0
         }));
 
-        res.json({ 
-            success: true, 
-            data: result, 
+        res.json({
+            success: true,
+            data: result,
             is_locked: false,
             jenis_penilaian: jenis
         });
@@ -979,9 +979,9 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
             warning = ' Peringatan: Gagal menghitung ulang nilai rapor otomatis. Silakan input ulang nilai untuk memperbarui.';
         }
 
-        res.json({ 
-            success: true, 
-            message: `Bobot penilaian ${jenis} berhasil disimpan` + warning 
+        res.json({
+            success: true,
+            message: `Bobot penilaian ${jenis} berhasil disimpan` + warning
         });
     } catch (err) {
         console.error('Error updateBobotAkademikByMapel:', err);
@@ -1083,11 +1083,11 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
 
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai);
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => `${o.deskripsi} (${o.rentang_min}-${o.rentang_max})`).join(', ');
+            const overlap = overlaps[0];
             return res.status(400).json({
                 success: false,
                 code: 'RANGE_OVERLAP',
-                message: `Range nilai ${minNilai}-${maxNilai} tumpang tindih dengan: ${overlapInfo}`
+                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${Math.floor(overlap.rentang_min)}-${Math.floor(overlap.rentang_max)}). Silakan gunakan range lain atau edit kategori tersebut.`
             });
         }
 
@@ -1170,11 +1170,11 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
 
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, id);
         if (overlaps.length > 0) {
-            const overlapInfo = overlaps.map(o => `${o.deskripsi} (${o.rentang_min}-${o.rentang_max})`).join(', ');
+            const overlap = overlaps[0];
             return res.status(400).json({
                 success: false,
                 code: 'RANGE_OVERLAP',
-                message: `Range nilai ${minNilai}-${maxNilai} tumpang tindih dengan: ${overlapInfo}`
+                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${Math.floor(overlap.rentang_min)}-${Math.floor(overlap.rentang_max)}). Silakan gunakan range lain atau edit kategori tersebut.`
             });
         }
 

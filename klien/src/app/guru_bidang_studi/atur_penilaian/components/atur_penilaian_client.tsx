@@ -6,6 +6,7 @@
  *   - Tambah banner status periode (belum aktif/selesai)
  *   - Hapus banner info jenis penilaian aktif (sudah ada di header global)
  *   - Pertahankan state jenisPenilaianAktif untuk logika validasi
+ *   - ✅ CoverageWarning lebih prominent dan informatif
  * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage
  */
 
@@ -135,25 +136,49 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     );
 };
 
-// ====== COVERAGE WARNING BANNER ======
+// ====== COVERAGE WARNING BANNER (UPDATED - LEBIH PROMINENT) ======
 const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     if (!coverage || coverage.covered) return null;
     const gaps = coverage.gaps || (coverage.gap ? [{ aspek: 'Akademik', gap: coverage.gap }] : []);
     if (gaps.length === 0) return null;
+
     return (
-        <div className="mb-4 p-3 rounded-xl flex items-start gap-2"
-            style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
-            <AlertTriangle size={18} className="text-yellow-600 mt-0.5 flex-shrink-0" />
-            <div className="text-xs" style={{ color: '#78350f' }}>
-                <strong>Peringatan:</strong> Range nilai 0-100 belum lengkap.
+        <div className="mb-5 p-4 rounded-xl flex items-start gap-3"
+            style={{ 
+                background: 'linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%)', 
+                border: '2px solid #fcd34d',
+                boxShadow: '0 2px 8px rgba(252,211,77,0.2)'
+            }}>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: '#fde68a' }}>
+                <AlertTriangle size={20} className="text-yellow-700" />
+            </div>
+            <div className="flex-1">
+                <p className="text-sm font-bold mb-2" style={{ color: '#78350f' }}>
+                    ⚠️ Peringatan: Range Nilai 0-100 Belum Lengkap
+                </p>
                 {gaps.length === 1 ? (
-                    <> Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <strong>{gaps[0].gap}</strong>.</>
+                    <p className="text-xs" style={{ color: '#92400e' }}>
+                        Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <strong className="px-2 py-0.5 rounded bg-yellow-200">{gaps[0].gap}</strong>. 
+                        Silakan tambahkan kategori untuk menutup gap ini.
+                    </p>
                 ) : (
-                    <ul className="mt-1 ml-4 list-disc">
-                        {gaps.map((g, i) => (
-                            <li key={i}><strong>{g.aspek}:</strong> gap pada rentang <strong>{g.gap}</strong></li>
-                        ))}
-                    </ul>
+                    <div className="text-xs" style={{ color: '#92400e' }}>
+                        <p className="mb-2">Ditemukan {gaps.length} gap yang perlu ditutup:</p>
+                        <ul className="space-y-1 ml-4">
+                            {gaps.map((g, i) => (
+                                <li key={i} className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-600"></span>
+                                    <span>
+                                        <strong>{g.aspek}:</strong> gap pada rentang <strong className="px-1.5 py-0.5 rounded bg-yellow-200">{g.gap}</strong>
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                        <p className="mt-2 text-xs italic">
+                            💡 Tambahkan kategori nilai untuk menutup gap di atas agar penilaian siswa dapat diproses dengan benar.
+                        </p>
+                    </div>
                 )}
             </div>
         </div>

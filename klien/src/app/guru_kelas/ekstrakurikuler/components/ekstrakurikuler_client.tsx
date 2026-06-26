@@ -4,6 +4,7 @@
  * UPDATE: 
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika PAS belum aktif atau sudah selesai
+ *   - Tambah: Popup konfirmasi dengan template yang sama seperti kokurikuler
  */
 
 'use client';
@@ -33,13 +34,12 @@ const parseBackendError = async (res: Response): Promise<{ message: string; code
 };
 
 // ====== TYPES ======
-type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
+type ModalType = 'success' | 'error' | 'warning' | 'network';
 
 interface ModalConfig {
     type: ModalType;
     title: string;
     message: string;
-    onConfirm?: () => void;
 }
 
 interface EkskulItem {
@@ -80,32 +80,21 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
     warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
     network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
-    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
-    const isConfirm = modal.type === 'confirm';
     return (
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
-                {!isConfirm && (
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                )}
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
                 <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ap-pulse`}>{s.icon}</div>
                 <div className="text-center">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                {isConfirm ? (
-                    <div className="flex gap-3 w-full">
-                        <button onClick={onClose} className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}>Batal</button>
-                        <button onClick={() => { modal.onConfirm?.(); onClose(); }} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm">Lanjutkan</button>
-                    </div>
-                ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
-                )}
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
             </div>
         </div>
     );
@@ -124,12 +113,12 @@ const btnPrimary = {
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
+    <button onClick={onClick} disabled={disabled}
+        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+        onMouseEnter={e => { if (!disabled) (e.currentTarget.style.background = '#fff0e5'); }}
+        onMouseLeave={e => { if (!disabled) (e.currentTarget.style.background = '#fff'); }}
     >{children}</button>
 );
 
@@ -168,6 +157,10 @@ export default function EkskulClient() {
     ]);
     const [isSaving, setIsSaving] = useState(false);
 
+    // ✅ STATE KONFIRMASI (sama seperti kokurikuler)
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
+
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
@@ -205,7 +198,6 @@ export default function EkskulClient() {
                         setDaftarEkskul(data.daftar_ekskul || []);
                         setKelasNama(data.kelas || 'Kelas Anda');
 
-                        // ✅ Cek status PAS dari response (jika backend mengirim)
                         const pasStatus = data.pasStatus;
                         if (pasStatus === 'selesai') {
                             setIsReadOnly(true);
@@ -237,7 +229,6 @@ export default function EkskulClient() {
                     if (errData.code === 'NOT_ASSIGNED') {
                         setIsNotAssigned(true);
                     } else if (errData.code === 'PERIOD_NOT_OPEN') {
-                        // Fallback jika backend masih block GET request
                         setIsReadOnly(true);
                         setReadOnlyReason('not_open');
                         setSiswaList([]);
@@ -321,7 +312,6 @@ export default function EkskulClient() {
 
         setEditSiswa(siswa);
 
-        // Initialize edit data dengan data yang sudah ada
         const initialData = [
             { ekskul_id: 0, deskripsi: '' },
             { ekskul_id: 0, deskripsi: '' },
@@ -347,18 +337,21 @@ export default function EkskulClient() {
         setEditData(newData);
     };
 
-    const handleSave = async () => {
+    // ✅ Validasi + buka modal konfirmasi (sama seperti kokurikuler)
+    const openConfirmSave = () => {
         if (!editSiswa) return;
 
-        // Validasi: cek apakah ada perubahan
         const validEkskul = editData.filter(e => e.ekskul_id > 0);
 
         if (validEkskul.length === 0 && editSiswa.ekskul.length === 0) {
-            showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+            showModal({
+                type: 'warning',
+                title: 'Tidak Ada Perubahan',
+                message: 'Tidak ada data yang diubah.'
+            });
             return;
         }
 
-        // Validasi deskripsi tidak kosong
         for (let i = 0; i < validEkskul.length; i++) {
             if (!validEkskul[i].deskripsi.trim()) {
                 showModal({
@@ -370,7 +363,17 @@ export default function EkskulClient() {
             }
         }
 
+        // ✅ Set nama siswa untuk ditampilkan di modal konfirmasi
+        setConfirmSiswaNama(editSiswa.nama);
+        setShowConfirmModal(true);
+    };
+
+    // ✅ Actual save (dipanggil dari modal konfirmasi)
+    const executeSave = async () => {
+        if (!editSiswa) return;
+
         setIsSaving(true);
+        const validEkskul = editData.filter(e => e.ekskul_id > 0);
 
         try {
             const token = localStorage.getItem('token');
@@ -389,7 +392,6 @@ export default function EkskulClient() {
             });
 
             if (res.ok) {
-                // Update local state
                 const updatedSiswa = siswaList.map(s => {
                     if (s.id === editSiswa.id) {
                         return {
@@ -407,13 +409,25 @@ export default function EkskulClient() {
 
                 setSiswaList(updatedSiswa);
                 setFilteredSiswa(updatedSiswa);
+
+                setShowConfirmModal(false);
                 closeEdit();
-                showModal({ type: 'success', title: 'Berhasil!', message: 'Data ekstrakurikuler berhasil disimpan.' });
+                setConfirmSiswaNama('');
+
+                setTimeout(() => {
+                    showModal({
+                        type: 'success',
+                        title: 'Berhasil!',
+                        message: 'Data ekstrakurikuler berhasil disimpan.'
+                    });
+                }, 250);
             } else {
                 const errData = await parseBackendError(res);
+                setShowConfirmModal(false);
                 showModal({ type: 'error', title: 'Gagal Menyimpan', message: errData.message });
             }
         } catch (err: any) {
+            setShowConfirmModal(false);
             showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Tidak dapat terhubung ke server.' });
         } finally {
             setIsSaving(false);
@@ -548,7 +562,6 @@ export default function EkskulClient() {
                             Kelas: <span style={{ color: '#e8690a' }}>{kelasNama}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            {/* Tampilkan per halaman */}
                             <div className="flex items-center gap-2 whitespace-nowrap">
                                 <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
                                 <select value={itemsPerPage}
@@ -562,7 +575,6 @@ export default function EkskulClient() {
                                 <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                             </div>
 
-                            {/* Pencarian */}
                             <div className="relative min-w-[200px] sm:min-w-[220px]">
                                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                     <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
@@ -715,7 +727,6 @@ export default function EkskulClient() {
                         className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
 
-                        {/* Modal header */}
                         <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
                             <h2 className="text-base font-bold text-white">Detail Ekstrakurikuler</h2>
                             <button onClick={closeDetail}
@@ -726,13 +737,11 @@ export default function EkskulClient() {
                         </div>
 
                         <div className="p-6">
-                            {/* Info siswa */}
                             <div className="flex flex-col items-center mb-6">
                                 <h3 className="text-lg font-bold text-gray-800">{selectedSiswa.nama}</h3>
                                 <p className="text-sm text-gray-500">NIS: {selectedSiswa.nis} | NISN: {selectedSiswa.nisn}</p>
                             </div>
 
-                            {/* Daftar ekskul */}
                             <div className="space-y-3">
                                 <h4 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Ekstrakurikuler yang Diikuti:</h4>
                                 {selectedSiswa.ekskul.length === 0 ? (
@@ -771,7 +780,6 @@ export default function EkskulClient() {
                         className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
 
-                        {/* Modal header */}
                         <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
                             <h2 className="text-base font-bold text-white">Edit Ekstrakurikuler</h2>
                             <button onClick={closeEdit}
@@ -782,13 +790,11 @@ export default function EkskulClient() {
                         </div>
 
                         <div className="p-6">
-                            {/* Info siswa */}
                             <div className="mb-6 p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
                                 <p className="text-sm font-bold text-gray-800">{editSiswa.nama}</p>
                                 <p className="text-xs text-gray-500">NIS: {editSiswa.nis} | NISN: {editSiswa.nisn}</p>
                             </div>
 
-                            {/* Form ekskul */}
                             <div className="space-y-4">
                                 <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Pilih Ekstrakurikuler (Maksimal 3):</p>
 
@@ -803,7 +809,6 @@ export default function EkskulClient() {
                                         </div>
 
                                         <div className="space-y-3">
-                                            {/* Dropdown ekskul */}
                                             <div>
                                                 <label className="block text-xs font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
                                                     Pilih Ekstrakurikuler
@@ -822,7 +827,6 @@ export default function EkskulClient() {
                                                 </select>
                                             </div>
 
-                                            {/* Textarea deskripsi */}
                                             <div>
                                                 <label className="block text-xs font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
                                                     Deskripsi Aktivitas <span className="text-red-500">*</span>
@@ -843,7 +847,7 @@ export default function EkskulClient() {
                             <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                                 <BtnSecondary onClick={closeEdit}>Batal</BtnSecondary>
                                 <button
-                                    onClick={handleSave}
+                                    onClick={openConfirmSave}
                                     disabled={isSaving}
                                     className={btnPrimary.base}
                                     style={{ ...btnPrimary.style, opacity: isSaving ? 0.6 : 1 }}
@@ -863,6 +867,58 @@ export default function EkskulClient() {
                                     )}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {/* MODAL KONFIRMASI - TEMPLATE SAMA SEPERTI KOKURIKULER */}
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {showConfirmModal && (
+                <div
+                    className="fixed inset-0 z-[110] flex items-center justify-center p-4 ap-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget && !isSaving) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ap-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi Penyimpanan
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            Apakah Anda yakin ingin menyimpan data ini?
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                disabled={isSaving}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={executeSave}
+                                disabled={isSaving}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    <>Simpan</>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>

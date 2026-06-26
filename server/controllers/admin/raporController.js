@@ -37,6 +37,8 @@ const getKelasByTahunAjaran = async (req, res) => {
     try {
         const { tahun_ajaran_id, semester } = req.query;
 
+        console.log('📥 GET /arsip-rapor/kelas:', { tahun_ajaran_id, semester });
+
         if (!tahun_ajaran_id) {
             return res.status(400).json({
                 success: false,
@@ -44,42 +46,51 @@ const getKelasByTahunAjaran = async (req, res) => {
             });
         }
 
-        if (!semester || !['Ganjil', 'Genap'].includes(semester)) {
+        // ✅ Frontend mengirim id_induk, langsung pakai untuk query kelas
+        const idInduk = parseInt(tahun_ajaran_id, 10);
+
+        if (isNaN(idInduk)) {
             return res.status(400).json({
                 success: false,
-                message: 'semester wajib diisi (Ganjil atau Genap)'
+                message: 'tahun_ajaran_id tidak valid'
             });
         }
 
-        const semesterData = await getIdSemester(tahun_ajaran_id, semester);
-
-        if (!semesterData) {
-            return res.status(404).json({
-                success: false,
-                message: `Semester ${semester} tidak ditemukan untuk tahun ajaran ini`
-            });
-        }
-
+        // ✅ Query kelas dengan id_induk (karena kelas berlaku 1 TA penuh)
         const [rows] = await db.execute(
             `SELECT id_kelas, nama_kelas 
-                FROM kelas 
-                WHERE tahun_ajaran_id = ? 
-                ORDER BY nama_kelas`,
-            [semesterData.id_tahun_ajaran]
+             FROM kelas 
+             WHERE tahun_ajaran_id = ? 
+             ORDER BY nama_kelas`,
+            [idInduk]  // ← LANGSUNG pakai id_induk!
         );
+
+        console.log('📋 Kelas ditemukan:', rows.length);
+
+        // Ambil info semester untuk response (opsional)
+        let semesterInfo = null;
+        if (semester) {
+            const [semRows] = await db.execute(
+                `SELECT id_tahun_ajaran, semester, status, status_pts, status_pas 
+                 FROM tahun_ajaran 
+                 WHERE id_tahun_ajaran_induk = ? AND semester = ?
+                 LIMIT 1`,
+                [idInduk, semester]
+            );
+            semesterInfo = semRows[0] || null;
+        }
 
         res.json({
             success: true,
             data: rows,
-            semester_info: {
-                id: semesterData.id_tahun_ajaran,
-                semester: semesterData.semester,
-                status: semesterData.status
-            }
+            semester_info: semesterInfo
         });
     } catch (err) {
-        console.error('Error get kelas by tahun ajaran:', err);
-        res.status(500).json({ success: false, message: 'Gagal memuat daftar kelas' });
+        console.error('❌ Error get kelas by tahun ajaran:', err);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Gagal memuat daftar kelas: ' + err.message 
+        });
     }
 };
 

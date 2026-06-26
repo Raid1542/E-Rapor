@@ -1,7 +1,7 @@
 /**
  * Nama File: absensiController.js
  * Fungsi: Controller untuk absensi siswa guru kelas
- * UPDATE: Fix undefined parameter error
+ * ✅ FIXED: Gunakan req.infoKelasWali dari middleware
  */
 
 const absensiModel = require('../../models/guru_kelas/absensiModel');
@@ -9,6 +9,8 @@ const db = require('../../config/db');
 
 /**
  * GET /absensi/:jenis/:semester
+ * ✅ FIXED: Pakai req.infoKelasWali dari middleware cekGuruKelasDitugaskan
+ * ✅ FIXED: Typo izin_total → row.izin_total
  */
 exports.getAbsensiSiswa = async (req, res) => {
     try {
@@ -19,7 +21,7 @@ exports.getAbsensiSiswa = async (req, res) => {
             userId,
             jenis,
             semester,
-            user: req.user
+            infoKelasWali: req.infoKelasWali
         });
 
         if (!userId) {
@@ -29,38 +31,32 @@ exports.getAbsensiSiswa = async (req, res) => {
             });
         }
 
-        // 1. Ambil info kelas dan tahun ajaran aktif
-        const [kelasInfo] = await db.execute(
-            `SELECT gk.kelas_id, k.nama_kelas, gk.tahun_ajaran_id, ta.id_tahun_ajaran, ta.id_tahun_ajaran_induk
-             FROM guru_kelas gk
-             JOIN kelas k ON gk.kelas_id = k.id_kelas
-             JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-             WHERE gk.user_id = ? AND ta.status = 'aktif'
-             LIMIT 1`,
-            [userId]
-        );
-
-        console.log('📚 Kelas info raw:', kelasInfo);
-
-        if (kelasInfo.length === 0) {
+        // ✅ PAKAI data dari middleware (sudah ter-set)
+        const infoKelas = req.infoKelasWali;
+        if (!infoKelas || !infoKelas.kelas_id) {
             return res.status(404).json({
                 success: false,
-                message: 'Kelas aktif tidak ditemukan.'
+                message: 'Data kelas tidak ditemukan. Silakan hubungi admin.'
             });
         }
 
-        // ✅ Ambil tahun ajaran ID dengan fallback
-        const tahunAjaranId = kelasInfo[0].id_tahun_ajaran || kelasInfo[0].tahun_ajaran_id;
-        const kelasId = kelasInfo[0].kelas_id;
-        const namaKelas = kelasInfo[0].nama_kelas;
-
-        console.log('📚 Processed:', { tahunAjaranId, kelasId, namaKelas });
+        const kelasId = infoKelas.kelas_id;
+        const namaKelas = infoKelas.nama_kelas;
+        
+        // ✅ Ambil tahun ajaran aktif (semester_id untuk query absensi)
+        const tahunAjaranId = req.idSemesterAktif;  // ← semester_id = 2
+        
+        console.log('📚 Processed:', { 
+            kelasId, 
+            namaKelas, 
+            tahunAjaranId,
+            idInduk: req.idTahunAjaranInduk
+        });
 
         if (!tahunAjaranId || !kelasId) {
             return res.status(500).json({
                 success: false,
-                message: 'Data tahun ajaran atau kelas tidak valid',
-                debug: kelasInfo[0]
+                message: 'Data tahun ajaran atau kelas tidak valid'
             });
         }
 
@@ -82,13 +78,14 @@ exports.getAbsensiSiswa = async (req, res) => {
                     sudah_diinput: row.sudah_diinput === 1
                 };
             } else {
+                // ✅ FIXED: Typo izin_total → row.izin_total
                 return {
                     id_siswa: row.id_siswa,
                     nama: row.nama_lengkap,
                     nis: row.nis || '',
                     nisn: row.nisn || '',
                     sakit: row.sakit_total,
-                    izin: row.izin_total,
+                    izin: row.izin_total,  // ✅ FIXED!
                     alpha: row.alpha_total,
                     sudah_diinput: row.sudah_diinput === 1,
                     pts_sakit: row.sakit_pts,
@@ -123,12 +120,11 @@ exports.getAbsensiSiswa = async (req, res) => {
 
 /**
  * POST /absensi
- * ✅ FIXED: Ambil jenis dari body, bukan dari URL
+ * ✅ FIXED: Ambil jenis dari body, pakai req.infoKelasWali
  */
 exports.upsertAbsensi = async (req, res) => {
     try {
         const userId = req.user?.id;
-        // ✅ FIXED: Ambil jenis dari body atau penilaianContext
         const jenis = req.body.jenis?.toUpperCase() || req.penilaianContext?.jenis;
         const semester = req.body.semester || req.penilaianContext?.semester;
         const { siswa_id, sakit, izin, alpha } = req.body;
@@ -185,25 +181,17 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // Ambil info kelas dan tahun ajaran
-        const [kelasInfo] = await db.execute(
-            `SELECT gk.kelas_id, gk.tahun_ajaran_id, ta.id_tahun_ajaran
-             FROM guru_kelas gk
-             JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-             WHERE gk.user_id = ? AND ta.status = 'aktif'
-             LIMIT 1`,
-            [userId]
-        );
-
-        if (kelasInfo.length === 0) {
+        // ✅ PAKAI data dari middleware
+        const infoKelas = req.infoKelasWali;
+        if (!infoKelas || !infoKelas.kelas_id) {
             return res.status(404).json({
                 success: false,
-                message: 'Kelas aktif tidak ditemukan.'
+                message: 'Data kelas tidak ditemukan. Silakan hubungi admin.'
             });
         }
 
-        const tahunAjaranId = kelasInfo[0].id_tahun_ajaran || kelasInfo[0].tahun_ajaran_id;
-        const kelasId = kelasInfo[0].kelas_id;
+        const kelasId = infoKelas.kelas_id;
+        const tahunAjaranId = req.idSemesterAktif;  // ← semester_id untuk absensi
 
         if (!tahunAjaranId || !kelasId) {
             return res.status(500).json({
@@ -243,10 +231,8 @@ exports.upsertAbsensi = async (req, res) => {
             `SELECT 1 FROM siswa_kelas sk
             WHERE sk.siswa_id = ? 
             AND sk.kelas_id = ?
-            AND sk.id_tahun_ajaran_induk = (
-                SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?
-            )`,
-            [siswa_id, kelasId, tahunAjaranId]
+            AND sk.id_tahun_ajaran_induk = ?`,
+            [siswa_id, kelasId, req.idTahunAjaranInduk]  // ← Pakai id_induk
         );
 
         if (siswaCheck.length === 0) {

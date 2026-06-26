@@ -2,6 +2,7 @@
  * Nama File: RaporGuruKelasClient.tsx
  * Fungsi: Cetak rapor siswa untuk guru kelas menggunakan template Word
  * UPDATE: 
+ *   - ✅ HAPUS: Fitur "Unduh Semua" (hanya unduh per siswa)
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif
  *   - Banner warning status periode
@@ -274,7 +275,7 @@ const RaporGuruKelasClient = () => {
         return selectedJenis === 'PTS' ? tahunAjaranInfo.status_pts : tahunAjaranInfo.status_pas;
     };
 
-    // === Unduh rapor ===
+    // === Unduh rapor (per siswa) ===
     const handleDownloadRapor = async (siswaId: number, namaSiswa: string, nisn: string) => {
         // ✅ CEK READ-ONLY
         if (isReadOnly && readOnlyReason === 'not_open') {
@@ -333,36 +334,6 @@ const RaporGuruKelasClient = () => {
         } finally {
             setDownloadingId(null);
         }
-    };
-
-    // === Download semua rapor ===
-    const handleDownloadAll = async () => {
-        // ✅ CEK READ-ONLY
-        if (isReadOnly && readOnlyReason === 'not_open') {
-            showModal({
-                type: 'warning',
-                title: '⏳ Mode Baca-Saja',
-                message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengunduh rapor siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
-            });
-            return;
-        }
-
-        if (siswaList.length === 0) {
-            showModal({ type: 'warning', title: 'Tidak Ada Data', message: 'Tidak ada siswa untuk diunduh rapornya.' });
-            return;
-        }
-
-        showModal({
-            type: 'warning',
-            title: `Unduh ${siswaList.length} Rapor?`,
-            message: `Akan mengunduh ${siswaList.length} rapor ${selectedJenis}.\n\nFile akan diunduh satu per satu.`,
-            onConfirm: async () => {
-                for (const siswa of siswaList) {
-                    await handleDownloadRapor(siswa.id, siswa.nama, siswa.nisn);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            }
-        });
     };
 
     // === Derived state ===
@@ -518,24 +489,7 @@ const RaporGuruKelasClient = () => {
                                     Total: {siswaList.length} siswa
                                 </span>
                             </div>
-
-                            {/* Tombol Download Semua */}
-                            {siswaList.length > 0 && isDownloadAllowed && (
-                                <button
-                                    onClick={handleDownloadAll}
-                                    disabled={downloadingId !== null}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50"
-                                    style={{
-                                        background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                        boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
-                                >
-                                    <Download size={14} />
-                                    Unduh Semua ({siswaList.length})
-                                </button>
-                            )}
+                            {/* ✅ HAPUS: Tombol "Unduh Semua" sudah dihapus */}
                         </div>
                     )}
                 </div>
@@ -641,6 +595,7 @@ const RaporGuruKelasClient = () => {
                             <ul className="list-disc pl-4 space-y-1" style={{ color: '#c95b08' }}>
                                 <li>Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
                                 <li>Buka dengan Microsoft Word untuk tampilan terbaik</li>
+                                <li>Unduh rapor satu per satu dengan klik tombol <strong>Unduh</strong> pada kolom Aksi</li>
                                 {selectedJenis === 'PAS' && tahunAjaranInfo?.semester === 'Genap' && (
                                     <li className="font-semibold">✓ PAS Genap mencantumkan status kenaikan kelas</li>
                                 )}

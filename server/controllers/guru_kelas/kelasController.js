@@ -69,18 +69,14 @@ const getKelasSaya = async (req, res) => {
 /**
  * GET /siswa
  * Mendapatkan daftar siswa di kelas yang diampu
+ * ✅ FIXED: Tambah data kelas dan fase di response
  */
 const getSiswaByKelas = async (req, res) => {
     try {
         const userId = req.user.id;
-        // ✅ PENTING: Gunakan id_tahun_ajaran_induk (bukan semester_id)
         const idInduk = req.idTahunAjaranInduk;
-        const semesterId = req.idSemesterAktif;
 
-        console.log('🔍 [getSiswaByKelas] START');
-        console.log('🔍 userId:', userId);
-        console.log('🔍 idInduk:', idInduk);
-        console.log('🔍 semesterId:', semesterId);
+        console.log('🔍 [getSiswaByKelas] userId:', userId, 'idInduk:', idInduk);
 
         if (!idInduk) {
             return res.status(400).json({ 
@@ -89,13 +85,13 @@ const getSiswaByKelas = async (req, res) => {
             });
         }
 
-        // ✅ Query guru_kelas dengan id_induk
+        // ✅ Ambil info kelas (nama + fase)
         const [guruKelasRows] = await db.execute(
-            `SELECT gk.kelas_id, k.nama_kelas
+            `SELECT gk.kelas_id, k.nama_kelas, k.fase
              FROM guru_kelas gk
              JOIN kelas k ON gk.kelas_id = k.id_kelas
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`, 
-            [userId, idInduk]  // ← Gunakan idInduk (bukan semesterId)
+            [userId, idInduk]
         );
 
         if (guruKelasRows.length === 0) {
@@ -105,20 +101,24 @@ const getSiswaByKelas = async (req, res) => {
             });
         }
 
-        const { kelas_id, nama_kelas } = guruKelasRows[0];
+        const { kelas_id, nama_kelas, fase } = guruKelasRows[0];
 
-        // ✅ Ambil siswa dengan id_induk
+        // ✅ Ambil siswa dengan data kelas dan fase
         const [siswaRows] = await db.execute(
             `SELECT
                 s.id_siswa AS id,
                 s.nis, s.nisn, s.nama_lengkap AS nama,
-                s.tempat_lahir, s.tanggal_lahir, s.jenis_kelamin, s.alamat, s.status
+                s.tempat_lahir, s.tanggal_lahir, s.jenis_kelamin, s.status,
+                ? AS kelas,
+                ? AS fase
             FROM siswa s
             JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
             ORDER BY s.nama_lengkap`,
-            [kelas_id, idInduk]  // ← idInduk sudah benar
+            [nama_kelas, fase, kelas_id, idInduk]
         );
+
+        console.log('✅ Found', siswaRows.length, 'siswa di kelas', nama_kelas);
 
         res.json({
             success: true,
@@ -136,12 +136,11 @@ const getSiswaByKelas = async (req, res) => {
 
 /**
  * GET /progress-penilaian
- * ✅ UPDATED: Mendapatkan progress penilaian per mata pelajaran
+ * ✅ FIXED: Filter berdasarkan jenis_penilaian yang aktif (PTS/PAS)
  */
 const getProgressPenilaian = async (req, res) => {
     try {
         const userId = req.user.id;
-        // ✅ PENTING: Pisahkan id_induk dan semester_id
         const idInduk = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
 
@@ -155,10 +154,8 @@ const getProgressPenilaian = async (req, res) => {
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id FROM guru_kelas gk 
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-            [userId, idInduk]  // ← Gunakan idInduk (bukan semesterId)
+            [userId, idInduk]
         );
-
-        console.log('📊 guruKelasRows:', guruKelasRows);
 
         if (guruKelasRows.length === 0) {
             console.log('⚠️ Guru belum punya kelas');
@@ -168,15 +165,41 @@ const getProgressPenilaian = async (req, res) => {
         const kelasId = guruKelasRows[0].kelas_id;
         console.log('📊 kelasId:', kelasId);
 
-        // 2. Ambil semester aktif
+        // 2. ✅ Ambil semester aktif DAN status PTS/PAS
         const [semesterInfo] = await db.execute(
-            `SELECT semester FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            `SELECT semester, status_pts, status_pas FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
             [semesterId]
         );
+        
         const semesterAktif = semesterInfo[0]?.semester || 'Ganjil';
+        const statusPts = semesterInfo[0]?.status_pts || 'nonaktif';
+        const statusPas = semesterInfo[0]?.status_pas || 'nonaktif';
+        
         console.log('📊 semesterAktif:', semesterAktif);
+        console.log('📊 status_pts:', statusPts);
+        console.log('📊 status_pas:', statusPas);
 
-        // 3. ✅ Query - Campuran id_induk dan semester_id
+        // 3. ✅ Tentukan jenis penilaian yang sedang aktif
+        let jenisPenilaianAktif = null;
+        if (statusPts === 'aktif') {
+            jenisPenilaianAktif = 'PTS';
+        } else if (statusPas === 'aktif') {
+            jenisPenilaianAktif = 'PAS';
+        }
+
+        console.log('📊 jenisPenilaianAktif:', jenisPenilaianAktif);
+
+        // 4. ✅ Jika tidak ada yang aktif, return kosong
+        if (!jenisPenilaianAktif) {
+            console.log('⚠️ Tidak ada periode penilaian yang aktif');
+            return res.json({ 
+                success: true, 
+                data: [],
+                message: 'Belum ada periode penilaian yang aktif'
+            });
+        }
+
+        // 5. ✅ Query dengan filter jenis_penilaian
         const [progressRows] = await db.execute(
             `SELECT 
                 mp.id_mata_pelajaran,
@@ -187,8 +210,9 @@ const getProgressPenilaian = async (req, res) => {
                  WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?) AS total_siswa,
                 (SELECT COUNT(*) FROM nilai_rapor nr 
                  WHERE nr.mapel_id = mp.id_mata_pelajaran 
-                 AND nr.tahun_ajaran_id = ?          -- ← semester_id (bukan id_induk!)
+                 AND nr.tahun_ajaran_id = ?
                  AND nr.semester = ?
+                 AND nr.jenis_penilaian = ?          -- ✅ TAMBAHKAN INI!
                  AND nr.nilai_rapor IS NOT NULL
                  AND nr.siswa_id IN (
                      SELECT sk.siswa_id FROM siswa_kelas sk 
@@ -197,14 +221,14 @@ const getProgressPenilaian = async (req, res) => {
              FROM mata_pelajaran mp
              WHERE mp.id_mata_pelajaran IN (
                  SELECT p.mapel_id FROM pembelajaran p 
-                 WHERE p.kelas_id = ? AND p.tahun_ajaran_id = ?  -- ← semester_id (bukan id_induk!)
+                 WHERE p.kelas_id = ? AND p.tahun_ajaran_id = ?
              )
              ORDER BY mp.id_mata_pelajaran ASC`,
             [
-                kelasId, idInduk,                    // total_siswa (id_induk)
-                semesterId, semesterAktif,           // sudah_dinilai (semester_id)
-                kelasId, idInduk,                    // sudah_dinilai filter (id_induk)
-                kelasId, semesterId                  // WHERE IN (semester_id)
+                kelasId, idInduk,                           // total_siswa (id_induk)
+                semesterId, semesterAktif, jenisPenilaianAktif,  // ✅ sudah_dinilai dengan filter jenis
+                kelasId, idInduk,                           // sudah_dinilai filter (id_induk)
+                kelasId, semesterId                         // WHERE IN (semester_id)
             ]
         );
 
@@ -223,7 +247,11 @@ const getProgressPenilaian = async (req, res) => {
         console.log('📊 Final data:', JSON.stringify(data, null, 2));
         console.log('═══════════════════════════════════════');
 
-        res.json({ success: true, data });
+        res.json({ 
+            success: true, 
+            data,
+            jenis_penilaian: jenisPenilaianAktif  // ✅ Kirim jenis penilaian aktif ke frontend
+        });
     } catch (err) {
         console.error('❌ Error getProgressPenilaian:', err);
         res.status(500).json({ success: false, message: err.message });

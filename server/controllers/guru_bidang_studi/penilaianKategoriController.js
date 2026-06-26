@@ -26,45 +26,42 @@ exports.getKategoriAkademik = async (req, res) => {
         const kelasIdNum = parseInt(kelas_id, 10);
 
         if (isNaN(mapelIdNum) || mapelIdNum <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'mapel_id tidak valid'
-            });
+            return res.status(400).json({ success: false, message: 'mapel_id tidak valid' });
         }
 
         if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'kelas_id tidak valid'
-            });
+            return res.status(400).json({ success: false, message: 'kelas_id tidak valid' });
         }
 
         const taAktif = await kategoriModel.getTahunAjaranAktif();
         if (!taAktif) {
-            return res.status(400).json({
-                success: false,
-                message: 'Tidak ada semester aktif'
-            });
+            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
         
         // ✅ TENTUKAN jenis penilaian aktif
-        const statusPTS = taAktif.status_pts;
-        const statusPAS = taAktif.status_pas;
-        const jenisPenilaianAktif = statusPTS === 'aktif' ? 'PTS' : statusPAS === 'aktif' ? 'PAS' : null;
+        const jenisPenilaianAktif = taAktif.status_pts === 'aktif' ? 'PTS' 
+            : taAktif.status_pas === 'aktif' ? 'PAS' : null;
         
         console.log(`📊 [GET Kategori] Jenis aktif: ${jenisPenilaianAktif}`);
 
-        // ✅ AMBIL kategori sesuai jenis penilaian aktif
         const kategori = await kategoriModel.getKategoriByMapel(
             mapelIdNum, 
             semesterId, 
             kelasIdNum,
-            jenisPenilaianAktif  // ✅ Filter berdasarkan jenis aktif
+            jenisPenilaianAktif
         );
         
-        const coverage = await kategoriModel.cekCoverage0to100(mapelIdNum, semesterId, kelasIdNum);
+        // ✅ FIXED: Kirim parameter jenisPenilaianAktif
+        const coverage = await kategoriModel.cekCoverage0to100(
+            mapelIdNum, 
+            semesterId, 
+            kelasIdNum,
+            jenisPenilaianAktif  // ✅ TAMBAH parameter ini!
+        );
+
+        console.log(`📊 [Coverage Result]:`, JSON.stringify(coverage));
 
         res.json({
             success: true,

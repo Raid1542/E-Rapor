@@ -100,29 +100,41 @@ exports.getDashboardData = async (req, res) => {
         let totalPenilaianAda = 0;
 
         for (const mapel of mapelDasar) {
-            // 5a. Hitung siswa yang sudah dinilai
+            // 5a. Hitung siswa yang sudah dinilai - ✅ FIXED: Pakai nilai_rapor
             const [dinilaiResult] = await db.execute(`
-                SELECT COUNT(DISTINCT nd.siswa_id) AS total
-                FROM nilai_detail nd
-                WHERE nd.mapel_id = ?
-                    AND nd.tahun_ajaran_id = ?
-                    AND nd.nilai IS NOT NULL
-                    AND nd.siswa_id IN (
-                        SELECT sk.siswa_id
-                        FROM siswa_kelas sk
-                        WHERE sk.kelas_id IN (
-                            SELECT kelas_id 
-                            FROM pembelajaran 
-                            WHERE user_id = ? 
-                            AND mapel_id = ? 
-                            AND tahun_ajaran_id = ?
-                        )
-                        AND sk.id_tahun_ajaran_induk = ?
-                    )
-            `, [mapel.id_mata_pelajaran, semesterId, userId, mapel.id_mata_pelajaran, semesterId, indukId]);
+        SELECT COUNT(DISTINCT nr.siswa_id) AS total
+        FROM nilai_rapor nr
+        WHERE nr.mapel_id = ?
+            AND nr.tahun_ajaran_id = ?
+            AND nr.semester = ?
+            AND nr.jenis_penilaian = ?
+            AND nr.nilai_rapor IS NOT NULL
+            AND nr.siswa_id IN (
+                SELECT sk.siswa_id
+                FROM siswa_kelas sk
+                WHERE sk.kelas_id IN (
+                    SELECT kelas_id 
+                    FROM pembelajaran 
+                    WHERE user_id = ? 
+                    AND mapel_id = ? 
+                    AND tahun_ajaran_id = ?
+                )
+                AND sk.id_tahun_ajaran_induk = ?
+            )
+    `, [
+                mapel.id_mata_pelajaran,
+                semesterId,
+                ta.semester,
+                jenis_penilaian_aktif || 'PTS',
+                userId,
+                mapel.id_mata_pelajaran,
+                semesterId,
+                indukId
+            ]);
 
             const sudahDinilai = dinilaiResult[0]?.total || 0;
             totalPenilaianAda += sudahDinilai;
+
 
             // 5b. Cek bobot
             let bobotTerconfig = false;

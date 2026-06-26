@@ -98,7 +98,7 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
   const s = MODAL_STYLES[modal.type];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dg-fadeIn">
+    <div className="fixed inset-0 z-200 flex items-center justify-center p-4 dg-fadeIn">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dg-scaleIn">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -223,7 +223,6 @@ export default function KokurikulerClient() {
 
         const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
 
-        // ✅ Handle session expired
         if (taRes.status === 401) {
           localStorage.removeItem('token');
           window.location.href = '/login';
@@ -244,7 +243,7 @@ export default function KokurikulerClient() {
           throw new Error(taData.message || 'Gagal memuat tahun ajaran');
         }
 
-        const { status_pts, status_pas, semester: sem } = taData.data;
+        const { status_pts, status_pas } = taData.data;
 
         setStatusPTS(status_pts || 'nonaktif');
         setStatusPAS(status_pas || 'nonaktif');
@@ -323,7 +322,6 @@ export default function KokurikulerClient() {
 
         const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler`, { headers });
 
-        // ✅ Handle session expired
         if (res.status === 401) {
           localStorage.removeItem('token');
           window.location.href = '/login';
@@ -466,6 +464,7 @@ export default function KokurikulerClient() {
     }, 200);
   };
 
+  // ✅ PERBAIKAN: handleEdit dengan validasi aspek & auto-scroll
   const handleEdit = (siswa: SiswaKokurikuler) => {
     if (isReadOnly) {
       if (readOnlyReason === 'locked') {
@@ -493,9 +492,48 @@ export default function KokurikulerClient() {
       return;
     }
 
+    const editableAspek = DAFTAR_ASPEK.filter(aspek => canEditAspek(aspek.id));
+
+    if (editableAspek.length === 0) {
+      showModal({
+        type: 'warning',
+        title: 'Tidak Ada Aspek yang Bisa Diedit',
+        message: `Saat ini periode ${jenisPenilaianAktif} aktif.\n\n${jenisPenilaianAktif === 'PTS'
+            ? "Hanya aspek Mutaba'ah Yaumiyah yang dapat diisi.\n\nSilakan pilih siswa lain atau tunggu periode PAS untuk mengisi aspek lainnya."
+            : "Silakan hubungi administrator."
+          }`
+      });
+      return;
+    }
+
     setSelectedSiswa(siswa);
-    setEditingNilai({ ...siswa.nilai });
+
+    // ✅ PERBAIKAN: Initialize editingNilai dengan semua aspek (termasuk yang kosong)
+    // Ini memastikan Object.keys(editingNilai) berisi semua aspek
+    const initialEditingNilai: Record<number, NilaiAspek> = {};
+    DAFTAR_ASPEK.forEach(aspek => {
+      initialEditingNilai[aspek.id] = siswa.nilai[aspek.id] || {
+        nilai: null,
+        grade: null,
+        deskripsi: null
+      };
+    });
+    setEditingNilai(initialEditingNilai);
+
     setShowEdit(true);
+
+    // Auto-scroll ke aspek pertama yang bisa diedit
+    setTimeout(() => {
+      const firstEditableAspek = editableAspek[0];
+      const element = document.getElementById(`aspek-${firstEditableAspek.id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('ring-2', 'ring-orange-400');
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-orange-400');
+        }, 2000);
+      }
+    }, 100);
   };
 
   const closeEdit = () => {
@@ -509,9 +547,7 @@ export default function KokurikulerClient() {
 
   // ✅ PERBAIKAN: Validasi nilai real-time
   const handleNilaiChange = (aspekId: number, nilai: number | null) => {
-    // Validasi nilai
     if (nilai !== null) {
-      // Validasi range 0-100
       if (nilai < 0 || nilai > 100) {
         showModal({
           type: 'warning',
@@ -520,8 +556,7 @@ export default function KokurikulerClient() {
         });
         return;
       }
-      
-      // Validasi integer
+
       if (!Number.isInteger(nilai)) {
         showModal({
           type: 'warning',
@@ -545,13 +580,13 @@ export default function KokurikulerClient() {
     });
   };
 
-  // ✅ PERBAIKAN: Validasi semua aspek terisi
+  // ✅ PERBAIKAN: Validasi semua aspek terisi + cek perubahan
   const openConfirmSimpan = () => {
     if (!selectedSiswa) return;
 
-    // ✅ Validasi semua aspek yang bisa diedit sudah terisi
+    // Validasi semua aspek yang bisa diedit sudah terisi
     const aspekBelumTerisi = DAFTAR_ASPEK.filter(aspek => {
-      if (!canEditAspek(aspek.id)) return false; // Skip yang terkunci
+      if (!canEditAspek(aspek.id)) return false;
       const nilaiData = editingNilai[aspek.id];
       return !nilaiData || nilaiData.nilai === null || nilaiData.nilai === undefined;
     });
@@ -565,20 +600,33 @@ export default function KokurikulerClient() {
       return;
     }
 
-    const hasChanges = Object.keys(editingNilai).some(aspekIdStr => {
-      const aspekId = Number(aspekIdStr);
-      if (!canEditAspek(aspekId)) return false;
+    // ✅ PERBAIKAN: Cek perubahan dengan logika yang lebih robust
+    // Gunakan DAFTAR_ASPEK instead of Object.keys(editingNilai)
+    const hasChanges = DAFTAR_ASPEK.some(aspek => {
+      // Skip aspek yang tidak bisa diedit (terkunci)
+      if (!canEditAspek(aspek.id)) return false;
 
-      const newNilai = editingNilai[aspekId]?.nilai;
-      const oldNilai = selectedSiswa.nilai[aspekId]?.nilai;
-      return newNilai !== oldNilai;
+      const newNilai = editingNilai[aspek.id]?.nilai;
+      const oldNilai = selectedSiswa.nilai[aspek.id]?.nilai;
+
+      // ✅ Konversi ke number untuk perbandingan yang konsisten
+      const newNum = (newNilai === null || newNilai === undefined) ? null : Number(newNilai);
+      const oldNum = (oldNilai === null || oldNilai === undefined) ? null : Number(oldNilai);
+
+      // ✅ Handle kasus null/undefined
+      if (newNum === null && oldNum === null) return false; // Keduanya kosong = tidak ada perubahan
+      if (newNum === null || oldNum === null) return true;  // Salah satu kosong = ada perubahan
+      if (isNaN(newNum) || isNaN(oldNum)) return false;     // Invalid number = skip
+
+      // ✅ Bandingkan nilai number
+      return newNum !== oldNum;
     });
 
     if (!hasChanges) {
       showModal({
         type: 'warning',
         title: 'Tidak Ada Perubahan',
-        message: 'Data yang Anda masukkan sama dengan data sebelumnya.'
+        message: 'Data yang Anda masukkan sama dengan data sebelumnya.\n\nSilakan ubah nilai minimal satu aspek sebelum menyimpan.'
       });
       return;
     }
@@ -586,103 +634,6 @@ export default function KokurikulerClient() {
     setConfirmSiswaNama(selectedSiswa.nama);
     setConfirmAction('save-nilai');
     setShowConfirmModal(true);
-  };
-
-  // ✅ PERBAIKAN: Error handling & timeout
-  const executeSimpanNilai = async () => {
-    if (!selectedSiswa) return;
-
-    setSaving(true);
-    
-    // ✅ Buat AbortController untuk timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 detik
-
-    try {
-      const token = localStorage.getItem('token');
-
-      const promises = Object.keys(editingNilai).map(async (aspekIdStr) => {
-        const aspekId = Number(aspekIdStr);
-
-        if (!canEditAspek(aspekId)) return;
-
-        const newNilai = editingNilai[aspekId]?.nilai;
-        const oldNilai = selectedSiswa.nilai[aspekId]?.nilai;
-
-        if (newNilai !== oldNilai) {
-          const { grade, deskripsi } = getGradeByNilai(newNilai, aspekId);
-
-          const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/${selectedSiswa.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              aspek_id: aspekId,
-              nilai: newNilai,
-              grade,
-              deskripsi,
-            }),
-            signal: controller.signal, // ✅ Tambah signal
-          });
-
-          // ✅ Handle session expired
-          if (res.status === 401) {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
-            throw new Error('Sesi berakhir');
-          }
-
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
-            throw new Error(errData.message || `Gagal menyimpan aspek ${aspekId}`);
-          }
-        }
-      });
-
-      await Promise.all(promises);
-      clearTimeout(timeoutId); // ✅ Clear timeout
-
-      const updated: SiswaKokurikuler = {
-        ...selectedSiswa,
-        nilai: editingNilai,
-      };
-
-      setSiswaList(prev => prev.map(s => s.id === selectedSiswa.id ? updated : s));
-      setFilteredSiswa(prev => prev.map(s => s.id === selectedSiswa.id ? updated : s));
-
-      setShowConfirmModal(false);
-      setShowEdit(false);
-      setSelectedSiswa(null);
-
-      showModal({
-        type: 'success',
-        title: 'Nilai Disimpan!',
-        message: `Nilai ${updated.nama} berhasil disimpan.`
-      });
-    } catch (err: any) {
-      clearTimeout(timeoutId); // ✅ Clear timeout
-      
-      // ✅ Handle timeout
-      if (err.name === 'AbortError') {
-        showModal({
-          type: 'error',
-          title: 'Request Timeout',
-          message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
-        });
-        return;
-      }
-      
-      // ✅ Jangan show error jika session expired
-      if (err.message === 'Sesi berakhir') return;
-      
-      setShowConfirmModal(false);
-      showModal({
-        type: 'error',
-        title: 'Gagal Menyimpan',
-        message: err.message || 'Gagal menyimpan nilai.'
-      });
-    } finally {
-      setSaving(false);
-    }
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -708,14 +659,12 @@ export default function KokurikulerClient() {
     setEditingProyek({ id_judul_proyek: null, judul: '', deskripsi: '' });
   };
 
-  // ✅ PERBAIKAN: Validasi panjang judul
   const openConfirmSaveProyek = () => {
     if (!editingProyek.judul.trim()) {
       showModal({ type: 'warning', title: 'Judul Kosong', message: 'Judul proyek tidak boleh kosong.' });
       return;
     }
 
-    // ✅ Validasi panjang judul
     if (editingProyek.judul.length > 255) {
       showModal({
         type: 'warning',
@@ -729,69 +678,173 @@ export default function KokurikulerClient() {
     setShowConfirmModal(true);
   };
 
-  // ✅ PERBAIKAN: Error handling & timeout
-  // Cari fungsi executeSaveProyek (line ~650)
-const executeSaveProyek = async () => {
-  setSavingProyek(true);
-  
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
-  
-  try {
-    const token = localStorage.getItem('token');
-    const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/judul-proyek`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        judul: editingProyek.judul.trim(),
-        // deskripsi dihapus
-      }),
-      signal: controller.signal,
-    });
+  const executeSaveProyek = async () => {
+    setSavingProyek(true);
 
-    clearTimeout(timeoutId);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    if (res.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-      return;
-    }
-
-    if (res.ok) {
-      const data = await res.json();
-      setJudulProyek({
-        id_judul_proyek: data.data?.id || editingProyek.id_judul_proyek,
-        judul: editingProyek.judul.trim(),
-        // deskripsi dihapus
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/judul-proyek`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          judul: editingProyek.judul.trim(),
+        }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        setJudulProyek({
+          id_judul_proyek: data.data?.id || editingProyek.id_judul_proyek,
+          judul: editingProyek.judul.trim(),
+        });
+
+        setShowConfirmModal(false);
+        closeProyekModal();
+        showModal({ type: 'success', title: 'Berhasil!', message: 'Judul proyek berhasil disimpan.' });
+      } else {
+        const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+        throw new Error(err.message || 'Gagal menyimpan judul proyek');
+      }
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+
+      if (err.name === 'AbortError') {
+        showModal({
+          type: 'error',
+          title: 'Request Timeout',
+          message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
+        });
+        return;
+      }
+
+      if (err.message === 'Sesi berakhir') return;
 
       setShowConfirmModal(false);
-      closeProyekModal();
-      showModal({ type: 'success', title: 'Berhasil!', message: 'Judul proyek berhasil disimpan.' });
-    } else {
-      const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
-      throw new Error(err.message || 'Gagal menyimpan judul proyek');
+      showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan judul proyek.' });
+    } finally {
+      setSavingProyek(false);
     }
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    
-    if (err.name === 'AbortError') {
+  };
+
+  const executeSimpanNilai = async () => {
+    if (!selectedSiswa || !jenisPenilaianAktif) return;
+
+    setSaving(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Sesi berakhir');
+      }
+
+      // ✅ Ambil hanya aspek yang bisa diedit sesuai periode
+      const aspekYangDisimpan = DAFTAR_ASPEK.filter(aspek => canEditAspek(aspek.id));
+
+      // ✅ Simpan satu per satu aspek
+      const promises = aspekYangDisimpan.map(async (aspek) => {
+        const nilaiData = editingNilai[aspek.id];
+        const nilai = nilaiData?.nilai ?? null;
+
+        // Skip jika nilai null
+        if (nilai === null) return;
+
+        const { grade, deskripsi } = getGradeByNilai(nilai, aspek.id);
+
+        const res = await fetch(`http://localhost:5000/api/guru-kelas/kokurikuler/${selectedSiswa.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            aspek_id: aspek.id,
+            nilai: nilai,
+            grade: grade,
+            deskripsi: deskripsi,
+            jenis_penilaian: jenisPenilaianAktif,
+          }),
+          signal: controller.signal,
+        });
+
+        if (res.status === 401) {
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          throw new Error('Sesi berakhir');
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+          throw new Error(errData.message || `Gagal menyimpan aspek ${aspek.nama}`);
+        }
+
+        return res.json();
+      });
+
+      await Promise.all(promises);
+      clearTimeout(timeoutId);
+
+      // ✅ Update local state dengan nilai baru
+      const updatedSiswa: SiswaKokurikuler = {
+        ...selectedSiswa,
+        nilai: { ...editingNilai },
+      };
+
+      setSiswaList(prev => prev.map(s => s.id === updatedSiswa.id ? updatedSiswa : s));
+      setFilteredSiswa(prev => prev.map(s => s.id === updatedSiswa.id ? updatedSiswa : s));
+
+      // ✅ Tutup modal dan tampilkan success message
+      setShowConfirmModal(false);
+      setShowEdit(false);
+      setSelectedSiswa(null);
+      setEditingNilai({});
+
+      setTimeout(() => {
+        showModal({
+          type: 'success',
+          title: 'Nilai Berhasil Disimpan!',
+          message: `Nilai kokurikuler ${updatedSiswa.nama} berhasil disimpan.`
+        });
+      }, 250);
+
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+
+      if (err.name === 'AbortError') {
+        showModal({
+          type: 'error',
+          title: 'Request Timeout',
+          message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
+        });
+        return;
+      }
+
+      if (err.message === 'Sesi berakhir') return;
+
+      setShowConfirmModal(false);
       showModal({
         type: 'error',
-        title: 'Request Timeout',
-        message: 'Permintaan Anda terlalu lama. Silakan coba lagi.'
+        title: 'Gagal Menyimpan',
+        message: err.message || 'Gagal menyimpan nilai kokurikuler.'
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-    
-    if (err.message === 'Sesi berakhir') return;
-    
-    setShowConfirmModal(false);
-    showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan judul proyek.' });
-  } finally {
-    setSavingProyek(false);
-  }
-};
+  };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // BADGE NILAI
@@ -871,7 +924,7 @@ const executeSaveProyek = async () => {
   const isPtsActive = jenisPenilaianAktif === 'PTS';
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ BANNER INFO - LEBIH VISUAL
+  // ✅ BANNER INFO
   // ═══════════════════════════════════════════════════════════════════════════
   const renderBannerInfo = () => {
     if (isReadOnly) {
@@ -896,13 +949,11 @@ const executeSaveProyek = async () => {
 
     if (!jenisPenilaianAktif) return null;
 
-    // Daftar aspek yang bisa dan tidak bisa diinput
     const editableAspek = DAFTAR_ASPEK.filter(a => canEditAspek(a.id));
     const lockedAspek = DAFTAR_ASPEK.filter(a => !canEditAspek(a.id));
 
     return (
       <div className="mb-5 rounded-xl overflow-hidden" style={{ border: `1px solid ${isPtsActive ? '#fdba74' : '#86efac'}` }}>
-        {/* Header Banner */}
         <div className="flex items-center gap-3 px-4 py-2.5" style={{ background: isPtsActive ? '#fff7ed' : '#ecfdf5' }}>
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isPtsActive ? 'bg-orange-100' : 'bg-green-100'}`}>
             <Calendar className={`w-4 h-4 ${isPtsActive ? 'text-orange-600' : 'text-green-600'}`} />
@@ -917,9 +968,7 @@ const executeSaveProyek = async () => {
           </div>
         </div>
 
-        {/* Content - 2 Kolom */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0 bg-white">
-          {/* Kolom Kiri: Yang Bisa Diinput */}
           <div className="p-4 border-r border-gray-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
@@ -943,7 +992,6 @@ const executeSaveProyek = async () => {
             </div>
           </div>
 
-          {/* Kolom Kanan: Yang Terkunci */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
@@ -983,7 +1031,6 @@ const executeSaveProyek = async () => {
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
       {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-      {/* ✅ BANNER INFO - Komponen Baru */}
       {renderBannerInfo()}
 
       <div className="mb-6">
@@ -1164,7 +1211,7 @@ const executeSaveProyek = async () => {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* ✅ MODAL DETAIL - LEBIH BAGUS, DESKRIPSI AREA LEBIH LUAS */}
+      {/* MODAL DETAIL */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {showDetail && selectedSiswa && (
         <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
@@ -1185,7 +1232,6 @@ const executeSaveProyek = async () => {
             </div>
 
             <div className="p-6 space-y-5">
-              {/* Info Siswa */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
                   <p className="text-xs text-gray-500 mb-0.5">NIS</p>
@@ -1197,7 +1243,6 @@ const executeSaveProyek = async () => {
                 </div>
               </div>
 
-              {/* Judul Proyek (jika ada) */}
               {judulProyek.judul && (
                 <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
                   <div className="flex items-start gap-3">
@@ -1212,7 +1257,6 @@ const executeSaveProyek = async () => {
                 </div>
               )}
 
-              {/* ✅ DAFTAR ASPEK - Layout Baru: Nilai+Grade di kiri, Deskripsi full di kanan */}
               <div className="space-y-4">
                 {DAFTAR_ASPEK.map(aspek => {
                   const nilaiData = selectedSiswa.nilai[aspek.id];
@@ -1223,7 +1267,6 @@ const executeSaveProyek = async () => {
 
                   return (
                     <div key={aspek.id} className="rounded-xl overflow-hidden border-2" style={{ borderColor: '#fdba74' }}>
-                      {/* Header Aspek */}
                       <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: '#fff7ed' }}>
                         <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: '#7a3a0a' }}>
                           <div className="w-1.5 h-5 rounded-full" style={{ background: '#e8690a' }}></div>
@@ -1237,10 +1280,8 @@ const executeSaveProyek = async () => {
                         )}
                       </div>
 
-                      {/* Content - Layout 2 kolom */}
                       <div className="p-4 bg-white">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {/* Kolom 1: Nilai */}
                           <div className="text-center p-3 rounded-lg" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
                             <p className="text-xs text-gray-500 mb-1">Nilai</p>
                             <div className="text-3xl font-bold" style={{ color: hasValue ? '#c2410c' : '#d1d5db' }}>
@@ -1248,7 +1289,6 @@ const executeSaveProyek = async () => {
                             </div>
                           </div>
 
-                          {/* Kolom 2: Grade */}
                           <div className="text-center p-3 rounded-lg" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
                             <p className="text-xs text-gray-500 mb-1">Grade</p>
                             <div className="text-3xl font-bold" style={{ color: grade ? '#c2410c' : '#d1d5db' }}>
@@ -1256,7 +1296,6 @@ const executeSaveProyek = async () => {
                             </div>
                           </div>
 
-                          {/* Kolom 3: Deskripsi - LEBIH LUAS */}
                           <div className="md:col-span-1 p-3 rounded-lg" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
                             <p className="text-xs text-gray-500 mb-1">Deskripsi</p>
                             <p className="text-sm leading-relaxed break-words whitespace-pre-wrap min-h-[48px]" style={{ color: deskripsi ? '#374151' : '#9ca3af' }}>
@@ -1286,7 +1325,7 @@ const executeSaveProyek = async () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* ✅ MODAL EDIT - LEBIH BAGUS, DESKRIPSI AREA LEBIH LUAS */}
+      {/* ✅ MODAL EDIT - DENGAN PERBAIKAN */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {showEdit && selectedSiswa && (
         <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
@@ -1320,7 +1359,7 @@ const executeSaveProyek = async () => {
                 </div>
               )}
 
-              {/* ✅ Render aspek dengan layout baru */}
+              {/* ✅ Render aspek dengan layout baru + perbaikan */}
               {DAFTAR_ASPEK.map(aspek => {
                 const nilaiData = editingNilai[aspek.id];
                 const nilai = nilaiData?.nilai;
@@ -1330,12 +1369,16 @@ const executeSaveProyek = async () => {
                 const lockReason = getAspekLockReason(aspek.id);
 
                 return (
-                  <div key={aspek.id} className="rounded-xl overflow-hidden border-2"
+                  <div
+                    key={aspek.id}
+                    id={`aspek-${aspek.id}`}  // ✅ Tambah ID untuk scroll
+                    className="rounded-xl overflow-hidden border-2 transition-all"
                     style={{
                       borderColor: isAspekEditable ? '#fdba74' : '#d1d5db',
-                      opacity: isAspekEditable ? 1 : 0.75
+                      opacity: isAspekEditable ? 1 : 0.6,  // ✅ Lebih redup untuk terkunci
+                      background: isAspekEditable ? '#fff' : '#f9fafb'
                     }}>
-                    
+
                     {/* Header Aspek */}
                     <div className="px-4 py-2.5 flex items-center justify-between"
                       style={{ background: isAspekEditable ? '#fff7ed' : '#f3f4f6' }}>
@@ -1359,7 +1402,20 @@ const executeSaveProyek = async () => {
 
                     {/* Content */}
                     <div className="p-4" style={{ background: isAspekEditable ? '#fffaf6' : '#f9fafb' }}>
-                      {/* Input Nilai & Grade Preview - 1 baris */}
+                      {/* ✅ Banner info untuk aspek terkunci */}
+                      {!isAspekEditable && (
+                        <div className="mb-3 p-3 rounded-lg flex items-start gap-2" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                          <Lock size={16} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-yellow-800">
+                            <strong>Aspek ini terkunci</strong><br />
+                            {jenisPenilaianAktif === 'PTS'
+                              ? "Saat periode PTS aktif, hanya aspek Mutaba'ah Yaumiyah yang dapat diisi. Aspek ini akan terbuka saat periode PAS."
+                              : "Periode penilaian belum aktif."}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Input Nilai & Grade Preview */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="block text-xs font-semibold mb-1.5" style={{ color: isAspekEditable ? '#7a3a0a' : '#9ca3af' }}>
@@ -1403,7 +1459,7 @@ const executeSaveProyek = async () => {
                         </div>
                       </div>
 
-                      {/* ✅ DESKRIPSI - AREA LEBIH LUAS, FULL WIDTH */}
+                      {/* ✅ DESKRIPSI */}
                       {deskripsi && (
                         <div>
                           <label className="block text-xs font-semibold mb-1.5" style={{ color: isAspekEditable ? '#7a3a0a' : '#9ca3af' }}>
@@ -1450,74 +1506,73 @@ const executeSaveProyek = async () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-{/* MODAL JUDUL PROYEK */}
-{/* ═══════════════════════════════════════════════════════════════════════ */}
-{showProyekModal && (
-  <div className="fixed inset-0 flex items-center justify-center z-50 p-4 dg-fadeIn"
-    onClick={e => { if (e.target === e.currentTarget) closeProyekModal(); }}>
-    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md dg-scaleIn" style={CARD_STYLE}>
-      <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-          <BookOpen size={18} />
-          {editingProyek.id_judul_proyek ? 'Edit Judul Proyek' : 'Atur Judul Proyek'}
-        </h2>
-        <button onClick={closeProyekModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-          style={{ background: 'rgba(255,255,255,0.2)' }}>
-          <X size={16} className="text-white" />
-        </button>
-      </div>
+      {/* MODAL JUDUL PROYEK */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {showProyekModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 dg-fadeIn"
+          onClick={e => { if (e.target === e.currentTarget) closeProyekModal(); }}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md dg-scaleIn" style={CARD_STYLE}>
+            <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <BookOpen size={18} />
+                {editingProyek.id_judul_proyek ? 'Edit Judul Proyek' : 'Atur Judul Proyek'}
+              </h2>
+              <button onClick={closeProyekModal} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <X size={16} className="text-white" />
+              </button>
+            </div>
 
-      <div className="p-6 space-y-5">
-        <div className="p-4 rounded-lg border space-y-2" style={{ backgroundColor: '#fff7ed', borderColor: '#fed7aa' }}>
-          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>Informasi</p>
-          <p className="text-sm text-gray-700">
-            Judul proyek ini akan digunakan untuk semua siswa di kelas {kelasNama}.
-            Nilai proyek akan diberikan kepada setiap siswa secara individual.
-          </p>
+            <div className="p-6 space-y-5">
+              <div className="p-4 rounded-lg border space-y-2" style={{ backgroundColor: '#fff7ed', borderColor: '#fed7aa' }}>
+                <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>Informasi</p>
+                <p className="text-sm text-gray-700">
+                  Judul proyek ini akan digunakan untuk semua siswa di kelas {kelasNama}.
+                  Nilai proyek akan diberikan kepada setiap siswa secara individual.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-gray-900">
+                  Judul Proyek <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingProyek.judul}
+                  onChange={(e) => setEditingProyek({ ...editingProyek, judul: e.target.value })}
+                  placeholder="Contoh: Proyek Kebersihan Lingkungan"
+                  className={inputCls}
+                  maxLength={255}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+              <BtnSecondary onClick={closeProyekModal} disabled={savingProyek}>Batal</BtnSecondary>
+              <button
+                onClick={openConfirmSaveProyek}
+                disabled={savingProyek || !editingProyek.judul.trim()}
+                className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
+                style={btnPrimary.style}
+                onMouseEnter={btnPrimary.hover}
+                onMouseLeave={btnPrimary.leave}
+              >
+                {savingProyek ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} /> Simpan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
-
-        {/* ✅ HANYA JUDUL - Deskripsi Dihapus */}
-        <div className="space-y-2">
-          <label className="block text-sm font-bold text-gray-900">
-            Judul Proyek <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={editingProyek.judul}
-            onChange={(e) => setEditingProyek({ ...editingProyek, judul: e.target.value })}
-            placeholder="Contoh: Proyek Kebersihan Lingkungan"
-            className={inputCls}
-            maxLength={255}
-          />
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
-        <BtnSecondary onClick={closeProyekModal} disabled={savingProyek}>Batal</BtnSecondary>
-        <button
-          onClick={openConfirmSaveProyek}
-          disabled={savingProyek || !editingProyek.judul.trim()}
-          className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
-          style={btnPrimary.style}
-          onMouseEnter={btnPrimary.hover}
-          onMouseLeave={btnPrimary.leave}
-        >
-          {savingProyek ? (
-            <>
-              <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-              Menyimpan...
-            </>
-          ) : (
-            <>
-              <Save size={16} /> Simpan
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL KONFIRMASI */}

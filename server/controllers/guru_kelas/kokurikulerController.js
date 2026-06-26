@@ -1,7 +1,9 @@
 /**
  * Nama File: kokurikulerController.js
  * Fungsi: Mengelola nilai kokurikuler siswa
- * ✅ FIXED: Semua query filter by jenis_penilaian (PTS/PAS)
+ * ✅ FIXED: 
+ *   - Semua query filter by jenis_penilaian (PTS/PAS)
+ *   - ✅ PENTING: Semua query guru_kelas pakai id_induk (BUKAN semester_id)
  * 
  * RULES:
  * - PTS Aktif: Hanya Mutaba'ah yang bisa diinput
@@ -34,7 +36,7 @@ const ASPEK_ID = {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /kokurikuler
-// ✅ FIXED: Filter by jenis_penilaian
+// ✅ FIXED: Filter by jenis_penilaian + pakai id_induk
 // ═════════════════════════════════════════════════════════════════════════════
 exports.getNilaiKokurikuler = async (req, res) => {
     try {
@@ -54,14 +56,15 @@ exports.getNilaiKokurikuler = async (req, res) => {
         console.log('📊 [BACKEND] Tahun ajaran:', taAktif.id_tahun_ajaran);
 
         const semesterId = taAktif.id_tahun_ajaran;
+        const idInduk = taAktif.id_tahun_ajaran_induk;  // ✅ TAMBAHKAN
         const semester = taAktif.semester;
 
         // ✅ FIXED: Tentukan jenis_penilaian dari status
         const jenis_penilaian = getJenisPenilaian(taAktif.status_pts, taAktif.status_pas);
         console.log(`📊 [Kokurikuler] Jenis penilaian aktif: ${jenis_penilaian}`);
 
-        // Ambil kelas
-        const kelas_id = await kokurikulerModel.getKelasByGuru(userId, semesterId);
+        // ✅ Ambil kelas - PAKAI idInduk!
+        const kelas_id = await kokurikulerModel.getKelasByGuru(userId, idInduk);
 
         if (!kelas_id) {
             return res.status(400).json({
@@ -79,8 +82,8 @@ exports.getNilaiKokurikuler = async (req, res) => {
         );
         const kelasNama = kelasInfo[0]?.nama_kelas || 'Kelas Anda';
 
-        // Ambil siswa
-        const siswaRows = await kokurikulerModel.getSiswaByKelas(kelas_id, taAktif.id_tahun_ajaran_induk);
+        // ✅ Ambil siswa - pakai idInduk
+        const siswaRows = await kokurikulerModel.getSiswaByKelas(kelas_id, idInduk);
 
         console.log('📊 [BACKEND] Jumlah siswa:', siswaRows.length);
 
@@ -187,7 +190,7 @@ exports.getNilaiKokurikuler = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /kokurikuler/:siswaId
-// ✅ FIXED: Filter by jenis_penilaian
+// ✅ FIXED: Filter by jenis_penilaian + pakai id_induk
 // ═════════════════════════════════════════════════════════════════════════════
 exports.getNilaiKokurikulerBySiswa = async (req, res) => {
     try {
@@ -204,12 +207,14 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
         }
 
         const semesterId = taAktif.id_tahun_ajaran;
+        const idInduk = taAktif.id_tahun_ajaran_induk;  // ✅ TAMBAHKAN
         const semester = taAktif.semester;
 
         // ✅ FIXED: Tentukan jenis_penilaian
         const jenis_penilaian = getJenisPenilaian(taAktif.status_pts, taAktif.status_pas);
 
-        const kelas_id = await kokurikulerModel.getKelasByGuru(userId, semesterId);
+        // ✅ Ambil kelas - PAKAI idInduk!
+        const kelas_id = await kokurikulerModel.getKelasByGuru(userId, idInduk);
 
         if (!kelas_id) {
             return res.status(404).json({ success: false, message: 'Kelas aktif tidak ditemukan.' });
@@ -233,6 +238,7 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // PUT /kokurikuler/:siswaId
 // ✅ VALIDASI: PTS → hanya Mutaba'ah, PAS → semua aspek
+// ✅ FIXED: Pakai id_induk untuk getKelasByGuru
 // ═════════════════════════════════════════════════════════════════════════════
 exports.updateNilaiKokurikuler = async (req, res) => {
     try {
@@ -241,6 +247,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 
         const userId = req.user.id;
         const semesterId = req.idSemesterAktif;
+        const idInduk = req.idTahunAjaranInduk;  // ✅ TAMBAHKAN
         const { semester, status_pts, status_pas } = req.penilaianContext || {};
 
         console.log('🔍 [BACKEND] updateNilaiKokurikuler:', { siswaId, aspek_id, nilai, status_pts, status_pas });
@@ -319,7 +326,8 @@ exports.updateNilaiKokurikuler = async (req, res) => {
             });
         }
 
-        const kelas_id = await kokurikulerModel.getKelasByGuru(userId, semesterId);
+        // ✅ Ambil kelas - PAKAI idInduk!
+        const kelas_id = await kokurikulerModel.getKelasByGuru(userId, idInduk);
 
         if (!kelas_id) {
             return res.status(403).json({ success: false, message: 'Anda belum ditugaskan sebagai wali kelas' });
@@ -333,7 +341,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
              WHERE s.id_siswa = ? 
              AND sk.kelas_id = ? 
              AND sk.id_tahun_ajaran_induk = ?`,
-            [siswaId, kelas_id, taAktif.id_tahun_ajaran_induk]
+            [siswaId, kelas_id, idInduk]
         );
 
         if (siswaCheck.length === 0) {
@@ -413,7 +421,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /kokurikuler/judul-proyek
-// ✅ FIXED: Hapus deskripsi dari response
+// ✅ FIXED: Pakai id_induk untuk getKelasByGuru
 // ═════════════════════════════════════════════════════════════════════════════
 exports.getJudulProyek = async (req, res) => {
     try {
@@ -427,7 +435,8 @@ exports.getJudulProyek = async (req, res) => {
             });
         }
 
-        const kelasId = await kokurikulerModel.getKelasByGuru(userId, taAktif.id_tahun_ajaran);
+        // ✅ Ambil kelas - PAKAI id_induk!
+        const kelasId = await kokurikulerModel.getKelasByGuru(userId, taAktif.id_tahun_ajaran_induk);
 
         if (!kelasId) {
             return res.status(400).json({
@@ -436,11 +445,12 @@ exports.getJudulProyek = async (req, res) => {
             });
         }
 
+        // ✅ Ambil judul proyek - pakai semester_id (karena judul_proyek per semester)
         const proyek = await proyekModel.getJudulProyekByKelas(kelasId, taAktif.id_tahun_ajaran);
 
         res.json({
             success: true,
-            data: proyek || { id_judul_proyek: null, judul: '' }  // ✅ Hapus deskripsi
+            data: proyek || { id_judul_proyek: null, judul: '' }
         });
     } catch (err) {
         console.error('Error getJudulProyek:', err);
@@ -453,11 +463,11 @@ exports.getJudulProyek = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // POST /kokurikuler/judul-proyek
-// ✅ FIXED: Hapus deskripsi
+// ✅ FIXED: Pakai id_induk untuk getKelasByGuru
 // ═════════════════════════════════════════════════════════════════════════════
 exports.saveJudulProyek = async (req, res) => {
     try {
-        const { judul } = req.body;  // ✅ Hapus deskripsi
+        const { judul } = req.body;
         const userId = req.user.id;
 
         // ✅ CEK PERIODE: Hanya boleh saat PAS aktif
@@ -481,7 +491,8 @@ exports.saveJudulProyek = async (req, res) => {
             });
         }
 
-        const kelasId = await kokurikulerModel.getKelasByGuru(userId, taAktif.id_tahun_ajaran);
+        // ✅ Ambil kelas - PAKAI id_induk!
+        const kelasId = await kokurikulerModel.getKelasByGuru(userId, taAktif.id_tahun_ajaran_induk);
 
         if (!kelasId) {
             return res.status(400).json({
@@ -505,7 +516,7 @@ exports.saveJudulProyek = async (req, res) => {
             });
         }
 
-        // ✅ FIXED: Hapus parameter deskripsi
+        // ✅ Simpan judul proyek - pakai semester_id
         const result = await proyekModel.saveJudulProyek(
             kelasId,
             taAktif.id_tahun_ajaran,
