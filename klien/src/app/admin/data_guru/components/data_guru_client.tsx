@@ -152,7 +152,7 @@ export default function DataGuruClient() {
       const res = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok) {
-        const validRoles = ['guru kelas', 'guru bidang studi'];
+        const validRoles = ['guru_kelas', 'guru_bidang_studi'];
         setGuruList(Array.isArray(data.data) ? data.data.map((g: any) => {
           let s = 'aktif';
           if (typeof g.status === 'string') { s = g.status.trim().toLowerCase(); if (s !== 'aktif') s = 'nonaktif'; }
@@ -519,7 +519,7 @@ export default function DataGuruClient() {
               <div className="flex flex-col gap-1.5">
                 <label className={labelCls} style={labelColor}>Role (Hak Akses) <span className="text-red-500">*</span></label>
                 <div className="flex flex-wrap gap-2">
-                  {[{ key: 'guru kelas', label: 'Guru Kelas' }, { key: 'guru bidang studi', label: 'Guru Bidang Studi' }].map(role => {
+                  {[{ key: 'guru_kelas', label: 'Guru Kelas' }, { key: 'guru_bidang_studi', label: 'Guru Bidang Studi' }].map(role => {
                     const active = formData.roles.includes(role.key);
                     return (
                       <button key={role.key} type="button"
