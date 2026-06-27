@@ -1,10 +1,13 @@
 const db = require('../../config/db');
 const guruModel = require('../../models/admin/guruModel');
 
+// File: controllers/dashboardController.js
+
 const getDashboardStats = async (req, res) => {
     try {
         const [taAktif] = await db.execute(`
-            SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran
+            SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran,
+                   status_pts, status_pas
             FROM tahun_ajaran 
             WHERE status = 'aktif' 
             LIMIT 1
@@ -17,7 +20,9 @@ const getDashboardStats = async (req, res) => {
                     guru: 0, siswa: 0, admin: 0,
                     ekstrakurikuler: 0, kelas: 0, mata_pelajaran: 0,
                     tahun_ajaran: null,
-                    semester: null
+                    semester: null,
+                    status_pts: 'nonaktif',
+                    status_pas: 'nonaktif'
                 }
             });
         }
@@ -26,8 +31,10 @@ const getDashboardStats = async (req, res) => {
         const taIdInduk = taAktif[0].id_tahun_ajaran_induk;
         const semesterAktif = taAktif[0].semester;
         const tahunAjaran = taAktif[0].tahun_ajaran;
+        const statusPTS = taAktif[0].status_pts || 'nonaktif';
+        const statusPAS = taAktif[0].status_pas || 'nonaktif';
 
-        // ✅ FIXED: Count Guru dengan role underscore
+        // Count Guru
         const [guruRows] = await db.execute(`
             SELECT COUNT(DISTINCT u.id_user) AS total
             FROM user u
@@ -37,14 +44,12 @@ const getDashboardStats = async (req, res) => {
         `);
         const guruCount = Number(guruRows[0].total) || 0;
 
-        // Count Siswa
+        // Count Siswa - HANYA yang status aktif
         const [siswaRows] = await db.execute(`
             SELECT COUNT(DISTINCT s.id_siswa) AS total
             FROM siswa s
-            INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-            WHERE sk.id_tahun_ajaran_induk = ? 
-                AND (s.status = 'aktif' OR s.status IS NULL)
-        `, [taIdInduk]); 
+            WHERE s.status = 'aktif'
+        `);
         const siswaCount = Number(siswaRows[0].total) || 0;
 
         // Count Admin
@@ -88,7 +93,9 @@ const getDashboardStats = async (req, res) => {
                 mata_pelajaran: mapelCount,
                 tahun_ajaran: tahunAjaran,
                 semester: semesterAktif,
-                id_detail: taIdDetail
+                id_detail: taIdDetail,
+                status_pts: statusPTS,
+                status_pas: statusPAS
             }
         });
     } catch (err) {

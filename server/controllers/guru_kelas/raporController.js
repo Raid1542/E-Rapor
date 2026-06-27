@@ -287,6 +287,8 @@ exports.generateRaporPDF = async (req, res) => {
             ? parseFloat((nilaiList.reduce((a, b) => a + b, 0) / nilaiList.length).toFixed(2))
             : 0;
 
+        // Format untuk ditampilkan di template (selalu 2 desimal)
+        const rataRataDisplay = rataRata.toFixed(2); // "95.00", "86.38", dll
         // ── Deskripsi Rata-rata ──────────────────────────────────────────────
         // Pakai tabel kategori_deskripsi_rata_rata
         const [deskRata] = await db.execute(
@@ -460,7 +462,7 @@ exports.generateRaporPDF = async (req, res) => {
             semuaMapel,
             daftarMapel1,
             daftarMapel2,
-            ratarata: rataRata,
+            ratarata: rataRataDisplay,
             ckratarata,
             my, gmy, dmy,
             bpi, gbpi, dbpi,

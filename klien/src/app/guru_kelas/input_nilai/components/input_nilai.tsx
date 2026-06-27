@@ -255,8 +255,8 @@ export default function InputNilaiClient() {
                     komponenRes.json()
                 ]);
 
-                const wajib = mapelData.wajib || [];
-                const pilihan = mapelData.pilihan || [];
+                const wajib = mapelData.data?.wajib || [];
+                const pilihan = mapelData.data?.pilihan || [];
                 setMapelList([...wajib, ...pilihan]);
                 setKomponenList(komponenData.data || []);
             } catch (err: any) {
@@ -466,64 +466,64 @@ export default function InputNilaiClient() {
     };
 
     const executeSimpanNilai = async () => {
-    if (!editingSiswa || !selectedMapelId) return;
+        if (!editingSiswa || !selectedMapelId) return;
 
-    setSaving(true);
-    try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:5000/api/guru-kelas/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ nilai: editingNilai }),
-        });
+        setSaving(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`http://localhost:5000/api/guru-kelas/nilai-komponen/${selectedMapelId}/${editingSiswa.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ nilai: editingNilai }),
+            });
 
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
-            throw new Error(err.message);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+                throw new Error(err.message);
+            }
+
+            const data = await res.json();
+            const updated: SiswaNilai = {
+                ...editingSiswa,
+                nilai: editingNilai,
+                nilai_rapor_pts: data.jenis_penilaian === 'PTS' ? Math.floor(data.nilai_rapor ?? editingSiswa.nilai_rapor_pts) : editingSiswa.nilai_rapor_pts,
+                deskripsi_pts: data.jenis_penilaian === 'PTS' ? (data.deskripsi ?? editingSiswa.deskripsi_pts) : editingSiswa.deskripsi_pts,
+                nilai_rapor_pas: data.jenis_penilaian === 'PAS' ? Math.floor(data.nilai_rapor ?? editingSiswa.nilai_rapor_pas) : editingSiswa.nilai_rapor_pas,
+                deskripsi_pas: data.jenis_penilaian === 'PAS' ? (data.deskripsi ?? editingSiswa.deskripsi_pas) : editingSiswa.deskripsi_pas,
+            };
+
+            setSiswaList(prev => prev.map(s => s.id === editingSiswa.id ? updated : s));
+            setFilteredSiswa(prev => prev.map(s => s.id === editingSiswa.id ? updated : s));
+
+            setShowConfirmModal(false);
+            setShowEdit(false);
+            setEditingSiswa(null);
+            setConfirmSiswaNama('');
+
+            setTimeout(() => {
+                showModal({
+                    type: 'success',
+                    title: 'Nilai Disimpan!',
+                    message: `Nilai ${updated.nama} berhasil disimpan.`
+                });
+            }, 250);
+        } catch (err: any) {
+            setShowConfirmModal(false);
+            setShowEdit(false);
+            setEditingSiswa(null);
+            setConfirmSiswaNama('');
+
+            setTimeout(() => {
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Menyimpan',
+                    message: err.message || 'Gagal menyimpan nilai.'
+                });
+            }, 250);
+        } finally {
+            setSaving(false);
         }
-
-        const data = await res.json();
-        const updated: SiswaNilai = {
-            ...editingSiswa,
-            nilai: editingNilai,
-            nilai_rapor_pts: data.jenis_penilaian === 'PTS' ? Math.floor(data.nilai_rapor ?? editingSiswa.nilai_rapor_pts) : editingSiswa.nilai_rapor_pts,
-            deskripsi_pts: data.jenis_penilaian === 'PTS' ? (data.deskripsi ?? editingSiswa.deskripsi_pts) : editingSiswa.deskripsi_pts,
-            nilai_rapor_pas: data.jenis_penilaian === 'PAS' ? Math.floor(data.nilai_rapor ?? editingSiswa.nilai_rapor_pas) : editingSiswa.nilai_rapor_pas,
-            deskripsi_pas: data.jenis_penilaian === 'PAS' ? (data.deskripsi ?? editingSiswa.deskripsi_pas) : editingSiswa.deskripsi_pas,
-        };
-
-        setSiswaList(prev => prev.map(s => s.id === editingSiswa.id ? updated : s));
-        setFilteredSiswa(prev => prev.map(s => s.id === editingSiswa.id ? updated : s));
-
-        setShowConfirmModal(false);
-        setShowEdit(false);
-        setEditingSiswa(null);
-        setConfirmSiswaNama('');
-
-        setTimeout(() => {
-            showModal({
-                type: 'success',
-                title: 'Nilai Disimpan!',
-                message: `Nilai ${updated.nama} berhasil disimpan.`
-            });
-        }, 250);
-    } catch (err: any) {
-        setShowConfirmModal(false);
-        setShowEdit(false);
-        setEditingSiswa(null);
-        setConfirmSiswaNama('');
-
-        setTimeout(() => {
-            showModal({
-                type: 'error',
-                title: 'Gagal Menyimpan',
-                message: err.message || 'Gagal menyimpan nilai.'
-            });
-        }, 250);
-    } finally {
-        setSaving(false);
-    }
-};
+    };
 
     // ── BADGE NILAI ─────────────────────────────────────────────────────────────
 

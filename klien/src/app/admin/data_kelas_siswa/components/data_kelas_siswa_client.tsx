@@ -1,17 +1,4 @@
-/**
- * Nama File: data_kelas_siswa_client.tsx
- * Fungsi: Komponen klien untuk mengelola data kelas,
- *         mencakup fitur tambah (dengan pilihan wali kelas langsung),
- *         edit, hapus, pemilihan tahun ajaran, dan penetapan wali kelas.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * Update: 
- *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
- *   - ✅ TAMBAHAN: Fitur READ-ONLY saat PTS/PAS dikunci di Arsip Rapor
- *   - ✅ TAMBAHAN: Badge warning yang jelas saat data terkunci
- */
-
-'use client';
+"use client";
 
 import Link from 'next/link';
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
@@ -19,96 +6,9 @@ import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, Sh
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
-
-type ModalType = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
-
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
-
-const GlobalStyles = () => (
-  <style jsx global>{`
-    @keyframes dk-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes dk-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes dk-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .dk-fadeIn  { animation: dk-fadeIn  0.2s ease; }
-    .dk-scaleIn { animation: dk-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .dk-pulse   { animation: dk-pulse   0.6s ease 0.15s; }
-  `}</style>
-);
-
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
-
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
-};
-
-const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-  const s = MODAL_STYLES[modal.type];
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dk-fadeIn">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dk-scaleIn">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dk-pulse`}>{s.icon}</div>
-        <div className="text-center">
-          <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-          <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-        </div>
-        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
-      </div>
-    </div>
-  );
-};
-
-// ─── CONFIRM MODAL (untuk hapus) ─────────────────────────────────────────────
-
-const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dk-fadeIn">
-    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dk-scaleIn">
-      <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dk-pulse">
-        <Trash2 size={36} className="text-red-500" />
-      </div>
-      <div className="text-center">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Hapus</h3>
-        <p className="text-sm text-gray-500 leading-relaxed mt-2">{message}</p>
-      </div>
-      <div className="flex gap-3 w-full">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-xl border font-semibold text-sm transition-colors"
-          style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>Batal</button>
-        <button onClick={onConfirm} className="flex-1 py-3 rounded-xl text-white font-semibold text-sm bg-red-500 hover:bg-red-600 transition-colors">
-          Ya, Hapus
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
-
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
-
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
-
-const btnPrimary = {
-  base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
-  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
-  hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-  leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
-};
-
-const labelCls = "block text-sm font-semibold mb-1.5";
-const labelColor = { color: '#7a3a0a' };
-
-// ─── INTERFACES ───────────────────────────────────────────────────────────────
+/* ==========================================================================
+   INTERFACES
+   ========================================================================== */
 
 interface Kelas {
   id: number;
@@ -137,7 +37,105 @@ interface FormDataType {
   user_id: string;
 }
 
-// ─── SECONDARY BUTTON ─────────────────────────────────────────────────────────
+type ModalType = 'success' | 'error' | 'warning' | 'network';
+
+interface ModalConfig {
+  type: ModalType;
+  title: string;
+  message: string;
+}
+
+/* ==========================================================================
+   GLOBAL STYLES
+   ========================================================================== */
+
+const GlobalStyles = () => (
+  <style jsx global>{`
+    @keyframes dk-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes dk-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes dk-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    .dk-fadeIn  { animation: dk-fadeIn  0.2s ease; }
+    .dk-scaleIn { animation: dk-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+    .dk-pulse   { animation: dk-pulse   0.6s ease 0.15s; }
+  `}</style>
+);
+
+/* ==========================================================================
+   NOTIFICATION MODAL
+   ========================================================================== */
+
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+};
+
+const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+  const s = MODAL_STYLES[modal.type];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dk-fadeIn">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dk-scaleIn">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dk-pulse`}>{s.icon}</div>
+        <div className="text-center">
+          <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
+          <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+        </div>
+        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+      </div>
+    </div>
+  );
+};
+
+/* ==========================================================================
+   CONFIRM MODAL
+   ========================================================================== */
+
+const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 dk-fadeIn">
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dk-scaleIn">
+      <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dk-pulse">
+        <Trash2 size={36} className="text-red-500" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Hapus</h3>
+        <p className="text-sm text-gray-500 leading-relaxed mt-2">{message}</p>
+      </div>
+      <div className="flex gap-3 w-full">
+        <button onClick={onCancel} className="flex-1 py-3 rounded-xl border font-semibold text-sm transition-colors"
+          style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>Batal</button>
+        <button onClick={onConfirm} className="flex-1 py-3 rounded-xl text-white font-semibold text-sm bg-red-500 hover:bg-red-600 transition-colors">
+          Ya, Hapus
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+/* ==========================================================================
+   SHARED STYLE CONSTANTS
+   ========================================================================== */
+
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+
+const btnPrimary = {
+  base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
+  hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
+  leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+};
+
+const labelCls = "block text-sm font-semibold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
 
 const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
   <button onClick={onClick}
@@ -148,7 +146,9 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
   >{children}</button>
 );
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+/* ==========================================================================
+   MAIN COMPONENT
+   ========================================================================== */
 
 export default function DataKelasClient() {
   const { showSessionExpired, handleLogout } = useSession();
@@ -162,29 +162,26 @@ export default function DataKelasClient() {
   const [currentPage, setCurrentPage] = useState(1);
   const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
   const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
-  const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState<boolean>(false);
+  const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState(false);
   const [guruList, setGuruList] = useState<GuruOption[]>([]);
   const [loadingGuru, setLoadingGuru] = useState(false);
-
-  // ✅ STATE BARU: Untuk fitur READ-ONLY saat PTS/PAS dikunci
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [lockedBy, setLockedBy] = useState<string | null>(null);
   const [lockedSemester, setLockedSemester] = useState<string | null>(null);
-
-  // ✅ TAMBAHAN: State untuk modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
-
   const [formData, setFormData] = useState<FormDataType>({ nama_kelas: '', fase: '', user_id: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   const [modal, setModal] = useState<ModalConfig | null>(null);
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  
   const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
   const closeModal = useCallback(() => setModal(null), []);
   const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
 
-  // ── fetch ──────────────────────────────────────────────────────────────────
+  /* --------------------------------------------------------------------
+     DATA FETCHING
+  -------------------------------------------------------------------- */
 
   const fetchTahunAjaran = async () => {
     try {
@@ -228,15 +225,11 @@ export default function DataKelasClient() {
       }
     } catch {
       setGuruList([]);
-    }
-    finally {
+    } finally {
       setLoadingGuru(false);
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // ✅ UPDATED: Ambil status read-only dari response backend
-  // ═══════════════════════════════════════════════════════════════
   const fetchKelas = async (tahunAjaranId: number) => {
     try {
       const token = localStorage.getItem('token');
@@ -245,8 +238,6 @@ export default function DataKelasClient() {
       const data = await res.json();
       if (res.ok && data.success) {
         setKelasList(data.data.map((k: any) => ({ ...k, wali_kelas_id: k.wali_kelas === '-' ? null : k.wali_kelas_id })));
-        
-        // ✅ AMBIL status read-only dari response
         setIsReadOnly(data.is_read_only || false);
         setLockedBy(data.locked_by || null);
         setLockedSemester(data.locked_semester || null);
@@ -278,7 +269,9 @@ export default function DataKelasClient() {
     }
   }, [tahunAjaranList]);
 
-  // ── form handlers ──────────────────────────────────────────────────────────
+  /* --------------------------------------------------------------------
+     FORM HANDLERS
+  -------------------------------------------------------------------- */
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -351,7 +344,7 @@ export default function DataKelasClient() {
       if (selectedTahunAjaranId) fetchKelas(selectedTahunAjaranId);
       showModal({
         type: 'success',
-        title: 'Kelas Ditambahkan!',
+        title: 'Kelas Ditambahkan',
         message: `Kelas ${formData.nama_kelas} berhasil ditambahkan.`,
       });
     } catch {
@@ -389,7 +382,7 @@ export default function DataKelasClient() {
 
       showModal({
         type: 'success',
-        title: 'Data Diperbarui!',
+        title: 'Data Diperbarui',
         message: `Data kelas ${formData.nama_kelas} berhasil diperbarui.`
       });
 
@@ -414,7 +407,7 @@ export default function DataKelasClient() {
         });
         if (res.ok) {
           fetchKelas(selectedTahunAjaranId);
-          showModal({ type: 'success', title: 'Kelas Dihapus!', message: `Kelas "${namaKelas}" berhasil dihapus.` });
+          showModal({ type: 'success', title: 'Kelas Dihapus', message: `Kelas "${namaKelas}" berhasil dihapus.` });
         } else {
           const err = await res.json();
           showModal({ type: 'error', title: 'Gagal Menghapus', message: err.message || 'Terjadi kesalahan saat menghapus kelas.' });
@@ -425,7 +418,9 @@ export default function DataKelasClient() {
 
   const handleReset = () => { setFormData({ nama_kelas: '', fase: '', user_id: '' }); setErrors({}); };
 
-  // ── filter & pagination ────────────────────────────────────────────────────
+  /* --------------------------------------------------------------------
+     FILTER & PAGINATION
+  -------------------------------------------------------------------- */
 
   const filteredKelas = kelasList.filter(kelas => {
     const query = searchQuery.toLowerCase().trim();
@@ -445,47 +440,87 @@ export default function DataKelasClient() {
     const btnActive = "text-white border-orange-500";
     const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
+    // Tombol Previous
     pages.push(
-      <button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+      <button key="pagination-prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
         className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>
     );
+
+    // ✅ PERBAIKAN: Logika range yang lebih aman
     const range: number[] = [];
-    if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) range.push(i); }
-    else {
+    
+    if (totalPages <= 5) {
+      // Jika total halaman <= 5, tampilkan semua
+      for (let i = 1; i <= totalPages; i++) {
+        range.push(i);
+      }
+    } else {
+      // Selalu tampilkan halaman 1
       range.push(1);
-      if (currentPage > 3) range.push(-1);
-      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) range.push(i);
-      if (currentPage < totalPages - 2) range.push(-2);
-      range.push(totalPages);
+      
+      // Tambahkan ellipsis jika currentPage > 3
+      if (currentPage > 3) {
+        range.push(-1); // -1 untuk ellipsis kiri
+      }
+      
+      // Tampilkan halaman di sekitar currentPage
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      
+      for (let i = start; i <= end; i++) {
+        // ✅ PERBAIKAN: Hindari duplikasi dengan halaman 1
+        if (i !== 1 && !range.includes(i)) {
+          range.push(i);
+        }
+      }
+      
+      // Tambahkan ellipsis jika currentPage < totalPages - 2
+      if (currentPage < totalPages - 2) {
+        range.push(-2); // -2 untuk ellipsis kanan
+      }
+      
+      // Selalu tampilkan halaman terakhir
+      // ✅ PERBAIKAN: Hindari duplikasi
+      if (totalPages !== 1 && !range.includes(totalPages)) {
+        range.push(totalPages);
+      }
     }
-    range.forEach(p => {
-      if (p < 0) { pages.push(<span key={p} className="px-1 text-gray-400 text-sm">…</span>); }
-      else {
+
+    // Render halaman
+    range.forEach((p, idx) => {
+      if (p < 0) {
+        // Ellipsis
+        pages.push(<span key={`ellipsis-${idx}`} className="px-1 text-gray-400 text-sm">…</span>);
+      } else {
         pages.push(
-          <button key={p} onClick={() => setCurrentPage(p)}
+          <button 
+            key={`page-${p}`} 
+            onClick={() => setCurrentPage(p)}
             className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
             style={currentPage === p ? { background: 'linear-gradient(135deg,#e8690a,#f5a623)' } : {}}
           >{p}</button>
         );
       }
     });
+
+    // Tombol Next
     pages.push(
-      <button key="next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+      <button key="pagination-next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
         className={`${btnBase} ${btnInactive} disabled:opacity-40`}>»</button>
     );
-    return pages;
-  };
 
-  // ── FORM PAGE ──────────────────────────────────────────────────────────────
+    return pages;
+};
+
+  /* --------------------------------------------------------------------
+     FORM PAGE RENDER
+  -------------------------------------------------------------------- */
 
   const renderForm = (isEdit: boolean) => (
     <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
-
-      {showSessionExpired && (
-        <SessionExpiredModal onConfirm={handleLogout} />
-      )}
+      {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Data Kelas</h1>
@@ -503,7 +538,6 @@ export default function DataKelasClient() {
         </div>
 
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-
           <div className="flex flex-col gap-1.5">
             <label className={labelCls} style={labelColor}>
               Nama Kelas <span className="text-red-500">*</span>
@@ -638,16 +672,15 @@ export default function DataKelasClient() {
   if (showTambah) return renderForm(false);
   if (showEdit) return renderForm(true);
 
-  // ── HALAMAN UTAMA ──────────────────────────────────────────────────────────
+  /* --------------------------------------------------------------------
+     MAIN LIST RENDER
+  -------------------------------------------------------------------- */
 
   return (
     <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
       <GlobalStyles />
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
-      {showSessionExpired && (
-        <SessionExpiredModal onConfirm={handleLogout} />
-      )}
-
+      {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
       {confirmCfg && (
         <ConfirmModal
           message={confirmCfg.message}
@@ -662,8 +695,6 @@ export default function DataKelasClient() {
       </div>
 
       <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-
-        {/* Dropdown Tahun Ajaran */}
         <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
@@ -676,7 +707,6 @@ export default function DataKelasClient() {
                   setSelectedTahunAjaranAktif(false);
                   setLoading(false);
                   setKelasList([]);
-                  // ✅ RESET status read-only saat ganti TA
                   setIsReadOnly(false);
                   setLockedBy(null);
                   setLockedSemester(null);
@@ -709,9 +739,6 @@ export default function DataKelasClient() {
           </div>
         ) : (
           <>
-            {/* ═══════════════════════════════════════════════════════════════
-                ✅ BADGE READ-ONLY - Tampil jika data terkunci
-            ═══════════════════════════════════════════════════════════════ */}
             {isReadOnly && (
               <div 
                 className="mx-5 mt-4 p-4 rounded-xl flex items-start gap-3"
@@ -723,24 +750,22 @@ export default function DataKelasClient() {
                 <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-amber-900 mb-1">
-                    🔒 Data Kelas Terkunci (Read-Only)
+                    Data Kelas Terkunci (Read-Only)
                   </h3>
                   <p className="text-xs text-amber-800 mb-2">
                     Penilaian <strong>{lockedBy}</strong> semester <strong>{lockedSemester}</strong> telah diarsipkan dan dikunci. 
                     Data kelas tidak dapat diubah sampai tahun ajaran berakhir.
                   </p>
                   <p className="text-xs text-amber-700 italic">
-                    💡 Untuk membuka kunci, silakan hubungi administrator atau gunakan halaman Arsip Rapor.
+                    Untuk membuka kunci, silakan hubungi administrator atau gunakan halaman Arsip Rapor.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Toolbar */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  {/* ✅ Tombol Tambah - DISABLE jika read-only */}
                   {selectedTahunAjaranAktif && !isReadOnly && (
                     <button
                       onClick={() => setShowTambah(true)}
@@ -798,7 +823,6 @@ export default function DataKelasClient() {
               </p>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm border-collapse">
                 <thead>
@@ -826,7 +850,7 @@ export default function DataKelasClient() {
                     </tr>
                   ) : currentKelas.map((kelas, index) => (
                     <tr
-                      key={kelas.id}
+                      key={`kelas-${kelas.id}-${index}`}
                       className="transition-colors"
                       style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
                       onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
@@ -867,7 +891,6 @@ export default function DataKelasClient() {
                             <Users size={13} /> Lihat Siswa
                           </Link>
 
-                          {/* ✅ Tombol Edit & Hapus - DISABLE jika read-only */}
                           {selectedTahunAjaranAktif && !isReadOnly && (
                             <>
                               <button
@@ -891,7 +914,6 @@ export default function DataKelasClient() {
                             </>
                           )}
 
-                          {/* ✅ Badge terkunci di setiap baris jika read-only */}
                           {isReadOnly && (
                             <span 
                               className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold"
@@ -909,7 +931,6 @@ export default function DataKelasClient() {
               </table>
             </div>
 
-            {/* Pagination */}
             <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
               <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
                 Halaman {currentPage} dari {totalPages}

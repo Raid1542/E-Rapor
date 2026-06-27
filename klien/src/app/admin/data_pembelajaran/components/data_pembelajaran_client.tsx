@@ -290,21 +290,23 @@ export default function DataPembelajaranPage() {
 
   const fetchKelasList = useCallback(async (idInduk: number) => {
     try {
-      const token = getToken();
-      if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setKelasList(removeDuplicatesById(
-          (data.data || []).map((k: any) => ({ id: k.id, nama: k.nama_kelas }))
-        ));
-      }
+        const token = getToken();
+        if (!token) return;
+        
+        // ✅ PERBAIKAN: Kirim sebagai query parameter
+        const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            setKelasList(removeDuplicatesById(
+                (data.data || []).map((k: any) => ({ id: k.id, nama: k.nama_kelas }))
+            ));
+        }
     } catch {
-      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data kelas.' });
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data kelas.' });
     }
-  }, [showModal]);
+}, [showModal]);
 
   const fetchDropdowns = useCallback(async (semesterId: number) => {
     setDropdownLoading(true);

@@ -1,14 +1,16 @@
 /**
  * Nama File: helpers.js
  * Fungsi: Helper functions yang dipakai bersama di controller guru kelas
+ * ✅ FIXED: Semua query guru_kelas pakai semesterId (bukan tahunAjaranIndukId)
  */
 
 const db = require('../../config/db');
 
 /**
  * Helper: Validasi apakah mata pelajaran adalah mapel wajib yang diampu guru kelas
+ * ✅ FIXED: Parameter ketiga adalah semesterId (bukan tahunAjaranIndukId)
  */
-exports.isMapelWajibGuruKelas = async (userId, mapelId, tahunAjaranIndukId) => {
+exports.isMapelWajibGuruKelas = async (userId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(`
             SELECT mp.id_mata_pelajaran
@@ -19,7 +21,7 @@ exports.isMapelWajibGuruKelas = async (userId, mapelId, tahunAjaranIndukId) => {
             AND gk.user_id = ?
             AND mp.jenis = 'wajib'
             AND gk.tahun_ajaran_id = ?
-        `, [mapelId, userId, tahunAjaranIndukId]);
+        `, [mapelId, userId, semesterId]);  // ✅ PAKAI semesterId
         return rows.length > 0;
     } catch (err) {
         console.error('Error di isMapelWajibGuruKelas:', err);
@@ -61,6 +63,7 @@ exports.getDeskripsiFromKategori = (nilai, kategoriList) => {
 
 /**
  * Helper: Memperbarui semua nilai rapor untuk suatu mata pelajaran berdasarkan bobot terbaru
+ * ✅ FIXED: Query guru_kelas pakai semesterId
  */
 exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
     try {
@@ -72,13 +75,15 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             throw new Error('Data tahun ajaran atau semester tidak ditemukan di middleware');
         }
 
+        // ✅ PERBAIKAN: PAKAI semesterId untuk guru_kelas
         const [gkRows] = await db.execute(
-    `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
-    [userId, tahunAjaranIndukId]  // ← tahunAjaranIndukId = 1
-);
+            `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
+            [userId, semesterId]  // ✅ semesterId, BUKAN tahunAjaranIndukId
+        );
         if (gkRows.length === 0) throw new Error('Kelas aktif tidak ditemukan');
         const { kelas_id } = gkRows[0];
 
+        // ✅ PERBAIKAN: id_tahun_ajaran_induk untuk siswa_kelas
         const [siswaRows] = await db.execute(
             `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelas_id, tahunAjaranIndukId]
@@ -145,7 +150,6 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             }
             nilaiRapor = Math.floor(nilaiRapor);
 
-            // Cek dulu struktur tabel, jika ada tahun_ajaran_id tetap pakai
             const [kategoriRows] = await db.execute(
                 `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND is_active = 1
@@ -176,6 +180,7 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
 
 /**
  * Helper internal: mengambil data rekap nilai untuk ekspor
+ * ✅ FIXED: Query guru_kelas pakai semesterId
  */
 exports.getRekapanData = async (userId, req) => {
     const tahunAjaranIndukId = req?.idTahunAjaranInduk;
@@ -184,15 +189,17 @@ exports.getRekapanData = async (userId, req) => {
 
     if (!tahunAjaranIndukId || !semesterId || !semester) throw new Error('Data tahun ajaran atau semester tidak ditemukan');
 
+    // ✅ PERBAIKAN: PAKAI semesterId untuk guru_kelas
     const [kelasRows] = await db.query(
-    `SELECT k.id_kelas FROM kelas k 
+        `SELECT k.id_kelas FROM kelas k 
         JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
         WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-    [userId, tahunAjaranIndukId]  // ← tahunAjaranIndukId
-);
+        [userId, semesterId]  // ✅ semesterId, BUKAN tahunAjaranIndukId
+    );
     if (kelasRows.length === 0) throw new Error('Kelas tidak ditemukan');
     const kelasId = kelasRows[0].id_kelas;
 
+    // ✅ id_tahun_ajaran_induk untuk siswa_kelas
     const [siswaRows] = await db.query(
         `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
             FROM siswa s 

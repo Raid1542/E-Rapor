@@ -1,7 +1,7 @@
 /**
  * Nama File: catatanWaliController.js
  * Fungsi: Mengelola catatan wali kelas
- * UPDATE: Fix query GET, tambah validasi lengkap
+ * ✅ FIXED: Hapus duplikasi fungsi, semua query guru_kelas pakai semesterId
  */
 
 const db = require('../../config/db');
@@ -36,13 +36,13 @@ exports.getCatatanWaliKelas = async (req, res) => {
             });
         }
 
-        // 1. Ambil kelas guru
+        // 1. Ambil kelas guru - PAKAI semesterId
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas
              FROM guru_kelas gk
              JOIN kelas k ON gk.kelas_id = k.id_kelas
              WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-            [userId, tahunAjaranIndukId]
+            [userId, semesterId]
         );
 
         if (guruKelasRows.length === 0) {
@@ -54,7 +54,7 @@ exports.getCatatanWaliKelas = async (req, res) => {
 
         const { kelas_id, nama_kelas } = guruKelasRows[0];
 
-        // 2. ✅ PERBAIKAN: Ambil SEMUA siswa di kelas, lalu LEFT JOIN catatan
+        // 2. Ambil SEMUA siswa di kelas, lalu LEFT JOIN catatan
         const [data] = await db.execute(
             `SELECT 
                 s.id_siswa, 
@@ -95,6 +95,7 @@ exports.getCatatanWaliKelas = async (req, res) => {
 
 /**
  * PUT /catatan-wali-kelas/:siswa_id/:jenis/:semester
+ * ✅ FIXED: Hapus duplikasi, pakai semesterId
  */
 exports.updateCatatanWaliKelas = async (req, res) => {
     try {
@@ -107,7 +108,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
         const { semester, jenis: reqJenis } = req.penilaianContext || {};
         const { status_pts, status_pas } = req.tahunAjaranAktif || {};
 
-        // ✅ VALIDASI BARU: siswa_id harus valid
+        // VALIDASI: siswa_id harus valid
         if (isNaN(siswa_id) || siswa_id <= 0) {
             return res.status(400).json({ 
                 success: false, 
@@ -129,7 +130,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Catatan wajib diisi
+        // VALIDASI: Catatan wajib diisi
         const trimmedCatatan = catatan_wali_kelas?.trim() || '';
         if (!trimmedCatatan) {
             return res.status(400).json({ 
@@ -138,7 +139,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Minimal 20 karakter
+        // VALIDASI: Minimal 20 karakter
         if (trimmedCatatan.length < 20) {
             return res.status(400).json({ 
                 success: false, 
@@ -146,7 +147,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI BARU: Sanitasi input
+        // VALIDASI: Sanitasi input
         const sanitizedCatatan = sanitizeInput(trimmedCatatan);
 
         // Cek periode dikunci
@@ -161,10 +162,10 @@ exports.updateCatatanWaliKelas = async (req, res) => {
             });
         }
 
-        // Ambil kelas guru
+        // ✅ PERBAIKAN: PAKAI semesterId, BUKAN tahunAjaranIndukId
         const [guruKelasRows] = await db.execute(
             `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
-            [userId, tahunAjaranIndukId]
+            [userId, semesterId]
         );
 
         if (guruKelasRows.length === 0) {
@@ -176,7 +177,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
 
         const { kelas_id } = guruKelasRows[0];
 
-        // ✅ VALIDASI BARU: Cek siswa ada di kelas guru
+        // VALIDASI: Cek siswa ada di kelas guru
         const [validSiswa] = await db.execute(
             `SELECT 1 FROM siswa_kelas 
              WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?`,

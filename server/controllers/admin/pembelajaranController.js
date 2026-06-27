@@ -1,18 +1,10 @@
 /**
  * Nama File: pembelajaranController.js
- * Update: Support per semester (bukan selalu semester aktif)
- *   - Terima semester_id dari frontend
- *   - Validasi semester aktif/nonaktif untuk CRUD
  */
 
 const db = require('../../config/db');
 const pembelajaranModel = require('../../models/admin/pembelajaranModel');
 
-// ═══════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═══════════════════════════════════════════════════════════════
-
-// Konversi id_induk → id_detail (semester aktif) - UNTUK BACKWARD COMPATIBILITY
 const getIdTahunAjaranAktif = async (idInduk) => {
     const [rows] = await db.execute(
         `SELECT id_tahun_ajaran 
@@ -23,7 +15,6 @@ const getIdTahunAjaranAktif = async (idInduk) => {
     );
     return rows.length > 0 ? rows[0].id_tahun_ajaran : null;
 };
-
 
 const validateSemesterId = async (semesterId) => {
     if (!semesterId || isNaN(Number(semesterId))) {
@@ -57,9 +48,6 @@ const validateSemesterId = async (semesterId) => {
     };
 };
 
-// ═══════════════════════════════════════════════════════════════
-// GET PEMBELAJARAN (List semua per semester)
-// ═══════════════════════════════════════════════════════════════
 const getPembelajaran = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
@@ -86,13 +74,10 @@ const getPembelajaran = async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 // GET PEMBELAJARAN BY KELAS
 // ═══════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Terima semester_id dari query, filter pembelajaran per semester
-// ═══════════════════════════════════════════════════════════════
 const getPembelajaranByKelas = async (req, res) => {
     try {
         const { kelasId } = req.params;
-        const { semester_id } = req.query;  // ✅ BARU: Terima semester_id
+        const { semester_id } = req.query;
 
         if (!kelasId || isNaN(Number(kelasId))) {
             return res.status(400).json({
@@ -101,7 +86,6 @@ const getPembelajaranByKelas = async (req, res) => {
             });
         }
 
-        // ✅ BARU: Validasi semester_id
         if (!semester_id) {
             return res.status(400).json({
                 success: false,
@@ -117,24 +101,48 @@ const getPembelajaranByKelas = async (req, res) => {
             });
         }
 
-        const taId = validation.data.id;  // semester ID
+        const taId = validation.data.id;       // semester ID (id_tahun_ajaran)
+        const idInduk = validation.data.id_induk; // id_tahun_ajaran_induk
 
-        const kelasInfo = await pembelajaranModel.getKelasInfo(Number(kelasId));
-        if (!kelasInfo) {
+        // Ambil info kelas
+        const [kelasRows] = await db.execute(
+            `
+            SELECT 
+                k.id_kelas,
+                k.nama_kelas,
+                k.fase,
+                k.tahun_ajaran_id,
+                ta.tahun_ajaran,
+                ta.semester,
+                ta.status,
+                ta.id_tahun_ajaran_induk
+            FROM kelas k
+            INNER JOIN tahun_ajaran ta ON k.tahun_ajaran_id = ta.id_tahun_ajaran
+            WHERE k.id_kelas = ?
+            `,
+            [Number(kelasId)]
+        );
+
+        if (kelasRows.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Kelas tidak ditemukan'
             });
         }
 
-        // ✅ PERBAIKI: Kirim id_induk (bukan semester ID) ke getWaliKelas
+        const kelasInfo = kelasRows[0];
+
+        // ✅ PERBAIKAN: Kirim taId (semester ID) ke getWaliKelas
+        // Karena guru_kelas.tahun_ajaran_id menyimpan semester ID
         const waliKelas = await pembelajaranModel.getWaliKelas(
             Number(kelasId),
-            kelasInfo.id_induk
+            taId
         );
 
-        // ✅ PERBAIKI: Kirim taId (semester ID) untuk filter pembelajaran
-        const separated = await pembelajaranModel.getByKelasIdSeparated(Number(kelasId), taId);
+        const separated = await pembelajaranModel.getByKelasIdSeparated(
+            Number(kelasId),
+            taId
+        );
 
         const mapelWajibBelumDitugaskan = await pembelajaranModel.getMapelWajibBelumDitugaskan(
             Number(kelasId),
@@ -152,10 +160,10 @@ const getPembelajaranByKelas = async (req, res) => {
                 kelas: {
                     id: kelasInfo.id_kelas,
                     nama_kelas: kelasInfo.nama_kelas,
-                    tahun_ajaran_id: taId,  // ✅ semester ID
+                    tahun_ajaran_id: taId,
                     tahun_ajaran: kelasInfo.tahun_ajaran,
-                    semester: validation.data.semester,  // ✅ dari validation
-                    is_aktif: validation.data.is_aktif  // ✅ dari validation
+                    semester: validation.data.semester,
+                    is_aktif: validation.data.is_aktif
                 },
                 wali_kelas: waliKelas ? {
                     id: waliKelas.id_user,
@@ -177,10 +185,7 @@ const getPembelajaranByKelas = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// GET DROPDOWN (Menerima semester_id dari query)
-// ═══════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Kirim id_induk ke getKelasByTahunAjaran
+// GET DROPDOWN
 // ═══════════════════════════════════════════════════════════════
 const getDropdownPembelajaran = async (req, res) => {
     try {
@@ -205,13 +210,15 @@ const getDropdownPembelajaran = async (req, res) => {
             });
         }
 
-        const taId = validation.data.id;  // semester ID
-        const idInduk = validation.data.id_induk;  // ✅ BARU: id_induk
+        const taId = validation.data.id;       // semester ID
+        const idInduk = validation.data.id_induk;
 
         const guru = await pembelajaranModel.getGuruAktif();
-        // ✅ PERBAIKI: Kirim id_induk (bukan semester ID)
-        const kelas = await pembelajaranModel.getKelasByTahunAjaran(idInduk);
-        // Mapel tetap pakai semester ID (karena mapel per semester)
+        
+        // ✅ PERBAIKAN: Kirim taId (semester ID) ke getKelasByTahunAjaran
+        // Karena kelas.tahun_ajaran_id menyimpan semester ID
+        const kelas = await pembelajaranModel.getKelasByTahunAjaran(taId);
+        
         const semuaMapel = await pembelajaranModel.getMapelByTahunAjaran(taId);
 
         const mapel_wajib = semuaMapel.filter(mp => mp.jenis === 'wajib');
@@ -237,7 +244,7 @@ const getDropdownPembelajaran = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Gunakan id_induk untuk validasi kelas (bukan semester ID)
+// TAMBAH MAPEL WAJIB
 // ═══════════════════════════════════════════════════════════════
 const tambahMapelWajib = async (req, res) => {
     const connection = await db.getConnection();
@@ -266,8 +273,8 @@ const tambahMapelWajib = async (req, res) => {
             });
         }
 
-        const taId = validation.data.id;  // semester ID
-        const idInduk = validation.data.id_induk;  // ✅ BARU: id_induk
+        const taId = validation.data.id;       // semester ID
+        const idInduk = validation.data.id_induk;
 
         if (!validation.data.is_aktif) {
             return res.status(403).json({
@@ -278,20 +285,20 @@ const tambahMapelWajib = async (req, res) => {
 
         const kelasIdNum = Number(kelas_id);
 
-        // ✅ PERBAIKI: Gunakan id_induk (bukan semester ID) untuk validasi kelas
+        // ✅ PERBAIKAN: Validasi kelas pakai taId (semester ID)
         const [kelasCheck] = await connection.execute(
             `SELECT id_kelas, nama_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?`,
-            [kelasIdNum, idInduk]  // ← GANTI taId jadi idInduk!
+            [kelasIdNum, taId]
         );
         if (kelasCheck.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Kelas tidak valid atau bukan milik tahun ajaran yang dipilih.'
+                message: 'Kelas tidak valid atau bukan milik semester yang dipilih.'
             });
         }
 
-        // Ambil wali kelas (tetap pakai id_induk)
-        const waliKelas = await pembelajaranModel.getWaliKelas(kelasIdNum, idInduk);
+        // ✅ PERBAIKAN: Kirim taId ke getWaliKelas
+        const waliKelas = await pembelajaranModel.getWaliKelas(kelasIdNum, taId);
         if (!waliKelas) {
             return res.status(400).json({
                 success: false,
@@ -299,13 +306,12 @@ const tambahMapelWajib = async (req, res) => {
             });
         }
 
-        // Validasi semua mapel_ids adalah mapel WAJIB (tetap pakai semester ID)
         const placeholders = mapel_ids.map(() => '?').join(',');
         const [mapelCheck] = await connection.execute(
             `SELECT id_mata_pelajaran, nama_mapel, jenis 
              FROM mata_pelajaran 
              WHERE id_mata_pelajaran IN (${placeholders}) AND tahun_ajaran_id = ?`,
-            [...mapel_ids.map(id => Number(id)), taId]  // ← Mapel tetap pakai semester ID
+            [...mapel_ids.map(id => Number(id)), taId]
         );
 
         if (mapelCheck.length !== mapel_ids.length) {
@@ -323,14 +329,13 @@ const tambahMapelWajib = async (req, res) => {
             });
         }
 
-        // Bulk insert (tetap pakai semester ID)
         await connection.beginTransaction();
 
         const inserted = await pembelajaranModel.bulkInsertMapelWajib(
             kelasIdNum,
             mapel_ids.map(id => Number(id)),
             waliKelas.id_user,
-            taId,  // ← Pembelajaran tetap simpan semester ID
+            taId,
             connection
         );
 
@@ -356,7 +361,7 @@ const tambahMapelWajib = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Gunakan id_induk untuk validasi kelas (bukan semester ID)
+// TAMBAH MAPEL PILIHAN
 // ═══════════════════════════════════════════════════════════════
 const tambahMapelPilihan = async (req, res) => {
     const connection = await db.getConnection();
@@ -385,8 +390,8 @@ const tambahMapelPilihan = async (req, res) => {
             });
         }
 
-        const taId = validation.data.id;  // semester ID
-        const idInduk = validation.data.id_induk;  // ✅ BARU: id_induk
+        const taId = validation.data.id;       // semester ID
+        const idInduk = validation.data.id_induk;
 
         if (!validation.data.is_aktif) {
             return res.status(403).json({
@@ -399,24 +404,23 @@ const tambahMapelPilihan = async (req, res) => {
         const mapelIdNum = Number(mapel_id);
         const userIdNum = Number(user_id);
 
-        // ✅ PERBAIKI: Gunakan id_induk (bukan semester ID) untuk validasi kelas
+        // ✅ PERBAIKAN: Validasi kelas pakai taId (semester ID)
         const [kelasCheck] = await connection.execute(
             `SELECT id_kelas, nama_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?`,
-            [kelasIdNum, idInduk]  // ← GANTI taId jadi idInduk!
+            [kelasIdNum, taId]
         );
         if (kelasCheck.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Kelas tidak valid atau bukan milik tahun ajaran yang dipilih.'
+                message: 'Kelas tidak valid atau bukan milik semester yang dipilih.'
             });
         }
 
-        // Cek mapel ada dan merupakan mapel PILIHAN (tetap pakai semester ID)
         const [mapelCheck] = await connection.execute(
             `SELECT id_mata_pelajaran, nama_mapel, jenis 
                 FROM mata_pelajaran 
                 WHERE id_mata_pelajaran = ? AND tahun_ajaran_id = ?`,
-            [mapelIdNum, taId]  // ← Mapel tetap pakai semester ID
+            [mapelIdNum, taId]
         );
         if (mapelCheck.length === 0) {
             return res.status(400).json({
@@ -431,7 +435,6 @@ const tambahMapelPilihan = async (req, res) => {
             });
         }
 
-        // Cek guru ada dan aktif
         const [guruCheck] = await connection.execute(
             `SELECT id_user, nama_lengkap FROM user WHERE id_user = ? AND status = 'aktif'`,
             [userIdNum]
@@ -443,7 +446,6 @@ const tambahMapelPilihan = async (req, res) => {
             });
         }
 
-        // Cek duplikasi (tetap pakai semester ID)
         const isMapelDuplicate = await pembelajaranModel.isMapelDuplicateInKelas(
             kelasIdNum, mapelIdNum, taId
         );
@@ -454,12 +456,11 @@ const tambahMapelPilihan = async (req, res) => {
             });
         }
 
-        // INSERT (tetap pakai semester ID)
         await connection.beginTransaction();
 
         const id = await pembelajaranModel.create(
             {
-                tahun_ajaran_id: taId,  // ← Simpan semester ID
+                tahun_ajaran_id: taId,
                 kelas_id: kelasIdNum,
                 mapel_id: mapelIdNum,
                 user_id: userIdNum
@@ -496,7 +497,7 @@ const tambahMapelPilihan = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// TAMBAH PEMBELAJARAN (Legacy - tetap support)
+// TAMBAH PEMBELAJARAN (Legacy)
 // ═══════════════════════════════════════════════════════════════
 const tambahPembelajaran = async (req, res) => {
     const connection = await db.getConnection();
@@ -538,7 +539,6 @@ const tambahPembelajaran = async (req, res) => {
         const mapelIdNum = Number(mapel_id);
         const userIdNum = Number(user_id);
 
-        // Cek guru ada
         const [guruCheck] = await connection.execute(
             `SELECT id_user FROM user WHERE id_user = ? AND status = 'aktif'`,
             [userIdNum]
@@ -547,7 +547,6 @@ const tambahPembelajaran = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Guru tidak valid atau tidak aktif.' });
         }
 
-        // Cek kelas
         const [kelasCheck] = await connection.execute(
             `SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?`,
             [kelasIdNum, taId]
@@ -556,7 +555,6 @@ const tambahPembelajaran = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Kelas tidak valid.' });
         }
 
-        // Cek mapel
         const [mapelCheck] = await connection.execute(
             `SELECT id_mata_pelajaran, nama_mapel, jenis FROM mata_pelajaran WHERE id_mata_pelajaran = ? AND tahun_ajaran_id = ?`,
             [mapelIdNum, taId]
@@ -567,7 +565,6 @@ const tambahPembelajaran = async (req, res) => {
 
         const namaMapel = mapelCheck[0].nama_mapel;
 
-        // Cek duplikasi
         const isDuplicate = await pembelajaranModel.isDuplicate(userIdNum, kelasIdNum, mapelIdNum, taId);
         if (isDuplicate) {
             return res.status(400).json({ success: false, message: `Kombinasi ini sudah ada.` });
@@ -640,24 +637,20 @@ const editPembelajaran = async (req, res) => {
         const mapelIdNum = Number(mapel_id);
         const userIdNum = Number(user_id);
 
-        // Cek data exist
         const oldData = await pembelajaranModel.getById(idNum);
         if (!oldData) {
             return res.status(404).json({ success: false, message: 'Penugasan tidak ditemukan.' });
         }
 
-        // Cek data milik semester yang dipilih
         if (oldData.tahun_ajaran_id !== taId) {
             return res.status(403).json({ success: false, message: 'Data tidak milik semester yang dipilih.' });
         }
 
-        // Cek hasChanges
         const hasChanges = oldData.user_id !== userIdNum || oldData.kelas_id !== kelasIdNum || oldData.mapel_id !== mapelIdNum;
         if (!hasChanges) {
             return res.status(400).json({ success: false, message: 'Tidak ada perubahan data.' });
         }
 
-        // Validasi guru, kelas, mapel
         const [guruCheck] = await connection.execute(`SELECT id_user FROM user WHERE id_user = ? AND status = 'aktif'`, [userIdNum]);
         if (guruCheck.length === 0) return res.status(400).json({ success: false, message: 'Guru tidak valid.' });
 
@@ -669,7 +662,6 @@ const editPembelajaran = async (req, res) => {
 
         const namaMapel = mapelCheck[0].nama_mapel;
 
-        // Cek duplikasi
         const isDuplicate = await pembelajaranModel.isDuplicate(userIdNum, kelasIdNum, mapelIdNum, taId, idNum);
         if (isDuplicate) return res.status(400).json({ success: false, message: 'Kombinasi ini sudah ada.' });
 

@@ -1,10 +1,5 @@
 /**
  * Nama File: pembelajaranModel.js
- * Update: 
- *   - ✅ FIX: getKelasInfo JOIN ke tahun_ajaran_induk
- *   - ✅ FIX: getByKelasId tambah filter semester
- *   - ✅ FIX: getByKelasIdSeparated tambah filter semester
- *   - ✅ FIX: getGuruAktif role pakai underscore (sesuai database)
  */
 
 const db = require('../../config/db');
@@ -164,18 +159,26 @@ const pembelajaranModel = {
     return rows[0] || null;
   },
 
-  async getWaliKelas(kelasId, idInduk) {
+  async getWaliKelas(kelasId, semesterId) {
     const [rows] = await db.execute(
       `
         SELECT u.id_user, u.nama_lengkap
         FROM guru_kelas gk
         JOIN user u ON gk.user_id = u.id_user
-        WHERE gk.kelas_id = ? AND gk.tahun_ajaran_id = ?
+        JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+        WHERE gk.kelas_id = ? 
+          AND ta.id_tahun_ajaran_induk = (
+              SELECT id_tahun_ajaran_induk 
+              FROM tahun_ajaran 
+              WHERE id_tahun_ajaran = ?
+          )
+        ORDER BY gk.id_guru_kelas DESC
+        LIMIT 1
       `,
-      [kelasId, idInduk]
+      [kelasId, semesterId]
     );
     return rows[0] || null;
-  },
+},
 
   async isWaliKelas(userId, kelasId, tahunAjaranId) {
     const [rows] = await db.execute(
@@ -196,7 +199,6 @@ const pembelajaranModel = {
     return rows[0].jumlah;
   },
 
-  // ✅ FIXED: Role pakai underscore (sesuai database)
   async getGuruAktif() {
     const [rows] = await db.execute(`
       SELECT 
@@ -211,7 +213,9 @@ const pembelajaranModel = {
     return rows;
   },
 
-  async getKelasByTahunAjaran(idInduk) {
+  // ✅ PERBAIKAN: Parameter sekarang semesterId, bukan idInduk
+  // Karena kelas.tahun_ajaran_id menyimpan semester ID
+  async getKelasByTahunAjaran(semesterId) {
     const [rows] = await db.execute(
       `
         SELECT 
@@ -221,7 +225,7 @@ const pembelajaranModel = {
         WHERE tahun_ajaran_id = ?
         ORDER BY nama_kelas ASC
       `,
-      [idInduk]
+      [semesterId]
     );
     return rows;
   },
@@ -249,14 +253,13 @@ const pembelajaranModel = {
       SELECT 
         k.id_kelas,
         k.nama_kelas,
-        k.tahun_ajaran_id AS id_induk,
+        k.tahun_ajaran_id AS semester_id,
         tai.tahun_ajaran,
-        ta_aktif.id_tahun_ajaran AS semester_id,
-        ta_aktif.semester,        
-        ta_aktif.status AS status_ta
+        tai.semester,        
+        tai.status AS status_ta,
+        tai.id_tahun_ajaran_induk
       FROM kelas k
-      JOIN tahun_ajaran_induk tai ON k.tahun_ajaran_id = tai.id_tahun_ajaran_induk
-      LEFT JOIN tahun_ajaran ta_aktif ON ta_aktif.id_tahun_ajaran_induk = k.tahun_ajaran_id AND ta_aktif.status = 'aktif'
+      JOIN tahun_ajaran tai ON k.tahun_ajaran_id = tai.id_tahun_ajaran
       WHERE k.id_kelas = ?
     `,
       [kelasId]
@@ -294,9 +297,10 @@ const pembelajaranModel = {
           SELECT 1 FROM pembelajaran p 
           WHERE p.mapel_id = mp.id_mata_pelajaran 
             AND p.kelas_id = ?
+            AND p.tahun_ajaran_id = ?
         )
       ORDER BY mp.urutan_rapor ASC, mp.nama_mapel ASC
-    `, [tahunAjaranId, kelasId]);
+    `, [tahunAjaranId, kelasId, tahunAjaranId]);
     return rows;
   },
 
@@ -313,9 +317,10 @@ const pembelajaranModel = {
           SELECT 1 FROM pembelajaran p 
           WHERE p.mapel_id = mp.id_mata_pelajaran 
             AND p.kelas_id = ?
+            AND p.tahun_ajaran_id = ?
         )
       ORDER BY mp.nama_mapel ASC
-    `, [tahunAjaranId, kelasId]);
+    `, [tahunAjaranId, kelasId, tahunAjaranId]);
     return rows;
   },
 

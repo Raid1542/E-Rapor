@@ -139,7 +139,7 @@ router.post('/siswa-master/import', adminOnly, uploadExcel.single('file'), admin
 
 // --- Data Siswa per Kelas ---
 router.get('/kelas/:id/siswa', adminOnlyWithTahunAjaran, admin.getSiswaByKelas); 
-router.get('/siswa/available', adminOnlyWithTahunAjaran, admin.getSiswaAvailable); 
+router.get('/siswa/available', adminOnly, admin.getSiswaAvailable); 
 router.post('/kelas/:id/assign-siswa', adminOnlyWithTahunAjaran, admin.assignSiswaKeKelas);
 router.delete('/kelas/:id/siswa/:siswaId', adminOnlyWithTahunAjaran, admin.keluarkanSiswaDariKelas);
 

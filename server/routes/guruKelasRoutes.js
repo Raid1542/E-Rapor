@@ -179,10 +179,7 @@ router.put('/upload_foto',
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. ABSENSI
 // ═════════════════════════════════════════════════════════════════════════════
-
-// ✅ Middleware khusus absensi: ambil jenis dari body (POST) atau params (GET)
 const validateAbsensiJenis = (req, res, next) => {
-    // Untuk POST: ambil dari body
     if (req.method === 'POST') {
         const { jenis } = req.body;
         if (!jenis || !['PTS', 'PAS'].includes(jenis.toUpperCase())) {
@@ -199,7 +196,6 @@ const validateAbsensiJenis = (req, res, next) => {
     next();
 };
 
-// ✅ Middleware khusus absensi: cek status periode (tidak block GET)
 const cekStatusAbsensi = async (req, res, next) => {
     try {
         const { jenis } = req.penilaianContext || {};
@@ -221,7 +217,6 @@ const cekStatusAbsensi = async (req, res, next) => {
         const { status_pts, status_pas } = taRows[0];
         const status = jenis === 'PTS' ? status_pts : status_pas;
 
-        // ✅ Untuk POST: Block jika periode selesai
         if (req.method === 'POST' && status === 'selesai') {
             return res.status(403).json({
                 success: false,
@@ -230,7 +225,6 @@ const cekStatusAbsensi = async (req, res, next) => {
             });
         }
 
-        // ✅ Untuk POST: Block jika periode belum aktif
         if (req.method === 'POST' && status === 'nonaktif') {
             return res.status(403).json({
                 success: false,
@@ -239,10 +233,7 @@ const cekStatusAbsensi = async (req, res, next) => {
             });
         }
 
-        // ✅ Untuk GET: Tidak block, tetap lanjut (frontend yang handle read-only)
-        // Set flag untuk controller
-        req.absensiStatus = status; // 'aktif' | 'selesai' | 'nonaktif'
-        
+        req.absensiStatus = status;
         next();
     } catch (err) {
         console.error('Error cekStatusAbsensi:', err);
@@ -253,22 +244,20 @@ const cekStatusAbsensi = async (req, res, next) => {
     }
 };
 
-// GET absensi - boleh akses walau periode selesai
 router.get('/absensi/:jenis/:semester',
     authenticate,
     guruKelasOnly,
     validateJenisSemester,
-    cekStatusAbsensi,  // ✅ Pakai middleware baru
+    cekStatusAbsensi,
     cekGuruKelasDitugaskan,
     safeHandler(guruKelasControllers.getAbsensiSiswa)
 );
 
-// POST absensi - harus aktif
 router.post('/absensi',
     authenticate,
     guruKelasOnly,
-    validateAbsensiJenis,  // ✅ Ambil jenis dari body
-    cekStatusAbsensi,      // ✅ Cek status periode
+    validateAbsensiJenis,
+    cekStatusAbsensi,
     cekGuruKelasDitugaskan,
     safeHandler(guruKelasControllers.upsertAbsensi)
 );
@@ -317,7 +306,6 @@ router.put('/ekskul/:siswaId',
 // ═════════════════════════════════════════════════════════════════════════════
 // 6. KOKURIKULER (PRIORITAS UTAMA)
 // ═════════════════════════════════════════════════════════════════════════════
-
 router.get('/kokurikuler/judul-proyek',
     authenticate,
     guruKelasOnly,
@@ -362,10 +350,12 @@ router.put('/kokurikuler/:siswaId',
 // ═════════════════════════════════════════════════════════════════════════════
 // 7. NILAI AKADEMIK
 // ═════════════════════════════════════════════════════════════════════════════
+
+// ✅ PERUBAHAN DI SINI: cekPenilaianStatus → cekTahunAjaranAktif
 router.get('/mapel',
     authenticate,
     guruKelasOnly,
-    cekPenilaianStatus,
+    cekTahunAjaranAktif,  // ✅ INI YANG DIUBAH (sebelumnya: cekPenilaianStatus)
     safeHandler(guruKelasControllers.getMapelForGuruKelas)
 );
 
@@ -553,8 +543,6 @@ router.post('/atur-penilaian/kategori-kokurikuler-batch',
 // ═════════════════════════════════════════════════════════════════════════════
 // 11.2 ATUR PENILAIAN: DESKRIPSI RATA-RATA (PER KELAS)
 // ═════════════════════════════════════════════════════════════════════════════
-
-// GET - Ambil semua kategori deskripsi rata-rata
 router.get('/atur-penilaian/deskripsi-rata-rata',
     authenticate,
     guruKelasOnly,
@@ -563,7 +551,6 @@ router.get('/atur-penilaian/deskripsi-rata-rata',
     safeHandler(guruKelasControllers.getKategoriDeskripsiRataRata)
 );
 
-// POST - Tambah kategori deskripsi rata-rata baru
 router.post('/atur-penilaian/deskripsi-rata-rata',
     authenticate,
     guruKelasOnly,
@@ -572,7 +559,6 @@ router.post('/atur-penilaian/deskripsi-rata-rata',
     safeHandler(guruKelasControllers.createKategoriDeskripsiRataRata)
 );
 
-// PUT - Update kategori deskripsi rata-rata
 router.put('/atur-penilaian/deskripsi-rata-rata/:id',
     authenticate,
     guruKelasOnly,
@@ -582,7 +568,6 @@ router.put('/atur-penilaian/deskripsi-rata-rata/:id',
     safeHandler(guruKelasControllers.updateKategoriDeskripsiRataRata)
 );
 
-// DELETE - Hapus kategori deskripsi rata-rata
 router.delete('/atur-penilaian/deskripsi-rata-rata/:id',
     authenticate,
     guruKelasOnly,
@@ -710,7 +695,6 @@ const adminOrGuruKelasDitugaskan = [
     authorize(['admin', 'guru_kelas']),
     async (req, res, next) => {
         if (req.user.role === 'admin') {
-            // Ambil id_tahun_ajaran_induk dari tahunAjaranId param
             const tahunAjaranId = parseInt(req.params.tahunAjaranId, 10);
             
             if (tahunAjaranId) {

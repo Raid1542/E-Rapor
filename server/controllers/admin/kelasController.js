@@ -46,7 +46,7 @@ const checkReadOnly = async (idInduk) => {
 
 const getKelas = async (req, res) => {
     try {
-        let { tahun_ajaran_id } = req.query;
+        const { tahun_ajaran_id } = req.query;
 
         if (!tahun_ajaran_id) {
             return res.status(400).json({ 
@@ -56,9 +56,6 @@ const getKelas = async (req, res) => {
         }
 
         const idInduk = Number(tahun_ajaran_id);
-
-        // ✅ CEK STATUS READ-ONLY
-        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
 
         const [rows] = await db.execute(
             `
@@ -74,11 +71,17 @@ const getKelas = async (req, res) => {
                 SELECT gk.kelas_id, u.nama_lengkap, gk.user_id
                 FROM guru_kelas gk
                 JOIN user u ON gk.user_id = u.id_user
-                WHERE gk.tahun_ajaran_id = ?
+                WHERE gk.tahun_ajaran_id IN (
+                    SELECT id_tahun_ajaran FROM tahun_ajaran 
+                    WHERE id_tahun_ajaran_induk = ?
+                )
             ) wk ON k.id_kelas = wk.kelas_id
             LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
                 AND sk.id_tahun_ajaran_induk = ?
-            WHERE k.tahun_ajaran_id = ?
+            WHERE k.tahun_ajaran_id IN (
+                SELECT id_tahun_ajaran FROM tahun_ajaran 
+                WHERE id_tahun_ajaran_induk = ?
+            )
             GROUP BY k.id_kelas, k.nama_kelas, k.fase, wk.nama_lengkap, wk.user_id
             ORDER BY k.nama_kelas ASC
             `,
@@ -87,10 +90,7 @@ const getKelas = async (req, res) => {
         
         res.json({ 
             success: true, 
-            data: rows,
-            is_read_only: isReadOnly,
-            locked_by: lockedBy,
-            locked_semester: lockedSemester
+            data: rows
         });
     } catch (err) {
         console.error('Error get kelas:', err);
@@ -124,18 +124,22 @@ const getKelasById = async (req, res) => {
         kelas.is_aktif = (kelas.status_tahun_ajaran === 'aktif');
         delete kelas.status_tahun_ajaran;
 
-        // ✅ BARU: Ambil id_induk dari tahun_ajaran_id untuk cek read-only
+        // Ambil id_induk dari tahun_ajaran_id
         const [taInfo] = await db.execute(
             `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
             [tahunAjaranId]
         );
 
+        // ✅ PERBAIKAN: Tambahkan id_tahun_ajaran_induk ke response
         if (taInfo.length > 0) {
+            kelas.id_tahun_ajaran_induk = taInfo[0].id_tahun_ajaran_induk;
+            
             const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(taInfo[0].id_tahun_ajaran_induk);
             kelas.is_read_only = isReadOnly;
             kelas.locked_by = lockedBy;
             kelas.locked_semester = lockedSemester;
         } else {
+            kelas.id_tahun_ajaran_induk = null;
             kelas.is_read_only = false;
             kelas.locked_by = null;
             kelas.locked_semester = null;
