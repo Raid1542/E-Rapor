@@ -1,18 +1,35 @@
+/**
+ * Nama File: dashboardController.js
+ * Fungsi: Controller untuk statistik dashboard admin dan upload foto profil.
+ *         Menyediakan data agregat (jumlah guru, siswa, admin, dll) dan status periode penilaian.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
 const db = require('../../config/db');
 const guruModel = require('../../models/admin/guruModel');
 
-// File: controllers/dashboardController.js
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET DASHBOARD STATISTICS
+// ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * GET /api/admin/dashboard/stats
+ * Ambil statistik dashboard: jumlah guru, siswa, admin, ekskul, kelas, mapel.
+ * Termasuk informasi tahun ajaran aktif dan status PTS/PAS.
+ */
 const getDashboardStats = async (req, res) => {
     try {
+        // Step 1: Ambil tahun ajaran aktif
         const [taAktif] = await db.execute(`
             SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran,
-                   status_pts, status_pas
+                    status_pts, status_pas
             FROM tahun_ajaran 
             WHERE status = 'aktif' 
             LIMIT 1
         `);
 
+        // Return kosong jika tidak ada tahun ajaran aktif
         if (taAktif.length === 0) {
             return res.json({
                 success: true,
@@ -34,7 +51,7 @@ const getDashboardStats = async (req, res) => {
         const statusPTS = taAktif[0].status_pts || 'nonaktif';
         const statusPAS = taAktif[0].status_pas || 'nonaktif';
 
-        // Count Guru
+        // Step 2: Count data master
         const [guruRows] = await db.execute(`
             SELECT COUNT(DISTINCT u.id_user) AS total
             FROM user u
@@ -42,55 +59,45 @@ const getDashboardStats = async (req, res) => {
             WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')
                 AND u.status = 'aktif'
         `);
-        const guruCount = Number(guruRows[0].total) || 0;
 
-        // Count Siswa - HANYA yang status aktif
         const [siswaRows] = await db.execute(`
             SELECT COUNT(DISTINCT s.id_siswa) AS total
             FROM siswa s
             WHERE s.status = 'aktif'
         `);
-        const siswaCount = Number(siswaRows[0].total) || 0;
 
-        // Count Admin
         const [adminRows] = await db.execute(`
             SELECT COUNT(*) AS total
             FROM user u
             INNER JOIN user_role ur ON u.id_user = ur.id_user
             WHERE ur.role = 'admin' AND u.status = 'aktif'
         `);
-        const adminCount = Number(adminRows[0].total) || 0;
 
-        // Count Ekstrakurikuler
         const [ekskulRows] = await db.execute(`
             SELECT COUNT(*) AS total FROM ekstrakurikuler
             WHERE tahun_ajaran_id IN (?, ?)
         `, [taIdDetail, taIdInduk]);
-        const ekskulCount = Number(ekskulRows[0].total) || 0;
 
-        // Count Kelas
         const [kelasRows] = await db.execute(`
             SELECT COUNT(*) AS total FROM kelas
             WHERE tahun_ajaran_id IN (?, ?)
         `, [taIdDetail, taIdInduk]);
-        const kelasCount = Number(kelasRows[0].total) || 0;
 
-        // Count Mata Pelajaran
         const [mapelRows] = await db.execute(`
             SELECT COUNT(*) AS total FROM mata_pelajaran
             WHERE tahun_ajaran_id IN (?, ?)
         `, [taIdDetail, taIdInduk]);
-        const mapelCount = Number(mapelRows[0].total) || 0;
 
+        // Step 3: Return response
         res.json({
             success: true,
             data: {
-                guru: guruCount,
-                siswa: siswaCount,
-                admin: adminCount,
-                ekstrakurikuler: ekskulCount,
-                kelas: kelasCount,
-                mata_pelajaran: mapelCount,
+                guru: Number(guruRows[0].total) || 0,
+                siswa: Number(siswaRows[0].total) || 0,
+                admin: Number(adminRows[0].total) || 0,
+                ekstrakurikuler: Number(ekskulRows[0].total) || 0,
+                kelas: Number(kelasRows[0].total) || 0,
+                mata_pelajaran: Number(mapelRows[0].total) || 0,
                 tahun_ajaran: tahunAjaran,
                 semester: semesterAktif,
                 id_detail: taIdDetail,
@@ -107,13 +114,21 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. UPLOAD PROFILE PHOTO
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/upload-foto
+ * Upload foto profil admin/guru.
+ */
 const uploadFotoProfil = async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'File foto diperlukan' });
         }
 
-        const userId = req.user.id; // Dari JWT middleware
+        const userId = req.user.id;
         const fotoPath = `/uploads/${req.file.filename}`;
 
         // Simpan path ke database
@@ -123,7 +138,6 @@ const uploadFotoProfil = async (req, res) => {
             return res.status(404).json({ message: 'Guru tidak ditemukan' });
         }
 
-        // Perbarui localStorage di frontend nanti
         res.json({
             success: true,
             message: 'Foto profil berhasil diupload',
@@ -134,6 +148,10 @@ const uploadFotoProfil = async (req, res) => {
         res.status(500).json({ message: 'Gagal mengupload foto profil' });
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getDashboardStats,

@@ -1,24 +1,36 @@
 /**
  * Nama File: backupController.js
- * Fungsi: Backup & Restore SELURUH database e-Rapor (semua tahun ajaran)
- * Format: .zip (database.sql + folder uploads) atau .sql langsung
+ * Fungsi: Controller untuk backup dan restore database E-Rapor secara menyeluruh.
+ *         Backup menghasilkan file ZIP berisi SQL dump + folder uploads.
+ *         Restore menerima file .sql atau .zip untuk mengembalikan data database.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
 const fs = require('fs');
 const path = require('path');
-const archiver = require('archiver'); // Untuk buat ZIP
-const AdmZip = require('adm-zip');    // Untuk extract ZIP saat restore
+const archiver = require('archiver');
+const AdmZip = require('adm-zip');
 
-// Folder temp untuk proses backup/restore
 const TEMP_DIR = path.join(__dirname, '../../temp_backup');
 
-// ==========================================
-// BACKUP (Download ZIP)
-// ==========================================
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. BACKUP DATABASE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/backup
+ * Backup seluruh database + folder uploads ke file ZIP.
+ * 
+ * Proses:
+ *   1. Dump semua tabel ke SQL (struktur + data)
+ *   2. Gabungkan SQL + folder uploads dalam ZIP
+ *   3. Kirim file ZIP ke browser untuk download
+ */
 exports.downloadBackup = async (req, res) => {
     try {
-        // 1. Pastikan folder temp ada
+        // Step 1: Setup folder temp
         if (!fs.existsSync(TEMP_DIR)) {
             fs.mkdirSync(TEMP_DIR, { recursive: true });
         }
@@ -30,44 +42,40 @@ exports.downloadBackup = async (req, res) => {
 
         console.log('Memulai backup database...');
 
-        // 2. Ambil SEMUA tabel di database (dinamis, tidak perlu hardcode)
+        // Step 2: Ambil daftar semua tabel
         const [tables] = await db.execute('SHOW TABLES');
         const tableNames = tables.map(row => Object.values(row)[0]);
+        console.log(`Ditemukan ${tableNames.length} tabel`);
 
-        console.log(`Ditemukan ${tableNames.length} tabel:`, tableNames);
-
-        // 3. Generate SQL Dump (Struktur + Data)
+        // Step 3: Generate SQL dump
         let sqlDump = `-- Backup Database E-Rapor SDIT Ulil Albab\n`;
         sqlDump += `-- Tanggal: ${new Date().toISOString()}\n`;
         sqlDump += `-- Total Tabel: ${tableNames.length}\n\n`;
-        sqlDump += `SET FOREIGN_KEY_CHECKS = 0;\n\n`; // Nonaktifkan FK sementara
+        sqlDump += `SET FOREIGN_KEY_CHECKS = 0;\n\n`;
 
         for (const tableName of tableNames) {
             try {
-                // a. DROP TABLE IF EXISTS (agar restore bersih)
+                // DROP TABLE untuk restore bersih
                 sqlDump += `DROP TABLE IF EXISTS \`${tableName}\`;\n\n`;
 
-                // b. Ambil struktur tabel (CREATE TABLE)
+                // Struktur tabel
                 const [createTable] = await db.execute(`SHOW CREATE TABLE \`${tableName}\``);
                 sqlDump += `${createTable[0]['Create Table']};\n\n`;
 
-                // c. Ambil SEMUA data di tabel ini
+                // Data tabel
                 const [rows] = await db.execute(`SELECT * FROM \`${tableName}\``);
                 
                 if (rows.length > 0) {
-                    // Generate INSERT statements untuk setiap baris
                     for (const row of rows) {
                         const values = Object.values(row).map(val => {
                             if (val === null) return 'NULL';
                             if (typeof val === 'string') {
-                                // Escape single quote agar tidak error di SQL
                                 return `'${val.replace(/'/g, "\\'")}'`;
                             }
                             if (typeof val === 'object') {
-                                // Handle JSON/Date object
                                 return `'${JSON.stringify(val)}'`;
                             }
-                            return val; // Number, boolean, dll
+                            return val;
                         }).join(', ');
                         
                         sqlDump += `INSERT INTO \`${tableName}\` VALUES (${values});\n`;
@@ -76,27 +84,25 @@ exports.downloadBackup = async (req, res) => {
                 }
             } catch (err) {
                 console.warn(`Gagal backup tabel ${tableName}:`, err.message);
-                // Lanjutkan ke tabel berikutnya, jangan stop total
             }
         }
         
-        sqlDump += `SET FOREIGN_KEY_CHECKS = 1;\n`; // Aktifkan FK kembali
+        sqlDump += `SET FOREIGN_KEY_CHECKS = 1;\n`;
 
-        // 4. Simpan file SQL sementara
+        // Step 4: Simpan file SQL
         fs.writeFileSync(sqlPath, sqlDump, 'utf8');
-        console.log('File database.sql berhasil dibuat');
 
-        // 5. Buat File ZIP (Gabungkan SQL + Folder Uploads)
+        // Step 5: Buat ZIP
         const output = fs.createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 9 } }); // Kompresi maksimal
+        const archive = archiver('zip', { zlib: { level: 9 } });
 
         output.on('close', () => {
             const sizeMB = (archive.pointer() / 1024 / 1024).toFixed(2);
             console.log(`ZIP selesai dibuat. Ukuran: ${sizeMB} MB`);
             
-            // 6. Kirim File ke Browser (Download)
+            // Step 6: Download file
             res.download(zipPath, fileName, (err) => {
-                // Cleanup: Hapus file temp setelah download selesai
+                // Cleanup file temp
                 if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
                 if (fs.existsSync(sqlPath)) fs.unlinkSync(sqlPath);
                 
@@ -115,18 +121,14 @@ exports.downloadBackup = async (req, res) => {
         });
 
         archive.pipe(output);
-
-        // Masukkan file SQL ke dalam ZIP
         archive.file(sqlPath, { name: 'database.sql' });
 
-        // Masukkan folder uploads (Logo, Foto Profil) ke dalam ZIP
+        // Tambahkan folder uploads ke ZIP
         const uploadsPath = path.join(__dirname, '../../public/uploads');
         if (fs.existsSync(uploadsPath)) {
             archive.directory(uploadsPath, 'uploads');
-            console.log('Folder uploads ditambahkan ke backup');
         }
 
-        // Finalize ZIP
         archive.finalize();
 
     } catch (err) {
@@ -138,14 +140,25 @@ exports.downloadBackup = async (req, res) => {
     }
 };
 
-// ==========================================
-// RESTORE (Upload & Replace Data)
-// ==========================================
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. RESTORE DATABASE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/backup/restore
+ * Restore database dari file .sql atau .zip.
+ * 
+ * Proses:
+ *   1. Extract SQL dari ZIP atau baca langsung dari .sql
+ *   2. Split SQL menjadi per statement
+ *   3. Eksekusi dalam transaction (atomic)
+ *   4. Rollback jika ada error kritis
+ */
 exports.uploadRestore = async (req, res) => {
     const connection = await db.getConnection();
     
     try {
-        // Validasi file upload
+        // Validasi file
         if (!req.file) {
             return res.status(400).json({ message: 'File backup wajib diupload' });
         }
@@ -155,28 +168,22 @@ exports.uploadRestore = async (req, res) => {
 
         console.log(`Memproses file: ${req.file.originalname}`);
 
-        // ==========================================
-        // HANDLE FILE .ZIP (Extract database.sql)
-        // ==========================================
+        // Step 1: Extract SQL dari ZIP atau baca langsung
         if (req.file.originalname.endsWith('.zip')) {
             try {
                 const zip = new AdmZip(filePath);
                 const zipEntries = zip.getEntries();
                 
-                // Cari file 'database.sql' di dalam ZIP
                 const sqlEntry = zipEntries.find(entry => entry.entryName === 'database.sql');
                 
                 if (!sqlEntry) {
                     fs.unlinkSync(filePath);
                     return res.status(400).json({ 
-                        message: 'File ZIP tidak valid. Harus mengandung file database.sql di dalamnya.' 
+                        message: 'File ZIP tidak valid. Harus mengandung file database.sql.' 
                     });
                 }
                 
-                // Extract content SQL ke memory
                 sqlContent = sqlEntry.getData().toString('utf8');
-                console.log('database.sql berhasil diekstrak dari ZIP');
-                
             } catch (zipErr) {
                 fs.unlinkSync(filePath);
                 return res.status(400).json({ 
@@ -185,9 +192,6 @@ exports.uploadRestore = async (req, res) => {
                 });
             }
         } 
-        // ==========================================
-        // HANDLE FILE .SQL (Langsung baca)
-        // ==========================================
         else if (req.file.originalname.endsWith('.sql')) {
             sqlContent = fs.readFileSync(filePath, 'utf8');
         } 
@@ -198,11 +202,7 @@ exports.uploadRestore = async (req, res) => {
             });
         }
 
-        // ==========================================
-        // EKSEKUSI SQL RESTORE
-        // ==========================================
-        
-        // Split SQL menjadi per statement (berdasarkan tanda titik koma)
+        // Step 2: Split SQL menjadi per statement
         const statements = sqlContent
             .split(';')
             .map(stmt => stmt.trim())
@@ -214,7 +214,7 @@ exports.uploadRestore = async (req, res) => {
 
         console.log(`Mengeksekusi ${statements.length} statement SQL...`);
 
-        // Gunakan Transaction agar data aman (atomic)
+        // Step 3: Eksekusi dalam transaction
         await connection.beginTransaction();
 
         let successCount = 0;
@@ -227,33 +227,26 @@ exports.uploadRestore = async (req, res) => {
                     successCount++;
                 } catch (err) {
                     errorCount++;
-                    // Log error tapi JANGAN throw, biar restore lanjut ke statement berikutnya
-                    // Ini penting karena kadang ada statement duplikat atau minor issue
-                    console.warn(`Statement ke-${successCount} error:`, err.message.substring(0, 100));
+                    console.warn(`Statement error:`, err.message.substring(0, 100));
                 }
             }
         }
 
         await connection.commit();
-        
-        // Hapus file upload setelah selesai
         fs.unlinkSync(filePath);
 
         console.log(`Restore selesai. Sukses: ${successCount}, Error: ${errorCount}`);
 
         res.json({
             success: true,
-            message: `store berhasil! ${successCount} statement dieksekusi.`,
+            message: `Restore berhasil! ${successCount} statement dieksekusi.`,
             warning: 'Silakan refresh halaman atau restart aplikasi untuk memastikan data terbaru.'
         });
 
     } catch (err) {
-        // Jika error kritis, ROLLBACK semua perubahan
         await connection.rollback();
-        
         console.error('Error Restore:', err);
         
-        // Hapus file upload jika ada error
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
@@ -263,7 +256,6 @@ exports.uploadRestore = async (req, res) => {
             error: err.message 
         });
     } finally {
-        // Pastikan koneksi dilepas
         connection.release();
     }
 };
