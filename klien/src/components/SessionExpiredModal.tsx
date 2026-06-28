@@ -1,34 +1,87 @@
+/**
+ * Nama File: SessionExpiredModal.tsx
+ * Fungsi: Komponen modal untuk menampilkan notifikasi sesi login yang telah berakhir.
+ *         Muncul secara otomatis ketika token JWT kadaluarsa atau tidak valid.
+ *         Menyediakan tombol untuk login ulang dengan animasi smooth dan auto-focus.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, LogOut, ShieldAlert } from 'lucide-react';
+import { LogOut, ShieldAlert } from 'lucide-react';
 
+// ═════════════════════════════════════════════════════════════════════════════
+// INTERFACE DEFINITION
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Props untuk komponen SessionExpiredModal
+ * 
+ * @property onConfirm - Callback function yang dipanggil saat user klik tombol login ulang
+ */
 interface SessionExpiredModalProps {
     onConfirm: () => void;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// SESSION EXPIRED MODAL COMPONENT
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Komponen modal untuk notifikasi sesi login berakhir.
+ * 
+ * Fitur:
+ *   - Animasi masuk yang smooth (fade-in + scale)
+ *   - Auto-focus ke tombol login untuk UX yang lebih baik
+ *   - Icon dengan animasi pulse untuk menarik perhatian
+ *   - Backdrop blur untuk efek modern
+ *   - Gradient button dengan hover effect
+ *   - Z-index tinggi (99999) untuk memastikan modal di atas semua elemen
+ * 
+ * Penggunaan:
+ *   <SessionExpiredModal onConfirm={handleLogout} />
+ * 
+ * @param onConfirm - Callback function untuk handle login ulang
+ * @returns Modal overlay dengan notifikasi sesi berakhir
+ */
 export default function SessionExpiredModal({ onConfirm }: SessionExpiredModalProps) {
     const [isVisible, setIsVisible] = useState(false);
 
-    // ✅ Animasi masuk yang smooth
+    // ── Effect: Animasi Masuk Smooth ─────────────────────────────────────────
+
+    /**
+     * Trigger animasi masuk setelah komponen mount
+     * Delay 50ms untuk memastikan transisi CSS bekerja dengan baik
+     */
     useEffect(() => {
         const timer = setTimeout(() => setIsVisible(true), 50);
         return () => clearTimeout(timer);
     }, []);
 
-    // ✅ Auto-focus ke tombol untuk UX
+    // ── Effect: Auto-Focus Tombol ────────────────────────────────────────────
+
+    /**
+     * Auto-focus ke tombol login untuk UX yang lebih baik
+     * User bisa langsung tekan Enter untuk login ulang
+     */
     useEffect(() => {
         const btn = document.querySelector('[data-session-btn]') as HTMLButtonElement;
         btn?.focus();
     }, []);
+
+    // ── Render: Modal Overlay ────────────────────────────────────────────────
 
     return (
         <div 
             className="fixed inset-0 z-[99999] flex items-center justify-center p-4 transition-opacity duration-200"
             style={{ opacity: isVisible ? 1 : 0 }}
         >
+            {/* Backdrop dengan blur effect */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
+            {/* Modal Container */}
             <div 
                 className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-6 transition-all duration-300"
                 style={{ 
@@ -44,9 +97,10 @@ export default function SessionExpiredModal({ onConfirm }: SessionExpiredModalPr
                     </div>
                 </div>
 
+                {/* Text Content */}
                 <div className="text-center space-y-3">
                     <h3 className="text-xl font-bold text-gray-900">
-                        ⚠️ Sesi Login Telah Berakhir
+                        Sesi Login Telah Berakhir
                     </h3>
                     <p className="text-sm text-gray-600 leading-relaxed">
                         Untuk keamanan akun Anda, sesi login telah otomatis berakhir karena token sudah kadaluarsa.
@@ -56,6 +110,7 @@ export default function SessionExpiredModal({ onConfirm }: SessionExpiredModalPr
                     </p>
                 </div>
 
+                {/* Action Button */}
                 <button
                     data-session-btn
                     onClick={onConfirm}

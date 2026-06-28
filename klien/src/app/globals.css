@@ -1,35 +1,83 @@
 /**
- * Nama File: global.css
- * Fungsi: File stylesheet global untuk aplikasi E-Rapor.
- *         Mengatur font utama (Poppins), tema warna, dan dukungan dark mode.
+ * Nama File: globals.css
+ * Fungsi: File stylesheet global untuk aplikasi E-Rapor SDIT Ulil Albab.
+ *         Mengatur konfigurasi dasar visual aplikasi termasuk font utama (Poppins),
+ *         tema warna (light/dark mode), dan variabel CSS untuk konsistensi desain.
+ *         File ini di-import oleh RootLayout dan berlaku untuk seluruh aplikasi.
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
  */
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 1. IMPORT EXTERNAL RESOURCES
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Import font Poppins dari Google Fonts
+ * Weight: 300 (light), 400 (regular), 500 (medium), 600 (semibold), 700 (bold)
+ */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/**
+ * Import Tailwind CSS framework
+ * Menyediakan utility classes untuk styling cepat dan konsisten
+ */
 @import "tailwindcss";
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 2. CSS VARIABLES (LIGHT MODE)
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Variabel CSS untuk tema light mode (default)
+ * Digunakan sebagai base untuk seluruh aplikasi
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #ffffff;
+    --foreground: #171717;
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 3. TAILWIND THEME CONFIGURATION
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Konfigurasi tema Tailwind CSS
+ * Mapping variabel CSS ke Tailwind theme untuk integrasi yang seamless
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono);
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 4. DARK MODE SUPPORT
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Override variabel CSS untuk dark mode
+ * Aktif otomatis berdasarkan preferensi sistem operasi user
+ * Menggunakan media query prefers-color-scheme
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: black;
-  }
+    :root {
+        --background: #0a0a0a;
+        --foreground: black;
+    }
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 5. BASE STYLES
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Style dasar untuk elemen body
+ * Menerapkan variabel CSS untuk background, text color, dan font family
+ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
 }

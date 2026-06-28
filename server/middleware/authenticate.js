@@ -1,53 +1,83 @@
+/**
+ * Nama File: authenticate.js
+ * Fungsi: Middleware untuk validasi JWT token pada setiap request yang memerlukan autentikasi.
+ *         Mengekstrak token dari header Authorization atau query parameter, memverifikasi,
+ *         dan menyimpan payload user di req.user untuk digunakan di middleware berikutnya.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
 const jwt = require('jsonwebtoken');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// AUTHENTICATION MIDDLEWARE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Middleware untuk verifikasi JWT token.
+ * Token diambil dari header Authorization (Bearer) atau query parameter.
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next function
+ * @returns {void} Lanjut ke middleware berikutnya atau return error response
+ */
 const authenticate = (req, res, next) => {
-  let token = null;
-  const authHeader = req.headers['authorization'];
-  
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.split(' ')[1];
-  }
+    let token = null;
+    const authHeader = req.headers['authorization'];
 
-  if (!token && req.query && req.query.token) {
-    token = req.query.token;
-  }
-
-  if (!token) {
-    return res.status(401).json({ 
-      success: false,
-      message: 'Token tidak ditemukan',
-      code: 'NO_TOKEN'
-    });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (!decoded.id || !decoded.role) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Token tidak valid: payload tidak lengkap',
-        code: 'INVALID_TOKEN'
-      });
+    // Ambil token dari header Authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
     }
 
-    req.user = decoded;
-    next();
-  } catch (err) {
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token telah kadaluarsa',
-        code: 'TOKEN_EXPIRED'
-      });
+    // Fallback: ambil token dari query parameter
+    if (!token && req.query && req.query.token) {
+        token = req.query.token;
     }
-    
-    return res.status(403).json({ 
-      success: false,
-      message: 'Token tidak valid',
-      code: 'INVALID_TOKEN'
-    });
-  }
+
+    // Cek keberadaan token
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: 'Token tidak ditemukan',
+            code: 'NO_TOKEN'
+        });
+    }
+
+    try {
+        // Verifikasi token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Validasi payload token
+        if (!decoded.id || !decoded.role) {
+            return res.status(403).json({
+                success: false,
+                message: 'Token tidak valid: payload tidak lengkap',
+                code: 'INVALID_TOKEN'
+            });
+        }
+
+        // Simpan data user di request object
+        req.user = decoded;
+        next();
+    } catch (err) {
+        // Handle token expired
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                message: 'Token telah kadaluarsa',
+                code: 'TOKEN_EXPIRED'
+            });
+        }
+
+        // Handle invalid token
+        return res.status(403).json({
+            success: false,
+            message: 'Token tidak valid',
+            code: 'INVALID_TOKEN'
+        });
+    }
 };
 
 module.exports = authenticate;

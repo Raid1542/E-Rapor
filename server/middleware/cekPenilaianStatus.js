@@ -1,8 +1,42 @@
+/**
+ * Nama File: cekPenilaianStatus.js
+ * Fungsi: Middleware untuk validasi status periode penilaian (PTS/PAS).
+ *         Menentukan jenis penilaian aktif, mengatur akses berdasarkan status periode,
+ *         dan mengizinkan GET request untuk download rapor meski periode selesai.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
 const db = require('../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// CHECK PENILAIAN STATUS MIDDLEWARE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Middleware untuk validasi status PTS dan PAS secara dinamis.
+ * 
+ * Alur Kerja:
+ *   1. Ambil tahun ajaran aktif dari database
+ *   2. Inject data semester dan status ke request object
+ *   3. Deteksi jenis penilaian dari query/body/params
+ *   4. Validasi akses berdasarkan status (aktif/selesai/nonaktif)
+ *   5. Fallback ke jenis penilaian aktif jika tidak ada parameter
+ * 
+ * Aturan Akses:
+ *   - Status aktif: Write & read diizinkan
+ *   - Status selesai: Hanya read (download rapor)
+ *   - Status nonaktif: Hanya read
+ * 
+ * Data yang di-inject ke req:
+ *   - req.idTahunAjaranInduk: ID tahun ajaran induk
+ *   - req.idSemesterAktif: ID semester aktif
+ *   - req.jenis_penilaian: PTS atau PAS
+ *   - req.penilaianContext: { semester, status_pts, status_pas, jenis }
+ */
 const cekPenilaianStatus = async (req, res, next) => {
     try {
-        // ── 1. FETCH TAHUN AJARAN AKTIF ─────────────────────────────────────
+        // ── Step 1: Ambil Tahun Ajaran Aktif ──────────────────────────────
         const [taRows] = await db.execute(`
             SELECT 
                 ta.id_tahun_ajaran,
@@ -31,7 +65,7 @@ const cekPenilaianStatus = async (req, res, next) => {
             status_pas
         } = taRows[0];
 
-        // ── 2. SET DATA DASAR KE REQUEST ────────────────────────────────────
+        // ── Step 2: Inject Data ke Request ────────────────────────────────
         req.idTahunAjaranInduk = id_tahun_ajaran_induk;
         req.idSemesterAktif = id_tahun_ajaran;
         req.tahunAjaranAktif = taRows[0];
@@ -43,75 +77,57 @@ const cekPenilaianStatus = async (req, res, next) => {
         req.penilaianContext.status_pts = status_pts;
         req.penilaianContext.status_pas = status_pas;
 
-        // ── 3. CEK METHOD (GET vs WRITE) ────────────────────────────────────
+        // ── Step 3: Cek Method Request ────────────────────────────────────
         const isWriteOperation = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method);
 
-        // ── 4. ✅ CEK JENIS PENILAIAN DARI SEMUA SUMBER ────────────────────
-        // ✅ UPDATED: Cek dari query, body, params, dan context
+        // ── Step 4: Deteksi Jenis Penilaian dari Berbagai Sumber ──────────
         const reqJenis = req.query?.jenis
             || req.body?.jenis
             || req.body?.jenis_penilaian
             || req.params?.jenis
             || req.penilaianContext?.jenis;
 
-        console.log(`🔍 [Middleware] req.query.jenis: ${req.query?.jenis}`);
-        console.log(`🔍 [Middleware] req.body.jenis: ${req.body?.jenis}`);
-        console.log(`🔍 [Middleware] reqJenis yang digunakan: ${reqJenis}`);
-        console.log(`🔍 [Middleware] status_pts: ${status_pts}, status_pas: ${status_pas}`);
-
         if (reqJenis && ['PTS', 'PAS'].includes(reqJenis.toUpperCase())) {
             const jenis = reqJenis.toUpperCase();
             const status = jenis === 'PTS' ? status_pts : status_pas;
 
-            console.log(`✅ [Middleware] Memproses jenis: ${jenis}, status: ${status}`);
-
-            // 4a. Periode AKTIF
+            // Status aktif: izinkan semua operasi
             if (status === 'aktif') {
                 req.jenis_penilaian = jenis;
                 req.penilaianContext.jenis = jenis;
-                console.log(`✅ [Middleware] Periode ${jenis} aktif, lanjutkan`);
                 return next();
             }
-            // 4b. Periode SELESAI (dikunci)
+            // Status selesai: hanya izinkan GET (download rapor)
             else if (status === 'selesai') {
-                // ✅ HANYA block write operation, izinkan GET (download/read)
                 if (isWriteOperation) {
-                    console.log(`❌ [Middleware] Periode ${jenis} sudah selesai, block write`);
                     return res.status(403).json({
                         success: false,
                         message: `Periode ${jenis} sudah selesai. Data tidak dapat diubah.`,
                         code: 'PERIOD_LOCKED'
                     });
-                } else {
-                    // ✅ GET request (download rapor) → izinkan
-                    req.jenis_penilaian = jenis;
-                    req.penilaianContext.jenis = jenis;
-                    console.log(`✅ [Middleware] Periode ${jenis} selesai, GET request diizinkan (download)`);
-                    return next();
                 }
+                req.jenis_penilaian = jenis;
+                req.penilaianContext.jenis = jenis;
+                return next();
             }
-            // 4c. Periode BELUM AKTIF
+            // Status nonaktif: hanya izinkan GET
             else {
                 if (isWriteOperation) {
-                    console.log(`❌ [Middleware] Periode ${jenis} belum dibuka, block write`);
                     return res.status(403).json({
                         success: false,
                         message: `Periode ${jenis} belum dibuka oleh admin.`,
                         code: 'PERIOD_NOT_OPEN'
                     });
-                } else {
-                    req.jenis_penilaian = jenis;
-                    req.penilaianContext.jenis = jenis;
-                    req.penilaianContext.periodNotOpen = true;
-                    console.log(`⚠️ [Middleware] GET request: periode ${jenis} belum dibuka, lanjutkan`);
-                    return next();
                 }
+                req.jenis_penilaian = jenis;
+                req.penilaianContext.jenis = jenis;
+                req.penilaianContext.periodNotOpen = true;
+                return next();
             }
         }
 
-        // ── 5. FALLBACK: TENTUKAN JENIS PENILAIAN AKTIF ─────────────────────
-        console.log(`⚠️ [Middleware] Tidak ada parameter jenis, gunakan fallback`);
-
+        // ── Step 5: Fallback - Tentukan Jenis Penilaian Aktif ─────────────
+        // Validasi: PTS dan PAS tidak boleh aktif bersamaan
         if (status_pts === 'aktif' && status_pas === 'aktif') {
             return res.status(400).json({
                 success: false,
@@ -120,28 +136,27 @@ const cekPenilaianStatus = async (req, res, next) => {
             });
         }
 
+        // Fallback ke PTS jika aktif
         if (status_pts === 'aktif') {
             req.jenis_penilaian = 'PTS';
             req.penilaianContext.jenis = 'PTS';
-            console.log(`✅ [Middleware] Fallback ke PTS (aktif)`);
             return next();
         }
 
+        // Fallback ke PAS jika aktif
         if (status_pas === 'aktif') {
             req.jenis_penilaian = 'PAS';
             req.penilaianContext.jenis = 'PAS';
-            console.log(`✅ [Middleware] Fallback ke PAS (aktif)`);
             return next();
         }
 
-        // ── 8. KEDUA PERIODE NONAKTIF ───────────────────────────────────────
+        // ── Step 6: Kedua Periode Nonaktif ────────────────────────────────
         req.jenis_penilaian = 'PTS';
         req.penilaianContext.jenis = 'PTS';
         req.penilaianContext.info = 'Belum ada periode penilaian yang dibuka oleh admin';
         req.penilaianContext.periodNotOpen = true;
 
         if (isWriteOperation) {
-            console.log(`❌ [Middleware] Tidak ada periode aktif, block write`);
             return res.status(403).json({
                 success: false,
                 message: 'Belum ada periode penilaian yang dibuka oleh admin.',
@@ -149,7 +164,6 @@ const cekPenilaianStatus = async (req, res, next) => {
             });
         }
 
-        console.log(`⚠️ [Middleware] GET request: periode belum dibuka, default ke PTS`);
         next();
 
     } catch (err) {

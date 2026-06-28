@@ -1,18 +1,31 @@
 /**
  * Nama File: cekAksesMapelDanKelas.js
- * Fungsi: Validasi guru mengajar mapel tertentu di kelas tertentu
- *         Dipakai untuk route input nilai yang butuh :mapelId dan :kelasId
+ * Fungsi: Middleware untuk validasi akses guru bidang studi ke mata pelajaran di kelas tertentu.
+ *         Memastikan guru mengajar mapel yang diakses di kelas dan semester aktif.
+ *         Digunakan untuk route input nilai yang membutuhkan parameter :mapelId dan :kelasId.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// CHECK MAPEL & KELAS ACCESS MIDDLEWARE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Middleware untuk validasi akses guru ke mapel di kelas tertentu.
+ * 
+ * Data yang di-inject ke req:
+ *   - req.penugasanGuru: { mapel_id, kelas_id, nama_mapel, nama_kelas, jenis_mapel }
+ */
 const cekAksesMapelDanKelas = async (req, res, next) => {
     try {
         const { mapelId, kelasId } = req.params;
         const userId = req.user.id;
         const semesterId = req.idSemesterAktif;
 
-        // Validasi parameter
+        // Step 1: Validasi parameter
         if (!mapelId || !kelasId) {
             return res.status(400).json({
                 success: false,
@@ -27,7 +40,7 @@ const cekAksesMapelDanKelas = async (req, res, next) => {
             });
         }
 
-        // Cek apakah guru mengajar mapel ini di kelas ini
+        // Step 2: Cek penugasan guru ke mapel di kelas tertentu
         const [rows] = await db.execute(
             `SELECT p.id, mp.nama_mapel, mp.jenis, k.nama_kelas
                 FROM pembelajaran p
@@ -40,15 +53,16 @@ const cekAksesMapelDanKelas = async (req, res, next) => {
             [userId, mapelId, kelasId, semesterId]
         );
 
+        // Step 3: Validasi akses
         if (rows.length === 0) {
             return res.status(403).json({
                 success: false,
-                message: `Anda tidak mengajar mata pelajaran ini di kelas tersebut semester ini.`,
+                message: 'Anda tidak mengajar mata pelajaran ini di kelas tersebut semester ini.',
                 code: 'NO_ACCESS_TO_MAPEL_KELAS'
             });
         }
 
-        // Simpan info penugasan
+        // Step 4: Inject informasi penugasan ke request
         req.penugasanGuru = {
             mapel_id: parseInt(mapelId),
             kelas_id: parseInt(kelasId),

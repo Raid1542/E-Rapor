@@ -1,14 +1,28 @@
 /**
- * File: fetchWrapper.ts
- * ✅ UPDATED: Handle 401 dengan aman, hindari double logout
+ * Nama File: fetchWrapper.ts
+ * Fungsi: Wrapper untuk fetch API dengan auto-attach JWT token dan handling 401 unauthorized.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 import { getToken } from '@/lib/auth';
 
+// ═════════════════════════════════════════════════════════════════════════════
+// INTERFACE
+// ═════════════════════════════════════════════════════════════════════════════
+
 interface FetchOptions extends RequestInit {
-    skipAuthCheck?: boolean;
+    skipAuthCheck?: boolean; // Skip 401 handling untuk endpoint publik
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// MAIN FUNCTION
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetch dengan auto Authorization header dan handling token expired.
+ * Trigger event 'sessionExpired' saat server return 401 + TOKEN_EXPIRED.
+ */
 export async function fetchWithAuth(
     url: string,
     options: FetchOptions = {}
@@ -23,25 +37,16 @@ export async function fetchWithAuth(
     };
 
     try {
-        const response = await fetch(url, {
-            ...fetchOptions,
-            headers,
-        });
+        const response = await fetch(url, { ...fetchOptions, headers });
 
-        // ✅ Hanya trigger logout jika server merespon 401
+        // Handle 401 - token expired
         if (response.status === 401 && !skipAuthCheck) {
             const data = await response.json().catch(() => ({}));
             
-            // Cek apakah pesan dari server memang tentang expired
             if (data.code === 'TOKEN_EXPIRED' || data.message?.toLowerCase().includes('expired')) {
-                console.log('🔒 [fetchWrapper] Token expired from server');
                 localStorage.removeItem('token');
                 localStorage.removeItem('currentUser');
-                
-                // Trigger event agar useSession menampilkan modal
                 window.dispatchEvent(new CustomEvent('sessionExpired'));
-                
-                // Redirect ke login
                 window.location.href = '/login';
             }
         }
@@ -55,21 +60,28 @@ export async function fetchWithAuth(
     }
 }
 
-// Helper functions
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** GET request dengan auth */
 export const getWithAuth = (url: string) =>
     fetchWithAuth(url, { method: 'GET' });
 
+/** POST request dengan auth + JSON body */
 export const postWithAuth = (url: string, data: any) =>
     fetchWithAuth(url, {
         method: 'POST',
         body: JSON.stringify(data),
     });
 
+/** PUT request dengan auth + JSON body */
 export const putWithAuth = (url: string, data: any) =>
     fetchWithAuth(url, {
         method: 'PUT',
         body: JSON.stringify(data),
     });
 
+/** DELETE request dengan auth */
 export const deleteWithAuth = (url: string) =>
     fetchWithAuth(url, { method: 'DELETE' });
