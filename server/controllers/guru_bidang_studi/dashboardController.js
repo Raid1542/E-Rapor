@@ -1,18 +1,36 @@
 /**
  * Nama File: dashboardController.js
- * UPDATE: 
- *   - Fix status code 404 → 403 untuk "belum ditugaskan"
- *   - Tambah code: 'NOT_ASSIGNED' untuk frontend
- *   - Tambah status_pts & status_pas untuk banner warning
+ * Fungsi: Controller untuk dashboard guru bidang studi.
+ *         Menyediakan data statistik pengajaran, progress penilaian per mapel,
+ *         validasi konfigurasi (bobot & kategori), dan peringatan sistem.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// DASHBOARD DATA
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/guru-bidang-studi/dashboard
+ * Ambil data dashboard guru bidang studi dengan statistik lengkap.
+ * 
+ * Response includes:
+ *   - Info tahun ajaran & semester aktif
+ *   - Status PTS/PAS (aktif/nonaktif/selesai)
+ *   - Total kelas & siswa unik yang diajar
+ *   - Progress penilaian per mata pelajaran (hanya mapel pilihan)
+ *   - Status konfigurasi (bobot & kategori)
+ *   - Overall progress percentage
+ *   - Warnings untuk konfigurasi yang belum lengkap
+ */
 exports.getDashboardData = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // STEP 1: Ambil Tahun Ajaran Aktif
+        // Step 1: Ambil Tahun Ajaran Aktif
         const [taRows] = await db.execute(`
             SELECT 
                 id_tahun_ajaran,
@@ -40,7 +58,7 @@ exports.getDashboardData = async (req, res) => {
         const semesterId = ta.id_tahun_ajaran;
         const indukId = ta.id_tahun_ajaran_induk;
 
-        // STEP 2: Tentukan Jenis Penilaian Aktif
+        // Step 2: Tentukan Jenis Penilaian Aktif
         let jenis_penilaian_aktif = null;
         if (ta.status_pts === 'aktif') {
             jenis_penilaian_aktif = 'PTS';
@@ -48,7 +66,7 @@ exports.getDashboardData = async (req, res) => {
             jenis_penilaian_aktif = 'PAS';
         }
 
-        // STEP 3: Hitung Total Kelas & Siswa UNIK
+        // Step 3: Hitung Total Kelas & Siswa Unik
         const [kelasUnikResult] = await db.execute(`
             SELECT COUNT(DISTINCT kelas_id) AS total
             FROM pembelajaran
@@ -70,7 +88,7 @@ exports.getDashboardData = async (req, res) => {
 
         const totalSiswaUnik = siswaUnikResult[0]?.total || 0;
 
-        // STEP 4: Ambil Mata Pelajaran yang Diajar (HANYA JENIS PILIHAN)
+        // Step 4: Ambil Mata Pelajaran yang Diajar (Hanya Jenis Pilihan)
         const [mapelDasar] = await db.execute(`
             SELECT 
                 mp.id_mata_pelajaran,
@@ -86,42 +104,42 @@ exports.getDashboardData = async (req, res) => {
             ORDER BY mp.nama_mapel
         `, [userId, semesterId]);
 
-        // ✅ PERBAIKAN: Cek apakah guru ditugaskan
+        // Cek apakah guru ditugaskan
         if (mapelDasar.length === 0) {
-            return res.status(403).json({  // ✅ UBAH: 404 → 403
+            return res.status(403).json({
                 success: false,
                 message: 'Anda belum ditugaskan mengajar mata pelajaran apapun di semester ini.',
-                code: 'NOT_ASSIGNED'  // ✅ TAMBAHKAN: code untuk frontend
+                code: 'NOT_ASSIGNED'
             });
         }
 
-        // STEP 5: Hitung Progress per Mapel + Cek Konfigurasi
+        // Step 5: Hitung Progress per Mapel + Cek Konfigurasi
         const mataPelajaranList = [];
         let totalPenilaianAda = 0;
 
         for (const mapel of mapelDasar) {
-            // 5a. Hitung siswa yang sudah dinilai - ✅ FIXED: Pakai nilai_rapor
+            // 5a. Hitung siswa yang sudah dinilai (pakai nilai_rapor)
             const [dinilaiResult] = await db.execute(`
-        SELECT COUNT(DISTINCT nr.siswa_id) AS total
-        FROM nilai_rapor nr
-        WHERE nr.mapel_id = ?
-            AND nr.tahun_ajaran_id = ?
-            AND nr.semester = ?
-            AND nr.jenis_penilaian = ?
-            AND nr.nilai_rapor IS NOT NULL
-            AND nr.siswa_id IN (
-                SELECT sk.siswa_id
-                FROM siswa_kelas sk
-                WHERE sk.kelas_id IN (
-                    SELECT kelas_id 
-                    FROM pembelajaran 
-                    WHERE user_id = ? 
-                    AND mapel_id = ? 
-                    AND tahun_ajaran_id = ?
-                )
-                AND sk.id_tahun_ajaran_induk = ?
-            )
-    `, [
+                SELECT COUNT(DISTINCT nr.siswa_id) AS total
+                FROM nilai_rapor nr
+                WHERE nr.mapel_id = ?
+                    AND nr.tahun_ajaran_id = ?
+                    AND nr.semester = ?
+                    AND nr.jenis_penilaian = ?
+                    AND nr.nilai_rapor IS NOT NULL
+                    AND nr.siswa_id IN (
+                        SELECT sk.siswa_id
+                        FROM siswa_kelas sk
+                        WHERE sk.kelas_id IN (
+                            SELECT kelas_id 
+                            FROM pembelajaran 
+                            WHERE user_id = ? 
+                            AND mapel_id = ? 
+                            AND tahun_ajaran_id = ?
+                        )
+                        AND sk.id_tahun_ajaran_induk = ?
+                    )
+            `, [
                 mapel.id_mata_pelajaran,
                 semesterId,
                 ta.semester,
@@ -135,8 +153,7 @@ exports.getDashboardData = async (req, res) => {
             const sudahDinilai = dinilaiResult[0]?.total || 0;
             totalPenilaianAda += sudahDinilai;
 
-
-            // 5b. Cek bobot
+            // 5b. Cek konfigurasi bobot
             let bobotTerconfig = false;
 
             if (jenis_penilaian_aktif === 'PTS') {
@@ -176,13 +193,13 @@ exports.getDashboardData = async (req, res) => {
             });
         }
 
-        // STEP 6: Hitung Progress Overall
+        // Step 6: Hitung Progress Overall
         const totalPenilaianDibutuhkan = totalSiswaUnik * mapelDasar.length;
         const overallProgress = totalPenilaianDibutuhkan > 0
             ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100)
             : 0;
 
-        // STEP 7: Format Jadwal
+        // Step 7: Format Jadwal
         const jadwal = {
             pts: ta.tanggal_pembagian_pts
                 ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', {
@@ -196,7 +213,7 @@ exports.getDashboardData = async (req, res) => {
                 : null,
         };
 
-        // STEP 8: Hitung Peringatan Konfigurasi
+        // Step 8: Hitung Peringatan Konfigurasi
         const warnings = mataPelajaranList
             .filter(m => !m.konfigurasi.lengkap)
             .map(m => {
@@ -214,13 +231,12 @@ exports.getDashboardData = async (req, res) => {
             })
             .filter(w => w.masalah !== '');
 
-        // STEP 9: Return Response
+        // Step 9: Return Response
         res.json({
             success: true,
             data: {
                 tahun_ajaran: ta.tahun_ajaran,
                 semester: ta.semester,
-                // ✅ TAMBAHKAN: status_pts dan status_pas untuk banner warning
                 status_pts: ta.status_pts || 'nonaktif',
                 status_pas: ta.status_pas || 'nonaktif',
                 jenis_penilaian_aktif,

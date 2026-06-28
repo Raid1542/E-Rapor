@@ -1,29 +1,54 @@
 /**
  * Nama File: mataPelajaranController.js
- * Fungsi: Controller untuk CRUD mata pelajaran per semester
- * Update: Support pilih semester spesifik, validasi status semester
+ * Fungsi: Controller untuk CRUD mata pelajaran per semester.
+ *         Menangani validasi kode/nama mapel, urutan rapor, dan dependensi pembelajaran.
+ *         Semua operasi divalidasi berdasarkan semester aktif.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const mapelModel = require('../../models/admin/mapelModel');
 const db = require('../../config/db');
 
-// Helper: Cek status semester (aktif/nonaktif)
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Ambil status semester berdasarkan ID.
+ * @param {number} semesterId - ID semester
+ * @returns {Object|null} Data semester atau null
+ */
 const getSemesterStatus = async (semesterId) => {
     const [rows] = await db.execute(
         `SELECT status, semester, tahun_ajaran, id_tahun_ajaran_induk 
-         FROM tahun_ajaran 
-         WHERE id_tahun_ajaran = ?`,
+            FROM tahun_ajaran 
+            WHERE id_tahun_ajaran = ?`,
         [semesterId]
     );
     return rows.length > 0 ? rows[0] : null;
 };
 
-// Helper: Cek apakah semester aktif
+/**
+ * Cek apakah semester aktif.
+ * @param {number} semesterId - ID semester
+ * @returns {boolean} true jika semester aktif
+ */
 const isSemesterActive = async (semesterId) => {
     const semester = await getSemesterStatus(semesterId);
     return semester && semester.status === 'aktif';
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET ALL MATA PELAJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/mapel
+ * Ambil daftar mata pelajaran berdasarkan semester.
+ * 
+ * @param {string} req.query.tahun_ajaran_id - ID semester
+ */
 const getMataPelajaran = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
@@ -37,7 +62,7 @@ const getMataPelajaran = async (req, res) => {
 
         const semesterId = Number(tahun_ajaran_id);
 
-        // ✅ Cek apakah ID ini semester atau induk
+        // Cek keberadaan semester
         const semesterInfo = await getSemesterStatus(semesterId);
         
         if (!semesterInfo) {
@@ -47,7 +72,7 @@ const getMataPelajaran = async (req, res) => {
             });
         }
 
-        // ✅ Ambil data mapel untuk semester yang dipilih
+        // Ambil data mapel
         const rows = await mapelModel.getAllByTahunAjaran(semesterId);
         
         res.json({ 
@@ -69,6 +94,14 @@ const getMataPelajaran = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. GET MATA PELAJARAN BY ID
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/mapel/:id
+ * Ambil detail mata pelajaran berdasarkan ID.
+ */
 const getMataPelajaranById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -96,19 +129,35 @@ const getMataPelajaranById = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. CREATE MATA PELAJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/mapel
+ * Tambah mata pelajaran baru dengan validasi lengkap.
+ * 
+ * Validasi:
+ *   - Semester harus aktif
+ *   - Kode mapel: 2-20 karakter, huruf kapital, angka, strip
+ *   - Nama mapel: minimal 3 karakter
+ *   - Jenis: wajib atau pilihan
+ *   - Urutan rapor: 1-100, unik per semester
+ *   - Tidak boleh duplikat kode/nama di semester yang sama
+ */
 const tambahMataPelajaran = async (req, res) => {
     try {
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor, semester_id } = req.body;
 
-        // ✅ Terima semester_id langsung dari frontend
+        // Ambil semester_id
         let semesterId = semester_id ? Number(semester_id) : null;
 
-        // Jika tidak ada semester_id, ambil dari middleware (fallback)
+        // Fallback: ambil dari middleware
         if (!semesterId && req.idTahunAjaranInduk) {
             const [rows] = await db.execute(
                 `SELECT id_tahun_ajaran FROM tahun_ajaran 
-                 WHERE id_tahun_ajaran_induk = ? AND status = 'aktif' 
-                 LIMIT 1`,
+                    WHERE id_tahun_ajaran_induk = ? AND status = 'aktif' 
+                    LIMIT 1`,
                 [req.idTahunAjaranInduk]
             );
             semesterId = rows.length > 0 ? rows[0].id_tahun_ajaran : null;
@@ -121,7 +170,7 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
-        // ✅ Cek apakah semester aktif
+        // Cek semester aktif
         const isActive = await isSemesterActive(semesterId);
         if (!isActive) {
             return res.status(403).json({
@@ -130,7 +179,7 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
-        // Validasi input
+        // Validasi input wajib
         if (!kode_mapel || !nama_mapel || !jenis || !kurikulum) {
             return res.status(400).json({
                 success: false,
@@ -138,11 +187,13 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
+        // Normalisasi input
         const kodeMapelNormalized = kode_mapel.trim().toUpperCase();
         const namaMapelNormalized = nama_mapel.trim();
         const kurikulumNormalized = kurikulum.trim();
         const jenisNormalized = jenis.trim().toLowerCase();
 
+        // Validasi format kode mapel
         if (!/^[A-Z0-9-]{2,20}$/.test(kodeMapelNormalized)) {
             return res.status(400).json({
                 success: false,
@@ -150,6 +201,7 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
+        // Validasi panjang nama
         if (namaMapelNormalized.length < 3) {
             return res.status(400).json({
                 success: false,
@@ -157,6 +209,7 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
+        // Validasi jenis
         if (!['wajib', 'pilihan'].includes(jenisNormalized)) {
             return res.status(400).json({
                 success: false,
@@ -164,7 +217,7 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
-        // Cek duplikasi
+        // Cek duplikasi kode
         const kodeSudahAda = await mapelModel.isKodeMapelExist(kodeMapelNormalized, semesterId);
         if (kodeSudahAda) {
             return res.status(400).json({
@@ -173,6 +226,7 @@ const tambahMataPelajaran = async (req, res) => {
             });
         }
 
+        // Cek duplikasi nama
         const namaSudahAda = await mapelModel.isNamaMapelExist(namaMapelNormalized, semesterId);
         if (namaSudahAda) {
             return res.status(400).json({
@@ -211,6 +265,7 @@ const tambahMataPelajaran = async (req, res) => {
             urutanRaporFinal = urutanRaporNum;
         }
 
+        // Create mapel
         const result = await mapelModel.create({
             kode_mapel: kodeMapelNormalized,
             nama_mapel: namaMapelNormalized,
@@ -243,6 +298,14 @@ const tambahMataPelajaran = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. UPDATE MATA PELAJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/mapel/:id
+ * Update data mata pelajaran dengan validasi lengkap.
+ */
 const editMataPelajaran = async (req, res) => {
     try {
         const { id } = req.params;
@@ -269,7 +332,7 @@ const editMataPelajaran = async (req, res) => {
         const oldData = existingRows[0];
         const semesterId = oldData.tahun_ajaran_id;
 
-        // ✅ Cek apakah semester aktif
+        // Cek semester aktif
         const isActive = await isSemesterActive(semesterId);
         if (!isActive) {
             return res.status(403).json({
@@ -291,10 +354,12 @@ const editMataPelajaran = async (req, res) => {
             });
         }
 
+        // Normalisasi input
         const kodeMapelNormalized = trimmedKodeMapel.toUpperCase();
         const namaMapelNormalized = trimmedNamaMapel;
         const jenisNormalized = trimmedJenis.toLowerCase();
 
+        // Validasi format
         if (!/^[A-Z0-9-]{2,20}$/.test(kodeMapelNormalized)) {
             return res.status(400).json({
                 success: false,
@@ -316,7 +381,7 @@ const editMataPelajaran = async (req, res) => {
             });
         }
 
-        // Cek duplikasi
+        // Cek duplikasi (exclude current mapel)
         const kodeSudahAda = await mapelModel.isKodeMapelExist(kodeMapelNormalized, semesterId, idNum);
         if (kodeSudahAda) {
             return res.status(400).json({
@@ -363,6 +428,7 @@ const editMataPelajaran = async (req, res) => {
             urutanRaporFinal = urutanRaporNum;
         }
 
+        // Update mapel
         const result = await mapelModel.update(idNum, {
             kode_mapel: kodeMapelNormalized,
             nama_mapel: namaMapelNormalized,
@@ -400,6 +466,19 @@ const editMataPelajaran = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. DELETE MATA PELAJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * DELETE /api/admin/mapel/:id
+ * Hapus mata pelajaran dengan validasi dependensi.
+ * 
+ * Validasi:
+ *   - Semester harus aktif
+ *   - Tidak digunakan di jadwal pembelajaran
+ *   - Tidak memiliki data nilai rapor
+ */
 const hapusMataPelajaran = async (req, res) => {
     try {
         const { id } = req.params;
@@ -423,7 +502,7 @@ const hapusMataPelajaran = async (req, res) => {
         const mapelData = existingRows[0];
         const semesterId = mapelData.tahun_ajaran_id;
 
-        // ✅ Cek apakah semester aktif
+        // Cek semester aktif
         const isActive = await isSemesterActive(semesterId);
         if (!isActive) {
             return res.status(403).json({
@@ -432,7 +511,7 @@ const hapusMataPelajaran = async (req, res) => {
             });
         }
 
-        // Cek relasi
+        // Cek dependensi: pembelajaran
         const jumlahPembelajaran = await mapelModel.isUsedInPembelajaran(idNum);
         if (jumlahPembelajaran > 0) {
             return res.status(400).json({
@@ -441,6 +520,7 @@ const hapusMataPelajaran = async (req, res) => {
             });
         }
 
+        // Cek dependensi: nilai rapor
         const jumlahNilai = await mapelModel.hasNilaiRapor(idNum);
         if (jumlahNilai > 0) {
             return res.status(400).json({
@@ -449,6 +529,7 @@ const hapusMataPelajaran = async (req, res) => {
             });
         }
 
+        // Delete mapel
         const result = await mapelModel.delete(idNum);
         if (result.affectedRows === 0) {
             return res.status(404).json({
@@ -470,6 +551,10 @@ const hapusMataPelajaran = async (req, res) => {
         });
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getMataPelajaran,

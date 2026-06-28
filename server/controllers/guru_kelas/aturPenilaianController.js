@@ -1,14 +1,10 @@
 /**
  * Nama File: aturPenilaianController.js
- * Fungsi: Handle logic & response untuk fitur Atur Penilaian
- *         ✅ UPDATED: 
- *         - Semua konfigurasi PER KELAS + PER JENIS (PTS/PAS)
- *         - ✅ Validasi periode untuk Kategori Kokurikuler:
- *           - PTS aktif → hanya Mutaba'ah (id=5)
- *           - PAS aktif → semua aspek
- *         - ✅ Kategori Akademik: terpisah untuk PTS dan PAS
- *         - ✅ Bobot: PTS = auto 100%, PAS = editable
- *         - ✅ Deskripsi Rata-rata: HANYA PTS
+ * Fungsi: Controller untuk manajemen konfigurasi penilaian guru kelas.
+ *         Menangani kategori nilai akademik, kokurikuler, bobot, dan deskripsi rata-rata
+ *         dengan validasi akses berdasarkan periode penilaian (PTS/PAS).
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
@@ -16,13 +12,24 @@ const model = require('../../models/guru_kelas/aturPenilaianModel');
 const { updateAllNilaiRaporForMapel, validateGradeOrder } = require('./helpers');
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ✅ KONSTANTA: ID Aspek Mutaba'ah (sesuai database)
+// KONSTANTA
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ID Aspek Mutaba'ah (sesuai database)
+ * Digunakan untuk validasi akses aspek kokurikuler saat PTS aktif
+ */
 const ASPEK_MUTABAAH_ID = 5;
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ✅ HELPER: Ambil jenis penilaian aktif dari request (dari middleware)
+// HELPER FUNCTIONS
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Ambil jenis penilaian aktif dari request (dari middleware atau query/body)
+ * @param {Object} req - Express request object
+ * @returns {string} Jenis penilaian ('PTS' atau 'PAS')
+ */
 const getJenisPenilaian = (req) => {
     return req.jenis_penilaian
         || req.query?.jenis
@@ -30,9 +37,19 @@ const getJenisPenilaian = (req) => {
         || 'PTS';
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ✅ HELPER: Validasi Akses Aspek Kokurikuler Berdasarkan Periode
-// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Validasi akses aspek kokurikuler berdasarkan periode penilaian
+ * 
+ * Business Rules:
+ *   - Belum ada periode aktif: tidak boleh akses
+ *   - PTS aktif: hanya aspek Mutaba'ah yang boleh
+ *   - PAS aktif: semua aspek boleh
+ * 
+ * @param {number} aspekId - ID aspek kokurikuler
+ * @param {string} status_pts - Status PTS (aktif/nonaktif/selesai)
+ * @param {string} status_pas - Status PAS (aktif/nonaktif/selesai)
+ * @returns {Object} { allowed, reason?, message? }
+ */
 const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
     const isPtsActive = status_pts === 'aktif';
     const isPasActive = status_pas === 'aktif';
@@ -65,9 +82,13 @@ const validateAspekKokurikulerAccess = (aspekId, status_pts, status_pas) => {
     return { allowed: true, reason: 'default' };
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ✅ HELPER: Validasi Akses Deskripsi Rata-rata (HANYA saat PTS aktif)
-// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Validasi akses deskripsi rata-rata (HANYA saat PTS aktif)
+ * 
+ * @param {string} status_pts - Status PTS
+ * @param {string} status_pas - Status PAS
+ * @returns {Object} { allowed, message? }
+ */
 const validateDeskripsiRataRataAccess = (status_pts, status_pas) => {
     if (status_pts === 'aktif') {
         return { allowed: true };
@@ -86,15 +107,21 @@ const validateDeskripsiRataRataAccess = (status_pts, status_pas) => {
     };
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// HELPER: Ambil kelas_id dari request
-// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Ambil kelas_id dari request (dari middleware)
+ * @param {Object} req - Express request object
+ * @returns {number|undefined} ID kelas
+ */
 const getKelasId = (req) => req.infoKelasWali?.kelas_id;
 
 // ═════════════════════════════════════════════════════════════════════════════
-// DATA PENDUKUNG
+// 1. DATA PENDUKUNG
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * GET /api/guru-kelas/atur-penilaian/aspek-kokurikuler
+ * Ambil daftar aspek kokurikuler (Mutaba'ah, BPI, Literasi, Proyek)
+ */
 exports.getAspekKokurikuler = async (req, res) => {
     try {
         const aspek = await model.getAspekKokurikuler();
@@ -105,6 +132,10 @@ exports.getAspekKokurikuler = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/guru-kelas/atur-penilaian/komponen-penilaian
+ * Ambil daftar komponen penilaian (UH, PTS, PAS, dll)
+ */
 exports.getKomponenPenilaian = async (req, res) => {
     try {
         const komponen = await model.getKomponenPenilaian();
@@ -115,10 +146,15 @@ exports.getKomponenPenilaian = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/guru-kelas/atur-penilaian/aspek-kokurikuler
+ * Tambah aspek kokurikuler baru dengan auto-generate kode
+ */
 exports.createAspekKokurikuler = async (req, res) => {
     try {
         const { nama, kode } = req.body;
 
+        // Validasi nama
         if (!nama || nama.trim().length < 3) {
             return res.status(400).json({
                 success: false,
@@ -126,6 +162,7 @@ exports.createAspekKokurikuler = async (req, res) => {
             });
         }
 
+        // Auto-generate kode jika tidak ada
         let kodeAspek = kode;
         if (!kodeAspek) {
             kodeAspek = nama.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
@@ -140,6 +177,7 @@ exports.createAspekKokurikuler = async (req, res) => {
             }
         }
 
+        // Cek duplikasi nama
         const [existingNama] = await db.execute(
             `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE nama = ?`,
             [nama.trim()]
@@ -152,6 +190,7 @@ exports.createAspekKokurikuler = async (req, res) => {
             });
         }
 
+        // Cek duplikasi kode
         const [existingKode] = await db.execute(
             `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE kode = ?`,
             [kodeAspek]
@@ -164,11 +203,13 @@ exports.createAspekKokurikuler = async (req, res) => {
             });
         }
 
+        // Ambil urutan berikutnya
         const [maxUrutan] = await db.execute(
             `SELECT COALESCE(MAX(urutan), 0) + 1 AS next_urutan FROM aspek_kokurikuler`
         );
         const nextUrutan = maxUrutan[0].next_urutan;
 
+        // Insert aspek baru
         const [result] = await db.execute(
             `INSERT INTO aspek_kokurikuler (kode, nama, urutan, created_at) VALUES (?, ?, ?, NOW())`,
             [kodeAspek, nama.trim(), nextUrutan]
@@ -194,22 +235,27 @@ exports.createAspekKokurikuler = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ✅ KATEGORI AKADEMIK (PER MAPEL + PER KELAS + PER JENIS)
+// 2. KATEGORI AKADEMIK (PER MAPEL + PER KELAS + PER JENIS)
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * GET /api/guru-kelas/atur-penilaian/kategori-akademik
+ * Ambil kategori nilai akademik untuk mapel, kelas, dan jenis penilaian tertentu
+ */
 exports.getKategoriNilaiAkademik = async (req, res) => {
     try {
         const mapelId = req.validatedMapelId;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
         const taAktif = await model.getTahunAjaranAktif();
 
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        console.log(`📊 [Akademik] Fetch kategori untuk jenis: ${jenis}`);
+        console.log(`[Akademik] Fetch kategori untuk jenis: ${jenis}`);
 
+        // Ambil kategori dengan filter jenis
         const kategori = await model.getKategoriAkademik(mapelId, taAktif.id_tahun_ajaran, kelasId, jenis);
 
         const kategoriParsed = kategori.map(k => ({
@@ -218,13 +264,14 @@ exports.getKategoriNilaiAkademik = async (req, res) => {
             max_nilai: Math.floor(parseFloat(k.max_nilai))
         }));
 
+        // Hitung coverage
         const coverage = await model.cekCoverage0to100(mapelId, taAktif.id_tahun_ajaran, kelasId, jenis);
 
         res.json({
             success: true,
             data: kategoriParsed,
             coverage: coverage,
-            jenis_penilaian: jenis // ✅ KIRIM KE FRONTEND
+            jenis_penilaian: jenis
         });
     } catch (err) {
         console.error('Error getKategoriNilaiAkademik:', err);
@@ -232,17 +279,23 @@ exports.getKategoriNilaiAkademik = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/guru-kelas/atur-penilaian/kategori-akademik
+ * Tambah kategori nilai akademik dengan validasi overlap per jenis
+ */
 exports.createKategoriNilaiAkademik = async (req, res) => {
     try {
         const { min_nilai, max_nilai, deskripsi, mapel_id } = req.body;
         const userId = req.user.id;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Validasi mapel_id
         if (mapel_id === undefined || mapel_id === null) {
             return res.status(400).json({ success: false, message: 'mapel_id wajib diisi' });
         }
 
+        // Sanitasi dan validasi nilai
         const minNilai = Math.floor(parseFloat(min_nilai));
         const maxNilai = Math.floor(parseFloat(max_nilai));
 
@@ -259,6 +312,7 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Validasi range minimal 3 poin
         const range = maxNilai - minNilai;
         if (range < 3) {
             return res.status(400).json({
@@ -267,21 +321,24 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Validasi akses guru
         const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(userId, mapel_id, kelasId, taAktif.id_tahun_ajaran);
         if (!mengajarMapel) {
             return res.status(403).json({ success: false, message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda' });
         }
 
-        // ✅ CEK OVERLAP DENGAN JENIS YANG SAMA
+        // Cek overlap dengan jenis yang sama
         const overlaps = await model.cekOverlapAkademik(mapel_id, taAktif.id_tahun_ajaran, kelasId, minNilai, maxNilai, jenis);
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
@@ -292,7 +349,7 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
-        // ✅ SIMPAN DENGAN JENIS
+        // Simpan dengan jenis
         const newId = await model.createKategoriAkademik(mapel_id, taAktif.id_tahun_ajaran, kelasId, minNilai, maxNilai, deskripsi.trim(), jenis);
 
         res.json({
@@ -306,14 +363,19 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
     }
 };
 
+/**
+ * PUT /api/guru-kelas/atur-penilaian/kategori-akademik/:id
+ * Update kategori nilai akademik dengan validasi overlap dan jenis
+ */
 exports.updateKategoriNilaiAkademik = async (req, res) => {
     try {
         const { id } = req.params;
         const { min_nilai, max_nilai, deskripsi } = req.body;
         const userId = req.user.id;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Sanitasi dan validasi nilai
         const minNilai = Math.floor(parseFloat(min_nilai));
         const maxNilai = Math.floor(parseFloat(max_nilai));
 
@@ -330,6 +392,7 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Validasi range minimal 3 poin
         const range = maxNilai - minNilai;
         if (range < 3) {
             return res.status(400).json({
@@ -338,21 +401,24 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Cek keberadaan kategori
         const existing = await model.getKategoriByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
-        // ✅ VALIDASI: Kategori yang diedit harus sesuai jenis
+        // Validasi: kategori yang diedit harus sesuai jenis
         if (existing.jenis_penilaian && existing.jenis_penilaian !== jenis) {
             return res.status(403).json({
                 success: false,
@@ -360,16 +426,18 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Cek apakah ada perubahan
         if (existing.min_nilai === minNilai && existing.max_nilai === maxNilai && existing.deskripsi.trim() === deskripsi.trim()) {
             return res.status(400).json({ success: false, message: 'Tidak ada perubahan data' });
         }
 
+        // Validasi akses guru
         const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(userId, existing.mapel_id, kelasId, taAktif.id_tahun_ajaran);
         if (!mengajarMapel) {
             return res.status(403).json({ success: false, message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda' });
         }
 
-        // ✅ CEK OVERLAP DENGAN JENIS YANG SAMA
+        // Cek overlap dengan jenis yang sama (exclude diri sendiri)
         const overlaps = await model.cekOverlapAkademik(existing.mapel_id, taAktif.id_tahun_ajaran, kelasId, minNilai, maxNilai, jenis, id);
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
@@ -380,6 +448,7 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Update kategori
         await model.updateKategoriAkademik(id, minNilai, maxNilai, deskripsi.trim());
 
         res.json({ success: true, message: `Kategori akademik ${jenis} berhasil diperbarui` });
@@ -389,24 +458,30 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
     }
 };
 
+/**
+ * DELETE /api/guru-kelas/atur-penilaian/kategori-akademik/:id
+ * Hapus kategori nilai akademik dengan validasi dependensi dan jenis
+ */
 exports.deleteKategoriNilaiAkademik = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Cek keberadaan kategori
         const existing = await model.getKategoriByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
-        // ✅ VALIDASI: Kategori yang dihapus harus sesuai jenis
+        // Validasi: kategori yang dihapus harus sesuai jenis
         if (existing.jenis_penilaian && existing.jenis_penilaian !== jenis) {
             return res.status(403).json({
                 success: false,
@@ -414,12 +489,13 @@ exports.deleteKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Validasi akses guru
         const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(userId, existing.mapel_id, kelasId, taAktif.id_tahun_ajaran);
         if (!mengajarMapel) {
             return res.status(403).json({ success: false, message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda' });
         }
 
-        // ✅ CEK DIPAKAI DENGAN JENIS YANG SAMA
+        // Cek apakah kategori dipakai dengan jenis yang sama
         const dipakai = await model.cekKategoriDipakai(existing.mapel_id, taAktif.id_tahun_ajaran, kelasId, existing.min_nilai, existing.max_nilai, jenis);
         if (dipakai.total > 0) {
             return res.status(400).json({
@@ -428,6 +504,7 @@ exports.deleteKategoriNilaiAkademik = async (req, res) => {
             });
         }
 
+        // Delete kategori
         await model.deleteKategoriAkademik(id, kelasId);
 
         res.json({ success: true, message: `Kategori akademik ${jenis} berhasil dihapus` });
@@ -438,20 +515,25 @@ exports.deleteKategoriNilaiAkademik = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ✅ KATEGORI KOKURIKULER (PER KELAS + PER JENIS)
+// 3. KATEGORI KOKURIKULER (PER KELAS + PER JENIS)
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * GET /api/guru-kelas/atur-penilaian/kategori-kokurikuler
+ * Ambil kategori nilai kokurikuler untuk kelas dan jenis penilaian tertentu
+ */
 exports.getKategoriNilaiKokurikuler = async (req, res) => {
     try {
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        console.log(`📊 [Kokurikuler] Fetch kategori untuk jenis: ${jenis}`);
+        console.log(`[Kokurikuler] Fetch kategori untuk jenis: ${jenis}`);
 
+        // Ambil kategori dengan filter jenis
         const kategori = await model.getKategoriKokurikuler(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, jenis);
 
         const kategoriParsed = kategori.map(k => ({
@@ -460,13 +542,14 @@ exports.getKategoriNilaiKokurikuler = async (req, res) => {
             max_nilai: Math.floor(parseFloat(k.max_nilai))
         }));
 
+        // Ambil daftar aspek
         const [aspekRows] = await db.execute(`
             SELECT id_aspek_kokurikuler, nama 
             FROM aspek_kokurikuler 
             ORDER BY urutan ASC
         `);
 
-        // ✅ Hitung coverage hanya untuk aspek yang relevan
+        // Hitung coverage hanya untuk aspek yang relevan
         const coverage = { covered: true, gaps: [] };
         const relevantAspek = jenis === 'PTS'
             ? aspekRows.filter(a => a.id_aspek_kokurikuler === ASPEK_MUTABAAH_ID)
@@ -521,7 +604,7 @@ exports.getKategoriNilaiKokurikuler = async (req, res) => {
             success: true,
             data: kategoriParsed,
             coverage: coverage,
-            jenis_penilaian: jenis, // ✅ KIRIM KE FRONTEND
+            jenis_penilaian: jenis,
             status_pts: taAktif.status_pts,
             status_pas: taAktif.status_pas
         });
@@ -531,22 +614,28 @@ exports.getKategoriNilaiKokurikuler = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/guru-kelas/atur-penilaian/kategori-kokurikuler
+ * Tambah kategori nilai kokurikuler dengan validasi periode, grade, dan overlap
+ */
 exports.createKategoriNilaiKokurikuler = async (req, res) => {
     try {
         const { min_nilai, max_nilai, grade, deskripsi, id_aspek_kokurikuler } = req.body;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Validasi aspek
         if (!id_aspek_kokurikuler) {
             return res.status(400).json({ success: false, message: 'Aspek kokurikuler wajib dipilih' });
         }
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        // ✅ VALIDASI PERIODE
+        // Validasi periode
         const accessCheck = validateAspekKokurikulerAccess(
             id_aspek_kokurikuler,
             taAktif.status_pts,
@@ -579,6 +668,7 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Validasi range minimal 3 poin
         const range = maxNilai - minNilai;
         if (range < 3) {
             return res.status(400).json({
@@ -587,6 +677,7 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Validasi grade
         if (!grade || !grade.trim()) {
             return res.status(400).json({ success: false, message: 'Grade wajib diisi' });
         }
@@ -595,11 +686,13 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
         if (gradeClean.length !== 1) {
             return res.status(400).json({ success: false, message: 'Grade harus 1 karakter (A, B, C, dst)' });
         }
+
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
-        // ✅ CEK DUPLIKAT DENGAN JENIS YANG SAMA
+        // Cek duplikasi grade dengan jenis yang sama
         const duplikat = await model.cekDuplikasiGrade(id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, gradeClean, jenis);
         if (duplikat.length > 0) {
             return res.status(400).json({
@@ -609,7 +702,7 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
-        // ✅ CEK OVERLAP DENGAN JENIS YANG SAMA
+        // Cek overlap dengan jenis yang sama
         const overlaps = await model.cekOverlapKokurikuler(id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, jenis);
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
@@ -620,7 +713,7 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
-        // ✅ SIMPAN DENGAN JENIS
+        // Simpan dengan jenis
         const newId = await model.createKategoriKokurikuler(
             id_aspek_kokurikuler,
             taAktif.id_tahun_ajaran,
@@ -644,13 +737,18 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
     }
 };
 
+/**
+ * PUT /api/guru-kelas/atur-penilaian/kategori-kokurikuler/:id
+ * Update kategori nilai kokurikuler dengan validasi periode, grade order, dan overlap
+ */
 exports.updateKategoriNilaiKokurikuler = async (req, res) => {
     try {
         const { id } = req.params;
         const { min_nilai, max_nilai, grade, deskripsi } = req.body;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Sanitasi dan validasi nilai
         const minNilai = parseFloat(min_nilai);
         const maxNilai = parseFloat(max_nilai);
 
@@ -667,6 +765,7 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Validasi range minimal 3 poin
         const range = maxNilai - minNilai;
         if (range < 3) {
             return res.status(400).json({
@@ -675,6 +774,7 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Validasi grade
         if (!grade || !grade.trim()) {
             return res.status(400).json({ success: false, message: 'Grade wajib diisi' });
         }
@@ -683,21 +783,25 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
         if (gradeClean.length !== 1) {
             return res.status(400).json({ success: false, message: 'Grade harus 1 karakter (A, B, C, dst)' });
         }
+
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Cek keberadaan kategori
         const existing = await model.getKategoriKokurikulerByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
-        // ✅ VALIDASI: Kategori yang diedit harus sesuai jenis
+        // Validasi: kategori yang diedit harus sesuai jenis
         if (existing.jenis_penilaian && existing.jenis_penilaian !== jenis) {
             return res.status(403).json({
                 success: false,
@@ -705,7 +809,7 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
-        // ✅ VALIDASI PERIODE
+        // Validasi periode
         const accessCheck = validateAspekKokurikulerAccess(
             existing.id_aspek_kokurikuler,
             taAktif.status_pts,
@@ -721,11 +825,13 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Cek apakah ada perubahan
         if (existing.rentang_min == minNilai && existing.rentang_max == maxNilai &&
             existing.grade === gradeClean && existing.deskripsi.trim() === deskripsi.trim()) {
             return res.status(400).json({ success: false, message: 'Tidak ada perubahan data' });
         }
 
+        // Validasi urutan grade
         const gradeValidation = await validateGradeOrder(
             existing.id_aspek_kokurikuler,
             taAktif.id_tahun_ajaran,
@@ -745,6 +851,7 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Cek duplikasi grade jika grade berubah
         if (existing.grade !== gradeClean) {
             const duplikat = await model.cekDuplikasiGrade(existing.id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, gradeClean, jenis, id);
             if (duplikat.length > 0) {
@@ -756,6 +863,7 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             }
         }
 
+        // Cek overlap dengan jenis yang sama (exclude diri sendiri)
         const overlaps = await model.cekOverlapKokurikuler(existing.id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, jenis, id);
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
@@ -766,6 +874,7 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Update kategori
         await model.updateKategoriKokurikuler(id, minNilai, maxNilai, gradeClean, deskripsi.trim());
 
         res.json({ success: true, message: `Kategori kokurikuler ${jenis} berhasil diperbarui` });
@@ -775,23 +884,29 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
     }
 };
 
+/**
+ * DELETE /api/guru-kelas/atur-penilaian/kategori-kokurikuler/:id
+ * Hapus kategori nilai kokurikuler dengan validasi periode dan dependensi
+ */
 exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
     try {
         const { id } = req.params;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Cek keberadaan kategori
         const existing = await model.getKategoriKokurikulerByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
-        // ✅ VALIDASI: Kategori yang dihapus harus sesuai jenis
+        // Validasi: kategori yang dihapus harus sesuai jenis
         if (existing.jenis_penilaian && existing.jenis_penilaian !== jenis) {
             return res.status(403).json({
                 success: false,
@@ -799,6 +914,7 @@ exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Validasi periode
         const accessCheck = validateAspekKokurikulerAccess(
             existing.id_aspek_kokurikuler,
             taAktif.status_pts,
@@ -814,6 +930,7 @@ exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Cek apakah kategori dipakai
         const dipakai = await model.cekKategoriKokurikulerDipakai(id, kelasId);
 
         if (!dipakai.exists) {
@@ -829,6 +946,7 @@ exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
             });
         }
 
+        // Delete kategori
         await model.deleteKategoriKokurikuler(id, kelasId);
 
         res.json({ success: true, message: `Kategori kokurikuler ${jenis} berhasil dihapus` });
@@ -839,26 +957,33 @@ exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ✅ BOBOT AKADEMIK (PER MAPEL + PER KELAS + PER JENIS)
+// 4. BOBOT AKADEMIK (PER MAPEL + PER KELAS + PER JENIS)
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * GET /api/guru-kelas/atur-penilaian/bobot/:mapelId
+ * Ambil bobot penilaian akademik untuk mapel dan kelas tertentu
+ */
 exports.getBobotAkademikByMapel = async (req, res) => {
     try {
         const { mapelId } = req.params;
         const userId = req.user.id;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(500).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Validasi akses guru
         const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(userId, mapelId, kelasId, taAktif.id_tahun_ajaran);
         if (!mengajarMapel) {
             return res.status(403).json({ success: false, message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda' });
         }
 
+        // Ambil daftar komponen
         const komponenList = await model.getKomponenPenilaianList();
         if (komponenList.length === 0) {
             return res.status(404).json({ success: false, message: 'Komponen penilaian belum diatur' });
@@ -866,7 +991,7 @@ exports.getBobotAkademikByMapel = async (req, res) => {
 
         const ptsKomponen = komponenList.find(k => /^PTS$/i.test(k.nama_komponen));
 
-        // ✅ JIKA PTS AKTIF: Auto 100% untuk komponen PTS
+        // Jika PTS aktif: auto 100% untuk komponen PTS
         if (taAktif.status_pts === 'aktif') {
             const result = komponenList.map(k => ({
                 komponen_id: k.id_komponen,
@@ -881,7 +1006,7 @@ exports.getBobotAkademikByMapel = async (req, res) => {
             });
         }
 
-        // ✅ JIKA PAS AKTIF: Ambil bobot dari database untuk jenis PAS
+        // Jika PAS aktif: ambil bobot dari database untuk jenis PAS
         const bobot = await model.getBobotByMapel(mapelId, kelasId, jenis);
 
         const bobotMap = {};
@@ -906,24 +1031,30 @@ exports.getBobotAkademikByMapel = async (req, res) => {
     }
 };
 
+/**
+ * PUT /api/guru-kelas/atur-penilaian/bobot/:mapelId
+ * Update bobot penilaian akademik dengan validasi total 100% dan auto-recompute
+ */
 exports.updateBobotAkademikByMapel = async (req, res) => {
     try {
         const { mapelId } = req.params;
         const bobotList = req.body.bobot || req.body; // Support both formats
         const userId = req.user.id;
         const kelasId = getKelasId(req);
-        const jenis = getJenisPenilaian(req); // ✅ AMBIL JENIS
+        const jenis = getJenisPenilaian(req);
 
+        // Validasi data bobot
         if (!Array.isArray(bobotList) || bobotList.length === 0) {
             return res.status(400).json({ success: false, message: 'Data bobot tidak valid' });
         }
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(500).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        // ✅ JIKA PTS AKTIF: Tolak perubahan bobot
+        // Jika PTS aktif: tolak perubahan bobot
         if (taAktif.status_pts === 'aktif') {
             return res.status(403).json({
                 success: false,
@@ -932,6 +1063,7 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
             });
         }
 
+        // Validasi setiap bobot
         for (const b of bobotList) {
             if (!b.komponen_id || b.bobot === undefined) {
                 return res.status(400).json({ success: false, message: 'Data bobot tidak lengkap' });
@@ -948,6 +1080,7 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
             }
         }
 
+        // Validasi total bobot harus 100%
         const total = bobotList.reduce((sum, b) => sum + (parseFloat(b.bobot) || 0), 0);
         if (Math.abs(total - 100) > 0.01) {
             return res.status(400).json({
@@ -957,25 +1090,28 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
             });
         }
 
+        // Validasi akses guru
         const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(userId, mapelId, kelasId, taAktif.id_tahun_ajaran);
         if (!mengajarMapel) {
             return res.status(403).json({ success: false, message: 'Akses ditolak' });
         }
 
+        // Validasi komponen
         const komponenIds = bobotList.map(b => b.komponen_id);
         const komponenValid = await model.cekKomponenValid(komponenIds);
         if (!komponenValid) {
             return res.status(400).json({ success: false, message: 'Ada komponen yang tidak valid' });
         }
 
-        // ✅ SIMPAN DENGAN JENIS + TAHUN AJARAN
+        // Simpan dengan jenis + tahun ajaran
         await model.saveBobot(mapelId, kelasId, taAktif.id_tahun_ajaran, bobotList, jenis);
 
+        // Recompute semua nilai rapor
         let warning = '';
         try {
             await updateAllNilaiRaporForMapel(mapelId, userId, req);
         } catch (recalcErr) {
-            console.error('⚠️ Error hitung ulang nilai rapor:', recalcErr);
+            console.error('Error hitung ulang nilai rapor:', recalcErr);
             warning = ' Peringatan: Gagal menghitung ulang nilai rapor otomatis. Silakan input ulang nilai untuk memperbarui.';
         }
 
@@ -990,9 +1126,13 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ✅ KATEGORI DESKRIPSI RATA-RATA (HANYA PTS - TIDAK PERLU UBAH QUERY)
+// 5. KATEGORI DESKRIPSI RATA-RATA (HANYA PTS)
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * GET /api/guru-kelas/atur-penilaian/deskripsi-rata-rata
+ * Ambil kategori deskripsi rata-rata (hanya saat PTS aktif)
+ */
 exports.getKategoriDeskripsiRataRata = async (req, res) => {
     try {
         const kelasId = getKelasId(req);
@@ -1001,7 +1141,7 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        // ✅ VALIDASI AKSES: Hanya saat PTS aktif
+        // Validasi akses: hanya saat PTS aktif
         const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
         if (!accessCheck.allowed) {
             return res.status(403).json({
@@ -1011,6 +1151,7 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Ambil kategori
         const kategori = await model.getKategoriDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId);
 
         const kategoriParsed = kategori.map(k => ({
@@ -1019,13 +1160,14 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
             max_nilai: Math.floor(parseFloat(k.max_nilai))
         }));
 
+        // Hitung coverage
         const coverage = await model.cekCoverageDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId);
 
         res.json({
             success: true,
             data: kategoriParsed,
             coverage: coverage,
-            jenis_penilaian: 'PTS' // ✅ Selalu PTS
+            jenis_penilaian: 'PTS' // Selalu PTS
         });
     } catch (err) {
         console.error('Error getKategoriDeskripsiRataRata:', err);
@@ -1033,17 +1175,22 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/guru-kelas/atur-penilaian/deskripsi-rata-rata
+ * Tambah kategori deskripsi rata-rata (hanya saat PTS aktif)
+ */
 exports.createKategoriDeskripsiRataRata = async (req, res) => {
     try {
         const { min_nilai, max_nilai, deskripsi } = req.body;
         const kelasId = getKelasId(req);
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        // ✅ VALIDASI AKSES
+        // Validasi akses
         const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
         if (!accessCheck.allowed) {
             return res.status(403).json({
@@ -1053,6 +1200,7 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Sanitasi dan validasi nilai
         const minNilai = Math.floor(parseFloat(min_nilai));
         const maxNilai = Math.floor(parseFloat(max_nilai));
 
@@ -1069,6 +1217,7 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Validasi range minimal 3 poin
         const range = maxNilai - minNilai;
         if (range < 3) {
             return res.status(400).json({
@@ -1077,10 +1226,12 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
+        // Cek overlap
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai);
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
@@ -1091,6 +1242,7 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Create kategori
         const newId = await model.createKategoriDeskripsiRataRata(
             taAktif.id_tahun_ajaran,
             taAktif.semester,
@@ -1111,17 +1263,23 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
     }
 };
 
+/**
+ * PUT /api/guru-kelas/atur-penilaian/deskripsi-rata-rata/:id
+ * Update kategori deskripsi rata-rata (hanya saat PTS aktif)
+ */
 exports.updateKategoriDeskripsiRataRata = async (req, res) => {
     try {
         const { id } = req.params;
         const { min_nilai, max_nilai, deskripsi } = req.body;
         const kelasId = getKelasId(req);
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Validasi akses
         const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
         if (!accessCheck.allowed) {
             return res.status(403).json({
@@ -1131,6 +1289,7 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Sanitasi dan validasi nilai
         const minNilai = Math.floor(parseFloat(min_nilai));
         const maxNilai = Math.floor(parseFloat(max_nilai));
 
@@ -1147,6 +1306,7 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Validasi range minimal 3 poin
         const range = maxNilai - minNilai;
         if (range < 3) {
             return res.status(400).json({
@@ -1155,19 +1315,23 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Validasi deskripsi
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
 
+        // Cek keberadaan kategori
         const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
+        // Cek apakah ada perubahan
         if (existing.rentang_min == minNilai && existing.rentang_max == maxNilai && existing.deskripsi.trim() === deskripsi.trim()) {
             return res.status(400).json({ success: false, message: 'Tidak ada perubahan data' });
         }
 
+        // Cek overlap (exclude diri sendiri)
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, id);
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
@@ -1178,6 +1342,7 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Update kategori
         await model.updateKategoriDeskripsiRataRata(id, minNilai, maxNilai, deskripsi.trim());
 
         res.json({ success: true, message: 'Kategori deskripsi rata-rata (PTS) berhasil diperbarui' });
@@ -1187,16 +1352,22 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
     }
 };
 
+/**
+ * DELETE /api/guru-kelas/atur-penilaian/deskripsi-rata-rata/:id
+ * Hapus kategori deskripsi rata-rata (hanya saat PTS aktif)
+ */
 exports.deleteKategoriDeskripsiRataRata = async (req, res) => {
     try {
         const { id } = req.params;
         const kelasId = getKelasId(req);
 
+        // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
+        // Validasi akses
         const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
         if (!accessCheck.allowed) {
             return res.status(403).json({
@@ -1206,11 +1377,13 @@ exports.deleteKategoriDeskripsiRataRata = async (req, res) => {
             });
         }
 
+        // Cek keberadaan kategori
         const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
         if (!existing) {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
+        // Delete kategori
         await model.deleteKategoriDeskripsiRataRata(id, kelasId);
 
         res.json({ success: true, message: 'Kategori deskripsi rata-rata (PTS) berhasil dihapus' });

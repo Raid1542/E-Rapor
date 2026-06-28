@@ -1,29 +1,45 @@
 /**
  * Nama File: absensiController.js
- * Fungsi: Controller untuk absensi siswa guru kelas
- * ✅ FIXED: Gunakan req.infoKelasWali dari middleware
+ * Fungsi: Controller untuk manajemen absensi siswa oleh guru kelas.
+ *         Menangani pengambilan dan penyimpanan data absensi (sakit, izin, alpha)
+ *         untuk periode PTS dan PAS dengan validasi kelengkapan data.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const absensiModel = require('../../models/guru_kelas/absensiModel');
 const db = require('../../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET ABSENSI SISWA
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * GET /absensi/:jenis/:semester
- * ✅ FIXED: Pakai req.infoKelasWali dari middleware cekGuruKelasDitugaskan
- * ✅ FIXED: Typo izin_total → row.izin_total
+ * GET /api/guru-kelas/absensi/:jenis/:semester
+ * Ambil data absensi siswa untuk kelas yang diajar guru.
+ * 
+ * Fitur:
+ *   - Gunakan data kelas dari middleware (req.infoKelasWali)
+ *   - Format data sesuai jenis penilaian (PTS/PAS)
+ *   - Untuk PAS: include data PTS sebagai referensi
+ * 
+ * @param {string} req.penilaianContext.jenis - Jenis penilaian (PTS/PAS)
+ * @param {string} req.penilaianContext.semester - Nama semester
+ * @param {Object} req.infoKelasWali - Info kelas dari middleware
  */
 exports.getAbsensiSiswa = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { jenis, semester } = req.penilaianContext || {};
 
-        console.log('📥 GET absensi - Request:', {
+        console.log('GET absensi - Request:', {
             userId,
             jenis,
             semester,
             infoKelasWali: req.infoKelasWali
         });
 
+        // Validasi autentikasi
         if (!userId) {
             return res.status(401).json({
                 success: false,
@@ -31,7 +47,7 @@ exports.getAbsensiSiswa = async (req, res) => {
             });
         }
 
-        // ✅ PAKAI data dari middleware (sudah ter-set)
+        // Ambil data kelas dari middleware
         const infoKelas = req.infoKelasWali;
         if (!infoKelas || !infoKelas.kelas_id) {
             return res.status(404).json({
@@ -43,16 +59,17 @@ exports.getAbsensiSiswa = async (req, res) => {
         const kelasId = infoKelas.kelas_id;
         const namaKelas = infoKelas.nama_kelas;
         
-        // ✅ Ambil tahun ajaran aktif (semester_id untuk query absensi)
-        const tahunAjaranId = req.idSemesterAktif;  // ← semester_id = 2
-        
-        console.log('📚 Processed:', { 
+        // Ambil semester ID untuk query absensi
+        const tahunAjaranId = req.idSemesterAktif;
+
+        console.log('Processed:', { 
             kelasId, 
             namaKelas, 
             tahunAjaranId,
             idInduk: req.idTahunAjaranInduk
         });
 
+        // Validasi data tahun ajaran dan kelas
         if (!tahunAjaranId || !kelasId) {
             return res.status(500).json({
                 success: false,
@@ -60,11 +77,11 @@ exports.getAbsensiSiswa = async (req, res) => {
             });
         }
 
-        // 2. Ambil data absensi dari model
+        // Ambil data absensi dari model
         const absensiList = await absensiModel.getAbsensiByKelas(kelasId, tahunAjaranId);
-        console.log('📋 Absensi list:', absensiList.length, 'siswa');
+        console.log('Absensi list:', absensiList.length, 'siswa');
 
-        // 3. Format data sesuai jenis penilaian
+        // Format data sesuai jenis penilaian
         const formattedData = absensiList.map(row => {
             if (jenis === 'PTS') {
                 return {
@@ -78,14 +95,14 @@ exports.getAbsensiSiswa = async (req, res) => {
                     sudah_diinput: row.sudah_diinput === 1
                 };
             } else {
-                // ✅ FIXED: Typo izin_total → row.izin_total
+                // Untuk PAS: include data PTS sebagai referensi
                 return {
                     id_siswa: row.id_siswa,
                     nama: row.nama_lengkap,
                     nis: row.nis || '',
                     nisn: row.nisn || '',
                     sakit: row.sakit_total,
-                    izin: row.izin_total,  // ✅ FIXED!
+                    izin: row.izin_total,
                     alpha: row.alpha_total,
                     sudah_diinput: row.sudah_diinput === 1,
                     pts_sakit: row.sakit_pts,
@@ -95,7 +112,7 @@ exports.getAbsensiSiswa = async (req, res) => {
             }
         });
 
-        // 4. Return response
+        // Return response
         res.json({
             success: true,
             data: {
@@ -109,7 +126,7 @@ exports.getAbsensiSiswa = async (req, res) => {
         });
 
     } catch (err) {
-        console.error('❌ Error getAbsensiSiswa:', err);
+        console.error('Error getAbsensiSiswa:', err);
         res.status(500).json({
             success: false,
             message: 'Gagal mengambil data absensi',
@@ -118,9 +135,31 @@ exports.getAbsensiSiswa = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. UPSERT ABSENSI
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * POST /absensi
- * ✅ FIXED: Ambil jenis dari body, pakai req.infoKelasWali
+ * POST /api/guru-kelas/absensi
+ * Simpan atau update data absensi siswa untuk PTS atau PAS.
+ * 
+ * Validasi:
+ *   - Nilai absensi tidak boleh negatif
+ *   - Total absensi tidak boleh lebih dari 90 hari
+ *   - Untuk PAS: nilai tidak boleh kurang dari PTS
+ *   - Siswa harus terdaftar di kelas guru
+ * 
+ * Business Rules:
+ *   - PTS: simpan ke kolom sakit_pts, izin_pts, alpha_pts
+ *   - PAS: simpan ke kolom sakit_total, izin_total, alpha_total
+ *   - PAS harus >= PTS (karena PAS adalah total akumulasi)
+ * 
+ * @param {string} req.body.jenis - Jenis penilaian (PTS/PAS)
+ * @param {string} req.body.semester - Nama semester
+ * @param {number} req.body.siswa_id - ID siswa
+ * @param {number} req.body.sakit - Jumlah hari sakit
+ * @param {number} req.body.izin - Jumlah hari izin
+ * @param {number} req.body.alpha - Jumlah hari alpha
  */
 exports.upsertAbsensi = async (req, res) => {
     try {
@@ -129,8 +168,9 @@ exports.upsertAbsensi = async (req, res) => {
         const semester = req.body.semester || req.penilaianContext?.semester;
         const { siswa_id, sakit, izin, alpha } = req.body;
 
-        console.log('📥 POST absensi:', { userId, jenis, semester, siswa_id, sakit, izin, alpha });
+        console.log('POST absensi:', { userId, jenis, semester, siswa_id, sakit, izin, alpha });
 
+        // Validasi autentikasi
         if (!userId) {
             return res.status(401).json({
                 success: false,
@@ -138,6 +178,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
+        // Validasi jenis penilaian
         if (!jenis || !['PTS', 'PAS'].includes(jenis)) {
             return res.status(400).json({
                 success: false,
@@ -145,6 +186,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
+        // Validasi ID siswa
         if (!siswa_id) {
             return res.status(400).json({
                 success: false,
@@ -152,6 +194,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
+        // Sanitasi dan validasi nilai absensi
         const nilaiSakit = parseInt(sakit) || 0;
         const nilaiIzin = parseInt(izin) || 0;
         const nilaiAlpha = parseInt(alpha) || 0;
@@ -164,7 +207,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // Validasi maksimal absensi
+        // Validasi maksimal absensi per komponen
         const MAX_ABSEN = 90;
         if (nilaiSakit > MAX_ABSEN || nilaiIzin > MAX_ABSEN || nilaiAlpha > MAX_ABSEN) {
             return res.status(400).json({
@@ -173,6 +216,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
+        // Validasi total absensi
         const totalHari = nilaiSakit + nilaiIzin + nilaiAlpha;
         if (totalHari > MAX_ABSEN) {
             return res.status(400).json({
@@ -181,7 +225,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // ✅ PAKAI data dari middleware
+        // Ambil data kelas dari middleware
         const infoKelas = req.infoKelasWali;
         if (!infoKelas || !infoKelas.kelas_id) {
             return res.status(404).json({
@@ -191,8 +235,9 @@ exports.upsertAbsensi = async (req, res) => {
         }
 
         const kelasId = infoKelas.kelas_id;
-        const tahunAjaranId = req.idSemesterAktif;  // ← semester_id untuk absensi
+        const tahunAjaranId = req.idSemesterAktif;
 
+        // Validasi data tahun ajaran dan kelas
         if (!tahunAjaranId || !kelasId) {
             return res.status(500).json({
                 success: false,
@@ -200,7 +245,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // Validasi PTS vs PAS
+        // Validasi PTS vs PAS (PAS harus >= PTS)
         if (jenis === 'PAS') {
             const ptsData = await absensiModel.checkPTSExists(siswa_id, tahunAjaranId);
 
@@ -226,13 +271,13 @@ exports.upsertAbsensi = async (req, res) => {
             }
         }
 
-        // Validasi siswa terdaftar
+        // Validasi siswa terdaftar di kelas
         const [siswaCheck] = await db.execute(
             `SELECT 1 FROM siswa_kelas sk
             WHERE sk.siswa_id = ? 
             AND sk.kelas_id = ?
             AND sk.id_tahun_ajaran_induk = ?`,
-            [siswa_id, kelasId, req.idTahunAjaranInduk]  // ← Pakai id_induk
+            [siswa_id, kelasId, req.idTahunAjaranInduk]
         );
 
         if (siswaCheck.length === 0) {
@@ -242,7 +287,7 @@ exports.upsertAbsensi = async (req, res) => {
             });
         }
 
-        // Simpan data
+        // Simpan data absensi
         if (jenis === 'PTS') {
             await absensiModel.upsertAbsensiPTS(
                 siswa_id, kelasId, tahunAjaranId,
@@ -260,7 +305,7 @@ exports.upsertAbsensi = async (req, res) => {
             message: `Absensi ${jenis} berhasil disimpan`
         });
     } catch (err) {
-        console.error('❌ Error upsertAbsensi:', err);
+        console.error('Error upsertAbsensi:', err);
         res.status(500).json({
             success: false,
             message: 'Gagal menyimpan absensi',

@@ -1,47 +1,41 @@
+/**
+ * Nama File: index.js
+ * Fungsi: Main controller yang meng-export semua controller admin.
+ *         Menggunakan spread operator untuk menggabungkan semua sub-controller
+ *         ke dalam satu objek yang dapat diakses oleh routes.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ADMIN CONTROLLERS EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
+
 module.exports = {
-    // Admin
-    ...require('./adminController'),
+    // ── User Management ─────────────────────────────────────────────────────
+    ...require('./adminController'),      // CRUD admin
+    ...require('./guruController'),       // CRUD guru + import Excel
+    ...require('./pembinaEkskulController'), // CRUD pembina ekskul
 
-    // Guru
-    ...require('./guruController'),
+    // ── School Data ─────────────────────────────────────────────────────────
+    ...require('./sekolahController'),    // Data sekolah + logo
+    ...require('./siswaController'),      // CRUD siswa master
+    ...require('./siswaPerKelasController'), // Siswa per kelas
 
-    // Pembina Ekstrakurikuler
-    ...require('./pembinaEkskulController'),
+    // ── Academic Structure ──────────────────────────────────────────────────
+    ...require('./tahunAjaranController'), // Tahun ajaran & semester
+    ...require('./kelasController'),      // CRUD kelas
+    ...require('./guruKelasController'),  // Wali kelas
+    ...require('./mapelController'),      // Mata pelajaran
+    ...require('./pembelajaranController'), // Pembelajaran (mapel + kelas)
 
-    // Sekolah
-    ...require('./sekolahController'),
+    // ── Extracurricular ─────────────────────────────────────────────────────
+    ...require('./ekstrakurikulerController'), // CRUD ekskul + peserta
 
-    // Siswa
-    ...require('./siswaController'),
+    // ── Reporting & Analytics ───────────────────────────────────────────────
+    ...require('./dashboardController'),  // Dashboard stats + upload foto
+    ...require('./raporController'),      // Generate rapor PDF
 
-    // Siswa Per Kelas
-    ...require('./siswaPerKelasController'),
-
-    // Tahun Ajaran
-    ...require('./tahunAjaranController'),
-
-    // Kelas
-    ...require('./kelasController'),
-
-    // Guru Kelas
-    ...require('./guruKelasController'),
-
-    // Mapel
-    ...require('./mapelController'),
-
-    // Pembelajaran
-    ...require('./pembelajaranController'),
-
-    // Ekstrakurikuler
-    ...require('./ekstrakurikulerController'),
-
-    // Dashboard
-    ...require('./dashboardController'),
-
-    // Rapor
-    ...require('./raporController'),
-
-    // Backup & Restore
-    ...require('./backupController'),
-
+    // ── System Management ───────────────────────────────────────────────────
+    ...require('./backupController'),     // Backup & restore database
 };

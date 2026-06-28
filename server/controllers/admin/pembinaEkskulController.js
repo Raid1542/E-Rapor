@@ -1,8 +1,24 @@
+/**
+ * Nama File: pembinaEkskulController.js
+ * Fungsi: Controller untuk manajemen data pembina ekstrakurikuler (CRUD) dan import dari Excel.
+ *         Menangani validasi data pembina, cek duplikasi NIY/NUPTK, dan import massal.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
 const pembinaEkskulModel = require('../../models/admin/pembinaEkskulModel');
 const db = require('../../config/db');
 const XLSX = require('xlsx');
 const fs = require('fs');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET ALL PEMBINA EKSTRAKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/pembina-ekskul
+ * Ambil daftar semua pembina ekstrakurikuler.
+ */
 const getPembinaEkskul = async (req, res) => {
     try {
         const pembinaList = await pembinaEkskulModel.getAll();
@@ -13,6 +29,14 @@ const getPembinaEkskul = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. GET PEMBINA BY ID
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/pembina-ekskul/:id
+ * Ambil detail pembina berdasarkan ID.
+ */
 const getPembinaEkskulById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -38,6 +62,19 @@ const getPembinaEkskulById = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. CREATE PEMBINA
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/pembina-ekskul
+ * Tambah pembina ekstrakurikuler baru.
+ * 
+ * Validasi:
+ *   - Nama lengkap, tempat lahir, tanggal lahir, jenis kelamin wajib
+ *   - Tanggal lahir tidak boleh di masa depan
+ *   - NIY dan NUPTK tidak boleh duplikat
+ */
 const tambahPembinaEkskul = async (req, res) => {
     const { nama_lengkap, niy, nuptk, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, no_telepon, status } = req.body;
 
@@ -47,14 +84,17 @@ const tambahPembinaEkskul = async (req, res) => {
     if (!tanggal_lahir) return res.status(400).json({ success: false, message: 'Tanggal lahir wajib diisi' });
     if (!jenis_kelamin) return res.status(400).json({ success: false, message: 'Jenis kelamin wajib dipilih' });
 
+    // Validasi tanggal lahir
     const dob = new Date(tanggal_lahir);
     if (isNaN(dob.getTime())) return res.status(400).json({ success: false, message: 'Format tanggal lahir tidak valid' });
     if (dob > new Date()) return res.status(400).json({ success: false, message: 'Tanggal lahir tidak boleh di masa depan' });
 
+    // Normalisasi status
     const validStatus = ['aktif', 'nonaktif'];
     const finalStatus = validStatus.includes(status?.toLowerCase().trim()) ? status.toLowerCase().trim() : 'aktif';
 
     try {
+        // Cek duplikasi NIY
         if (niy && niy.trim()) {
             const [existingNiy] = await db.execute(
                 'SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?',
@@ -68,6 +108,7 @@ const tambahPembinaEkskul = async (req, res) => {
             }
         }
 
+        // Cek duplikasi NUPTK
         if (nuptk && nuptk.trim()) {
             const [existingNuptk] = await db.execute(
                 'SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?',
@@ -81,6 +122,7 @@ const tambahPembinaEkskul = async (req, res) => {
             }
         }
 
+        // Create pembina
         const id = await pembinaEkskulModel.create({
             nama_lengkap: nama_lengkap.trim(),
             niy: niy?.trim() || null,
@@ -101,6 +143,7 @@ const tambahPembinaEkskul = async (req, res) => {
     } catch (err) {
         console.error('Error tambah pembina:', err);
 
+        // Handle duplicate entry
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             let duplicateField = 'Data';
             if (err.sqlMessage) {
@@ -117,6 +160,14 @@ const tambahPembinaEkskul = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. UPDATE PEMBINA
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/pembina-ekskul/:id
+ * Update data pembina berdasarkan ID.
+ */
 const editPembinaEkskul = async (req, res) => {
     const { id } = req.params;
 
@@ -136,15 +187,17 @@ const editPembinaEkskul = async (req, res) => {
     if (!tanggal_lahir) return res.status(400).json({ success: false, message: 'Tanggal lahir wajib diisi' });
     if (!jenis_kelamin) return res.status(400).json({ success: false, message: 'Jenis kelamin wajib dipilih' });
 
+    // Validasi tanggal lahir
     const dob = new Date(tanggal_lahir);
     if (isNaN(dob.getTime())) return res.status(400).json({ success: false, message: 'Format tanggal lahir tidak valid' });
     if (dob > new Date()) return res.status(400).json({ success: false, message: 'Tanggal lahir tidak boleh di masa depan' });
 
+    // Normalisasi status
     const validStatus = ['aktif', 'nonaktif'];
     const finalStatus = validStatus.includes(status?.toLowerCase().trim()) ? status.toLowerCase().trim() : 'aktif';
 
     try {
-        const success = await pembinaEkskulModel.update(parsedId, {  // ✅ Pakai parsedId
+        const success = await pembinaEkskulModel.update(parsedId, {
             nama_lengkap: nama_lengkap.trim(),
             niy: niy || null,
             nuptk: nuptk || null,
@@ -177,17 +230,32 @@ const editPembinaEkskul = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. IMPORT PEMBINA FROM EXCEL
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/pembina-ekskul/import
+ * Import data pembina dari file Excel (.xlsx).
+ * 
+ * Format kolom wajib:
+ *   - nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin
+ * 
+ * Kolom opsional:
+ *   - niy, nuptk, alamat, no_telepon
+ */
 const importPembinaEkskul = async (req, res) => {
     const connection = await db.getConnection();
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
 
+        // Baca file Excel
         const workbook = XLSX.readFile(req.file.path);
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
         if (data.length === 0) throw new Error('File Excel kosong');
 
-        // Validasi kolom wajib di template
+        // Validasi kolom wajib
         const requiredCols = ['nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin'];
         const firstRow = data[0];
         for (const col of requiredCols) {
@@ -201,11 +269,12 @@ const importPembinaEkskul = async (req, res) => {
         const duplicates = [];
         let successCount = 0;
 
+        // Proses setiap baris
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNum = i + 2;
 
-            // Validasi per baris
+            // Validasi data per baris
             if (!row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
                 throw new Error(`Baris ${rowNum}: Data tidak lengkap`);
             }
@@ -213,11 +282,13 @@ const importPembinaEkskul = async (req, res) => {
                 throw new Error(`Baris ${rowNum}: Jenis kelamin harus Laki-laki atau Perempuan`);
             }
 
+            // Cek duplikasi NIY
             const [existingNiy] = row.niy ? await connection.execute(
                 'SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?', 
                 [row.niy]
             ) : [[]];
             
+            // Cek duplikasi NUPTK
             const [existingNuptk] = row.nuptk ? await connection.execute(
                 'SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?', 
                 [row.nuptk]
@@ -232,6 +303,7 @@ const importPembinaEkskul = async (req, res) => {
                 continue; 
             }
 
+            // Insert data pembina
             await pembinaEkskulModel.create({
                 nama_lengkap: row.nama_lengkap,
                 niy: row.niy || null,
@@ -249,6 +321,7 @@ const importPembinaEkskul = async (req, res) => {
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
+        // Response dengan info duplikat
         if (duplicates.length > 0) {
             return res.json({
                 success: true,
@@ -276,6 +349,10 @@ const importPembinaEkskul = async (req, res) => {
         connection.release();
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getPembinaEkskul,

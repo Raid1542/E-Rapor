@@ -1,19 +1,38 @@
 /**
  * Nama File: penilaianNilaiController.js
- * Fungsi: Mengelola input nilai siswa oleh guru bidang studi
- * UPDATE: Fix 8 bug kritis + Tambah field bobot_sudah_diatur
+ * Fungsi: Controller untuk input nilai siswa oleh guru bidang studi.
+ *         Menangani pengambilan nilai per mapel/kelas, simpan nilai komponen,
+ *         dan perhitungan otomatis nilai rapor (PTS/PAS) dengan bobot.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET NILAI BY MAPEL AND KELAS
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * Mengambil nilai siswa berdasarkan mata pelajaran dan kelas.
+ * GET /api/guru-bidang-studi/nilai/:mapelId/:kelasId
+ * Ambil daftar nilai siswa untuk mata pelajaran dan kelas tertentu.
+ * 
+ * Response includes:
+ *   - Daftar siswa aktif di kelas
+ *   - Nilai detail per komponen untuk setiap siswa
+ *   - Nilai rapor PTS dan PAS
+ *   - Status lock nilai rapor
+ *   - Info bobot sudah diatur atau belum
+ * 
+ * @param {string} req.params.mapelId - ID mata pelajaran
+ * @param {string} req.params.kelasId - ID kelas
  */
 exports.getNilaiByMapelAndKelas = async (req, res) => {
     try {
         const { mapelId, kelasId } = req.params;
         const userId = req.user.id;
 
+        // Validasi parameter
         if (!mapelId || !kelasId) {
             return res.status(400).json({
                 success: false,
@@ -21,7 +40,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             });
         }
 
-        // Ambil tahun ajaran aktif (semester)
+        // Step 1: Ambil tahun ajaran aktif (semester)
         const [taSemesterRows] = await db.execute(`
             SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status_pts, status_pas
             FROM tahun_ajaran
@@ -38,7 +57,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
         const indukId = taSemesterRows[0].id_tahun_ajaran_induk;
         const { semester, status_pts, status_pas } = taSemesterRows[0];
 
-        // Tentukan jenis penilaian aktif
+        // Step 2: Tentukan jenis penilaian aktif
         let jenis_penilaian_aktif = null;
         if (status_pts === 'aktif') {
             jenis_penilaian_aktif = 'PTS';
@@ -46,7 +65,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             jenis_penilaian_aktif = 'PAS';
         }
 
-        // Validasi akses guru
+        // Step 3: Validasi akses guru
         const [valid] = await db.execute(
             `SELECT 1 FROM pembelajaran 
             WHERE user_id = ? AND mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?`,
@@ -60,16 +79,14 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             });
         }
 
-        // Ambil nama kelas
+        // Step 4: Ambil nama kelas
         const [namaKelasRow] = await db.execute(
             `SELECT nama_kelas FROM kelas WHERE id_kelas = ?`,
             [kelasId]
         );
         const kelasNama = namaKelasRow[0]?.nama_kelas || 'Kelas Tidak Diketahui';
 
-        // ═══════════════════════════════════════════════════════════════
-        // ✅ BARU: CEK BOBOT SUDAH DIATUR
-        // ═══════════════════════════════════════════════════════════════
+        // Step 5: Cek apakah bobot sudah diatur
         const [bobotCheck] = await db.execute(`
             SELECT COUNT(*) as total 
             FROM konfigurasi_mapel_komponen 
@@ -80,8 +97,8 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
         `, [mapelId, semesterId, kelasId]);
 
         const bobotSudahDiatur = (bobotCheck[0]?.total || 0) > 0;
-        // ────────────────────────────────────────────────────────────────
 
+        // Step 6: Ambil daftar siswa aktif
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama
             FROM siswa s
@@ -93,7 +110,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             [kelasId, indukId]
         );
 
-        // Jika tidak ada siswa aktif, return kosong
+        // Return kosong jika tidak ada siswa
         if (siswaRows.length === 0) {
             return res.json({
                 success: true,
@@ -101,17 +118,18 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
                 komponen: [],
                 kelas: kelasNama,
                 jenis_penilaian_aktif,
-                bobot_sudah_diatur: bobotSudahDiatur,  // ✅ TAMBAHKAN
+                bobot_sudah_diatur: bobotSudahDiatur,
             });
         }
 
-        // Ambil komponen penilaian
+        // Step 7: Ambil komponen penilaian
         const [komponenRows] = await db.execute(`
             SELECT id_komponen, nama_komponen 
             FROM komponen_penilaian 
             ORDER BY urutan
         `);
 
+        // Step 8: Ambil nilai rapor PTS dan PAS
         const [nilaiRaporRows] = await db.execute(
             `SELECT siswa_id, nilai_rapor, deskripsi, jenis_penilaian, is_locked
             FROM nilai_rapor
@@ -119,6 +137,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             [mapelId, semesterId, semester]
         );
 
+        // Step 9: Ambil nilai detail untuk semua siswa
         const siswaIds = siswaRows.map(s => s.id);
         const [allNilaiDetail] = await db.execute(
             `SELECT siswa_id, komponen_id, nilai 
@@ -128,7 +147,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             [mapelId, semesterId, ...siswaIds]
         );
 
-        // Group nilai detail by siswa_id
+        // Step 10: Group nilai detail by siswa_id
         const nilaiBySiswa = new Map();
         allNilaiDetail.forEach(row => {
             if (!nilaiBySiswa.has(row.siswa_id)) {
@@ -137,7 +156,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             nilaiBySiswa.get(row.siswa_id).set(row.komponen_id, row.nilai);
         });
 
-        // Bangun Map untuk nilai rapor PTS dan PAS
+        // Step 11: Bangun Map untuk nilai rapor PTS dan PAS
         const nilaiRaporPTSMap = new Map();
         const nilaiRaporPASMap = new Map();
 
@@ -155,10 +174,9 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             }
         });
 
-        // Bangun list siswa dengan nilai detail dan rapor
+        // Step 12: Bangun list siswa dengan nilai detail dan rapor
         const siswaList = [];
         for (const s of siswaRows) {
-            // Ambil nilai detail dari Map (tanpa query lagi!)
             const nilaiMap = nilaiBySiswa.get(s.id) || new Map();
 
             const nilaiRecord = {};
@@ -166,7 +184,6 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
                 nilaiRecord[k.id_komponen] = nilaiMap.get(k.id_komponen) ?? null;
             });
 
-            // Ambil data rapor PTS & PAS dari Map
             const raporPTS = nilaiRaporPTSMap.get(s.id);
             const raporPAS = nilaiRaporPASMap.get(s.id);
 
@@ -191,7 +208,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             komponen: komponenRows,
             kelas: kelasNama,
             jenis_penilaian_aktif,
-            bobot_sudah_diatur: bobotSudahDiatur,  // ✅ TAMBAHKAN INI
+            bobot_sudah_diatur: bobotSudahDiatur,
         });
     } catch (err) {
         console.error('Error getNilaiByMapelAndKelas:', err);
@@ -199,14 +216,25 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. SIMPAN NILAI (SINGLE KOMPONEN)
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * Menyimpan nilai untuk satu komponen penilaian.
+ * POST /api/guru-bidang-studi/nilai
+ * Simpan nilai untuk satu komponen penilaian.
+ * 
+ * @param {number} req.body.siswa_id - ID siswa
+ * @param {number} req.body.mapel_id - ID mata pelajaran
+ * @param {number} req.body.komponen_id - ID komponen
+ * @param {number} req.body.nilai - Nilai (0-100)
  */
 exports.simpanNilai = async (req, res) => {
     try {
         const { siswa_id, mapel_id, komponen_id, nilai } = req.body;
         const user_id = req.user.id;
 
+        // Validasi input
         if (!siswa_id || !mapel_id || !komponen_id || nilai === undefined) {
             return res.status(400).json({ success: false, message: 'Semua field wajib diisi' });
         }
@@ -214,7 +242,7 @@ exports.simpanNilai = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nilai harus antara 0 dan 100' });
         }
 
-        // Ambil ID SEMESTER aktif
+        // Ambil ID semester aktif
         const [taSemesterRows] = await db.execute(`
             SELECT id_tahun_ajaran FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
         `);
@@ -223,12 +251,13 @@ exports.simpanNilai = async (req, res) => {
         }
         const semesterId = taSemesterRows[0].id_tahun_ajaran;
 
-        // Ambil ID INDUK
+        // Ambil ID induk
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
         if (!tahunAjaranIndukId) {
             return res.status(400).json({ success: false, message: 'ID Tahun Ajaran Induk tidak ditemukan' });
         }
 
+        // Validasi akses guru
         const [valid] = await db.execute(
             `SELECT 1 FROM pembelajaran 
             WHERE user_id = ? AND mapel_id = ? AND kelas_id IN (
@@ -242,6 +271,7 @@ exports.simpanNilai = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Akses ditolak' });
         }
 
+        // Insert atau update nilai detail
         await db.execute(
             `INSERT INTO nilai_detail 
             (siswa_id, mapel_id, komponen_id, nilai, tahun_ajaran_id, created_at, updated_at)
@@ -259,8 +289,31 @@ exports.simpanNilai = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. SIMPAN NILAI KOMPONEN BANYAK + HITUNG RAPOR
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * Menyimpan nilai untuk banyak komponen sekaligus dan menghitung nilai rapor otomatis.
+ * POST /api/guru-bidang-studi/nilai/:mapelId/:siswaId
+ * Simpan nilai untuk banyak komponen sekaligus dan hitung nilai rapor otomatis.
+ * 
+ * Alur Kerja:
+ *   1. Validasi akses guru dan status siswa
+ *   2. Cek apakah nilai rapor terkunci
+ *   3. Validasi komponen dan periode penilaian
+ *   4. Simpan nilai detail (insert/update/delete)
+ *   5. Hitung nilai rapor berdasarkan bobot
+ *   6. Simpan nilai rapor dengan deskripsi dari konfigurasi
+ * 
+ * Business Rules:
+ *   - PTS: Hanya komponen PTS yang boleh diinput
+ *   - PAS: Hitung dari UH + PTS + PAS dengan bobot
+ *   - Total bobot harus 100%
+ *   - Auto-generate deskripsi dari range kategori
+ * 
+ * @param {string} req.params.mapelId - ID mata pelajaran
+ * @param {string} req.params.siswaId - ID siswa
+ * @param {Object} req.body.nilai - Object {komponen_id: nilai}
  */
 exports.simpanNilaiKomponenBanyak = async (req, res) => {
     try {
@@ -269,6 +322,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
         const mapelIdNum = parseInt(mapelId, 10);
         const siswaIdNum = parseInt(siswaId, 10);
 
+        // Validasi parameter
         if (isNaN(mapelIdNum) || isNaN(siswaIdNum)) {
             return res.status(400).json({
                 success: false,
@@ -286,9 +340,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 1: Ambil Tahun Ajaran Aktif
-        // ═══════════════════════════════════════════════════════════════
+        // Step 1: Ambil Tahun Ajaran Aktif
         const [taSemesterRows] = await db.execute(`
             SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester 
             FROM tahun_ajaran 
@@ -303,9 +355,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
         const indukId = taSemesterRows[0].id_tahun_ajaran_induk;
         const semester = taSemesterRows[0].semester;
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 2: Validasi Akses (PAKAI SEMESTER ID!)
-        // ═══════════════════════════════════════════════════════════════
+        // Step 2: Validasi Akses
         const [valid] = await db.execute(
             `SELECT 1 FROM pembelajaran 
             WHERE user_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
@@ -319,9 +369,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 3: Cek Locked
-        // ═══════════════════════════════════════════════════════════════
+        // Step 3: Cek Locked
         const [lockedRows] = await db.execute(
             `SELECT is_locked FROM nilai_rapor 
             WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
@@ -334,9 +382,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 4: Cek Siswa Aktif + Ambil kelas_id
-        // ═══════════════════════════════════════════════════════════════
+        // Step 4: Cek Siswa Aktif + Ambil kelas_id
         const [siswaAktifRows] = await db.execute(
             `SELECT sk.kelas_id, s.status
         FROM siswa_kelas sk
@@ -367,9 +413,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
 
         const kelasIdNum = siswaAktifRows[0].kelas_id;
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 5: Ambil Komponen & Validasi
-        // ═══════════════════════════════════════════════════════════════
+        // Step 5: Ambil Komponen & Validasi
         const [komponenRows] = await db.execute(
             `SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`
         );
@@ -385,7 +429,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             }
         }
 
-        // Validasi periode PTS
+        // Validasi periode PTS: hanya komponen PTS yang boleh diinput
         if (jenis_penilaian === 'PTS') {
             const nonPTSComponents = Object.keys(nilai).filter(id => {
                 const komponen = komponenRows.find(k => k.id_komponen == id);
@@ -403,9 +447,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 6: Simpan Nilai Detail
-        // ═══════════════════════════════════════════════════════════════
+        // Step 6: Simpan Nilai Detail
         const [existingNilaiRows] = await db.execute(
             `SELECT komponen_id, nilai FROM nilai_detail 
             WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
@@ -489,9 +531,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             );
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 7: Hitung Nilai Rapor
-        // ═══════════════════════════════════════════════════════════════
+        // Step 7: Hitung Nilai Rapor
         const [nilaiRows] = await db.execute(
             `SELECT komponen_id, nilai FROM nilai_detail WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
             [siswaIdNum, mapelIdNum, semesterId]
@@ -527,6 +567,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
         let deskripsiPTS = null;
         let deskripsiPAS = null;
 
+        // Helper: Ambil konfigurasi kategori nilai
         const getConfigRows = async () => {
             const [rows] = await db.execute(
                 `SELECT min_nilai, max_nilai, deskripsi 
@@ -580,6 +621,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             const bobotPAS = pasKomponen ? (bobotMap.get(pasKomponen.id_komponen) || 0) : 0;
             const totalBobot = totalBobotUH + bobotPTSForPAS + bobotPAS;
 
+            // Validasi bobot
             if (bobotRows.length === 0) {
                 return res.status(400).json({
                     success: false,
@@ -594,6 +636,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
                 });
             }
 
+            // Hitung nilai rapor PAS dengan bobot
             if (totalBobot > 0) {
                 const nilaiRapor = ((rataUH * totalBobotUH) + (nilaiPTSForPAS * bobotPTSForPAS) + (nilaiPAS * bobotPAS)) / totalBobot;
                 nilaiRaporPAS = Math.round(nilaiRapor);
@@ -609,10 +652,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // STEP 8: Simpan Rapor (pakai kelas_id dari siswa_kelas)
-        // ═══════════════════════════════════════════════════════════════
-
+        // Step 8: Simpan Rapor
         // Simpan nilai rapor PTS
         if (jenis_penilaian === 'PTS' && nilaiRaporPTS !== null) {
             await db.execute(

@@ -1,16 +1,26 @@
 /**
  * Nama File: tahunAjaranController.js
- * Fungsi: Controller untuk mengelola tahun ajaran (2 tabel: induk + semester)
- * Update: 
- *   - Fix error "Incorrect date value" - konversi '' → null
- *   - Tambah validasi hasChanges untuk edit
- *   - Perkuat validasi duplikasi untuk tambah
- *   - ✅ TAMBAHAN: Validasi field yang sudah dikunci (status = 'selesai')
+ * Fungsi: Controller untuk mengelola tahun ajaran (2 tabel: induk + semester).
+ *         Menangani CRUD tahun ajaran, pergantian semester aktif, dan validasi
+ *         penguncian tanggal penilaian yang sudah diarsipkan.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const tahunAjaranModel = require('../../models/admin/tahunAjaranModel');
 const db = require('../../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sanitasi input tanggal ke format YYYY-MM-DD.
+ * Mendukung berbagai format input dan mengkonversi ke format standar.
+ * 
+ * @param {string|Date|null} value - Input tanggal
+ * @returns {string|null} Tanggal dalam format YYYY-MM-DD atau null
+ */
 const sanitizeDate = (value) => {
     if (value === undefined || value === null || value === '') return null;
 
@@ -37,6 +47,13 @@ const sanitizeDate = (value) => {
     return null;
 };
 
+/**
+ * Format tanggal untuk perbandingan (YYYY-MM-DD).
+ * Mengkonversi Date object atau string ke format standar.
+ * 
+ * @param {string|Date} dateValue - Input tanggal
+ * @returns {string} Tanggal dalam format YYYY-MM-DD atau string kosong
+ */
 const formatDateForCompare = (dateValue) => {
     if (!dateValue) return '';
 
@@ -55,6 +72,20 @@ const formatDateForCompare = (dateValue) => {
     return `${year}-${month}-${day}`;
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET ALL TAHUN AJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/tahun-ajaran
+ * Ambil daftar semua tahun ajaran dengan detail semester dan status penilaian.
+ * 
+ * Response includes:
+ *   - Info tahun ajaran induk
+ *   - Tanggal PTS/PAS untuk semester Ganjil & Genap
+ *   - Status penilaian (aktif/nonaktif/selesai)
+ *   - Status aktif tahun ajaran
+ */
 const getTahunAjaran = async (req, res) => {
     try {
         const data = await tahunAjaranModel.getAllTahunAjaran();
@@ -102,6 +133,20 @@ const getTahunAjaran = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. GET SEMESTER LIST
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/tahun-ajaran/semester
+ * Ambil daftar semua semester (Ganjil & Genap) untuk dropdown.
+ * 
+ * Response includes:
+ *   - ID semester
+ *   - ID tahun ajaran induk
+ *   - Status aktif
+ *   - Tanggal pembagian rapor PTS/PAS
+ */
 const getSemesterList = async (req, res) => {
     try {
         const [rows] = await db.execute(`
@@ -145,11 +190,28 @@ const getSemesterList = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. CREATE TAHUN AJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/tahun-ajaran
+ * Tambah tahun ajaran baru dengan auto-deactivate tahun ajaran sebelumnya.
+ * 
+ * Validasi:
+ *   - Tahun awal dan akhir wajib diisi
+ *   - Tahun akhir harus > tahun awal
+ *   - Tidak boleh duplikat tahun ajaran
+ * 
+ * Fitur:
+ *   - Auto-deactivate semua tahun ajaran aktif sebelumnya
+ *   - Sanitasi tanggal PTS/PAS ke format YYYY-MM-DD
+ */
 const tambahTahunAjaran = async (req, res) => {
     try {
         const { tahun1, tahun2, pts_ganjil, pas_ganjil, pts_genap, pas_genap } = req.body;
 
-        // ═══ VALIDASI Field wajib ═══
+        // Validasi field wajib
         if (!tahun1 || !tahun2) {
             return res.status(400).json({
                 success: false,
@@ -157,7 +219,7 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ VALIDASI Format tahun harus angka ═══
+        // Validasi format tahun
         const t1 = parseInt(tahun1);
         const t2 = parseInt(tahun2);
 
@@ -168,7 +230,7 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ Tahun akhir harus > tahun awal ═══
+        // Tahun akhir harus > tahun awal
         if (t2 <= t1) {
             return res.status(400).json({
                 success: false,
@@ -176,10 +238,9 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-
         const tahun_ajaran = `${t1}/${t2}`;
 
-        // ═══ Cek duplikasi tahun ajaran ═══
+        // Cek duplikasi tahun ajaran
         const [existing] = await db.execute(
             `SELECT id_tahun_ajaran_induk, tahun_ajaran FROM tahun_ajaran_induk WHERE tahun_ajaran = ?`,
             [tahun_ajaran]
@@ -192,7 +253,7 @@ const tambahTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ SANITASI TANGGAL ═══
+        // Sanitasi tanggal
         const sanitizedData = {
             tahun_ajaran,
             pts_ganjil: sanitizeDate(pts_ganjil),
@@ -206,7 +267,7 @@ const tambahTahunAjaran = async (req, res) => {
         try {
             await connection.beginTransaction();
 
-            // Nonaktifkan semua TA aktif sebelumnya
+            // Nonaktifkan semua tahun ajaran aktif sebelumnya
             await connection.execute(`
                 UPDATE tahun_ajaran 
                 SET status = 'nonaktif' 
@@ -227,7 +288,7 @@ const tambahTahunAjaran = async (req, res) => {
         } catch (err) {
             await connection.rollback();
 
-            // Handle error duplikasi dari database (safety net)
+            // Handle error duplikasi dari database
             if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
                 return res.status(400).json({
                     success: false,
@@ -249,15 +310,29 @@ const tambahTahunAjaran = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// ✅ UPDATED: Hanya validasi field yang BENAR-BENAR dikirim user
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. UPDATE TAHUN AJARAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/tahun-ajaran/:id_induk
+ * Update tanggal PTS/PAS dengan validasi penguncian untuk penilaian yang sudah selesai.
+ * 
+ * Validasi:
+ *   - Hanya validasi field yang benar-benar dikirim user
+ *   - Cek apakah field sudah dikunci (status = 'selesai')
+ *   - Cek apakah ada perubahan data (hasChanges)
+ * 
+ * Business Rules:
+ *   - Tanggal PTS/PAS tidak bisa diubah jika penilaian sudah diarsipkan
+ *   - Hanya update field yang dikirim (partial update)
+ */
 const updateTahunAjaran = async (req, res) => {
     try {
         const { id_induk } = req.params;
         const { pts_ganjil, pas_ganjil, pts_genap, pas_genap } = req.body;
 
-        // ═══ VALIDASI 1: Cek tahun ajaran ada ═══
+        // Validasi: Cek tahun ajaran ada
         const [cekTA] = await db.execute(
             `SELECT id_tahun_ajaran_induk FROM tahun_ajaran_induk WHERE id_tahun_ajaran_induk = ?`,
             [id_induk]
@@ -270,7 +345,7 @@ const updateTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ ✅ VALIDASI BARU: Cek apakah ada field yang sudah dikunci ═══
+        // Validasi: Cek apakah ada field yang sudah dikunci
         const [statusCheck] = await db.execute(
             `SELECT 
                 g.status_pts AS status_pts_ganjil,
@@ -299,7 +374,6 @@ const updateTahunAjaran = async (req, res) => {
                 return date.toISOString().split('T')[0];
             };
 
-            // ✅ HANYA CEK jika user MENGIRIM field tersebut
             // Cek PTS Ganjil
             if (pts_ganjil !== undefined && status.status_pts_ganjil === 'selesai') {
                 const currentPtsGanjil = formatDate(status.pts_ganjil_current);
@@ -345,7 +419,7 @@ const updateTahunAjaran = async (req, res) => {
             }
         }
 
-        // ═══ VALIDASI 2: Ambil data lama untuk perbandingan ═══
+        // Ambil data lama untuk perbandingan
         const dataLama = await tahunAjaranModel.getTahunAjaranById(id_induk);
         if (!dataLama) {
             return res.status(404).json({
@@ -354,7 +428,7 @@ const updateTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ SANITASI data baru ═══
+        // Sanitasi data baru
         const dataBaru = {
             pts_ganjil: pts_ganjil !== undefined ? sanitizeDate(pts_ganjil) : undefined,
             pas_ganjil: pas_ganjil !== undefined ? sanitizeDate(pas_ganjil) : undefined,
@@ -362,7 +436,7 @@ const updateTahunAjaran = async (req, res) => {
             pas_genap: pas_genap !== undefined ? sanitizeDate(pas_genap) : undefined
         };
 
-        // ═══ VALIDASI 3: Cek apakah ada perubahan (hasChanges) ═══
+        // Cek apakah ada perubahan
         const hasChanges =
             (pts_ganjil !== undefined && formatDateForCompare(dataLama.pts_ganjil) !== (dataBaru.pts_ganjil || '')) ||
             (pas_ganjil !== undefined && formatDateForCompare(dataLama.pas_ganjil) !== (dataBaru.pas_ganjil || '')) ||
@@ -376,7 +450,7 @@ const updateTahunAjaran = async (req, res) => {
             });
         }
 
-        // ═══ UPDATE data ═══
+        // Update data
         const success = await tahunAjaranModel.updateTahunAjaran(id_induk, dataBaru);
 
         if (!success) {
@@ -400,23 +474,41 @@ const updateTahunAjaran = async (req, res) => {
     }
 };
 
-// ═══════════════════════════════════════════════════════════════
-// PUT /api/admin/tahun-ajaran/:id_induk/semester
-// ✅ UPDATED: Fleksibel + Riwayat Ganti Semester + Alasan Wajib
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. GANTI SEMESTER AKTIF
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/tahun-ajaran/:id_induk/semester
+ * Ganti semester aktif (Ganjil ↔ Genap) dengan pencatatan riwayat.
+ * 
+ * Validasi:
+ *   - Semester harus Ganjil atau Genap
+ *   - Alasan pergantian wajib diisi
+ * 
+ * Fitur:
+ *   - Auto-deactivate semester lama
+ *   - Auto-activate semester baru
+ *   - Catat riwayat pergantian di tabel riwayat_ganti_semester
+ *   - Info statistik kelengkapan nilai (non-blocking)
+ * 
+ * @param {string} req.params.id_induk - ID tahun ajaran induk
+ * @param {string} req.body.semester_baru - Semester baru (Ganjil/Genap)
+ * @param {string} req.body.alasan - Alasan pergantian semester
+ */
 const gantiSemester = async (req, res) => {
     try {
         const { id_induk } = req.params;
         const { semester_baru, alasan } = req.body;
         const adminId = req.user?.id;
 
-        console.log('🔄 [gantiSemester] START');
-        console.log('🔄 ID TA:', id_induk);
-        console.log('🔄 Semester baru:', semester_baru);
-        console.log('🔄 Alasan:', alasan);
-        console.log('🔄 Admin ID:', adminId);
+        console.log('[gantiSemester] START');
+        console.log('ID TA:', id_induk);
+        console.log('Semester baru:', semester_baru);
+        console.log('Alasan:', alasan);
+        console.log('Admin ID:', adminId);
 
-        // ═══ VALIDASI 1: Semester harus valid ═══
+        // Validasi: Semester harus valid
         if (!['Ganjil', 'Genap'].includes(semester_baru)) {
             return res.status(400).json({
                 success: false,
@@ -424,7 +516,7 @@ const gantiSemester = async (req, res) => {
             });
         }
 
-        // ═══ VALIDASI 2: Alasan wajib diisi ═══
+        // Validasi: Alasan wajib diisi
         if (!alasan || alasan.trim().length === 0) {
             return res.status(400).json({
                 success: false,
@@ -437,11 +529,11 @@ const gantiSemester = async (req, res) => {
         try {
             await connection.beginTransaction();
 
-            // ═══ Ambil data TA induk ═══
+            // Ambil data tahun ajaran induk
             const [cekInduk] = await connection.execute(
                 `SELECT id_tahun_ajaran_induk, tahun_ajaran 
-                 FROM tahun_ajaran_induk 
-                 WHERE id_tahun_ajaran_induk = ?`,
+                    FROM tahun_ajaran_induk 
+                    WHERE id_tahun_ajaran_induk = ?`,
                 [id_induk]
             );
 
@@ -456,10 +548,10 @@ const gantiSemester = async (req, res) => {
             const tahunAjaran = cekInduk[0].tahun_ajaran;
             const semesterLama = semester_baru === 'Ganjil' ? 'Genap' : 'Ganjil';
 
-            // ═══ Cek semester lama ada ═══
+            // Cek semester lama ada
             const [idSemesterLama] = await connection.execute(
                 `SELECT id_tahun_ajaran FROM tahun_ajaran 
-                 WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
+                    WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
                 [id_induk, semesterLama]
             );
 
@@ -473,7 +565,7 @@ const gantiSemester = async (req, res) => {
 
             const id_ta_lama = idSemesterLama[0].id_tahun_ajaran;
 
-            // ═══ INFO NILAI (untuk response informatif, TIDAK BLOCKING) ═══
+            // Info nilai (untuk response informatif, tidak blocking)
             let infoNilai = {
                 total_siswa: 0,
                 total_kelas: 0,
@@ -484,7 +576,7 @@ const gantiSemester = async (req, res) => {
             };
 
             try {
-                // Hitung total siswa di TA ini
+                // Hitung total siswa di tahun ajaran ini
                 const [cekSiswa] = await connection.execute(`
                     SELECT COUNT(DISTINCT sk.siswa_id) as total_siswa
                     FROM siswa_kelas sk
@@ -537,39 +629,39 @@ const gantiSemester = async (req, res) => {
                 }
 
             } catch (queryErr) {
-                console.warn('⚠️ Warning: Query info nilai error:', queryErr.message);
+                console.warn('Warning: Query info nilai error:', queryErr.message);
             }
 
-            // ═══ UPDATE: Ganti status semester ═══
+            // Update: Ganti status semester
             // Nonaktifkan semester lama
             await connection.execute(
                 `UPDATE tahun_ajaran 
-                 SET status = 'nonaktif' 
-                 WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
+                    SET status = 'nonaktif' 
+                    WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
                 [id_induk, semesterLama]
             );
 
             // Aktifkan semester baru
             await connection.execute(
                 `UPDATE tahun_ajaran 
-                 SET status = 'aktif' 
-                 WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
+                    SET status = 'aktif' 
+                    WHERE id_tahun_ajaran_induk = ? AND semester = ?`,
                 [id_induk, semester_baru]
             );
 
-            // ═══ RIWAYAT GANTI SEMESTER: Catat pergantian ═══
+            // Riwayat: Catat pergantian semester
             await connection.execute(
                 `INSERT INTO riwayat_ganti_semester 
-                 (tahun_ajaran_induk_id, tahun_ajaran, semester_lama, semester_baru, alasan, admin_id)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
+                    (tahun_ajaran_induk_id, tahun_ajaran, semester_lama, semester_baru, alasan, admin_id)
+                    VALUES (?, ?, ?, ?, ?, ?)`,
                 [id_induk, tahunAjaran, semesterLama, semester_baru, alasan.trim(), adminId]
             );
 
             await connection.commit();
 
-            console.log('✅ [gantiSemester] Berhasil ganti semester');
+            console.log('[gantiSemester] Berhasil ganti semester');
 
-            // ═══ Response dengan info lengkap ═══
+            // Response dengan info lengkap
             const kelengkapan = infoNilai.total_siswa > 0 
                 ? Math.round((infoNilai.siswa_sudah_input / infoNilai.total_siswa) * 100)
                 : 0;
@@ -578,9 +670,9 @@ const gantiSemester = async (req, res) => {
             if (infoNilai.total_siswa === 0) {
                 catatan = 'Belum ada siswa di tahun ajaran ini.';
             } else if (infoNilai.siswa_belum_lengkap > 0) {
-                catatan = `⚠️ Masih ada ${infoNilai.siswa_belum_lengkap} siswa dengan nilai belum lengkap di semester ${semesterLama}. Data nilai TIDAK hilang dan dapat dilanjutkan kapan saja.`;
+                catatan = `Masih ada ${infoNilai.siswa_belum_lengkap} siswa dengan nilai belum lengkap di semester ${semesterLama}. Data nilai TIDAK hilang dan dapat dilanjutkan kapan saja.`;
             } else if (infoNilai.siswa_sudah_input > 0) {
-                catatan = `✅ Semua nilai di semester ${semesterLama} sudah lengkap (${kelengkapan}%). Data nilai tetap tersimpan.`;
+                catatan = `Semua nilai di semester ${semesterLama} sudah lengkap (${kelengkapan}%). Data nilai tetap tersimpan.`;
             } else {
                 catatan = 'Data nilai sebelumnya masih tersimpan, guru dapat melanjutkan input di semester yang baru.';
             }
@@ -601,14 +693,14 @@ const gantiSemester = async (req, res) => {
 
         } catch (err) {
             await connection.rollback();
-            console.error('❌ Error transaction:', err);
+            console.error('Error transaction:', err);
             throw err;
         } finally {
             connection.release();
         }
 
     } catch (err) {
-        console.error('❌ Error ganti semester:', err);
+        console.error('Error ganti semester:', err);
         res.status(500).json({
             success: false,
             message: `Gagal mengganti semester: ${err.message}`,
@@ -616,6 +708,10 @@ const gantiSemester = async (req, res) => {
         });
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getTahunAjaran,

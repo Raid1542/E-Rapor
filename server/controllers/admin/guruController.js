@@ -1,32 +1,48 @@
+/**
+ * Nama File: guruController.js
+ * Fungsi: Controller untuk manajemen data guru (CRUD) dan import dari Excel.
+ *         Menangani validasi data, cek duplikasi, dan mapping role.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
+ */
+
 const XLSX = require('xlsx');
 const guruModel = require('../../models/admin/guruModel');
 const db = require('../../config/db');
 const fs = require('fs');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET ALL GURU
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/guru
+ * Ambil daftar semua guru dengan data profil dan role.
+ */
 const getGuru = async (req, res) => {
     try {
         const [rows] = await db.execute(`
-        SELECT 
-            u.id_user,
-            u.nama_lengkap,
-            u.email_sekolah,
-            u.status,
-            g.niy,
-            g.nuptk,
-            g.tempat_lahir,
-            g.tanggal_lahir,
-            g.jenis_kelamin,
-            g.alamat,
-            g.no_telepon,
-            g.foto_path,
-            GROUP_CONCAT(ur.role) AS roles
-        FROM user u
-        INNER JOIN guru g ON u.id_user = g.user_id
-        INNER JOIN user_role ur ON u.id_user = ur.id_user
-        WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')  
-        GROUP BY u.id_user
-        ORDER BY u.nama_lengkap ASC
-    `);
+            SELECT 
+                u.id_user,
+                u.nama_lengkap,
+                u.email_sekolah,
+                u.status,
+                g.niy,
+                g.nuptk,
+                g.tempat_lahir,
+                g.tanggal_lahir,
+                g.jenis_kelamin,
+                g.alamat,
+                g.no_telepon,
+                g.foto_path,
+                GROUP_CONCAT(ur.role) AS roles
+            FROM user u
+            INNER JOIN guru g ON u.id_user = g.user_id
+            INNER JOIN user_role ur ON u.id_user = ur.id_user
+            WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')  
+            GROUP BY u.id_user
+            ORDER BY u.nama_lengkap ASC
+        `);
 
         const guruList = rows.map(row => ({
             ...row,
@@ -41,6 +57,14 @@ const getGuru = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. GET GURU BY ID
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/guru/:id
+ * Ambil detail guru berdasarkan ID.
+ */
 const getGuruById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -53,6 +77,15 @@ const getGuruById = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. CREATE GURU
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/guru
+ * Tambah guru baru dengan data profil dan role.
+ * Password default: 'sekolah123' atau dari env DEFAULT_GURU_PASSWORD.
+ */
 const tambahGuru = async (req, res) => {
     const {
         nama_lengkap,
@@ -67,13 +100,14 @@ const tambahGuru = async (req, res) => {
         no_telepon,
     } = req.body;
 
+    // Validasi input wajib
     if (!nama_lengkap) return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
     if (!email_sekolah) return res.status(400).json({ message: 'Email sekolah wajib diisi' });
     if (!tempat_lahir) return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
     if (!tanggal_lahir) return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
     if (!jenis_kelamin) return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
 
-
+    // Validasi dan normalisasi roles
     if (!Array.isArray(roles)) {
         return res.status(400).json({ message: 'Roles harus berupa array' });
     }
@@ -111,6 +145,7 @@ const tambahGuru = async (req, res) => {
     } catch (err) {
         console.error('Error tambah guru:', err);
 
+        // Handle duplicate entry
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             let duplicateField = 'Data';
             if (err.sqlMessage) {
@@ -127,6 +162,14 @@ const tambahGuru = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. UPDATE GURU
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/guru/:id
+ * Update data guru berdasarkan ID.
+ */
 const editGuru = async (req, res) => {
     const { id } = req.params;
     const {
@@ -144,13 +187,14 @@ const editGuru = async (req, res) => {
         password,
     } = req.body;
 
+    // Validasi input wajib
     if (!nama_lengkap) return res.status(400).json({ message: 'Nama lengkap wajib diisi' });
     if (!email_sekolah) return res.status(400).json({ message: 'Email sekolah wajib diisi' });
     if (!tempat_lahir) return res.status(400).json({ message: 'Tempat lahir wajib diisi' });
     if (!tanggal_lahir) return res.status(400).json({ message: 'Tanggal lahir wajib diisi' });
     if (!jenis_kelamin) return res.status(400).json({ message: 'Jenis kelamin wajib dipilih' });
 
-
+    // Validasi roles
     if (!Array.isArray(roles) || roles.length === 0) {
         return res.status(400).json({ message: 'Role wajib dipilih minimal satu' });
     }
@@ -182,6 +226,7 @@ const editGuru = async (req, res) => {
     } catch (err) {
         console.error('Error edit guru:', err);
 
+        // Handle duplicate entry
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             let duplicateField = 'Data';
             if (err.sqlMessage) {
@@ -198,17 +243,34 @@ const editGuru = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. IMPORT GURU FROM EXCEL
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/guru/import
+ * Import data guru dari file Excel (.xlsx).
+ * 
+ * Format kolom wajib:
+ *   - email_sekolah, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, roles
+ * 
+ * Role mapping:
+ *   - "guru kelas" / "guru_kelas" / "gurukelas" → guru_kelas
+ *   - "guru bidang studi" / "guru_bidang_studi" / "guru mapel" → guru_bidang_studi
+ */
 const importGuru = async (req, res) => {
     const connection = await db.getConnection();
     try {
         if (!req.file) return res.status(400).json({ message: 'File Excel diperlukan' });
 
+        // Baca file Excel
         const workbook = XLSX.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
         if (data.length === 0) throw new Error('File Excel kosong');
 
+        // Validasi kolom wajib
         const requiredColumns = ['email_sekolah', 'nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin', 'roles'];
         const firstRow = data[0];
         for (const col of requiredColumns) {
@@ -221,7 +283,7 @@ const importGuru = async (req, res) => {
 
         const duplicates = [];
         
-        // ✅ PERBAIKAN: Tambahkan role mapping
+        // Role mapping untuk normalisasi
         const roleMapping = {
             'guru kelas': 'guru_kelas',
             'guru_kelas': 'guru_kelas',
@@ -233,19 +295,23 @@ const importGuru = async (req, res) => {
             'guru_mapel': 'guru_bidang_studi',
         };
 
+        // Proses setiap baris
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNum = i + 2;
 
+            // Validasi data lengkap
             if (!row.email_sekolah || !row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
                 throw new Error(`Baris ${rowNum}: Data tidak lengkap. Field nama, email, tempat lahir, tanggal lahir, dan jenis kelamin wajib diisi`);
             }
 
+            // Validasi format email
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(row.email_sekolah)) {
                 throw new Error(`Baris ${rowNum}: Format email "${row.email_sekolah}" tidak valid`);
             }
 
+            // Konversi tanggal lahir
             let tanggal_lahir = row.tanggal_lahir;
             if (typeof tanggal_lahir === 'number') {
                 const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
@@ -263,11 +329,12 @@ const importGuru = async (req, res) => {
                 throw new Error(`Baris ${rowNum}: Tanggal lahir wajib diisi`);
             }
 
+            // Validasi jenis kelamin
             if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
                 throw new Error(`Baris ${rowNum}: Jenis kelamin harus "Laki-laki" atau "Perempuan"`);
             }
 
-            // ✅ PERBAIKAN: Parsing role dengan mapping
+            // Parsing dan normalisasi role
             const roles = row.roles ? row.roles.toString().split(',').map(r => r.trim().toLowerCase()) : [];
             const validRoles = roles.map(r => roleMapping[r]).filter(Boolean);
             
@@ -275,6 +342,7 @@ const importGuru = async (req, res) => {
                 throw new Error(`Baris ${rowNum}: Role harus berisi "guru kelas" atau "guru bidang studi". Nilai yang Anda masukkan: "${row.roles}"`);
             }
 
+            // Cek duplikasi
             const [existingEmail] = await connection.execute('SELECT id_user FROM user WHERE email_sekolah = ?', [row.email_sekolah]);
             const [existingNiy] = row.niy ? await connection.execute('SELECT id_guru FROM guru WHERE niy = ?', [row.niy]) : [[]];
             const [existingNuptk] = row.nuptk ? await connection.execute('SELECT id_guru FROM guru WHERE nuptk = ?', [row.nuptk]) : [[]];
@@ -290,6 +358,7 @@ const importGuru = async (req, res) => {
                 continue;
             }
 
+            // Insert data guru
             const password = row.password || 'sekolah123';
             const userData = {
                 email_sekolah: row.email_sekolah,
@@ -312,6 +381,7 @@ const importGuru = async (req, res) => {
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
+        // Response dengan info duplikat
         if (duplicates.length > 0) {
             return res.status(200).json({
                 message: `Import selesai: ${data.length - duplicates.length} data berhasil, ${duplicates.length} data dilewati (duplikat)`,
@@ -327,10 +397,12 @@ const importGuru = async (req, res) => {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('Import guru error:', err);
 
+        // Error validasi format
         if (err.message && (err.message.includes('Format') || err.message.includes('Baris'))) {
             return res.status(400).json({ message: err.message });
         }
 
+        // Error duplikasi
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({ message: 'Import gagal: Data duplikat ditemukan (Email/NIY/NUPTK sudah terdaftar)' });
         }
@@ -340,6 +412,10 @@ const importGuru = async (req, res) => {
         connection.release();
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getGuru,

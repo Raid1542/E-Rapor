@@ -1,11 +1,22 @@
 /**
  * Nama File: dataPendukungController.js
- * Fungsi: Mengelola data pendukung untuk guru bidang studi
- *         FIXED: Gunakan id_tahun_ajaran (bukan id_tahun_ajaran_induk)
+ * Fungsi: Controller untuk data pendukung guru bidang studi.
+ *         Menyediakan daftar mapel, kelas, komponen penilaian, dan info tahun ajaran aktif.
+ *         Semua query menggunakan id_tahun_ajaran (semester), bukan id_tahun_ajaran_induk.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Ambil data tahun ajaran aktif dari database.
+ * @returns {Object|null} Data tahun ajaran aktif atau null
+ */
 const getTahunAjaranAktif = async () => {
     const [taRows] = await db.execute(`
         SELECT 
@@ -23,8 +34,16 @@ const getTahunAjaranAktif = async () => {
     return taRows.length > 0 ? taRows[0] : null;
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET KELAS BY MAPEL
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * TAMBAHKAN FUNGSI INI di bagian akhir file
+ * GET /api/guru-bidang-studi/kelas-by-mapel
+ * Ambil daftar kelas yang diajar guru untuk mata pelajaran tertentu.
+ * 
+ * @param {string} req.query.mapel_id - ID mata pelajaran
+ * @param {number} req.idSemesterAktif - ID semester aktif (dari middleware)
  */
 exports.getKelasByMapel = async (req, res) => {
     try {
@@ -86,6 +105,15 @@ exports.getKelasByMapel = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. GET DAFTAR MAPEL
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/guru-bidang-studi/mapel
+ * Ambil daftar mata pelajaran pilihan yang diajar guru di semester aktif.
+ * Hanya mengembalikan mapel jenis 'pilihan' (mapel wajib ditangani guru kelas).
+ */
 exports.getDaftarMapel = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -109,7 +137,7 @@ exports.getDaftarMapel = async (req, res) => {
             JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
             WHERE p.user_id = ? 
                 AND p.tahun_ajaran_id = ?
-                AND mp.jenis = 'pilihan'  -- ✅ HANYA MAPEL PILIHAN
+                AND mp.jenis = 'pilihan'
             ORDER BY mp.nama_mapel
         `, [userId, tahunAjaranId]);
 
@@ -126,6 +154,14 @@ exports.getDaftarMapel = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. GET DAFTAR KELAS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/guru-bidang-studi/kelas
+ * Ambil daftar semua kelas yang diajar guru di semester aktif.
+ */
 exports.getDaftarKelas = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -165,6 +201,14 @@ exports.getDaftarKelas = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. GET KOMPONEN PENILAIAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/guru-bidang-studi/komponen-penilaian
+ * Ambil daftar komponen penilaian (tugas, ulangan, praktik, dll) untuk dropdown.
+ */
 exports.getKomponenPenilaian = async (req, res) => {
     try {
         const [komponen] = await db.execute(`
@@ -185,6 +229,14 @@ exports.getKomponenPenilaian = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. GET TAHUN AJARAN AKTIF
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/guru-bidang-studi/tahun-ajaran-aktif
+ * Ambil info tahun ajaran aktif beserta status PTS dan PAS.
+ */
 exports.getTahunAjaranAktif = async (req, res) => {
     try {
         const taAktif = await getTahunAjaranAktif();

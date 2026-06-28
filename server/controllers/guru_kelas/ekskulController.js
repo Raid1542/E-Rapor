@@ -1,7 +1,7 @@
 /**
  * Nama File: ekskulController.js
  * Fungsi: Mengelola ekstrakurikuler siswa
- * UPDATE: Fix nama kolom + tambah validasi
+
  */
 
 const db = require('../../config/db');

@@ -1,15 +1,23 @@
 /**
  * Nama File: ekstrakurikulerController.js
- * Fungsi: Controller untuk CRUD ekstrakurikuler PER SEMESTER
- * Update: 
- *   - Gunakan semester_id dari query/body (bukan req.idTahunAjaranInduk)
- *   - Middleware adminOnlyWithTahunAjaran sudah validasi TA aktif
+ * Fungsi: Controller untuk CRUD ekstrakurikuler per semester, manajemen peserta,
+ *         dan dropdown pembina. Semua operasi divalidasi berdasarkan semester_id.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const ekstrakurikulerModel = require('../../models/admin/ekstrakurikulerModel');
 const db = require('../../config/db');
 
-// ✅ Helper untuk validasi semester
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPER: VALIDATE SEMESTER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Validasi semester_id dari request.
+ * @param {number|string} semesterId - ID semester yang akan divalidasi
+ * @returns {Object} { valid, message?, data? }
+ */
 const validateSemesterId = async (semesterId) => {
     if (!semesterId || isNaN(Number(semesterId))) {
         return { valid: false, message: 'Semester wajib dipilih' };
@@ -35,7 +43,14 @@ const validateSemesterId = async (semesterId) => {
     };
 };
 
-// ✅ Gunakan semester_id dari query
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET ALL EKSTRAKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/ekstrakurikuler
+ * Ambil daftar ekstrakurikuler berdasarkan semester.
+ */
 const getEkskul = async (req, res) => {
     try {
         const { semester_id } = req.query;
@@ -58,11 +73,24 @@ const getEkskul = async (req, res) => {
     }
 };
 
-// ✅ Gunakan semester_id dari body
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. CREATE EKSTRAKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/ekstrakurikuler
+ * Tambah ekstrakurikuler baru dengan validasi pembina dan duplikasi nama.
+ * 
+ * Validasi:
+ *   - Semester harus aktif
+ *   - Nama ekskul tidak boleh duplikat di semester yang sama
+ *   - 1 pembina hanya boleh mengampu 1 ekskul per semester
+ */
 const tambahEkskul = async (req, res) => {
     try {
         const { nama_ekskul, pembina_id, keterangan, semester_id } = req.body;
 
+        // Validasi semester
         const validation = await validateSemesterId(semester_id);
         if (!validation.valid) {
             return res.status(400).json({ message: validation.message });
@@ -74,11 +102,12 @@ const tambahEkskul = async (req, res) => {
             });
         }
 
+        // Validasi nama ekskul
         if (!nama_ekskul || !nama_ekskul.trim()) {
             return res.status(400).json({ message: 'Nama ekstrakurikuler wajib diisi' });
         }
 
-        // Validasi pembina jika diisi
+        // Validasi pembina
         if (pembina_id) {
             const pembinaList = await ekstrakurikulerModel.getAllPembinaAktif();
             const pembinaValid = pembinaList.find(p => p.id === Number(pembina_id));
@@ -86,7 +115,7 @@ const tambahEkskul = async (req, res) => {
                 return res.status(400).json({ message: 'Pembina tidak valid atau tidak aktif' });
             }
 
-            // ✅ BARU: Cek apakah pembina sudah mengampu ekskul lain
+            // Cek apakah pembina sudah mengampu ekskul lain
             const existingEkskul = await ekstrakurikulerModel.isPembinaAlreadyAssigned(
                 Number(pembina_id),
                 validation.data.semester_id
@@ -99,6 +128,7 @@ const tambahEkskul = async (req, res) => {
             }
         }
 
+        // Cek duplikasi nama
         const isDuplicate = await ekstrakurikulerModel.isNamaEkskulExist(
             nama_ekskul,
             validation.data.semester_id
@@ -109,6 +139,7 @@ const tambahEkskul = async (req, res) => {
             });
         }
 
+        // Create ekskul
         const ekskulId = await ekstrakurikulerModel.create({
             nama_ekskul: nama_ekskul.trim(),
             pembina_id: pembina_id || null,
@@ -127,12 +158,20 @@ const tambahEkskul = async (req, res) => {
     }
 };
 
-// ✅ Gunakan semester_id dari body
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. UPDATE EKSTRAKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/ekstrakurikuler/:id
+ * Update data ekstrakurikuler dengan validasi pembina dan duplikasi nama.
+ */
 const editEkskul = async (req, res) => {
     try {
         const { id } = req.params;
         const { nama_ekskul, pembina_id, keterangan, semester_id } = req.body;
 
+        // Validasi semester
         const validation = await validateSemesterId(semester_id);
         if (!validation.valid) {
             return res.status(400).json({ message: validation.message });
@@ -144,6 +183,7 @@ const editEkskul = async (req, res) => {
             });
         }
 
+        // Validasi nama ekskul
         if (!nama_ekskul || !nama_ekskul.trim()) {
             return res.status(400).json({ message: 'Nama ekstrakurikuler wajib diisi' });
         }
@@ -153,7 +193,7 @@ const editEkskul = async (req, res) => {
             return res.status(400).json({ message: 'ID tidak valid' });
         }
 
-        // Validasi pembina jika diisi
+        // Validasi pembina
         if (pembina_id) {
             const pembinaList = await ekstrakurikulerModel.getAllPembinaAktif();
             const pembinaValid = pembinaList.find(p => p.id === Number(pembina_id));
@@ -161,11 +201,11 @@ const editEkskul = async (req, res) => {
                 return res.status(400).json({ message: 'Pembina tidak valid atau tidak aktif' });
             }
 
-            // ✅ BARU: Cek apakah pembina sudah mengampu ekskul lain (selain yang sedang diedit)
+            // Cek apakah pembina sudah mengampu ekskul lain (exclude current ekskul)
             const existingEkskul = await ekstrakurikulerModel.isPembinaAlreadyAssigned(
                 Number(pembina_id),
                 validation.data.semester_id,
-                idNum  // Exclude current ekskul
+                idNum
             );
 
             if (existingEkskul) {
@@ -175,11 +215,13 @@ const editEkskul = async (req, res) => {
             }
         }
 
+        // Cek keberadaan ekskul
         const ekskulLama = await ekstrakurikulerModel.getById(idNum);
         if (!ekskulLama || ekskulLama.tahun_ajaran_id !== validation.data.semester_id) {
             return res.status(404).json({ message: 'Ekstrakurikuler tidak ditemukan' });
         }
 
+        // Cek duplikasi nama (exclude current ekskul)
         const isDuplicate = await ekstrakurikulerModel.isNamaEkskulExist(
             nama_ekskul,
             validation.data.semester_id,
@@ -189,6 +231,7 @@ const editEkskul = async (req, res) => {
             return res.status(400).json({ message: `Nama "${nama_ekskul}" sudah digunakan` });
         }
 
+        // Update ekskul
         const success = await ekstrakurikulerModel.update(idNum, {
             nama_ekskul: nama_ekskul.trim(),
             pembina_id: pembina_id || null,
@@ -210,12 +253,20 @@ const editEkskul = async (req, res) => {
     }
 };
 
-// ✅ Gunakan semester_id dari query
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. DELETE EKSTRAKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * DELETE /api/admin/ekstrakurikuler/:id
+ * Hapus ekstrakurikuler berdasarkan ID.
+ */
 const hapusEkskul = async (req, res) => {
     try {
         const { id } = req.params;
         const { semester_id } = req.query;
 
+        // Validasi semester
         const validation = await validateSemesterId(semester_id);
         if (!validation.valid) {
             return res.status(400).json({ message: validation.message });
@@ -226,11 +277,13 @@ const hapusEkskul = async (req, res) => {
             return res.status(400).json({ message: 'ID tidak valid' });
         }
 
+        // Cek keberadaan ekskul
         const ekskul = await ekstrakurikulerModel.getById(idNum);
         if (!ekskul || ekskul.tahun_ajaran_id !== validation.data.semester_id) {
             return res.status(404).json({ message: 'Ekstrakurikuler tidak ditemukan' });
         }
 
+        // Delete ekskul
         const success = await ekstrakurikulerModel.deleteById(idNum);
         if (!success) {
             return res.status(400).json({ message: 'Gagal menghapus ekstrakurikuler' });
@@ -246,12 +299,20 @@ const hapusEkskul = async (req, res) => {
     }
 };
 
-// ✅ Gunakan semester_id dari query
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. GET PESERTA BY EKSTRAKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/ekstrakurikuler/:id/anggota
+ * Ambil daftar peserta ekstrakurikuler tertentu.
+ */
 const getPesertaByEkskul = async (req, res) => {
     try {
         const { id } = req.params;
         const { semester_id } = req.query;
 
+        // Validasi semester
         const validation = await validateSemesterId(semester_id);
         if (!validation.valid) {
             return res.status(400).json({ message: validation.message });
@@ -262,11 +323,13 @@ const getPesertaByEkskul = async (req, res) => {
             return res.status(400).json({ message: 'ID ekskul tidak valid' });
         }
 
+        // Cek keberadaan ekskul
         const ekskul = await ekstrakurikulerModel.getById(idNum);
         if (!ekskul) {
             return res.status(404).json({ message: 'Ekstrakurikuler tidak ditemukan' });
         }
 
+        // Ambil peserta
         const peserta = await ekstrakurikulerModel.getPesertaByEkskul(idNum, validation.data.semester_id);
 
         res.json({
@@ -289,12 +352,20 @@ const getPesertaByEkskul = async (req, res) => {
     }
 };
 
-// ✅ Gunakan semester_id dari query
+// ═════════════════════════════════════════════════════════════════════════════
+// 6. GET EKSTRAKURIKULER BY SISWA
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/siswa/:siswaId/ekstrakurikuler
+ * Ambil daftar ekstrakurikuler yang diikuti siswa tertentu.
+ */
 const getEkskulBySiswa = async (req, res) => {
     try {
         const { siswaId } = req.params;
         const { semester_id } = req.query;
 
+        // Validasi semester
         const validation = await validateSemesterId(semester_id);
         if (!validation.valid) {
             return res.status(400).json({ message: validation.message });
@@ -305,6 +376,7 @@ const getEkskulBySiswa = async (req, res) => {
             return res.status(400).json({ message: 'ID siswa tidak valid' });
         }
 
+        // Ambil ekskul siswa
         const ekskulList = await ekstrakurikulerModel.getEkskulSiswa(siswaIdNum, validation.data.semester_id);
         
         res.json({ 
@@ -318,6 +390,14 @@ const getEkskulBySiswa = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 7. GET PEMBIN DROPDOWN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/ekstrakurikuler/pembina-dropdown
+ * Ambil daftar pembina aktif untuk dropdown form ekskul.
+ */
 const getPembinaDropdown = async (req, res) => {
     try {
         const pembinaList = await ekstrakurikulerModel.getAllPembinaAktif();
@@ -327,6 +407,10 @@ const getPembinaDropdown = async (req, res) => {
         res.status(500).json({ message: 'Gagal mengambil data pembina' });
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getEkskul,

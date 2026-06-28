@@ -1,7 +1,10 @@
 /**
  * Nama File: siswaMasterController.js
- * Fungsi: Master data siswa (TANPA tahun ajaran)
- *         Menggunakan Model untuk operasi database
+ * Fungsi: Controller untuk master data siswa (tanpa terikat tahun ajaran).
+ *         Menangani CRUD siswa, validasi duplikasi NIS/NISN, soft delete,
+ *         dan import massal dari Excel.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const SiswaModel = require('../../models/admin/siswaModel');
@@ -10,13 +13,28 @@ const fs = require('fs');
 const db = require('../../config/db');
 
 // ═════════════════════════════════════════════════════════════════════════════
-// GET /siswa-master - Ambil SEMUA siswa (master data)
+// 1. GET ALL SISWA (MASTER DATA)
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/siswa-master
+ * Ambil daftar semua siswa dengan pagination dan filter status.
+ * 
+ * @param {string} req.query.search - Keyword pencarian (nama/NIS/NISN)
+ * @param {number} req.query.page - Halaman (default: 1)
+ * @param {number} req.query.limit - Jumlah per halaman (default: 10)
+ * @param {string} req.query.status - Filter status (aktif/nonaktif, default: aktif)
+ */
 const getSiswaMaster = async (req, res) => {
     try {
         const { search, page = 1, limit = 10, status = 'aktif' } = req.query;
 
-        const result = await SiswaModel.getAllSiswa(search, status, parseInt(page), parseInt(limit));
+        const result = await SiswaModel.getAllSiswa(
+            search, 
+            status, 
+            parseInt(page), 
+            parseInt(limit)
+        );
 
         res.json({
             success: true,
@@ -34,8 +52,13 @@ const getSiswaMaster = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// GET /siswa-master/:id - Ambil detail siswa
+// 2. GET SISWA BY ID
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/siswa-master/:id
+ * Ambil detail siswa berdasarkan ID.
+ */
 const getSiswaMasterById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -64,8 +87,18 @@ const getSiswaMasterById = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// POST /siswa-master - Tambah siswa baru (MASTER DATA)
+// 3. CREATE SISWA
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/siswa-master
+ * Tambah siswa baru dengan validasi duplikasi NIS/NISN.
+ * 
+ * Validasi:
+ *   - NIS wajib dan unik
+ *   - NISN opsional tapi harus unik jika diisi
+ *   - Nama sama hanya warning (bukan error)
+ */
 const tambahSiswaMaster = async (req, res) => {
     try {
         const {
@@ -91,7 +124,7 @@ const tambahSiswaMaster = async (req, res) => {
         const trimmedNisn = nisn ? nisn.trim() : null;
         const trimmedNama = nama_lengkap.trim();
 
-        // ✅ CEK DUPLIKAT NIS
+        // Cek duplikat NIS
         const nisExists = await SiswaModel.checkNisExists(trimmedNis);
         if (nisExists) {
             return res.status(400).json({
@@ -101,7 +134,7 @@ const tambahSiswaMaster = async (req, res) => {
             });
         }
 
-        // ✅ CEK DUPLIKAT NISN (jika ada)
+        // Cek duplikat NISN (jika ada)
         if (trimmedNisn) {
             const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
             if (nisnExists) {
@@ -113,7 +146,7 @@ const tambahSiswaMaster = async (req, res) => {
             }
         }
 
-        // ✅ CEK NAMA SAMA (Warning, bukan error)
+        // Cek nama sama (warning, bukan error)
         const namaExists = await SiswaModel.checkNamaExists(trimmedNama);
         let warningMessage = null;
         if (namaExists) {
@@ -157,8 +190,13 @@ const tambahSiswaMaster = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// PUT /siswa-master/:id - Edit data siswa
+// 4. UPDATE SISWA
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/admin/siswa-master/:id
+ * Update data siswa dengan validasi duplikasi (exclude diri sendiri).
+ */
 const editSiswaMaster = async (req, res) => {
     try {
         const { id } = req.params;
@@ -173,7 +211,7 @@ const editSiswaMaster = async (req, res) => {
             status
         } = req.body;
 
-        // Cek apakah siswa ada
+        // Cek keberadaan siswa
         const existingSiswa = await SiswaModel.getSiswaById(id);
         if (!existingSiswa) {
             return res.status(404).json({
@@ -187,7 +225,7 @@ const editSiswaMaster = async (req, res) => {
         const trimmedNisn = nisn ? nisn.trim() : existingSiswa.nisn;
         const trimmedNama = nama_lengkap ? nama_lengkap.trim() : existingSiswa.nama_lengkap;
 
-        // ✅ CEK DUPLIKAT NIS (kecuali diri sendiri)
+        // Cek duplikat NIS (kecuali diri sendiri)
         if (trimmedNis !== existingSiswa.nis) {
             const nisExists = await SiswaModel.checkNisExists(trimmedNis, id);
             if (nisExists) {
@@ -199,7 +237,7 @@ const editSiswaMaster = async (req, res) => {
             }
         }
 
-        // ✅ CEK DUPLIKAT NISN (kecuali diri sendiri)
+        // Cek duplikat NISN (kecuali diri sendiri)
         if (trimmedNisn && trimmedNisn !== existingSiswa.nisn) {
             const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn, id);
             if (nisnExists) {
@@ -211,7 +249,7 @@ const editSiswaMaster = async (req, res) => {
             }
         }
 
-        // ✅ CEK PERUBAHAN
+        // Cek apakah ada perubahan data
         const hasChanges =
             existingSiswa.nis !== trimmedNis ||
             (existingSiswa.nisn || '') !== (trimmedNisn || '') ||
@@ -272,13 +310,21 @@ const editSiswaMaster = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// DELETE /siswa-master/:id - Hapus siswa (soft delete)
+// 5. DELETE SISWA (SOFT DELETE)
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * DELETE /api/admin/siswa-master/:id
+ * Hapus siswa dengan soft delete (ubah status jadi nonaktif).
+ * 
+ * Validasi:
+ *   - Siswa tidak boleh masih terdaftar di kelas manapun
+ */
 const hapusSiswaMaster = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Cek apakah siswa ada
+        // Cek keberadaan siswa
         const existingSiswa = await SiswaModel.getSiswaById(id);
         if (!existingSiswa) {
             return res.status(404).json({
@@ -287,7 +333,7 @@ const hapusSiswaMaster = async (req, res) => {
             });
         }
 
-        // Cek apakah siswa masih terdaftar di kelas manapun
+        // Cek apakah siswa masih terdaftar di kelas
         const totalKelas = await SiswaModel.checkSiswaInKelas(id);
         if (totalKelas > 0) {
             return res.status(400).json({
@@ -322,8 +368,24 @@ const hapusSiswaMaster = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// POST /siswa-master/import - Import siswa dari Excel (MASTER DATA)
+// 6. IMPORT SISWA FROM EXCEL
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/siswa-master/import
+ * Import data siswa dari file Excel (.xlsx).
+ * 
+ * Format kolom wajib:
+ *   - nis, nama_lengkap, jenis_kelamin
+ * 
+ * Kolom opsional:
+ *   - nisn, tempat_lahir, tanggal_lahir, alamat
+ * 
+ * Fitur:
+ *   - Skip duplikat NIS/NISN
+ *   - Auto-convert tanggal Excel ke format YYYY-MM-DD
+ *   - Return list data yang di-skip
+ */
 const importSiswaMaster = async (req, res) => {
     const connection = await db.getConnection();
     try {
@@ -334,6 +396,7 @@ const importSiswaMaster = async (req, res) => {
             });
         }
 
+        // Baca file Excel
         const workbook = XLSX.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
@@ -351,6 +414,7 @@ const importSiswaMaster = async (req, res) => {
         let processedCount = 0;
         const skipped = [];
 
+        // Proses setiap baris
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNumber = i + 2;
@@ -393,7 +457,7 @@ const importSiswaMaster = async (req, res) => {
                 }
             }
 
-            // Parse tanggal lahir
+            // Konversi tanggal lahir
             let tanggal_lahir = row.tanggal_lahir || null;
             if (typeof tanggal_lahir === 'number') {
                 const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
@@ -409,6 +473,7 @@ const importSiswaMaster = async (req, res) => {
                 }
             }
 
+            // Insert data siswa
             try {
                 await SiswaModel.createSiswa({
                     nis: trimmedNis,
@@ -440,6 +505,7 @@ const importSiswaMaster = async (req, res) => {
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
+        // Response dengan info data yang di-skip
         res.json({
             success: true,
             message: skipped.length > 0
@@ -463,6 +529,10 @@ const importSiswaMaster = async (req, res) => {
         connection.release();
     }
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
     getSiswaMaster,

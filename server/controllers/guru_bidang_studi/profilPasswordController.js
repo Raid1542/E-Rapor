@@ -1,30 +1,47 @@
 /**
  * Nama File: profilController.js
- * Fungsi: Mengelola profil guru bidang studi (lihat, edit, ganti password, upload foto)
- * Update: tempat_lahir & tanggal_lahir ada di tabel guru
+ * Fungsi: Controller untuk manajemen profil guru bidang studi.
+ *         Menangani pengambilan, edit profil, ganti password, dan upload foto.
+ *         Data profil tersebar di 2 tabel: user (nama, email) dan guru (data lainnya).
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
 const bcrypt = require('bcrypt');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. GET PROFIL
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/guru-bidang-studi/profil
+ * Ambil data profil guru bidang studi lengkap.
+ * 
+ * Response includes:
+ *   - Data dari tabel user: id, nama_lengkap, email_sekolah
+ *   - Data dari tabel guru: niy, nuptk, jenis_kelamin, no_telepon, alamat,
+ *     tempat_lahir, tanggal_lahir, foto_path
+ *   - Role: 'guru bidang studi'
+ */
 exports.getProfil = async (req, res) => {
     try {
         const userId = req.user.id;
 
-
         // Ambil data user
         const [userRows] = await db.execute(
             `SELECT id_user, nama_lengkap, email_sekolah 
-                FROM user 
-                WHERE id_user = ?`,
+             FROM user 
+             WHERE id_user = ?`,
             [userId]
         );
 
+        // Ambil data guru
         const [guruRows] = await db.execute(
             `SELECT niy, nuptk, jenis_kelamin, no_telepon, alamat, 
                     tempat_lahir, tanggal_lahir, foto_path 
-                FROM guru 
-                WHERE user_id = ?`,
+             FROM guru 
+             WHERE user_id = ?`,
             [userId]
         );
 
@@ -35,7 +52,7 @@ exports.getProfil = async (req, res) => {
             });
         }
 
-        // Gabungkan data
+        // Gabungkan data user dan guru
         const user = {
             id: userRows[0].id_user,
             role: 'guru bidang studi',
@@ -50,7 +67,6 @@ exports.getProfil = async (req, res) => {
             tanggal_lahir: guruRows[0]?.tanggal_lahir || null,
             profileImage: guruRows[0]?.foto_path || null,
         };
-
 
         res.json({
             success: true,
@@ -65,6 +81,30 @@ exports.getProfil = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. EDIT PROFIL
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/guru-bidang-studi/profil
+ * Update data profil guru bidang studi.
+ * 
+ * Update tabel user:
+ *   - nama_lengkap, email_sekolah
+ * 
+ * Update tabel guru:
+ *   - niy, nuptk, jenis_kelamin, no_telepon, alamat, tempat_lahir, tanggal_lahir
+ * 
+ * @param {string} req.body.nama_lengkap - Nama lengkap (wajib)
+ * @param {string} req.body.email_sekolah - Email sekolah (wajib)
+ * @param {string} req.body.niy - NIY (opsional)
+ * @param {string} req.body.nuptk - NUPTK (opsional)
+ * @param {string} req.body.jenis_kelamin - Jenis kelamin (opsional)
+ * @param {string} req.body.no_telepon - No telepon (opsional)
+ * @param {string} req.body.alamat - Alamat (opsional)
+ * @param {string} req.body.tempat_lahir - Tempat lahir (opsional)
+ * @param {string} req.body.tanggal_lahir - Tanggal lahir (opsional)
+ */
 exports.editProfil = async (req, res) => {
     try {
         const {
@@ -79,7 +119,7 @@ exports.editProfil = async (req, res) => {
             tanggal_lahir
         } = req.body;
 
-        // Validasi
+        // Validasi field wajib
         if (!nama_lengkap || !email_sekolah) {
             return res.status(400).json({
                 success: false,
@@ -92,22 +132,22 @@ exports.editProfil = async (req, res) => {
         // Update tabel user (hanya nama & email)
         const [userResult] = await db.execute(
             `UPDATE user 
-                SET nama_lengkap = ?, email_sekolah = ? 
-                WHERE id_user = ?`,
+             SET nama_lengkap = ?, email_sekolah = ? 
+             WHERE id_user = ?`,
             [nama_lengkap, email_sekolah, userId]
         );
 
-
+        // Update tabel guru (data lainnya)
         const [guruResult] = await db.execute(
             `UPDATE guru 
-                SET niy = ?, 
-                    nuptk = ?, 
-                    jenis_kelamin = ?, 
-                    no_telepon = ?, 
-                    alamat = ?,
-                    tempat_lahir = ?,
-                    tanggal_lahir = ?
-                WHERE user_id = ?`,
+             SET niy = ?, 
+                 nuptk = ?, 
+                 jenis_kelamin = ?, 
+                 no_telepon = ?, 
+                 alamat = ?,
+                 tempat_lahir = ?,
+                 tanggal_lahir = ?
+             WHERE user_id = ?`,
             [
                 niy || null, 
                 nuptk || null, 
@@ -120,20 +160,19 @@ exports.editProfil = async (req, res) => {
             ]
         );
 
-
-        // Ambil data terbaru
+        // Ambil data terbaru untuk response
         const [userRows] = await db.execute(
             `SELECT id_user, nama_lengkap, email_sekolah 
-                FROM user 
-                WHERE id_user = ?`,
+             FROM user 
+             WHERE id_user = ?`,
             [userId]
         );
 
         const [guruRows] = await db.execute(
             `SELECT niy, nuptk, jenis_kelamin, no_telepon, alamat, 
                     tempat_lahir, tanggal_lahir, foto_path 
-                FROM guru 
-                WHERE user_id = ?`,
+             FROM guru 
+             WHERE user_id = ?`,
             [userId]
         );
 
@@ -151,7 +190,6 @@ exports.editProfil = async (req, res) => {
             tanggal_lahir: guruRows[0]?.tanggal_lahir || null,
             profileImage: guruRows[0]?.foto_path || null,
         };
-
 
         res.json({
             success: true,
@@ -167,11 +205,28 @@ exports.editProfil = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. GANTI PASSWORD
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/guru-bidang-studi/ganti-password
+ * Ganti password dengan verifikasi password lama.
+ * 
+ * Validasi:
+ *   - Password lama dan baru wajib diisi
+ *   - Password baru minimal 8 karakter
+ *   - Password lama harus cocok dengan yang di database
+ * 
+ * @param {string} req.body.oldPassword - Password lama
+ * @param {string} req.body.newPassword - Password baru (min 8 karakter)
+ */
 exports.gantiPassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
         const userId = req.user.id;
 
+        // Validasi input
         if (!oldPassword || !newPassword) {
             return res.status(400).json({
                 success: false,
@@ -186,6 +241,7 @@ exports.gantiPassword = async (req, res) => {
             });
         }
 
+        // Ambil password dari database
         const [rows] = await db.execute(
             'SELECT password FROM user WHERE id_user = ?',
             [userId]
@@ -198,6 +254,7 @@ exports.gantiPassword = async (req, res) => {
             });
         }
 
+        // Verifikasi password lama
         const isMatch = await bcrypt.compare(oldPassword, rows[0].password);
         if (!isMatch) {
             return res.status(400).json({
@@ -206,6 +263,7 @@ exports.gantiPassword = async (req, res) => {
             });
         }
 
+        // Hash password baru dan update
         const newHashedPassword = await bcrypt.hash(newPassword, 10);
 
         await db.execute(
@@ -226,6 +284,16 @@ exports.gantiPassword = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. UPLOAD FOTO PROFIL
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /api/guru-bidang-studi/upload-foto
+ * Upload foto profil guru.
+ * 
+ * @param {File} req.file - File foto (dari multer)
+ */
 exports.uploadFotoProfil = async (req, res) => {
     try {
         if (!req.file) {
@@ -238,6 +306,7 @@ exports.uploadFotoProfil = async (req, res) => {
         const userId = req.user.id;
         const fotoPath = `/uploads/${req.file.filename}`;
 
+        // Update foto_path di tabel guru
         await db.execute(
             'UPDATE guru SET foto_path = ? WHERE user_id = ?',
             [fotoPath, userId]
