@@ -4,6 +4,8 @@
  * UPDATE: 
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif/selesai
+ *   - ✅ BARU: Banner warning jika bobot belum diatur saat periode PAS aktif
+ *   - ✅ BARU: Konfirmasi tambahan saat simpan nilai jika bobot belum diatur
  *   - Banner warning status periode
  *   - Tombol Edit disabled dengan icon  jika read only
  *   - Modal warning saat klik tombol di mode read only
@@ -143,6 +145,10 @@ export default function InputNilaiClient() {
     const [currentPage, setCurrentPage] = useState(1);
     const [dataLoading, setDataLoading] = useState(false);
 
+    // ✅ STATE BARU: Bobot belum diatur (untuk warning PAS)
+    const [bobotSudahDiatur, setBobotSudahDiatur] = useState<boolean>(true);
+    const [showBobotWarning, setShowBobotWarning] = useState(false);
+
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
@@ -276,6 +282,8 @@ export default function InputNilaiClient() {
             setFilteredSiswa([]);
             setCurrentMapel(null);
             setKelasNama('');
+            setBobotSudahDiatur(true);
+            setShowBobotWarning(false);
             return;
         }
 
@@ -322,6 +330,17 @@ export default function InputNilaiClient() {
                 setKelasNama(data.kelas || '');
                 setCurrentMapel(mapelList.find(m => m.mata_pelajaran_id === selectedMapelId) || null);
                 setCurrentPage(1);
+
+                // ✅ PERHATIKAN: Cek status bobot dari backend
+                const bobotStatus = data.bobot_sudah_diatur ?? true;
+                setBobotSudahDiatur(bobotStatus);
+
+                // ✅ Tampilkan warning jika PAS aktif DAN bobot belum diatur
+                if (!bobotStatus && jenisPenilaianAktif === 'PAS' && !isReadOnly) {
+                    setShowBobotWarning(true);
+                } else {
+                    setShowBobotWarning(false);
+                }
             } catch (err: any) {
                 showModal({ type: 'error', title: 'Gagal Memuat', message: err.message || 'Gagal memuat data nilai.' });
             } finally {
@@ -329,7 +348,7 @@ export default function InputNilaiClient() {
             }
         };
         fetchNilai();
-    }, [selectedMapelId, mapelList, showModal]);
+    }, [selectedMapelId, mapelList, showModal, jenisPenilaianAktif, isReadOnly]);
 
     // ── FILTER & PAGINATION ─────────────────────────────────────────────────────
 
@@ -458,6 +477,19 @@ export default function InputNilaiClient() {
                 title: 'Tidak Ada Perubahan',
                 message: 'Data yang Anda masukkan sama dengan data sebelumnya.'
             });
+            return;
+        }
+
+        // ✅ BARU: Konfirmasi tambahan jika PAS aktif & bobot belum diatur
+        if (jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur) {
+            showModal({
+                type: 'warning',
+                title: '⚠️ Bobot Penilaian Belum Diatur',
+                message: `Bobot penilaian untuk mata pelajaran "${currentMapel?.nama_mapel}" belum diatur.\n\nNilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata).\n\n💡 Tip: Atur bobot terlebih dahulu di menu "Atur Penilaian" untuk hasil yang akurat.\n\nApakah Anda tetap ingin melanjutkan menyimpan nilai?`
+            });
+            // User tetap bisa lanjut dengan klik OK
+            setConfirmSiswaNama(editingSiswa.nama);
+            setShowConfirmModal(true);
             return;
         }
 
@@ -627,6 +659,46 @@ export default function InputNilaiClient() {
                                 ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat nilai siswa, tetapi tidak dapat mengedit.'
                                 : 'Periode penilaian belum aktif. Anda dapat melihat nilai siswa, tetapi belum dapat menginput nilai. Silakan hubungi admin untuk membuka periode penilaian.'}
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ BANNER WARNING: BOBOT BELUM DIATUR (HANYA PAS AKTIF) */}
+            {showBobotWarning && jenisPenilaianAktif === 'PAS' && !isReadOnly && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                    style={{
+                        background: '#fef3c7',
+                        border: '1px solid #fcd34d'
+                    }}>
+                    <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
+                    <div className="flex-1">
+                        <p className="text-sm font-bold mb-1 text-yellow-900">
+                            ⚠️ Bobot Penilaian Belum Diatur
+                        </p>
+                        <p className="text-xs text-yellow-800">
+                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur. 
+                            Nilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata). 
+                            Untuk hasil yang akurat, silakan atur bobot terlebih dahulu di menu <strong>"Atur Penilaian"</strong>.
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={() => {
+                                    setShowBobotWarning(false);
+                                    window.location.href = '/guru-kelas/atur-penilaian';
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: '#fcd34d', color: '#78350f', border: '1px solid #f59e0b' }}
+                            >
+                                Atur Bobot Sekarang
+                            </button>
+                            <button
+                                onClick={() => setShowBobotWarning(false)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: '#fff', color: '#78350f', border: '1px solid #fcd34d' }}
+                            >
+                                Tutup
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1077,6 +1149,17 @@ export default function InputNilaiClient() {
                                         {jenisPenilaianAktif === 'PTS'
                                             ? ' Hanya nilai PTS yang dapat diubah.'
                                             : ' Nilai PTS terkunci, hanya UH & PAS yang bisa diubah.'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* ✅ Banner Warning Bobot di Modal Edit */}
+                            {jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur && (
+                                <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+                                    style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                                    <AlertCircle size={18} style={{ color: '#a16207', flexShrink: 0 }} className="mt-0.5" />
+                                    <p className="text-xs" style={{ color: '#78350f' }}>
+                                        <strong>⚠️ Peringatan:</strong> Bobot penilaian belum diatur. Nilai rapor akan dihitung dengan bobot default.
                                     </p>
                                 </div>
                             )}

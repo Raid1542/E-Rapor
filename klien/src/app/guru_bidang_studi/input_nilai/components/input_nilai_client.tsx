@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock } from 'lucide-react';
+import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock, AlertTriangle } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -82,10 +82,54 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     );
 };
 
+// ─── ✅ PERIOD NOT ACTIVE MODAL ────────────────────────────────────────────────
+
+const PeriodNotActiveModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 dg-scaleIn">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0 ring-4 ring-orange-100 dg-pulse">
+                        <AlertTriangle size={24} className="text-orange-500" />
+                    </div>
+                    <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                        ⏳ Periode Penilaian Belum Aktif
+                    </h3>
+                </div>
+
+                <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                    Baik <strong>PTS</strong> maupun <strong>PAS</strong> belum dibuka oleh admin. Anda dapat menyiapkan kategori dan bobot penilaian sekarang sebagai persiapan.
+                </p>
+
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6">
+                    <p className="text-xs text-orange-800 leading-relaxed">
+                        <strong>💡 Tip:</strong> Anda tetap bisa melihat data dan menyiapkan kategori penilaian agar siap digunakan saat periode dibuka.
+                    </p>
+                </div>
+
+                <button
+                    onClick={onClose}
+                    className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+                    style={{ 
+                        background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                        boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'}
+                >
+                    OK, Mengerti
+                </button>
+            </div>
+        </div>
+    );
+};
+
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-400 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
 
 const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
@@ -98,9 +142,6 @@ const btnPrimary = {
     hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
-
-const labelCls = "block text-sm font-semibold mb-1.5";
-const labelColor = { color: '#7a3a0a' };
 
 const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
     <button onClick={onClick} disabled={disabled}
@@ -122,22 +163,24 @@ export default function InputNilaiGBSClient() {
     const [loading, setLoading] = useState(true);
     const [isNotAssigned, setIsNotAssigned] = useState(false);
 
-    // Data pendukung
+    const [showPeriodNotActiveModal, setShowPeriodNotActiveModal] = useState(false);
+    const [hasShownPeriodModal, setHasShownPeriodModal] = useState(false);
+
+    const [bobotSudahDiatur, setBobotSudahDiatur] = useState<boolean>(true);
+    const [showBobotWarning, setShowBobotWarning] = useState(false);
+
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
     const [kelasList, setKelasList] = useState<KelasItem[]>([]);
     const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
 
-    // Selection
     const [selectedMapelId, setSelectedMapelId] = useState<number | null>(null);
     const [selectedKelasId, setSelectedKelasId] = useState<number | null>(null);
     const [currentMapel, setCurrentMapel] = useState<MapelItem | null>(null);
     const [currentKelas, setCurrentKelas] = useState<KelasItem | null>(null);
 
-    // ✅ NEW: Kelas filtered berdasarkan mapel
     const [kelasFiltered, setKelasFiltered] = useState<KelasItem[]>([]);
     const [kelasLoading, setKelasLoading] = useState(false);
 
-    // Data siswa
     const [siswaList, setSiswaList] = useState<SiswaNilai[]>([]);
     const [filteredSiswa, setFilteredSiswa] = useState<SiswaNilai[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -149,20 +192,23 @@ export default function InputNilaiGBSClient() {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-    // Modal Detail
     const [showDetail, setShowDetail] = useState(false);
     const [detailClosing, setDetailClosing] = useState(false);
     const [selectedSiswa, setSelectedSiswa] = useState<SiswaNilai | null>(null);
 
-    // Modal Edit
     const [showEdit, setShowEdit] = useState(false);
     const [editClosing, setEditClosing] = useState(false);
     const [editingSiswa, setEditingSiswa] = useState<SiswaNilai | null>(null);
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
     const [saving, setSaving] = useState(false);
 
-    // Modal konfirmasi
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    // ✅ PINDAHKAN KE SINI: Computed values (SEBELUM useEffect)
+    const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
+    const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
+    const isReadOnly = isPeriodNotActive || isPeriodLocked;
+    const readOnlyReason: 'not_open' | 'locked' | null = isPeriodLocked ? 'locked' : (isPeriodNotActive ? 'not_open' : null);
 
     // ── FETCH DATA AWAL ─────────────────────────────────────────────────────────
 
@@ -213,6 +259,18 @@ export default function InputNilaiGBSClient() {
                     setIsNotAssigned(true);
                     return;
                 }
+
+                const ptsStatus = status_pts || 'nonaktif';
+                const pasStatus = status_pas || 'nonaktif';
+                const bothNotActive = ptsStatus === 'nonaktif' && pasStatus === 'nonaktif';
+                const bothFinished = ptsStatus === 'selesai' && pasStatus === 'selesai';
+
+                if ((bothNotActive || bothFinished) && !hasShownPeriodModal) {
+                    setTimeout(() => {
+                        setShowPeriodNotActiveModal(true);
+                        setHasShownPeriodModal(true);
+                    }, 500);
+                }
             } catch (err: any) {
                 showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
             } finally {
@@ -220,7 +278,7 @@ export default function InputNilaiGBSClient() {
             }
         };
         fetchData();
-    }, [showModal]);
+    }, [showModal, hasShownPeriodModal]);
 
     // ── FETCH KELAS BERDASARKAN MAPEL ───────────────────────────────────────────
 
@@ -250,7 +308,6 @@ export default function InputNilaiGBSClient() {
                     }));
                     setKelasFiltered(kelasData);
                     
-                    // Auto-select kelas pertama jika hanya ada 1
                     if (kelasData.length === 1) {
                         setSelectedKelasId(kelasData[0].kelas_id);
                     } else {
@@ -280,6 +337,8 @@ export default function InputNilaiGBSClient() {
             setFilteredSiswa([]);
             setCurrentMapel(null);
             setCurrentKelas(null);
+            setBobotSudahDiatur(true);
+            setShowBobotWarning(false);
             return;
         }
 
@@ -350,6 +409,15 @@ export default function InputNilaiGBSClient() {
                 setCurrentMapel(mapelList.find(m => m.mata_pelajaran_id === selectedMapelId) || null);
                 setCurrentKelas(kelasFiltered.find(k => k.kelas_id === selectedKelasId) || null);
                 setCurrentPage(1);
+
+                const bobotStatus = data.bobot_sudah_diatur ?? true;
+                setBobotSudahDiatur(bobotStatus);
+
+                if (!bobotStatus && jenisPenilaianAktif === 'PAS' && !isReadOnly) {
+                    setShowBobotWarning(true);
+                } else {
+                    setShowBobotWarning(false);
+                }
             } catch (err: any) {
                 showModal({
                     type: 'error',
@@ -361,7 +429,7 @@ export default function InputNilaiGBSClient() {
             }
         };
         fetchNilai();
-    }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal]);
+    }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal, jenisPenilaianAktif, isReadOnly]);
 
     // ── FILTER & PAGINATION ─────────────────────────────────────────────────────
 
@@ -424,11 +492,7 @@ export default function InputNilaiGBSClient() {
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
-    // ✅ State Read Only - konsisten dengan guru kelas
-    const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
-    const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
-    const isReadOnly = isPeriodNotActive || isPeriodLocked;
-    const readOnlyReason: 'not_open' | 'locked' | null = isPeriodLocked ? 'locked' : (isPeriodNotActive ? 'not_open' : null);
+    // ❌ HAPUS deklarasi isReadOnly di sini (sudah dipindah ke atas)
 
     const handleEdit = (siswa: SiswaNilai) => {
         if (isReadOnly) {
@@ -485,6 +549,21 @@ export default function InputNilaiGBSClient() {
             return;
         }
 
+        if (jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur) {
+            showModal({
+                type: 'warning',
+                title: '⚠️ Bobot Penilaian Belum Diatur',
+                message: `Bobot penilaian untuk mata pelajaran "${currentMapel?.nama_mapel}" belum diatur.\n\nNilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata).\n\n💡 Tip: Atur bobot terlebih dahulu di menu "Atur Penilaian" untuk hasil yang akurat.\n\nApakah Anda tetap ingin melanjutkan menyimpan nilai?`
+            });
+            setEditClosing(true);
+            setTimeout(() => {
+                setShowEdit(false);
+                setEditClosing(false);
+                setShowConfirmModal(true);
+            }, 200);
+            return;
+        }
+
         setEditClosing(true);
         setTimeout(() => {
             setShowEdit(false);
@@ -524,11 +603,9 @@ export default function InputNilaiGBSClient() {
             setSiswaList(prevList => prevList.map(siswa => siswa.id === editingSiswa.id ? updatedSiswa : siswa));
             setFilteredSiswa(prevList => prevList.map(siswa => siswa.id === editingSiswa.id ? updatedSiswa : siswa));
 
-            // ✅ Tutup semua modal dulu
             setShowConfirmModal(false);
             setEditingSiswa(null);
 
-            // ✅ Tambah delay agar animasi close modal selesai
             setTimeout(() => {
                 showModal({
                     type: 'success',
@@ -538,11 +615,9 @@ export default function InputNilaiGBSClient() {
             }, 250);
 
         } catch (err: any) {
-            // ✅ Tutup modal konfirmasi DAN modal edit
             setShowConfirmModal(false);
             setEditingSiswa(null);
 
-            // ✅ Tambah delay agar animasi close modal selesai
             setTimeout(() => {
                 showModal({
                     type: 'error',
@@ -554,8 +629,6 @@ export default function InputNilaiGBSClient() {
             setSaving(false);
         }
     };
-
-    // ── BADGE NILAI ─────────────────────────────────────────────────────────────
 
     const NilaiBadge = ({ nilai }: { nilai: number }) => {
         if (nilai === null || nilai === undefined) {
@@ -569,8 +642,6 @@ export default function InputNilaiGBSClient() {
             </span>
         );
     };
-
-    // ── LOADING STATE ───────────────────────────────────────────────────────────
 
     if (loading) {
         return (
@@ -620,8 +691,6 @@ export default function InputNilaiGBSClient() {
         );
     }
 
-    // ── RENDER UTAMA ────────────────────────────────────────────────────────────
-
     const minTableWidth = 400 + (komponenList.length * 100) + 240;
     const canEditNilai = !isReadOnly;
 
@@ -630,8 +699,12 @@ export default function InputNilaiGBSClient() {
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+            
+            <PeriodNotActiveModal 
+                isOpen={showPeriodNotActiveModal} 
+                onClose={() => setShowPeriodNotActiveModal(false)} 
+            />
 
-            {/* ✅ BANNER READ ONLY - KONSISTEN DENGAN GURU KELAS */}
             {isReadOnly && (
                 <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
                     style={{
@@ -652,7 +725,45 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* Banner: Mata pelajaran belum diatur */}
+            {showBobotWarning && jenisPenilaianAktif === 'PAS' && !isReadOnly && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                    style={{
+                        background: '#fef3c7',
+                        border: '1px solid #fcd34d'
+                    }}>
+                    <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
+                    <div className="flex-1">
+                        <p className="text-sm font-bold mb-1 text-yellow-900">
+                            ⚠️ Bobot Penilaian Belum Diatur
+                        </p>
+                        <p className="text-xs text-yellow-800">
+                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur. 
+                            Nilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata). 
+                            Untuk hasil yang akurat, silakan atur bobot terlebih dahulu di menu <strong>"Atur Penilaian"</strong>.
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={() => {
+                                    setShowBobotWarning(false);
+                                    window.location.href = '/guru-bidang-studi/atur-penilaian';
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: '#fcd34d', color: '#78350f', border: '1px solid #f59e0b' }}
+                            >
+                                Atur Bobot Sekarang
+                            </button>
+                            <button
+                                onClick={() => setShowBobotWarning(false)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: '#fff', color: '#78350f', border: '1px solid #fcd34d' }}
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {mapelList.length === 0 && !isReadOnly && (
                 <div className="mb-6 p-4 rounded-2xl flex items-start gap-3"
                     style={{
@@ -681,10 +792,8 @@ export default function InputNilaiGBSClient() {
             </div>
 
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Toolbar - Sequential Dropdown Layout */}
                 <div className="px-5 py-4 space-y-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                     
-                    {/* Step 1: Dropdown Mapel */}
                     <div className="max-w-md">
                         <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
                             1. Pilih Mata Pelajaran
@@ -708,7 +817,6 @@ export default function InputNilaiGBSClient() {
                         </select>
                     </div>
 
-                    {/* Step 2: Dropdown Kelas (muncul setelah mapel dipilih) */}
                     {selectedMapelId && (
                         <div className="max-w-md animate-[dg-scaleIn_0.3s_ease]">
                             <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
@@ -738,7 +846,6 @@ export default function InputNilaiGBSClient() {
                                 ))}
                             </select>
                             
-                            {/* Info helper: jumlah kelas yang tersedia */}
                             {kelasFiltered.length > 0 && (
                                 <p className="text-xs mt-1.5" style={{ color: '#c95b08' }}>
                                     Tersedia {kelasFiltered.length} kelas untuk mata pelajaran ini
@@ -747,11 +854,9 @@ export default function InputNilaiGBSClient() {
                         </div>
                     )}
 
-                    {/* Row 2: Search, Badge, dan Items Per Page (muncul setelah kelas dipilih) */}
                     {selectedMapelId && selectedKelasId && (
                         <div className="pt-4 border-t animate-[dg-fadeIn_0.3s_ease]" style={{ borderColor: '#fde0c8' }}>
                             <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between">
-                                {/* Search Bar */}
                                 <div className="relative w-full xl:w-96">
                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                         <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
@@ -775,7 +880,6 @@ export default function InputNilaiGBSClient() {
                                     )}
                                 </div>
 
-                                {/* Right Section: Badge + Items Per Page */}
                                 <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
                                     <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap"
                                         style={{ background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }}>
@@ -799,7 +903,6 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             </div>
 
-                            {/* Pagination Info */}
                             <p className="text-xs mt-3 text-center xl:text-left" style={{ color: '#c95b08' }}>
                                 Menampilkan <strong>{filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)}</strong> dari <strong>{filteredSiswa.length}</strong> siswa
                             </p>
@@ -807,7 +910,6 @@ export default function InputNilaiGBSClient() {
                     )}
                 </div>
 
-                {/* Tabel */}
                 {!selectedMapelId || !selectedKelasId ? (
                     <div className="m-6 text-center py-10 rounded-2xl" style={{ background: '#fff7f0', border: '2px dashed #fde0c8' }}>
                         <p className="font-bold" style={{ color: '#c95b08' }}>
@@ -914,7 +1016,6 @@ export default function InputNilaiGBSClient() {
                             </table>
                         </div>
 
-                        {/* Pagination */}
                         {filteredSiswa.length > 0 && (
                             <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
                                 <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Halaman {currentPage} dari {totalPages}</span>
@@ -925,7 +1026,6 @@ export default function InputNilaiGBSClient() {
                 )}
             </div>
 
-            {/* ── MODAL DETAIL ─────────────────────────────────────────────────── */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
@@ -945,7 +1045,6 @@ export default function InputNilaiGBSClient() {
                         </div>
 
                         <div className="p-6 space-y-6">
-                            {/* Info Siswa */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
                                     <p className="text-xs text-gray-500 mb-1">NIS</p>
@@ -957,14 +1056,12 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             </div>
 
-                            {/* Rapor PTS & PAS */}
                             <div>
                                 <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
                                     <span className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></span>
                                     Nilai Rapor
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    {/* PTS */}
                                     <div className="rounded-xl p-5 border-2" style={{
                                         background: '#fff7ed',
                                         borderColor: '#fdba74',
@@ -998,7 +1095,6 @@ export default function InputNilaiGBSClient() {
                                         </div>
                                     </div>
 
-                                    {/* PAS */}
                                     <div className="rounded-xl p-5 border-2" style={{
                                         background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f9fafb',
                                         borderColor: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb'
@@ -1035,14 +1131,12 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             </div>
 
-                            {/* Nilai Komponen */}
                             <div>
                                 <h3 className="text-sm font-bold mb-4 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
                                     <span className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></span>
                                     Nilai Komponen Penilaian
                                 </h3>
 
-                                {/* Ulangan Harian */}
                                 <div className="mb-5">
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-1 h-4 rounded-full" style={{ background: '#fbbf24' }}></div>
@@ -1071,7 +1165,6 @@ export default function InputNilaiGBSClient() {
                                     </div>
                                 </div>
 
-                                {/* PTS & PAS */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-1 h-4 rounded-full" style={{ background: '#e8690a' }}></div>
@@ -1080,7 +1173,6 @@ export default function InputNilaiGBSClient() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(k => {
                                             const nilai = selectedSiswa.nilai[k.id_komponen];
-                                            const isPTS = /PTS/i.test(k.nama_komponen);
                                             return (
                                                 <div key={k.id_komponen} className="rounded-xl p-5 text-center border-2 relative overflow-hidden"
                                                     style={{
@@ -1109,7 +1201,6 @@ export default function InputNilaiGBSClient() {
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                             <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
                             {canEditNilai && (
@@ -1124,7 +1215,6 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ── MODAL EDIT ───────────────────────────────────────────────────── */}
             {showEdit && editingSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
@@ -1144,7 +1234,6 @@ export default function InputNilaiGBSClient() {
                         </div>
 
                         <div className="p-6 space-y-6">
-                            {/* Info Banner */}
                             {jenisPenilaianAktif && (
                                 <div className="rounded-xl px-4 py-3 flex items-center gap-3"
                                     style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
@@ -1158,7 +1247,16 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             )}
 
-                            {/* Ulangan Harian */}
+                            {jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur && (
+                                <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+                                    style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                                    <AlertCircle size={18} style={{ color: '#a16207', flexShrink: 0 }} className="mt-0.5" />
+                                    <p className="text-xs" style={{ color: '#78350f' }}>
+                                        <strong>⚠️ Peringatan:</strong> Bobot penilaian untuk mata pelajaran ini belum diatur. Nilai rapor akan dihitung dengan bobot default.
+                                    </p>
+                                </div>
+                            )}
+
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-1 h-5 rounded-full" style={{ background: '#fbbf24' }}></div>
@@ -1202,7 +1300,6 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             </div>
 
-                            {/* PTS & PAS */}
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></div>
@@ -1277,7 +1374,6 @@ export default function InputNilaiGBSClient() {
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                             <BtnSecondary onClick={closeEdit} disabled={saving}>Batal</BtnSecondary>
                             <button onClick={openConfirmSimpan} disabled={saving}
@@ -1301,7 +1397,6 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ── MODAL KONFIRMASI ─────────────────────────────────────────────── */}
             {showConfirmModal && editingSiswa && (
                 <div
                     className="fixed inset-0 z-[110] flex items-center justify-center p-4 dg-fadeIn"

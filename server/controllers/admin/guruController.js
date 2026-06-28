@@ -220,7 +220,18 @@ const importGuru = async (req, res) => {
         await connection.beginTransaction();
 
         const duplicates = [];
-        const validRolesList = ['guru_kelas', 'guru_bidang_studi'];
+        
+        // ✅ PERBAIKAN: Tambahkan role mapping
+        const roleMapping = {
+            'guru kelas': 'guru_kelas',
+            'guru_kelas': 'guru_kelas',
+            'gurukelas': 'guru_kelas',
+            'guru bidang studi': 'guru_bidang_studi',
+            'guru_bidang_studi': 'guru_bidang_studi',
+            'gurubidangstudi': 'guru_bidang_studi',
+            'guru mapel': 'guru_bidang_studi',
+            'guru_mapel': 'guru_bidang_studi',
+        };
 
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
@@ -256,10 +267,12 @@ const importGuru = async (req, res) => {
                 throw new Error(`Baris ${rowNum}: Jenis kelamin harus "Laki-laki" atau "Perempuan"`);
             }
 
+            // ✅ PERBAIKAN: Parsing role dengan mapping
             const roles = row.roles ? row.roles.toString().split(',').map(r => r.trim().toLowerCase()) : [];
-            const validRoles = roles.filter(r => validRolesList.includes(r));
+            const validRoles = roles.map(r => roleMapping[r]).filter(Boolean);
+            
             if (validRoles.length === 0) {
-                throw new Error(`Baris ${rowNum}: Role harus berisi "guru kelas" atau "guru bidang studi"`);
+                throw new Error(`Baris ${rowNum}: Role harus berisi "guru kelas" atau "guru bidang studi". Nilai yang Anda masukkan: "${row.roles}"`);
             }
 
             const [existingEmail] = await connection.execute('SELECT id_user FROM user WHERE email_sekolah = ?', [row.email_sekolah]);
@@ -276,7 +289,6 @@ const importGuru = async (req, res) => {
                 });
                 continue;
             }
-
 
             const password = row.password || 'sekolah123';
             const userData = {
@@ -299,7 +311,6 @@ const importGuru = async (req, res) => {
 
         await connection.commit();
         fs.unlinkSync(req.file.path);
-
 
         if (duplicates.length > 0) {
             return res.status(200).json({

@@ -1,7 +1,7 @@
 /**
  * Nama File: penilaianNilaiController.js
  * Fungsi: Mengelola input nilai siswa oleh guru bidang studi
- * UPDATE: Fix 8 bug kritis (parameter query, filter siswa aktif, bobot per kelas, dll)
+ * UPDATE: Fix 8 bug kritis + Tambah field bobot_sudah_diatur
  */
 
 const db = require('../../config/db');
@@ -67,6 +67,21 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
         );
         const kelasNama = namaKelasRow[0]?.nama_kelas || 'Kelas Tidak Diketahui';
 
+        // ═══════════════════════════════════════════════════════════════
+        // ✅ BARU: CEK BOBOT SUDAH DIATUR
+        // ═══════════════════════════════════════════════════════════════
+        const [bobotCheck] = await db.execute(`
+            SELECT COUNT(*) as total 
+            FROM konfigurasi_mapel_komponen 
+            WHERE mapel_id = ? 
+            AND tahun_ajaran_id = ?
+            AND is_active = 1
+            AND (kelas_id = ? OR kelas_id IS NULL)
+        `, [mapelId, semesterId, kelasId]);
+
+        const bobotSudahDiatur = (bobotCheck[0]?.total || 0) > 0;
+        // ────────────────────────────────────────────────────────────────
+
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama
             FROM siswa s
@@ -86,6 +101,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
                 komponen: [],
                 kelas: kelasNama,
                 jenis_penilaian_aktif,
+                bobot_sudah_diatur: bobotSudahDiatur,  // ✅ TAMBAHKAN
             });
         }
 
@@ -175,6 +191,7 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             komponen: komponenRows,
             kelas: kelasNama,
             jenis_penilaian_aktif,
+            bobot_sudah_diatur: bobotSudahDiatur,  // ✅ TAMBAHKAN INI
         });
     } catch (err) {
         console.error('Error getNilaiByMapelAndKelas:', err);
@@ -219,7 +236,6 @@ exports.simpanNilai = async (req, res) => {
                 WHERE siswa_id = ? AND id_tahun_ajaran_induk = ?
             ) AND tahun_ajaran_id = ?`,
             [user_id, mapel_id, siswa_id, tahunAjaranIndukId, semesterId]
-            //                                       ↑ induk              ↑ semester (bukan induk lagi!)
         );
 
         if (valid.length === 0) {

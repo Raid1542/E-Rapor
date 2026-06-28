@@ -234,10 +234,51 @@ const gantiPasswordAdmin = async (req, res) => {
     }
 };
 
+const uploadFotoProfil = async (req, res) => {
+    try {
+        const userId = req.user.id; // Dari middleware authenticate
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'File foto diperlukan' });
+        }
+
+        const fotoPath = '/uploads/' + req.file.filename;
+
+        // Cek apakah data guru sudah ada untuk user ini
+        const [guruRows] = await db.execute(
+            'SELECT 1 FROM guru WHERE user_id = ?',
+            [userId]
+        );
+
+        if (guruRows.length > 0) {
+            // Update foto di tabel guru
+            await db.execute(
+                'UPDATE guru SET foto_path = ? WHERE user_id = ?',
+                [fotoPath, userId]
+            );
+        } else {
+            // Insert data guru baru dengan foto
+            await db.execute(
+                'INSERT INTO guru (user_id, foto_path) VALUES (?, ?)',
+                [userId, fotoPath]
+            );
+        }
+
+        res.json({ 
+            message: 'Foto profil berhasil diupload',
+            fotoPath: fotoPath
+        });
+    } catch (err) {
+        console.error('Error upload foto profil:', err);
+        res.status(500).json({ message: 'Gagal mengupload foto profil' });
+    }
+};
+
 module.exports = {
     getAdmin,
     getAdminById,
     tambahAdmin,
     editAdmin,
     gantiPasswordAdmin,
+    uploadFotoProfil,
 };

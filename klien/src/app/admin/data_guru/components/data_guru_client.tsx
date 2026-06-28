@@ -857,7 +857,7 @@ export default function DataGuruClient() {
                   { label: 'Telepon', value: selectedGuru.no_telepon || '-' },
                   { label: 'Alamat', value: selectedGuru.alamat || '-' },
                   { label: 'Email', value: selectedGuru.email || '-' },
-                  { label: 'Hak Akses', value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ') : '-' },
+                  { label: 'Hak Akses', value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')).join(', ') : '-' },
                 ].map((item, i) => (
                   <div key={i} className="grid grid-cols-4 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
                     <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
