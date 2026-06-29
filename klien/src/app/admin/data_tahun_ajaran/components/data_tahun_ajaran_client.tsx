@@ -1,37 +1,24 @@
-"use client";
+/**
+ * Nama File: ArsipRaporPage.tsx
+ * Fungsi: Halaman arsip rapor untuk admin - menggunakan template Data Mata Pelajaran
+ *         dengan progressive disclosure dan UI yang konsisten
+ * Update:
+ *   - Dirapikan: Card 1 (filter TA+Semester+Jenis) compact satu baris
+ *   - Panel Status dipisah jadi Card 2 tersendiri (lebih menonjol)
+ *   - Card 3: toolbar Kelas + Search
+ *   - Card 4: tabel siswa + info unduhan
+ */
 
-import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
-import { Pencil, Plus, X, RotateCw, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+'use client';
+import { useState, useEffect, useCallback, ReactNode } from 'react';
+import {
+    Download, Search, X, CheckCircle2, AlertCircle, WifiOff,
+    ShieldAlert, Lock, Play, Pause, FileText, Calendar, CalendarRange
+} from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-/* ==========================================================================
-   INTERFACES
-   ========================================================================== */
-
-interface TahunAjaran {
-    id_induk: number;
-    tahun_ajaran: string;
-    pts_ganjil: string | null;
-    pas_ganjil: string | null;
-    pts_genap: string | null;
-    pas_genap: string | null;
-    semester_aktif: 'Ganjil' | 'Genap' | null;
-    status: 'AKTIF' | 'NONAKTIF';
-}
-
-interface FormDataType {
-    tahun1: string;
-    tahun2: string;
-    pts_ganjil: string;
-    pas_ganjil: string;
-    pts_genap: string;
-    pas_genap: string;
-}
-
-/* ==========================================================================
-   NOTIFICATION MODAL - Template dari data_admin_client
-   ========================================================================== */
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
 
@@ -42,16 +29,48 @@ interface ModalConfig {
     onConfirm?: () => void;
 }
 
+type StatusPenilaian = 'nonaktif' | 'aktif' | 'selesai';
+
+interface TahunAjaran {
+    id: number;
+    tahun_ajaran: string;
+    is_aktif: boolean;
+}
+
+interface SemesterOption {
+    id: number;
+    semester: string;
+    is_aktif: boolean;
+    status_pts: StatusPenilaian;
+    status_pas: StatusPenilaian;
+}
+
+interface Kelas {
+    id_kelas: number;
+    nama_kelas: string;
+}
+
+interface Siswa {
+    id_siswa: number;
+    nama: string;
+    nis: string;
+    nisn: string;
+}
+
+// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+
 const GlobalStyles = () => (
     <style jsx global>{`
-        @keyframes da-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes da-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes da-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        .da-fadeIn  { animation: da-fadeIn  0.2s ease; }
-        .da-scaleIn { animation: da-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .da-pulse   { animation: da-pulse   0.6s ease 0.15s; }
-    `}</style>
+    @keyframes ar-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes ar-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes ar-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    .ar-fadeIn  { animation: ar-fadeIn  0.2s ease; }
+    .ar-scaleIn { animation: ar-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+    .ar-pulse   { animation: ar-pulse   0.6s ease 0.15s; }
+  `}</style>
 );
+
+// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
@@ -66,35 +85,23 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     const isConfirm = modal.type === 'confirm';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 da-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ar-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 da-scaleIn">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ar-scaleIn">
                 {!isConfirm && (
                     <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
                 )}
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} da-pulse`}>{s.icon}</div>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ar-pulse`}>{s.icon}</div>
                 <div className="text-center">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
                 {isConfirm ? (
                     <div className="flex gap-3 w-full">
-                        <button
-                            onClick={onClose}
-                            className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
-                            style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                        >
-                            Batal
-                        </button>
-                        <button
-                            onClick={() => {
-                                modal.onConfirm?.();
-                                onClose();
-                            }}
-                            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
-                        >
-                            Lanjutkan
-                        </button>
+                        <BtnBatal onClick={onClose} />
+                        <button onClick={() => { modal.onConfirm?.(); onClose(); }}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+                        >Ya, Lanjutkan</button>
                     </div>
                 ) : (
                     <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
@@ -104,725 +111,465 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     );
 };
 
-/* ==========================================================================
-   SHARED STYLE CONSTANTS
-   ========================================================================== */
+// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
-
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+
+const selectCls = "border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]";
 
 const btnPrimary = {
     base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
     style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
-    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
+    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls = "block text-sm font-semibold mb-1.5";
-const labelColor = { color: '#7a3a0a' };
-
-const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-    >{children}</button>
+const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
+    <button
+        onClick={onClick}
+        className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+        style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+    >
+        {children}
+    </button>
 );
 
-/* ==========================================================================
-   HELPER FUNCTIONS
-   ========================================================================== */
+// ─── HELPER: STATUS STYLE ─────────────────────────────────────────────────────
 
-const formatTanggalIndonesia = (dateStr?: string | null): string => {
-    if (!dateStr) return '-';
-    const cleanDate = dateStr.split(' ')[0];
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) return '-';
-    
-    const [year, month, day] = cleanDate.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    
-    if (isNaN(date.getTime())) return '-';
-    
-    const bulan = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ][date.getMonth()];
-    
-    return `${day} ${bulan} ${year}`;
+const getStatusStyle = (status: StatusPenilaian) => {
+    switch (status) {
+        case 'aktif':
+            return {
+                bg: '#dcfce7', color: '#15803d', border: '#86efac',
+                dot: '#22c55e', text: 'Aktif (Bisa Download)',
+                icon: <Play size={14} />
+            };
+        case 'selesai':
+            return {
+                bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db',
+                dot: '#9ca3af', text: 'Selesai (Terkunci)',
+                icon: <Lock size={14} />
+            };
+        case 'nonaktif':
+        default:
+            return {
+                bg: '#fef9c3', color: '#92400e', border: '#fde68a',
+                dot: '#eab308', text: 'Belum Dibuka',
+                icon: <Pause size={14} />
+            };
+    }
 };
 
-/* ==========================================================================
-   MAIN COMPONENT
-   ========================================================================== */
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
-export default function DataTahunAjaranClient() {
-    /* --------------------------------------------------------------------
-       STATE MANAGEMENT
-    -------------------------------------------------------------------- */
-    
+export default function ArsipRaporPage() {
+    const API_BASE = 'http://localhost:5000/api';
     const { showSessionExpired, handleLogout } = useSession();
-    
+
+    // ── States ─────────────────────────────────────────────────────────────────
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [showTambah, setShowTambah] = useState(false);
-    const [showEdit, setShowEdit] = useState(false);
-    const [editId, setEditId] = useState<number | null>(null);
+    const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
+    const [kelasList, setKelasList] = useState<Kelas[]>([]);
+    const [siswaList, setSiswaList] = useState<Siswa[]>([]);
+
+    const [selectedTA, setSelectedTA] = useState<number | null>(null);
+    const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
+    const [selectedSemester, setSelectedSemester] = useState<string | null>(null);
+    const [selectedJenis, setSelectedJenis] = useState<'PTS' | 'PAS' | null>(null);
+    const [selectedKelas, setSelectedKelas] = useState<number | null>(null);
+
+    const [loadingTA, setLoadingTA] = useState(true);
+    const [loadingKelas, setLoadingKelas] = useState(false);
+    const [loadingSiswa, setLoadingSiswa] = useState(false);
+    const [loadingAction, setLoadingAction] = useState(false);
+    const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
     const [searchQuery, setSearchQuery] = useState('');
-    const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [currentPage, setCurrentPage] = useState(1);
-    
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
-    
-    const [showConfirmGantiSemester, setShowConfirmGantiSemester] = useState(false);
-    const [selectedItemForSemester, setSelectedItemForSemester] = useState<TahunAjaran | null>(null);
-    
-    const [alasanKoreksi, setAlasanKoreksi] = useState('');
-    const [showAlasanLainnya, setShowAlasanLainnya] = useState(false);
-    const [alasanCustom, setAlasanCustom] = useState('');
-    
-    const [showConfirmTambah, setShowConfirmTambah] = useState(false);
-    const [showConfirmEdit, setShowConfirmEdit] = useState(false);
-    
-    const [formData, setFormData] = useState<FormDataType>({
-        tahun1: '', tahun2: '',
-        pts_ganjil: '', pas_ganjil: '',
-        pts_genap: '', pas_genap: '',
-    });
-    
-    const [originalFormData, setOriginalFormData] = useState<FormDataType>({
-        tahun1: '', tahun2: '',
-        pts_ganjil: '', pas_ganjil: '',
-        pts_genap: '', pas_genap: '',
-    });
-    
-    const [errors, setErrors] = useState<Record<string, string>>({});
 
-    /* --------------------------------------------------------------------
-       DATA FETCHING
-    -------------------------------------------------------------------- */
-    
-    const fetchTahunAjaran = useCallback(async () => {
+    // ── Fetch Functions ────────────────────────────────────────────────────────
+
+    const fetchTahunAjaranList = async () => {
+        setLoadingTA(true);
         try {
             const token = localStorage.getItem('token');
-            if (!token) {
-                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
-                return;
-            }
-            
-            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
-                headers: { Authorization: `Bearer ${token}` },
+            if (!token) return;
+
+            const res = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            
             const data = await res.json();
-            
+
             if (res.ok && data.success) {
-                setTahunAjaranList(data.data);
-            } else {
-                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan.' });
+                const uniqueTA = Array.from(
+                    new Map(data.data.map((item: any) => [item.id_induk, {
+                        id: item.id_induk,
+                        tahun_ajaran: item.tahun_ajaran,
+                        is_aktif: item.status === 'AKTIF'
+                    }])).values()
+                ) as TahunAjaran[];
+
+                setTahunAjaranList(uniqueTA);
+
+                const activeTA = uniqueTA.find(ta => ta.is_aktif);
+                if (activeTA) {
+                    setSelectedTA(prev => prev ?? activeTA.id);
+                }
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
-            setLoading(false);
+            setLoadingTA(false);
         }
-    }, [showModal]);
-
-    useEffect(() => {
-        fetchTahunAjaran();
-    }, [fetchTahunAjaran]);
-
-    /* --------------------------------------------------------------------
-       FORM HANDLERS
-    -------------------------------------------------------------------- */
-    
-    const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        setErrors(prev => ({ ...prev, [name]: '' }));
     };
 
-    const validate = (): boolean => {
-        const errs: Record<string, string> = {};
-        
-        if (!formData.tahun1 || !formData.tahun2) {
-            errs.tahun = 'Tahun ajaran wajib diisi';
-        }
-        
-        setErrors(errs);
-        
-        if (Object.keys(errs).length > 0) {
-            showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap perbaiki kolom yang ditandai.' });
-            return false;
-        }
-        
-        return true;
-    };
-
-    const resetForm = () => {
-        setFormData({ 
-            tahun1: '', tahun2: '', 
-            pts_ganjil: '', pas_ganjil: '', 
-            pts_genap: '', pas_genap: '' 
-        });
-        setErrors({});
-    };
-
-    const hasChanges = () => {
-        return (
-            formData.pts_ganjil !== originalFormData.pts_ganjil ||
-            formData.pas_ganjil !== originalFormData.pas_ganjil ||
-            formData.pts_genap !== originalFormData.pts_genap ||
-            formData.pas_genap !== originalFormData.pas_genap
-        );
-    };
-
-    const openConfirmTambah = () => {
-        if (!validate()) return;
-        setShowConfirmTambah(true);
-    };
-
-    const openConfirmEdit = () => {
-        if (!validate() || !editId) return;
-        
-        if (!hasChanges()) {
-            showModal({
-                type: 'warning',
-                title: 'Tidak Ada Perubahan',
-                message: 'Tidak ada tanggal PTS/PAS yang berubah. Tidak perlu menyimpan.'
-            });
-            return;
-        }
-        
-        setShowConfirmEdit(true);
-    };
-
-    const executeEdit = async () => {
-        if (!editId) return;
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-            return;
-        }
-
+    const fetchSemesterByTahunAjaran = async (idInduk: number) => {
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${editId}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    Authorization: `Bearer ${token}` 
-                },
-                body: JSON.stringify({
-                    pts_ganjil: formData.pts_ganjil || null,
-                    pas_ganjil: formData.pas_ganjil,
-                    pts_genap: formData.pts_genap || null,
-                    pas_genap: formData.pas_genap,
-                }),
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const res = await fetch(`${API_BASE}/admin/semester-list`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            
-            if (res.ok) {
-                setShowEdit(false);
-                setEditId(null);
-                await fetchTahunAjaran();
-
-                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
-                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
-
-                showModal({ type: 'success', title: 'Data Diperbarui', message: 'Tahun ajaran berhasil diperbarui.' });
-            } else {
-                const err = await res.json();
-                showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan.' });
-            }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        }
-    };
-
-    const handleTambah = async () => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-            return;
-        }
-        
-        try {
-            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    Authorization: `Bearer ${token}` 
-                },
-                body: JSON.stringify({
-                    tahun1: formData.tahun1,
-                    tahun2: formData.tahun2,
-                    pts_ganjil: formData.pts_ganjil || null,
-                    pas_ganjil: formData.pas_ganjil,
-                    pts_genap: formData.pts_genap || null,
-                    pas_genap: formData.pas_genap,
-                }),
-            });
-            
-            if (res.ok) {
-                setShowTambah(false);
-                resetForm();
-                await fetchTahunAjaran();
-
-                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
-                window.dispatchEvent(new CustomEvent('semesterUpdated'));
-                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
-                localStorage.setItem('semesterUpdated', Date.now().toString());
-
-                showModal({
-                    type: 'success',
-                    title: 'Berhasil Ditambahkan',
-                    message: `Tahun ajaran ${formData.tahun1}/${formData.tahun2} berhasil ditambahkan dan diaktifkan.\n\nTahun ajaran sebelumnya otomatis dinonaktifkan.`
-                });
-            } else {
-                const err = await res.json();
-                showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan.' });
-            }
-        } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-        }
-    };
-
-    const openEdit = (item: TahunAjaran) => {
-        const [t1, t2] = item.tahun_ajaran.split('/');
-        setEditId(item.id_induk);
-
-        const data = {
-            tahun1: t1 || '',
-            tahun2: t2 || '',
-            pts_ganjil: item.pts_ganjil || '',
-            pas_ganjil: item.pas_ganjil || '',
-            pts_genap: item.pts_genap || '',
-            pas_genap: item.pas_genap || '',
-        };
-
-        setFormData(data);
-        setOriginalFormData(data);
-        setErrors({});
-        setShowEdit(true);
-    };
-
-    const openConfirmGantiSemester = (item: TahunAjaran) => {
-        setSelectedItemForSemester(item);
-        setShowConfirmGantiSemester(true);
-        setAlasanKoreksi('');
-        setAlasanCustom('');
-        setShowAlasanLainnya(false);
-    };
-
-    const executeGantiSemester = async () => {
-        if (!selectedItemForSemester) return;
-
-        const alasanFinal = showAlasanLainnya ? alasanCustom.trim() : alasanKoreksi;
-        if (!alasanFinal) {
-            showModal({
-                type: 'warning',
-                title: 'Alasan Wajib Diisi',
-                message: 'Silakan pilih atau isi alasan pergantian semester.'
-            });
-            return;
-        }
-
-        const item = selectedItemForSemester;
-        const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-            return;
-        }
-
-        setShowConfirmGantiSemester(false);
-
-        try {
-            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${item.id_induk}/semester`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    Authorization: `Bearer ${token}` 
-                },
-                body: JSON.stringify({
-                    semester_baru: semesterBaru,
-                    alasan: alasanFinal
-                }),
-            });
-
             const data = await res.json();
 
             if (res.ok && data.success) {
-                await fetchTahunAjaran();
+                const semesters = data.data
+                    .filter((sem: any) => sem.id_induk === idInduk)
+                    .map((sem: any) => ({
+                        id: sem.id,
+                        semester: sem.semester,
+                        is_aktif: sem.is_aktif,
+                        status_pts: 'nonaktif' as StatusPenilaian,
+                        status_pas: 'nonaktif' as StatusPenilaian,
+                    }));
 
-                window.dispatchEvent(new CustomEvent('tahunAjaranUpdated'));
-                window.dispatchEvent(new CustomEvent('semesterUpdated'));
-                localStorage.setItem('tahunAjaranUpdated', Date.now().toString());
-                localStorage.setItem('semesterUpdated', Date.now().toString());
-
-                setAlasanKoreksi('');
-                setAlasanCustom('');
-                setShowAlasanLainnya(false);
-
-                let successMessage = data.message || `Semester berhasil diganti ke ${semesterBaru}.`;
-                if (data.data?.catatan) {
-                    successMessage += `\n\n${data.data.catatan}`;
+                // Ambil status PTS/PAS
+                const resTA = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const dataTA = await resTA.json();
+                if (resTA.ok && dataTA.success) {
+                    const taData = dataTA.data.find((t: any) => t.id_induk === idInduk);
+                    if (taData) {
+                        semesters.forEach(sem => {
+                            if (sem.semester === 'Ganjil') {
+                                sem.status_pts = taData.status_pts_ganjil || 'nonaktif';
+                                sem.status_pas = taData.status_pas_ganjil || 'nonaktif';
+                            } else if (sem.semester === 'Genap') {
+                                sem.status_pts = taData.status_pts_genap || 'nonaktif';
+                                sem.status_pas = taData.status_pas_genap || 'nonaktif';
+                            }
+                        });
+                    }
                 }
 
+                setSemesterOptions(semesters);
+
+                const activeSemester = semesters.find(s => s.is_aktif);
+                if (activeSemester && !selectedSemesterId) {
+                    setSelectedSemesterId(activeSemester.id);
+                    setSelectedSemester(activeSemester.semester);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetch semester:', err);
+        }
+    };
+
+    const fetchKelas = async () => {
+    if (!selectedTA || !selectedSemester) return;  // ✅ Gunakan selectedTA (ID induk)
+
+    setLoadingKelas(true);
+    setKelasList([]);
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // ✅ GUNAKAN selectedTA (ID induk = 1), bukan selectedSemesterId
+        const res = await fetch(
+            `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${selectedTA}&semester=${selectedSemester}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            setKelasList(data.data || []);
+        } else {
+            setKelasList([]);
+        }
+    } catch {
+        setKelasList([]);
+    } finally {
+        setLoadingKelas(false);
+    }
+};
+
+    const fetchSiswa = async () => {
+        if (!selectedTA || !selectedKelas || !selectedSemester) return;
+
+        setLoadingSiswa(true);
+        setSiswaList([]);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const res = await fetch(
+                `${API_BASE}/admin/arsip-rapor/daftar-siswa/${selectedTA}/${selectedKelas}?semester=${selectedSemester}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                setSiswaList(data.data || []);
+            } else {
+                setSiswaList([]);
+            }
+        } catch {
+            setSiswaList([]);
+        } finally {
+            setLoadingSiswa(false);
+        }
+    };
+
+    // ── Effects ────────────────────────────────────────────────────────────────
+
+    useEffect(() => {
+        fetchTahunAjaranList();
+    }, []);
+
+    useEffect(() => {
+        if (selectedTA) {
+            fetchSemesterByTahunAjaran(selectedTA);
+            setKelasList([]);
+            setSiswaList([]);
+            setSelectedKelas(null);
+            setSelectedJenis(null);
+        } else {
+            setSemesterOptions([]);
+            setKelasList([]);
+            setSiswaList([]);
+            setSelectedSemesterId(null);
+            setSelectedSemester(null);
+            setSelectedKelas(null);
+            setSelectedJenis(null);
+        }
+    }, [selectedTA]);
+
+    useEffect(() => {
+        if (selectedSemesterId && selectedSemester) {
+            fetchKelas();
+            setSelectedKelas(null);
+            setSiswaList([]);
+            setSelectedJenis(null);
+        } else {
+            setKelasList([]);
+            setSelectedKelas(null);
+            setSiswaList([]);
+            setSelectedJenis(null);
+        }
+    }, [selectedSemesterId, selectedSemester]);
+
+    useEffect(() => {
+        if (selectedKelas) {
+            fetchSiswa();
+        } else {
+            setSiswaList([]);
+        }
+    }, [selectedKelas]);
+
+    // ── Derived Data ───────────────────────────────────────────────────────────
+
+    const currentSemester = semesterOptions.find(s => s.id === selectedSemesterId);
+    const statusSaatIni: StatusPenilaian = selectedJenis === 'PTS'
+        ? (currentSemester?.status_pts || 'nonaktif')
+        : (currentSemester?.status_pas || 'nonaktif');
+    const statusStyle = getStatusStyle(statusSaatIni);
+
+    const filteredSiswa = siswaList.filter(s => {
+        const q = searchQuery.toLowerCase().trim();
+        if (!q) return true;
+        return (
+            s.nama.toLowerCase().includes(q) ||
+            s.nis.toLowerCase().includes(q) ||
+            s.nisn.toLowerCase().includes(q)
+        );
+    });
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
+
+    const handleUbahStatus = async (statusBaru: StatusPenilaian) => {
+        if (!selectedTA || !selectedJenis || !selectedSemester) return;
+
+        setLoadingAction(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const res = await fetch(`${API_BASE}/admin/atur-status-penilaian`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    jenis: selectedJenis,
+                    status: statusBaru,
+                    tahun_ajaran_id: selectedTA,
+                    semester: selectedSemester
+                })
+            });
+
+            const result = await res.json();
+
+            if (res.ok && result.success) {
                 showModal({
                     type: 'success',
-                    title: 'Semester Berhasil Diganti',
-                    message: successMessage
+                    title: 'Status Diperbarui!',
+                    message: result.message || `Status ${selectedJenis} berhasil diubah.`
                 });
+                if (selectedTA) await fetchSemesterByTahunAjaran(selectedTA);
             } else {
                 showModal({
                     type: 'error',
-                    title: 'Gagal Ganti Semester',
-                    message: data.message || 'Terjadi kesalahan saat mengganti semester.'
+                    title: 'Gagal Mengubah Status',
+                    message: result.message || 'Terjadi kesalahan.'
                 });
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        } finally {
+            setLoadingAction(false);
         }
     };
 
-    /* --------------------------------------------------------------------
-       FILTER & PAGINATION
-    -------------------------------------------------------------------- */
-    
-    const filteredData = tahunAjaranList.filter((item) => {
-        const query = searchQuery.toLowerCase().trim();
-        return !query || item.tahun_ajaran.toLowerCase().includes(query);
-    });
+    const handleArsipkan = async () => {
+        if (!selectedTA || !selectedJenis || !selectedSemester) return;
 
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentData = filteredData.slice(startIndex, endIndex);
+        setLoadingAction(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
 
-    const renderPagination = () => {
-        const pages: ReactNode[] = [];
-        const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive = "text-white border-orange-500";
-        const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
+            const res = await fetch(`${API_BASE}/admin/arsipkan-rapor`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    jenis: selectedJenis,
+                    semester: selectedSemester,
+                    tahun_ajaran_id: selectedTA
+                })
+            });
 
-        pages.push(
-            <button 
-                key="prev" 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                disabled={currentPage === 1} 
-                className={`${btnBase} ${btnInactive} disabled:opacity-40`}
-            >
-                «
-            </button>
-        );
+            const result = await res.json();
 
-        const range: number[] = [];
-        if (totalPages <= 5) {
-            for (let i = 1; i <= totalPages; i++) range.push(i);
-        } else {
-            range.push(1);
-            if (currentPage > 3) range.push(-1);
-            for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-                range.push(i);
-            }
-            if (currentPage < totalPages - 2) range.push(-2);
-            range.push(totalPages);
-        }
-        
-        range.forEach((p) => {
-            if (p < 0) {
-                pages.push(<span key={p} className="px-1 text-gray-400 text-sm">...</span>);
+            if (res.ok && result.success) {
+                showModal({
+                    type: 'success',
+                    title: 'Berhasil Diarsipkan!',
+                    message: result.message || `${selectedJenis} berhasil diarsipkan dan dikunci.`
+                });
+                if (selectedTA) await fetchSemesterByTahunAjaran(selectedTA);
             } else {
-                pages.push(
-                    <button 
-                        key={p} 
-                        onClick={() => setCurrentPage(p)} 
-                        className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
-                        style={currentPage === p ? { background: 'linear-gradient(135deg,#e8690a,#f5a623)' } : {}}
-                    >
-                        {p}
-                    </button>
-                );
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Mengarsipkan',
+                    message: result.message || 'Terjadi kesalahan.'
+                });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
+    const handleDownloadRapor = async (siswaId: number, namaSiswa: string, nisn: string) => {
+        if (!selectedSemesterId || !selectedJenis || !selectedSemester) {
+            showModal({ type: 'warning', title: 'Data Tidak Lengkap', message: 'Pastikan semua filter sudah dipilih.' });
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+            return;
+        }
+
+        setDownloadingId(siswaId);
+        try {
+            const semester = selectedSemester.toLowerCase();
+            const res = await fetch(
+                `${API_BASE}/guru-kelas/generate-rapor/${siswaId}/${selectedJenis}/${semester}/${selectedSemesterId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.message || `Gagal mengunduh rapor (HTTP ${res.status})`);
+            }
+
+            const blob = await res.blob();
+            const cleanNisn = (nisn || String(siswaId)).replace(/[^0-9]/g, '');
+            const fileName = `Rapor_${selectedJenis}_${selectedSemester}_${cleanNisn}.docx`;
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showModal({
+                type: 'success',
+                title: 'Berhasil Diunduh',
+                message: `Rapor ${selectedJenis} untuk ${namaSiswa} berhasil diunduh.\n\nFile: ${fileName}`
+            });
+
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh',
+                message: err.message || 'Terjadi kesalahan saat mengunduh rapor.'
+            });
+        } finally {
+            setDownloadingId(null);
+        }
+    };
+
+    const handleDownloadAll = async () => {
+        if (siswaList.length === 0) {
+            showModal({ type: 'warning', title: 'Tidak Ada Data', message: 'Tidak ada siswa untuk diunduh rapornya.' });
+            return;
+        }
+
+        showModal({
+            type: 'confirm',
+            title: `Unduh ${siswaList.length} Rapor?`,
+            message: `Akan mengunduh ${siswaList.length} rapor ${selectedJenis}.\n\nFile akan diunduh satu per satu.`,
+            onConfirm: async () => {
+                for (const siswa of siswaList) {
+                    await handleDownloadRapor(siswa.id_siswa, siswa.nama, siswa.nisn || '');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
         });
-
-        pages.push(
-            <button 
-                key="next" 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-                disabled={currentPage === totalPages} 
-                className={`${btnBase} ${btnInactive} disabled:opacity-40`}
-            >
-                »
-            </button>
-        );
-        
-        return pages;
     };
 
-    /* --------------------------------------------------------------------
-       FORM PAGE RENDER
-    -------------------------------------------------------------------- */
-    
-    const renderForm = (isEdit: boolean) => (
-        <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
-            <GlobalStyles />
-            {modal && <NotifModal modal={modal} onClose={closeModal} />}
-            {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+    // ── RENDER ─────────────────────────────────────────────────────────────────
 
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Data Tahun Ajaran</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
-                    Kelola tahun ajaran dan semester aktif
-                </p>
-            </div>
-
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
-                    <h2 className="text-base font-bold text-white">
-                        {isEdit ? 'Edit' : 'Tambah'} Tahun Ajaran
-                    </h2>
-                    <button 
-                        onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center" 
-                        style={{ background: 'rgba(255,255,255,0.2)' }}
-                    >
-                        <X size={16} className="text-white" />
-                    </button>
-                </div>
-
-                <div className="p-6">
-                    <div className="mb-6">
-                        <label className={labelCls} style={labelColor}>
-                            Tahun Ajaran <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex items-center gap-3">
-                            <input 
-                                type="text" 
-                                name="tahun1" 
-                                value={formData.tahun1} 
-                                onChange={handleInputChange} 
-                                placeholder="2024"
-                                className={`w-32 ${errors.tahun ? inputErrCls : inputCls}`}
-                                disabled={isEdit}
-                            />
-                            <span className="text-2xl font-bold text-gray-400">/</span>
-                            <input 
-                                type="text" 
-                                name="tahun2" 
-                                value={formData.tahun2} 
-                                onChange={handleInputChange} 
-                                placeholder="2025"
-                                className={`w-32 ${errors.tahun ? inputErrCls : inputCls}`}
-                                disabled={isEdit}
-                            />
-                        </div>
-                        {errors.tahun && <p className="text-red-500 text-xs mt-1">{errors.tahun}</p>}
-                    </div>
-
-                    <div 
-                        className="mb-6 p-4 rounded-lg border"
-                        style={{ background: '#fff7ed', borderColor: '#fdba74' }}
-                    >
-                        <h3 className="text-base font-bold mb-3" style={{ color: '#c2410c' }}>
-                            Semester Ganjil
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelCls} style={labelColor}>
-                                    Tanggal Pembagian PTS
-                                </label>
-                                <input 
-                                    type="date" 
-                                    name="pts_ganjil" 
-                                    value={formData.pts_ganjil} 
-                                    onChange={handleInputChange} 
-                                    className={inputCls}
-                                />
-                            </div>
-                            <div>
-                                <label className={labelCls} style={labelColor}>
-                                    Tanggal Pembagian PAS
-                                </label>
-                                <input 
-                                    type="date" 
-                                    name="pas_ganjil" 
-                                    value={formData.pas_ganjil} 
-                                    onChange={handleInputChange} 
-                                    className={errors.pas_ganjil ? inputErrCls : inputCls}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div 
-                        className="mb-6 p-4 rounded-lg border"
-                        style={{ background: '#f0fdf4', borderColor: '#86efac' }}
-                    >
-                        <h3 className="text-base font-bold mb-3" style={{ color: '#15803d' }}>
-                            Semester Genap
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelCls} style={labelColor}>
-                                    Tanggal Pembagian PTS
-                                </label>
-                                <input 
-                                    type="date" 
-                                    name="pts_genap" 
-                                    value={formData.pts_genap} 
-                                    onChange={handleInputChange} 
-                                    className={inputCls}
-                                />
-                            </div>
-                            <div>
-                                <label className={labelCls} style={labelColor}>
-                                    Tanggal Pembagian PAS
-                                </label>
-                                <input 
-                                    type="date" 
-                                    name="pas_genap" 
-                                    value={formData.pas_genap} 
-                                    onChange={handleInputChange} 
-                                    className={errors.pas_genap ? inputErrCls : inputCls}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                        <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}>
-                            Batal
-                        </BtnSecondary>
-                        <BtnSecondary onClick={resetForm}>
-                            Reset
-                        </BtnSecondary>
-                        <button
-                            onClick={isEdit ? openConfirmEdit : openConfirmTambah}
-                            className={btnPrimary.base}
-                            style={btnPrimary.style}
-                            onMouseEnter={btnPrimary.hover}
-                            onMouseLeave={btnPrimary.leave}
-                        >
-                            {isEdit ? 'Simpan Perubahan' : 'Simpan'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Confirmation Modal - Tambah */}
-            {showConfirmTambah && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmTambah(false); }}
-                >
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 da-scaleIn">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert size={24} className="text-orange-500" />
-                            </div>
-                            <h3 className="text-base font-bold text-gray-900">
-                                Konfirmasi Penambahan Data
-                            </h3>
-                        </div>
-
-                        <p className="text-sm text-gray-600 mb-6">
-                            Anda akan menambahkan tahun ajaran <strong>{formData.tahun1}/{formData.tahun2}</strong>. 
-                            Tahun ajaran ini akan otomatis aktif dan tahun ajaran sebelumnya akan dinonaktifkan.
-                        </p>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowConfirmTambah(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowConfirmTambah(false);
-                                    handleTambah();
-                                }}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
-                            >
-                                Tambah & Aktifkan
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Confirmation Modal - Edit */}
-            {showConfirmEdit && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmEdit(false); }}
-                >
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 da-scaleIn">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert size={24} className="text-orange-500" />
-                            </div>
-                            <h3 className="text-base font-bold text-gray-900">
-                                Konfirmasi Perubahan Data
-                            </h3>
-                        </div>
-
-                        <div className="text-sm text-gray-600 mb-6">
-                            <p className="mb-2">Perubahan yang akan disimpan:</p>
-                            <ul className="text-xs space-y-1 ml-4">
-                                <li>PTS Ganjil: {formData.pts_ganjil ? formatTanggalIndonesia(formData.pts_ganjil) : 'belum diatur'}</li>
-                                <li>PAS Ganjil: {formData.pas_ganjil ? formatTanggalIndonesia(formData.pas_ganjil) : 'belum diatur'}</li>
-                                <li>PTS Genap: {formData.pts_genap ? formatTanggalIndonesia(formData.pts_genap) : 'belum diatur'}</li>
-                                <li>PAS Genap: {formData.pas_genap ? formatTanggalIndonesia(formData.pas_genap) : 'belum diatur'}</li>
-                            </ul>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowConfirmEdit(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowConfirmEdit(false);
-                                    executeEdit();
-                                }}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
-                            >
-                                Simpan Perubahan
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-
-    if (showTambah) return renderForm(false);
-    if (showEdit) return renderForm(true);
-
-    /* --------------------------------------------------------------------
-       MAIN LIST RENDER
-    -------------------------------------------------------------------- */
-    
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -830,59 +577,291 @@ export default function DataTahunAjaranClient() {
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Data Tahun Ajaran</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Arsip Rapor</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
-                    Kelola tahun ajaran dan semester aktif
+                    Kelola status penilaian dan unduh rapor siswa
                 </p>
             </div>
 
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                <div 
-                    className="px-5 py-4"
-                    style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}
-                >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <button 
-                            onClick={() => setShowTambah(true)}
-                            className={btnPrimary.base}
-                            style={btnPrimary.style}
-                            onMouseEnter={btnPrimary.hover}
-                            onMouseLeave={btnPrimary.leave}
+            {/* ====================================================================
+                CARD 1: Filter Tahun Ajaran + Semester + Jenis Penilaian — compact
+                satu baris, sama persis pola Card 1 di Data Mata Pelajaran/Pembelajaran.
+            ==================================================================== */}
+            <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-5" style={CARD_STYLE}>
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+                        <CalendarRange size={16} style={{ color: '#c95b08' }} />
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                            Tahun Ajaran
+                        </label>
+                        <select
+                            value={selectedTA ?? ''}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || value === 'no-data') {
+                                    setSelectedTA(null);
+                                    return;
+                                }
+                                setSelectedTA(Number(value));
+                            }}
+                            className={selectCls}
+                            disabled={loadingTA}
                         >
-                            <Plus size={16} /> Tambah Tahun Ajaran
-                        </button>
+                            <option value="">-- Pilih Tahun Ajaran --</option>
+                            {tahunAjaranList.map(ta => (
+                                <option key={ta.id} value={ta.id}>
+                                    {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                <select 
-                                    value={itemsPerPage} 
-                                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
-                                >
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
+                {selectedTA !== null && (
+                    <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                            Semester
+                        </label>
+                        <select
+                            value={selectedSemesterId ?? ''}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || value === 'no-data') {
+                                    setSelectedSemesterId(null);
+                                    setSelectedSemester(null);
+                                    return;
+                                }
+                                const id = Number(value);
+                                const sem = semesterOptions.find(s => s.id === id);
+                                setSelectedSemesterId(id);
+                                setSelectedSemester(sem?.semester || null);
+                            }}
+                            className={selectCls}
+                        >
+                            <option value="">-- Pilih Semester --</option>
+                            {semesterOptions.map(sem => (
+                                <option key={sem.id} value={sem.id}>
+                                    {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
+                                </option>
+                            ))}
+                        </select>
+
+                        {selectedSemesterId && currentSemester && (
+                            currentSemester.is_aktif ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                    style={{ background: '#d4f0dd', color: '#1a7a3a', border: '1px solid #86efac' }}>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                                    Aktif
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                    style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
+                                    <Lock size={12} />
+                                    Nonaktif
+                                </span>
+                            )
+                        )}
+                    </div>
+                )}
+
+                {selectedTA !== null && selectedSemesterId !== null && (
+                    <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                            Jenis Penilaian
+                        </label>
+                        <select
+                            value={selectedJenis ?? ''}
+                            onChange={(e) => {
+                                const val = e.target.value as 'PTS' | 'PAS' | '';
+                                setSelectedJenis(val || null);
+                            }}
+                            className={selectCls}
+                        >
+                            <option value="">-- Pilih Jenis --</option>
+                            <option value="PTS">PTS (Penilaian Tengah Semester)</option>
+                            <option value="PAS">PAS (Penilaian Akhir Semester)</option>
+                        </select>
+                    </div>
+                )}
+            </div>
+
+            {selectedTA === null ? (
+                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
+                    </div>
+                </div>
+            ) : selectedSemesterId === null ? (
+                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
+                    </div>
+                </div>
+            ) : selectedJenis === null ? (
+                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Jenis Penilaian Terlebih Dahulu</p>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {/* ====================================================================
+                        CARD 2: Panel Status — berdiri sendiri, lebih menonjol.
+                        Badge status besar + tombol aksi + info box keterangan.
+                    ==================================================================== */}
+                    <div className="bg-white rounded-2xl overflow-hidden mb-5" style={CARD_STYLE}>
+                        <div className="px-6 py-4 flex items-center justify-between" style={HEADER_GRAD}>
+                            <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                <Calendar size={18} />
+                                Status Penilaian {selectedJenis}
+                            </h2>
+                            <span
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+                                style={{
+                                    background: statusStyle.bg,
+                                    color: statusStyle.color,
+                                    border: `1px solid ${statusStyle.border}`
+                                }}
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: statusStyle.dot }} />
+                                {statusStyle.icon}
+                                {statusStyle.text}
+                            </span>
+                        </div>
+
+                        <div className="px-6 py-5">
+                            <div className="flex flex-wrap gap-2">
+                                {statusSaatIni === 'nonaktif' && (
+                                    <button
+                                        onClick={() => {
+                                            showModal({
+                                                type: 'confirm',
+                                                title: `Aktifkan ${selectedJenis}?`,
+                                                message: `Guru akan bisa mulai menginput nilai ${selectedJenis} untuk semua kelas.\n\nLanjutkan?`,
+                                                onConfirm: () => handleUbahStatus('aktif')
+                                            });
+                                        }}
+                                        disabled={loadingAction}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                        style={{
+                                            background: 'linear-gradient(135deg,#16a34a,#22c55e)',
+                                            boxShadow: '0 3px 10px rgba(22,163,74,0.25)'
+                                        }}
+                                    >
+                                        <Play size={15} /> Aktifkan {selectedJenis}
+                                    </button>
+                                )}
+
+                                {statusSaatIni === 'aktif' && (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                showModal({
+                                                    type: 'confirm',
+                                                    title: `Nonaktifkan ${selectedJenis}?`,
+                                                    message: `Guru tidak akan bisa mengedit nilai ${selectedJenis} untuk sementara waktu.\n\nLanjutkan?`,
+                                                    onConfirm: () => handleUbahStatus('nonaktif')
+                                                });
+                                            }}
+                                            disabled={loadingAction}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                            style={{
+                                                background: 'linear-gradient(135deg,#d97706,#f59e0b)',
+                                                boxShadow: '0 3px 10px rgba(217,119,6,0.25)'
+                                            }}
+                                        >
+                                            <Pause size={15} /> Nonaktifkan
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                showModal({
+                                                    type: 'confirm',
+                                                    title: `⚠️ Arsipkan & Kunci ${selectedJenis}?`,
+                                                    message: `PERHATIAN!\n\nSetelah diarsipkan:\n• Data nilai ${selectedJenis} akan terkunci PERMANEN\n• Guru TIDAK BISA mengedit nilai lagi\n• Rapor bisa diunduh\n\nTindakan ini tidak dapat dibatalkan!`,
+                                                    onConfirm: handleArsipkan
+                                                });
+                                            }}
+                                            disabled={loadingAction}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                            style={{
+                                                background: 'linear-gradient(135deg,#dc2626,#ef4444)',
+                                                boxShadow: '0 3px 10px rgba(220,38,38,0.25)'
+                                            }}
+                                        >
+                                            <Lock size={15} /> Arsipkan & Kunci
+                                        </button>
+                                    </>
+                                )}
+
+                                {statusSaatIni === 'selesai' && (
+                                    <div
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                                        style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}
+                                    >
+                                        <Lock size={15} /> Data Terkunci Permanen
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="relative min-w-[200px]">
+                            <div className="mt-4 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                                    <span className="font-semibold">ℹ️ Info: </span>
+                                    {statusSaatIni === 'nonaktif' && `Penilaian ${selectedJenis} belum dibuka. Guru tidak bisa input nilai.`}
+                                    {statusSaatIni === 'aktif' && `Penilaian ${selectedJenis} sedang aktif. Guru bisa input/edit nilai.`}
+                                    {statusSaatIni === 'selesai' && `Penilaian ${selectedJenis} sudah ditutup dan dikunci. Data tidak bisa diubah.`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ====================================================================
+                        CARD 3: Toolbar — dropdown Kelas + Search siswa.
+                    ==================================================================== */}
+                    <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
+                        <div className="flex items-center gap-3">
+                            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                Kelas
+                            </label>
+                            {loadingKelas ? (
+                                <div className="text-sm text-gray-400">Memuat kelas...</div>
+                            ) : (
+                                <select
+                                    value={selectedKelas ?? ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSelectedKelas(val ? Number(val) : null);
+                                    }}
+                                    className={selectCls}
+                                >
+                                    <option value="">-- Pilih Kelas --</option>
+                                    {kelasList.map((k, index) => (
+                                        <option key={`kelas-${k.id_kelas}-${index}`} value={k.id_kelas}>
+                                            {k.nama_kelas}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+
+                        {selectedKelas !== null && (
+                            <div className="relative min-w-[200px] sm:min-w-[220px]">
                                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                     <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
                                 </div>
-                                <input 
-                                    type="text" 
-                                    placeholder="Cari tahun ajaran..." 
+                                <input
+                                    type="text"
+                                    placeholder="Cari siswa..."
                                     value={searchQuery}
-                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
                                 />
                                 {searchQuery && (
-                                    <button 
-                                        type="button" 
-                                        onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery('')}
                                         className="absolute inset-y-0 right-2 flex items-center"
                                         style={{ color: '#c95b08' }}
                                     >
@@ -890,232 +869,111 @@ export default function DataTahunAjaranClient() {
                                     </button>
                                 )}
                             </div>
-                        </div>
+                        )}
                     </div>
-                    <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                        Menampilkan {filteredData.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredData.length)} dari {filteredData.length} data
-                    </p>
-                </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] text-sm border-collapse">
-                        <thead>
-                            <tr style={TH_GRAD}>
-                                {['No.', 'Tahun Ajaran', 'PTS Ganjil', 'PAS Ganjil', 'PTS Genap', 'PAS Genap', 'Semester Aktif', 'Status', 'Aksi'].map(h => (
-                                    <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={9} className="py-12 text-center text-gray-400 text-sm">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                            Memuat data...
+                    {selectedKelas === null ? (
+                        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                            <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Kelas Terlebih Dahulu</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* ====================================================================
+                                CARD 4: Tabel siswa + info unduhan.
+                            ==================================================================== */}
+                            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                                <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                    <p className="text-xs" style={{ color: '#c95b08' }}>
+                                        Menampilkan {filteredSiswa.length === 0 ? 0 : 1}–{filteredSiswa.length} dari {filteredSiswa.length} data
+                                    </p>
+                                </div>
+
+                                {loadingSiswa ? (
+                                    <div className="py-12 text-center">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                                            <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data siswa...</span>
                                         </div>
-                                    </td>
-                                </tr>
-                            ) : currentData.length === 0 ? (
-                                <tr>
-                                    <td colSpan={9} className="py-12 text-center text-gray-400 text-sm">
-                                        Tidak ada data tahun ajaran
-                                    </td>
-                                </tr>
-                            ) : (
-                                currentData.map((item, index) => (
-                                    <tr 
-                                        key={item.id_induk} 
-                                        className="transition-colors hover:bg-orange-50"
-                                        style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                    >
-                                        <td className="px-5 py-3.5 text-center text-gray-500 font-medium">
-                                            {startIndex + index + 1}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center font-bold" style={{ color: '#111827' }}>
-                                            {item.tahun_ajaran}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center" style={{ color: '#4b5563' }}>
-                                            {formatTanggalIndonesia(item.pts_ganjil)}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center" style={{ color: '#4b5563' }}>
-                                            {formatTanggalIndonesia(item.pas_ganjil)}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center" style={{ color: '#4b5563' }}>
-                                            {formatTanggalIndonesia(item.pts_genap)}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center" style={{ color: '#4b5563' }}>
-                                            {formatTanggalIndonesia(item.pas_genap)}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center">
-                                            {item.semester_aktif ? (
-                                                <span 
-                                                    className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold"
-                                                    style={{ background: '#dbeafe', color: '#1e40af', border: '1px solid #bfdbfe' }}
-                                                >
-                                                    {item.semester_aktif}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-400 text-xs">-</span>
-                                            )}
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center">
-                                            <span 
-                                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
-                                                    item.status === 'AKTIF' 
-                                                        ? 'bg-green-100 text-green-700 border border-green-200' 
-                                                        : 'bg-gray-100 text-gray-700 border border-gray-200'
-                                                }`}
-                                            >
-                                                <span className={`w-1.5 h-1.5 rounded-full inline-block ${item.status === 'AKTIF' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                                                {item.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                                            <div className="flex justify-center gap-2">
-                                                {item.status === 'AKTIF' ? (
-                                                    <>
-                                                        <button 
-                                                            onClick={() => openEdit(item)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:bg-orange-100"
-                                                            style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                                        >
-                                                            <Pencil size={13} /> Edit
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => openConfirmGantiSemester(item)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:bg-orange-100"
-                                                            style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
-                                                        >
-                                                            <RotateCw size={13} /> Ganti {item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">-</span>
-                                                )}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[640px] text-sm border-collapse">
+                                                <thead>
+                                                    <tr style={TH_GRAD}>
+                                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Aksi'].map(h => (
+                                                            <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredSiswa.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
+                                                                {searchQuery ? 'Tidak ada siswa yang cocok dengan pencarian' : 'Tidak ada data siswa'}
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredSiswa.map((siswa, index) => (
+                                                            <tr
+                                                                key={siswa.id_siswa}
+                                                                className="transition-colors"
+                                                                style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
+                                                            >
+                                                                <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                                                                <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
+                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nis}</td>
+                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nisn || '—'}</td>
+                                                                <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                                    <button
+                                                                        onClick={() => handleDownloadRapor(siswa.id_siswa, siswa.nama, siswa.nisn || '')}
+                                                                        disabled={downloadingId === siswa.id_siswa}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                                                                        style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
+                                                                    >
+                                                                        {downloadingId === siswa.id_siswa ? (
+                                                                            <>
+                                                                                <div className="w-3 h-3 rounded-full border-2 border-green-300 border-t-green-600 animate-spin" />
+                                                                                Mengunduh...
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Download size={13} /> Unduh Rapor
+                                                                            </>
+                                                                        )}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Info Box */}
+                                        <div className="px-5 py-4" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                            <div className="flex items-start gap-2">
+                                                <FileText size={15} className="mt-0.5 shrink-0" style={{ color: '#c95b08' }} />
+                                                <div>
+                                                    <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Informasi Unduhan</p>
+                                                    <ul className="text-xs space-y-0.5" style={{ color: '#c95b08' }}>
+                                                        <li>• Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
+                                                        <li>• Buka dengan Microsoft Word atau LibreOffice untuk tampilan terbaik</li>
+                                                        <li>• PAS Semester Genap mencantumkan status kenaikan kelas</li>
+                                                    </ul>
+                                                </div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div 
-                    className="flex items-center justify-between px-5 py-3"
-                    style={{ borderTop: '1px solid #fde0c8' }}
-                >
-                    <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
-                        Halaman {currentPage} dari {totalPages}
-                    </span>
-                    <div className="flex items-center gap-1">
-                        {renderPagination()}
-                    </div>
-                </div>
-            </div>
-
-            {/* Confirmation Modal - Ganti Semester */}
-            {showConfirmGantiSemester && selectedItemForSemester && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmGantiSemester(false); }}
-                >
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 da-scaleIn">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert size={24} className="text-orange-500" />
-                            </div>
-                            <h3 className="text-base font-bold text-gray-900">
-                                Ganti Semester
-                            </h3>
-                        </div>
-
-                        <div className="text-sm text-gray-600 mb-4">
-                            <div className="flex items-center justify-center gap-3 py-2 mb-3">
-                                <span className="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100">
-                                    {selectedItemForSemester.semester_aktif}
-                                </span>
-                                <span className="text-orange-600">→</span>
-                                <span className="px-3 py-1 rounded-lg text-sm font-semibold" style={{ background: '#fff0e5', color: '#c95b08' }}>
-                                    {selectedItemForSemester.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
-                                </span>
-                            </div>
-                            
-                            <div className="text-xs space-y-1.5 mb-3">
-                                <p className="flex items-start gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ background: '#e8690a' }}></span>
-                                    <span>Data nilai siswa tetap tersimpan</span>
-                                </p>
-                                <p className="flex items-start gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ background: '#e8690a' }}></span>
-                                    <span>Dapat bolak-balik untuk koreksi nilai</span>
-                                </p>
-                            </div>
-
-                            <div className="pt-2">
-                                <label className="block text-xs font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                    Alasan Ganti Semester <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    value={showAlasanLainnya ? 'lainnya' : alasanKoreksi}
-                                    onChange={(e) => {
-                                        if (e.target.value === 'lainnya') {
-                                            setShowAlasanLainnya(true);
-                                            setAlasanKoreksi('');
-                                        } else {
-                                            setShowAlasanLainnya(false);
-                                            setAlasanKoreksi(e.target.value);
-                                            setAlasanCustom('');
-                                        }
-                                    }}
-                                    className="w-full border rounded-lg px-3 py-2 text-xs outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
-                                >
-                                    <option value="">-- Pilih Alasan --</option>
-                                    <option value="Koreksi nilai siswa">Koreksi nilai siswa yang keliru</option>
-                                    <option value="Input nilai belum selesai">Input nilai belum selesai</option>
-                                    <option value="Pindah ke semester baru">Pindah ke semester baru</option>
-                                    <option value="Revisi rapor">Revisi rapor sebelum dibagikan</option>
-                                    <option value="lainnya">Lainnya (isi manual)</option>
-                                </select>
-
-                                {showAlasanLainnya && (
-                                    <input
-                                        type="text"
-                                        value={alasanCustom}
-                                        onChange={(e) => setAlasanCustom(e.target.value)}
-                                        placeholder="Tulis alasan Anda..."
-                                        className="w-full border rounded-lg px-3 py-2 text-xs outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 mt-2"
-                                        maxLength={200}
-                                    />
+                                        </div>
+                                    </>
                                 )}
                             </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowConfirmGantiSemester(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowConfirmGantiSemester(false);
-                                    executeGantiSemester();
-                                }}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
-                            >
-                                Ganti Semester
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                        </>
+                    )}
+                </>
             )}
         </div>
     );

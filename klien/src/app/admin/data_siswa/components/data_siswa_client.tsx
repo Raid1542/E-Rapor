@@ -4,12 +4,14 @@
  *         mencakup fitur tambah, edit, detail, import Excel, filter,
  *         pencarian, dan pagination.
  * UPDATE: Menggunakan struktur master data (tanpa tahun ajaran)
+ * UPDATE 2: Form tambah/edit pakai pola back-button + header card,
+ *           tombol Batal/Reset disamakan dengan Data Admin & Tahun Ajaran.
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
-import { Eye, Pencil, Upload, X, Plus, Search, Filter, CheckCircle2, AlertCircle, WifiOff, ShieldAlert } from 'lucide-react';
+import { Eye, Pencil, Upload, X, Plus, Search, Filter, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, ChevronLeft, GraduationCap } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -63,8 +65,8 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
@@ -77,6 +79,42 @@ const btnPrimary = {
 
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
+
+// ─── SECONDARY BUTTONS — disamakan dengan Data Admin (Batal=merah, Reset=biru) ──
+
+const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
+    <button
+        onClick={onClick}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+        style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+    >
+        {children}
+    </button>
+);
+
+const BtnReset = ({ onClick, children = 'Reset' }: { onClick: () => void; children?: React.ReactNode }) => (
+    <button
+        onClick={onClick}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+        style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
+    >
+        {children}
+    </button>
+);
+
+/** Tombol netral (untuk "Tutup" di modal Detail — bukan Batal/Reset, jadi tetap netral) */
+const BtnNetral = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
+    <button onClick={onClick}
+        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+    >{children}</button>
+);
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 
@@ -475,18 +513,8 @@ export default function DataSiswaClient() {
         setTimeout(() => { setShowImport(false); setImportClosing(false); }, 200);
     };
 
-    // ── Secondary buttons (Batal, Reset) ──────────────────────────────────────
-
-    const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-        <button onClick={onClick}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-            style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-        >{children}</button>
-    );
-
-    // ── FORM PAGE ──────────────────────────────────────────────────────────────
+    // ── FORM PAGE — pola back-button + header card, konsisten dengan
+    //    Data Admin & Data Tahun Ajaran ──────────────────────────────────────
 
     const renderForm = (isEdit: boolean) => (
         <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
@@ -494,27 +522,47 @@ export default function DataSiswaClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Page header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Data Siswa</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data siswa</p>
+            {/* Page header dengan back-button */}
+            <div className="mb-6 flex items-center gap-3">
+                <button
+                    onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                    style={{ background: '#fff', border: '1px solid #fde0c8', color: '#c95b08' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                >
+                    <ChevronLeft size={18} />
+                </button>
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        {isEdit ? 'Edit Data Siswa' : 'Tambah Data Siswa'}
+                    </h1>
+                    <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
+                        {isEdit ? 'Perbarui informasi data siswa' : 'Isi formulir untuk menambahkan siswa baru'}
+                    </p>
+                </div>
             </div>
 
             {/* Form card */}
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-                {/* Card header */}
-                <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
-                    <h2 className="text-base font-bold text-white">{isEdit ? 'Edit Data Siswa' : 'Tambah Data Siswa'}</h2>
-                    <button onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                        style={{ background: 'rgba(255,255,255,0.2)' }}>
-                        <X size={16} className="text-white" />
-                    </button>
+                {/* Card header gradient — konsisten dengan Data Admin */}
+                <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <GraduationCap size={20} className="text-white" />
+                    </div>
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/75">
+                            {isEdit ? 'Formulir Edit' : 'Formulir Tambah'}
+                        </p>
+                        <h2 className="text-base font-bold text-white leading-tight">
+                            {isEdit ? 'Ubah Data Siswa' : 'Data Siswa Baru'}
+                        </h2>
+                    </div>
                 </div>
 
                 {/* Form body */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
 
                     {/* Nama Lengkap - PALING ATAS */}
                     <div className="flex flex-col gap-1.5">
@@ -583,21 +631,21 @@ export default function DataSiswaClient() {
                             {errors.status && <p className="text-red-500 text-xs">{errors.status}</p>}
                         </div>
                     </div>
-                </div>
 
-                {/* Form footer */}
-                <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>Batal</BtnSecondary>
-                    <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
-                    <button
-                        onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
-                        className={btnPrimary.base}
-                        style={btnPrimary.style}
-                        onMouseEnter={btnPrimary.hover}
-                        onMouseLeave={btnPrimary.leave}
-                    >
-                        {isEdit ? 'Simpan Perubahan' : 'Simpan'}
-                    </button>
+                    {/* Form footer — full width di dalam grid */}
+                    <div className="md:col-span-2 flex justify-end gap-3 pt-5 mt-2" style={{ borderTop: '1px solid #fde0c8' }}>
+                        <BtnBatal onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }} />
+                        <BtnReset onClick={handleReset} />
+                        <button
+                            onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
+                            className={btnPrimary.base}
+                            style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
+                            onMouseEnter={btnPrimary.hover}
+                            onMouseLeave={btnPrimary.leave}
+                        >
+                            {isEdit ? 'Simpan Perubahan' : 'Simpan'}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -625,13 +673,7 @@ export default function DataSiswaClient() {
                         </p>
 
                         <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                            >
-                                Batal
-                            </button>
+                            <BtnBatal onClick={() => setShowConfirmModal(false)} />
                             <button
                                 onClick={() => {
                                     setShowConfirmModal(false);
@@ -670,82 +712,81 @@ export default function DataSiswaClient() {
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data siswa</p>
             </div>
 
-            {/* Table card */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            {/* Toolbar card — terpisah dari tabel */}
+            <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
+                {/* Kiri: Tambah */}
+                <button onClick={() => setShowTambah(true)}
+                    className={btnPrimary.base}
+                    style={btnPrimary.style}
+                    onMouseEnter={btnPrimary.hover}
+                    onMouseLeave={btnPrimary.leave}
+                >
+                    <Plus size={16} /> Tambah Siswa
+                </button>
 
-                {/* Card sub-header — toolbar */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Kanan: controls */}
+                <div className="flex flex-wrap items-center gap-2">
 
-                        {/* Kiri: Tambah */}
-                        <button onClick={() => setShowTambah(true)}
-                            className={btnPrimary.base}
-                            style={btnPrimary.style}
-                            onMouseEnter={btnPrimary.hover}
-                            onMouseLeave={btnPrimary.leave}
+                    {/* Tampilkan N data */}
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                        <select value={itemsPerPage}
+                            onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                            className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
                         >
-                            <Plus size={16} /> Tambah Siswa
-                        </button>
-
-                        {/* Kanan: controls */}
-                        <div className="flex flex-wrap items-center gap-2">
-
-                            {/* Tampilkan N data */}
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                <select value={itemsPerPage}
-                                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
-                                >
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                            </div>
-
-                            {/* Search */}
-                            <div className="relative min-w-[200px] sm:min-w-[220px]">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                                </div>
-                                <input type="text" placeholder="Cari siswa..." value={searchQuery}
-                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                                />
-                                {searchQuery && (
-                                    <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                                        className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Filter */}
-                            <button onClick={openFilterModal}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                            >
-                                <Filter size={15} /> Filter
-                            </button>
-
-                            {/* Import */}
-                            <button onClick={() => setShowImport(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                            >
-                                <Upload size={15} /> Import
-                            </button>
-                        </div>
+                            <option value={10}>10</option>
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                     </div>
 
-                    {/* Info count */}
-                    <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
+                    {/* Search */}
+                    <div className="relative min-w-[200px] sm:min-w-[220px]">
+                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                            <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                        </div>
+                        <input type="text" placeholder="Cari siswa..." value={searchQuery}
+                            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                            className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                        />
+                        {searchQuery && (
+                            <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Filter */}
+                    <button onClick={openFilterModal}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+                        style={{ background: '#fff', border: '1.5px solid #d97706', color: '#b35a08', boxShadow: '0 1px 4px rgba(217,119,6,0.15)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    >
+                        <Filter size={15} /> Filter
+                    </button>
+
+                    {/* Import */}
+                    <button onClick={() => setShowImport(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+                        style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.15)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#dbeafe')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#eff6ff')}
+                    >
+                        <Upload size={15} /> Import
+                    </button>
+                </div>
+            </div>
+
+            {/* Table card — terpisah dari toolbar */}
+            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+
+                {/* Info count */}
+                <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                    <p className="text-xs" style={{ color: '#c95b08' }}>
                         Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
                     </p>
                 </div>
@@ -895,7 +936,7 @@ export default function DataSiswaClient() {
                             </div>
 
                             <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
+                                <BtnNetral onClick={closeDetail}>Tutup</BtnNetral>
                                 <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
                                     className={btnPrimary.base} style={btnPrimary.style}
                                     onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
@@ -916,7 +957,10 @@ export default function DataSiswaClient() {
                         style={CARD_STYLE}>
 
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                            <h2 className="text-base font-bold text-white">Import Data Siswa</h2>
+                            <div className="flex items-center gap-2">
+                                <Upload size={16} className="text-white/80" />
+                                <h2 className="text-base font-bold text-white">Import Data Siswa</h2>
+                            </div>
                             <button onClick={closeImport} className="w-8 h-8 rounded-lg flex items-center justify-center"
                                 style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
@@ -952,10 +996,10 @@ export default function DataSiswaClient() {
                             <div className="flex gap-3 mt-5">
                                 <button onClick={handleImportExcel} disabled={!importFile}
                                     className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${!importFile ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: importFile ? '0 3px 10px rgba(232,105,10,0.25)' : 'none' }}>
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', border: '1.5px solid #c95b08', boxShadow: importFile ? '0 3px 10px rgba(232,105,10,0.25)' : 'none' }}>
                                     Import
                                 </button>
-                                <BtnSecondary onClick={closeImport}>Batal</BtnSecondary>
+                                <BtnBatal onClick={closeImport} />
                             </div>
                         </div>
                     </div>
@@ -971,7 +1015,10 @@ export default function DataSiswaClient() {
                         style={CARD_STYLE}>
 
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                            <h2 className="text-base font-bold text-white">Filter Siswa</h2>
+                            <div className="flex items-center gap-2">
+                                <Filter size={15} className="text-white/80" />
+                                <h2 className="text-base font-bold text-white">Filter Siswa</h2>
+                            </div>
                             <button onClick={closeFilterModal} className="w-8 h-8 rounded-lg flex items-center justify-center"
                                 style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
@@ -994,14 +1041,14 @@ export default function DataSiswaClient() {
                             ))}
 
                             <div className="pt-2 flex gap-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <BtnSecondary onClick={resetFilter}>Reset</BtnSecondary>
+                                <BtnReset onClick={resetFilter} />
                                 <button onClick={applyFilter}
-                                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all`}
-                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.25)' }}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', border: '1.5px solid #c95b08', boxShadow: '0 3px 10px rgba(232,105,10,0.25)' }}
                                     onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
                                 >
-                                    Terapkan
+                                    Terapkan Filter
                                 </button>
                             </div>
                         </div>

@@ -213,6 +213,8 @@ router.get('/siswa/:id/ekstrakurikuler', adminOnlyWithTahunAjaran, admin.getEksk
 
 // Dashboard
 router.get('/dashboard/stats', adminOnlyWithTahunAjaran, admin.getDashboardStats);
+router.get('/dashboard/progress-guru', adminOnlyWithTahunAjaran, admin.getProgressGuru);
+router.get('/dashboard/kelengkapan-rapor', adminOnlyWithTahunAjaran, admin.getKelengkapanRapor);
 
 // RAPOR 
 router.get('/arsip-rapor/tahun-ajaran', adminOnly, admin.getTahunAjaranAll);

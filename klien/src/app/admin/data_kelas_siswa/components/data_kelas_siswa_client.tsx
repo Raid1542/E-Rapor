@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
-import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, Lock } from 'lucide-react';
+import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, Lock, CalendarRange } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -122,8 +122,8 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
@@ -137,13 +137,28 @@ const btnPrimary = {
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
-const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-  <button onClick={onClick}
-    className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-    style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-  >{children}</button>
+const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
+  <button
+    onClick={onClick}
+    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+    style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+    onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+  >
+    {children}
+  </button>
+);
+
+const BtnReset = ({ onClick, children = 'Reset' }: { onClick: () => void; children?: React.ReactNode }) => (
+  <button
+    onClick={onClick}
+    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+    style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
+    onMouseEnter={(e) => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
+  >
+    {children}
+  </button>
 );
 
 /* ==========================================================================
@@ -602,14 +617,12 @@ export default function DataKelasClient() {
         </div>
 
         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
-          <BtnSecondary onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>
-            Batal
-          </BtnSecondary>
-          <BtnSecondary onClick={handleReset}>Reset</BtnSecondary>
+          <BtnBatal onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }} />
+          <BtnReset onClick={handleReset} />
           <button
             onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
             className={btnPrimary.base}
-            style={btnPrimary.style}
+            style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
             onMouseEnter={btnPrimary.hover}
             onMouseLeave={btnPrimary.leave}
           >
@@ -641,13 +654,7 @@ export default function DataKelasClient() {
             </p>
 
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-              >
-                Batal
-              </button>
+              <BtnBatal onClick={() => setShowConfirmModal(false)} />
               <button
                 onClick={() => {
                   setShowConfirmModal(false);
@@ -694,131 +701,155 @@ export default function DataKelasClient() {
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data kelas dan wali kelas</p>
       </div>
 
-      <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-        <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
-            <select
-              value={selectedTahunAjaranId ?? ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === '') {
-                  setSelectedTahunAjaranId(null);
-                  setSelectedTahunAjaranAktif(false);
-                  setLoading(false);
-                  setKelasList([]);
-                  setIsReadOnly(false);
-                  setLockedBy(null);
-                  setLockedSemester(null);
-                  localStorage.removeItem('selectedTahunAjaranId');
-                  return;
-                }
-                const id = Number(value);
-                const selectedTa = tahunAjaranList.find(ta => ta.id === id);
-                setSelectedTahunAjaranId(id);
-                setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
-                localStorage.setItem('selectedTahunAjaranId', id.toString());
-                setLoading(true);
-                fetchKelas(id);
-              }}
-              className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[220px]"
-            >
-              <option value="">-- Pilih Tahun Ajaran --</option>
-              {tahunAjaranList.map(ta => (
-                <option key={ta.id} value={ta.id}>
-                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* ====================================================================
+          CARD 1: Pilih Tahun Ajaran — gerbang sebelum konten lain relevan.
+          Dibuat compact (inline-flex, tidak lebar penuh) supaya terasa
+          seperti satu kontrol ringkas, bukan toolbar besar.
+      ==================================================================== */}
+      <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 inline-flex items-center gap-3" style={CARD_STYLE}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+          <CalendarRange size={16} style={{ color: '#c95b08' }} />
         </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tahun Ajaran</label>
+          <select
+            value={selectedTahunAjaranId ?? ''}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '') {
+                setSelectedTahunAjaranId(null);
+                setSelectedTahunAjaranAktif(false);
+                setLoading(false);
+                setKelasList([]);
+                setIsReadOnly(false);
+                setLockedBy(null);
+                setLockedSemester(null);
+                localStorage.removeItem('selectedTahunAjaranId');
+                return;
+              }
+              const id = Number(value);
+              const selectedTa = tahunAjaranList.find(ta => ta.id === id);
+              setSelectedTahunAjaranId(id);
+              setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false);
+              localStorage.setItem('selectedTahunAjaranId', id.toString());
+              setLoading(true);
+              fetchKelas(id);
+            }}
+            className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]"
+          >
+            <option value="">-- Pilih Tahun Ajaran --</option>
+            {tahunAjaranList.map(ta => (
+              <option key={ta.id} value={ta.id}>
+                {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-        {selectedTahunAjaranId === null ? (
+      {selectedTahunAjaranId === null ? (
+        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
           <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
             <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
           </div>
-        ) : (
-          <>
-            {isReadOnly && (
-              <div 
-                className="mx-5 mt-4 p-4 rounded-xl flex items-start gap-3"
-                style={{ 
-                  background: 'linear-gradient(135deg, #fef3c7, #fde68a)', 
-                  border: '2px solid #f59e0b'
-                }}
-              >
-                <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="text-sm font-bold text-amber-900 mb-1">
-                    Data Kelas Terkunci (Read-Only)
-                  </h3>
-                  <p className="text-xs text-amber-800 mb-2">
-                    Penilaian <strong>{lockedBy}</strong> semester <strong>{lockedSemester}</strong> telah diarsipkan dan dikunci. 
-                    Data kelas tidak dapat diubah sampai tahun ajaran berakhir.
-                  </p>
-                  <p className="text-xs text-amber-700 italic">
-                    Untuk membuka kunci, silakan hubungi administrator atau gunakan halaman Arsip Rapor.
-                  </p>
-                </div>
+        </div>
+      ) : (
+        <>
+          {isReadOnly && (
+            <div
+              className="mb-5 p-4 rounded-xl flex items-start gap-3"
+              style={{
+                background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+                border: '2px solid #f59e0b'
+              }}
+            >
+              <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-amber-900 mb-1">
+                  Data Kelas Terkunci (Read-Only)
+                </h3>
+                <p className="text-xs text-amber-800 mb-2">
+                  Penilaian <strong>{lockedBy}</strong> semester <strong>{lockedSemester}</strong> telah diarsipkan dan dikunci.
+                  Data kelas tidak dapat diubah sampai tahun ajaran berakhir.
+                </p>
+                <p className="text-xs text-amber-700 italic">
+                  Untuk membuka kunci, silakan hubungi administrator atau gunakan halaman Arsip Rapor.
+                </p>
               </div>
-            )}
+            </div>
+          )}
 
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  {selectedTahunAjaranAktif && !isReadOnly && (
-                    <button
-                      onClick={() => setShowTambah(true)}
-                      className={btnPrimary.base}
-                      style={btnPrimary.style}
-                      onMouseEnter={btnPrimary.hover}
-                      onMouseLeave={btnPrimary.leave}
-                    >
-                      <Plus size={16} /> Tambah Kelas
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                      className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
-                    >
-                      <option key="10" value={10}>10</option>
-                      <option key="25" value={25}>25</option>
-                      <option key="50" value={50}>50</option>
-                      <option key="100" value={100}>100</option>
-                    </select>
-                    <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                  </div>
+          {/* ====================================================================
+              CARD 2: Toolbar — Tambah Kelas + Tampilkan data + Search.
+              Terpisah dari card Tahun Ajaran dan card tabel.
+          ==================================================================== */}
+          <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
+            <div>
+              {selectedTahunAjaranAktif && !isReadOnly ? (
+                <button
+                  onClick={() => setShowTambah(true)}
+                  className={btnPrimary.base}
+                  style={btnPrimary.style}
+                  onMouseEnter={btnPrimary.hover}
+                  onMouseLeave={btnPrimary.leave}
+                >
+                  <Plus size={16} /> Tambah Kelas
+                </button>
+              ) : (
+                <span className="text-xs text-gray-400 italic">
+                  {isReadOnly ? 'Data terkunci, tidak dapat menambah kelas' : 'Tahun ajaran ini tidak aktif'}
+                </span>
+              )}
+            </div>
 
-                  <div className="relative min-w-[200px] sm:min-w-[220px]">
-                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                      <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Cari kelas..."
-                      value={searchQuery}
-                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                      className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                        className="absolute inset-y-0 right-2 flex items-center"
-                        style={{ color: '#c95b08' }}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
+                >
+                  <option key="10" value={10}>10</option>
+                  <option key="25" value={25}>25</option>
+                  <option key="50" value={50}>50</option>
+                  <option key="100" value={100}>100</option>
+                </select>
+                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
               </div>
-              <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
+
+              <div className="relative min-w-[200px] sm:min-w-[220px]">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                  <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Cari kelas..."
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                    className="absolute inset-y-0 right-2 flex items-center"
+                    style={{ color: '#c95b08' }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ====================================================================
+              CARD 3: Tabel data kelas
+          ==================================================================== */}
+          <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            {/* Info count */}
+            <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+              <p className="text-xs" style={{ color: '#c95b08' }}>
                 Menampilkan {filteredKelas.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredKelas.length)} dari {filteredKelas.length} data
               </p>
             </div>
@@ -915,7 +946,7 @@ export default function DataKelasClient() {
                           )}
 
                           {isReadOnly && (
-                            <span 
+                            <span
                               className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold"
                               style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
                               title="Data terkunci karena penilaian telah diarsipkan"
@@ -937,9 +968,9 @@ export default function DataKelasClient() {
               </span>
               <div className="flex items-center gap-1">{renderPagination()}</div>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

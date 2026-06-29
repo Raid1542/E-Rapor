@@ -223,7 +223,7 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── Handlers ───────────────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────
 
   const handleLogoutClick = () => {
     setDropdownOpen(false);
@@ -276,7 +276,7 @@ export default function Header() {
     ? `E-Rapor SDIT Ulil Albab | ${tahunAjaranInfo.tahun_ajaran} - ${tahunAjaranInfo.semester}`
     : 'E-Rapor SDIT Ulil Albab';
 
-  // ── Avatar ────────────────────────────────────────────────────────────────
+  // ── Avatar ───────────────────────────────────────────────────────────────
   const Avatar = ({ size = 'sm' }: { size?: 'sm' | 'md' }) => {
     const dim  = size === 'md' ? 'w-10 h-10' : 'w-8 h-8';
     const text = size === 'md' ? 'text-sm'   : 'text-xs';
@@ -345,27 +345,22 @@ export default function Header() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="relative" ref={dropdownRef}>
 
+              {/* Trigger Button - Simple: Foto di kiri, Nama di kanan, tanpa card */}
               <button
                 onClick={() => setDropdownOpen(v => !v)}
-                className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl transition-all duration-150"
-                style={{
-                  background: dropdownOpen ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.30)',
-                  border: '1.5px solid rgba(255,255,255,0.6)',
-                }}
-                onMouseEnter={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.40)'; }}
-                onMouseLeave={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.30)'; }}
+                className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-all duration-150 hover:bg-white/10"
               >
-                <Avatar size="sm" />
+                <Avatar size="md" />
                 <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">
+                  <p className="text-sm font-semibold text-white leading-tight drop-shadow-sm max-w-[150px] truncate">
                     {user.nama_lengkap}
                   </p>
-                  <p className="text-[10px] text-white/90 leading-tight capitalize font-medium">
+                  <p className="text-xs text-white/80 leading-tight capitalize font-medium">
                     {user.role}
                   </p>
                 </div>
                 <ChevronDown
-                  className="w-3.5 h-3.5 text-white transition-transform duration-200"
+                  className="w-4 h-4 text-white/80 transition-transform duration-200"
                   style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
                 />
               </button>
@@ -375,25 +370,26 @@ export default function Header() {
                   className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden hd-scaleIn"
                   style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
                 >
-                  <div className="p-4" style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
-                    <div className="flex items-center gap-3">
+                  {/* Card Header dengan warna orange yang lebih soft/pudar */}
+                  <div className="p-5" style={{ background: 'linear-gradient(135deg, #fce8d6 0%, #fdd4b8 60%, #fbc9a8 100%)' }}>
+                    <div className="flex items-center gap-4">
                       <div
-                        className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
-                        style={{ background: 'rgba(255,255,255,0.22)', border: '2px solid rgba(255,255,255,0.4)' }}
+                        className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                        style={{ background: 'rgba(255,255,255,0.6)', border: '2px solid rgba(255,255,255,0.8)' }}
                       >
                         {profileImage ? (
                           <img src={profileImage} alt="Foto Profil" className="w-full h-full object-cover"
                             onError={() => setProfileImage(null)} />
                         ) : (
-                          <span className="text-white text-sm font-bold">{getInitials(user.nama_lengkap)}</span>
+                          <span className="text-orange-700 text-base font-bold">{getInitials(user.nama_lengkap)}</span>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-sm text-white truncate leading-tight">{user.nama_lengkap}</p>
-                        <p className="text-[11px] text-white/65 truncate mt-0.5">{user.email_sekolah}</p>
+                        <p className="font-bold text-base text-orange-900 truncate leading-tight">{user.nama_lengkap}</p>
+                        <p className="text-sm text-orange-700/80 truncate mt-1">{user.email_sekolah}</p>
                         <span
-                          className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wide"
-                          style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
+                          className="inline-block mt-2 px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wide"
+                          style={{ background: 'rgba(255,255,255,0.7)', color: '#c95b08' }}
                         >
                           {user.role}
                         </span>
