@@ -1,14 +1,17 @@
 'use client';
-
-import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock, AlertTriangle, BookOpen, Users, GraduationCap } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import {
+    Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
+    WifiOff, ShieldAlert, LogOut, Lock, Save, BookOpen,
+    Users, GraduationCap
+} from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ─── KONSTANTA API ──────────────────────────────────────────────────────────
+// ====== KONSTANTA API ======
 const API = 'http://localhost:5000/api/guru-bidang-studi';
 
-// ─── DESIGN TOKENS ──────────────────────────────────────────────────────────
+// ====== DESIGN TOKENS (SAMA DENGAN ATUR PENILAIAN) ======
 const THEME = {
     colors: {
         primary: '#c95b08',
@@ -21,6 +24,11 @@ const THEME = {
             secondary: '#5c5048',
             muted: '#a89a8c',
         },
+        status: {
+            aktif: { bg: '#dcfce7', text: '#166534', border: '#86efac', dot: '#22c55e' },
+            selesai: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d', dot: '#f59e0b' },
+            nonaktif: { bg: '#f3f0ed', text: '#766b62', border: '#e2d9d0', dot: '#a89a8c' },
+        },
     },
     gradients: {
         primary: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
@@ -30,13 +38,18 @@ const THEME = {
     shadows: {
         sm: '0 1px 3px rgba(124, 68, 9, 0.06)',
         md: '0 6px 20px rgba(124, 68, 9, 0.10)',
-        lg: '0 12px 32px rgba(124, 68, 9, 0.14)',
     },
 };
 
-// ─── TYPES ────────────────────────────────────────────────────────────────
-type ModalType = 'success' | 'error' | 'warning' | 'network';
-interface ModalConfig { type: ModalType; title: string; message: string; }
+// ====== TYPES ======
+type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
+
+interface ModalConfig {
+    type: ModalType;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+}
 
 interface MapelItem {
     mata_pelajaran_id: number;
@@ -67,7 +80,24 @@ interface SiswaNilai {
     nilai: Record<number, number | null>;
 }
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+// ====== HELPER: Parse Error ======
+const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
+    try {
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            if (res.status === 404) return { message: 'Endpoint tidak ditemukan.', code: 'NOT_FOUND' };
+            if (res.status === 500) return { message: 'Server error.', code: 'SERVER_ERROR' };
+            return { message: `Server error (${res.status}).`, code: 'INVALID_RESPONSE' };
+        }
+        const data = await res.json();
+        return { message: data.message || 'Terjadi kesalahan', code: data.code };
+    } catch (error) {
+        return { message: 'Gagal memproses response dari server' };
+    }
+};
+
+// ====== GLOBAL STYLES (SAMA DENGAN ATUR PENILAIAN) ======
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes fadeInUp {
@@ -78,19 +108,8 @@ const GlobalStyles = () => (
             from { opacity: 0; transform: scale(0.93) translateY(10px); }
             to { opacity: 1; transform: scale(1) translateY(0); }
         }
-        .animate-fade-in-up {
-            animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-        }
         .scale-in { animation: scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .fade-in { animation: fadeInUp 0.2s ease; }
-        .card-hover {
-            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
-        }
-        .card-hover:hover {
-            transform: translateY(-3px);
-            box-shadow: ${THEME.shadows.md};
-        }
         .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
         .scrollbar-thin::-webkit-scrollbar-thumb {
             background: #f0c9a0;
@@ -99,33 +118,49 @@ const GlobalStyles = () => (
     `}</style>
 );
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
+// ====== NOTIF MODAL (SAMA DENGAN ATUR PENILAIAN) ======
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
     warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
     network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
+    const isConfirm = modal.type === 'confirm';
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 fade-in">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 fade-in">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 scale-in">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                {!isConfirm && (
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                )}
                 <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring}`}>{s.icon}</div>
                 <div className="text-center">
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                {isConfirm ? (
+                    <div className="flex gap-3 w-full">
+                        <button onClick={onClose}
+                            className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
+                            style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}
+                        >Batal</button>
+                        <button onClick={() => { modal.onConfirm?.(); onClose(); }}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+                        >Ya</button>
+                    </div>
+                ) : (
+                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                )}
             </div>
         </div>
     );
 };
 
-// ─── PERIOD NOT ACTIVE MODAL ────────────────────────────────────────────────
+// ====== PERIOD NOT ACTIVE MODAL ======
 const PeriodNotActiveModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
     if (!isOpen) return null;
 
@@ -135,7 +170,7 @@ const PeriodNotActiveModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 scale-in">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0 ring-4 ring-orange-100">
-                        <AlertTriangle size={24} className="text-orange-500" />
+                        <AlertCircle size={24} className="text-orange-500" />
                     </div>
                     <h3 className="text-base font-bold text-gray-900">⏳ Periode Penilaian Belum Aktif</h3>
                 </div>
@@ -159,7 +194,7 @@ const PeriodNotActiveModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     );
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ====== MAIN COMPONENT ======
 export default function InputNilaiGBSClient() {
     const { showSessionExpired, handleLogout } = useSession();
 
@@ -215,7 +250,7 @@ export default function InputNilaiGBSClient() {
     const isReadOnly = isPeriodNotActive || isPeriodLocked;
     const readOnlyReason: 'not_open' | 'locked' | null = isPeriodLocked ? 'locked' : (isPeriodNotActive ? 'not_open' : null);
 
-    // ── FETCH DATA AWAL ─────────────────────────────────────────────────────────
+    // ====== FETCH DATA ======
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -284,7 +319,7 @@ export default function InputNilaiGBSClient() {
         fetchData();
     }, [showModal, hasShownPeriodModal]);
 
-    // ── FETCH KELAS BERDASARKAN MAPEL ───────────────────────────────────────────
+    // ====== FETCH KELAS ======
     useEffect(() => {
         if (selectedMapelId === null) {
             setKelasFiltered([]);
@@ -310,7 +345,7 @@ export default function InputNilaiGBSClient() {
                         nama_kelas: k.nama_kelas,
                     }));
                     setKelasFiltered(kelasData);
-                    
+
                     if (kelasData.length === 1) {
                         setSelectedKelasId(kelasData[0].kelas_id);
                     } else {
@@ -332,7 +367,7 @@ export default function InputNilaiGBSClient() {
         fetchKelasByMapel();
     }, [selectedMapelId]);
 
-    // ── FETCH NILAI SAAT MAPEL & KELAS DIPILIH ──────────────────────────────────
+    // ====== FETCH NILAI ======
     useEffect(() => {
         if (selectedMapelId === null || selectedKelasId === null) {
             setSiswaList([]);
@@ -433,7 +468,7 @@ export default function InputNilaiGBSClient() {
         fetchNilai();
     }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal, jenisPenilaianAktif, isReadOnly]);
 
-    // ── FILTER & PAGINATION ─────────────────────────────────────────────────────
+    // ====== FILTER & PAGINATION ======
     useEffect(() => {
         if (!searchQuery.trim()) {
             setFilteredSiswa(siswaList);
@@ -461,10 +496,10 @@ export default function InputNilaiGBSClient() {
             <button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                 className={`${btnBase} ${btnInactive} disabled:opacity-40 disabled:cursor-not-allowed`}>«</button>
         );
-        
+
         const range: number[] = [];
-        if (totalPages <= 5) { 
-            for (let i = 1; i <= totalPages; i++) range.push(i); 
+        if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) range.push(i);
         } else {
             range.push(1);
             if (currentPage > 3) range.push(-1);
@@ -472,10 +507,10 @@ export default function InputNilaiGBSClient() {
             if (currentPage < totalPages - 2) range.push(-2);
             range.push(totalPages);
         }
-        
+
         range.forEach((p) => {
-            if (p < 0) { 
-                pages.push(<span key={p} className="px-1 text-gray-400 text-sm">…</span>); 
+            if (p < 0) {
+                pages.push(<span key={p} className="px-1 text-gray-400 text-sm">…</span>);
             } else {
                 pages.push(
                     <button key={p} onClick={() => setCurrentPage(p)}
@@ -485,7 +520,7 @@ export default function InputNilaiGBSClient() {
                 );
             }
         });
-        
+
         pages.push(
             <button key="next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
                 className={`${btnBase} ${btnInactive} disabled:opacity-40 disabled:cursor-not-allowed`}>»</button>
@@ -493,7 +528,7 @@ export default function InputNilaiGBSClient() {
         return pages;
     };
 
-    // ── HANDLERS ────────────────────────────────────────────────────────────────
+    // ====== HANDLERS ======
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
@@ -646,6 +681,7 @@ export default function InputNilaiGBSClient() {
         );
     };
 
+    // ====== LOADING STATE ======
     if (loading) {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
@@ -663,7 +699,6 @@ export default function InputNilaiGBSClient() {
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 fade-in">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 scale-in">
@@ -672,17 +707,9 @@ export default function InputNilaiGBSClient() {
                         </div>
                         <div className="text-center">
                             <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
-                            <p className="text-sm text-gray-600 leading-relaxed">
-                                Anda belum ditugaskan mengajar mata pelajaran pilihan di semester ini.
-                                <br />
-                                Silakan hubungi Administrator untuk penugasan mata pelajaran.
-                            </p>
+                            <p className="text-sm text-gray-600">Anda belum ditugaskan mengajar mata pelajaran pilihan di semester ini.</p>
                         </div>
-                        <button
-                            onClick={handleLogout}
-                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
-                            style={{ background: THEME.gradients.primary, boxShadow: THEME.shadows.md }}
-                        >
+                        <button onClick={handleLogout} className="w-full py-3 rounded-xl text-sm font-bold text-white" style={{ background: THEME.gradients.primary }}>
                             <LogOut size={18} /> Logout
                         </button>
                     </div>
@@ -693,34 +720,27 @@ export default function InputNilaiGBSClient() {
 
     const canEditNilai = !isReadOnly;
 
+    // ====== RENDER ======
     return (
-        <div className="flex-1 min-h-screen p-6" style={{ background: THEME.colors.background }}>
+        <div className="flex-1 p-6 min-h-screen" style={{ background: THEME.colors.background }}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-            
-            <PeriodNotActiveModal 
-                isOpen={showPeriodNotActiveModal} 
-                onClose={() => setShowPeriodNotActiveModal(false)} 
+
+            <PeriodNotActiveModal
+                isOpen={showPeriodNotActiveModal}
+                onClose={() => setShowPeriodNotActiveModal(false)}
             />
 
-            {/* WELCOME HEADER */}
-            <div className="mb-6 animate-fade-in-up">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: THEME.colors.primary, letterSpacing: '0.08em' }}>
-                    <BookOpen className="w-3.5 h-3.5" />
-                    Input Nilai Siswa
-                </p>
-                <h1 className="text-3xl font-bold tracking-tight" style={{ color: THEME.colors.text.primary }}>
-                    Kelola Nilai Komponen & Rapor
-                </h1>
-                <p className="text-sm mt-1" style={{ color: THEME.colors.text.muted }}>
-                    Input dan edit nilai siswa per mata pelajaran pilihan
-                </p>
+            {/* ====== HEADER (TANPA ANIMASI) ====== */}
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Input Nilai Siswa</h1>
+                <p className="text-sm mt-1" style={{ color: THEME.colors.primary }}>Kelola nilai komponen & rapor siswa per mata pelajaran</p>
             </div>
 
-            {/* STATUS BANNERS */}
+            {/* ====== STATUS BANNERS ====== */}
             {isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
                     style={{
                         background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7',
                         border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}`
@@ -733,14 +753,14 @@ export default function InputNilaiGBSClient() {
                         <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
                             {readOnlyReason === 'locked'
                                 ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat nilai siswa, tetapi tidak dapat mengedit.'
-                                : 'Periode penilaian belum aktif. Anda dapat melihat nilai siswa, tetapi belum dapat menginput nilai. Silakan hubungi admin untuk membuka periode penilaian.'}
+                                : 'Periode penilaian belum aktif. Anda dapat melihat nilai siswa, tetapi belum dapat menginput nilai.'}
                         </p>
                     </div>
                 </div>
             )}
 
             {showBobotWarning && jenisPenilaianAktif === 'PAS' && !isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
                     style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
                     <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
                     <div className="flex-1">
@@ -748,9 +768,8 @@ export default function InputNilaiGBSClient() {
                             ⚠️ Bobot Penilaian Belum Diatur
                         </p>
                         <p className="text-xs text-yellow-800">
-                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur. 
-                            Nilai rapor akan dihitung dengan bobot default. 
-                            Untuk hasil yang akurat, silakan atur bobot terlebih dahulu.
+                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur.
+                            Nilai rapor akan dihitung dengan bobot default.
                         </p>
                         <div className="flex gap-2 mt-2">
                             <button
@@ -775,16 +794,15 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* MAIN CARD */}
-            <div className="bg-white rounded-2xl overflow-hidden animate-fade-in-up" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
-                {/* FILTER SECTION */}
+            {/* ====== MAIN CARD (TANPA ANIMASI) ====== */}
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
+                {/* Filter Section */}
                 <div className="px-6 py-5 space-y-4" style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: '#fffaf6' }}>
-                    
+
                     {/* Dropdown Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
-                                <BookOpen size={16} style={{ color: THEME.colors.secondary }} />
+                            <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
                                 Mata Pelajaran
                             </label>
                             <select
@@ -795,7 +813,7 @@ export default function InputNilaiGBSClient() {
                                     setSelectedKelasId(null);
                                     setSearchQuery('');
                                 }}
-                                className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
+                                className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
                             >
                                 <option value="">-- Pilih Mata Pelajaran --</option>
                                 {mapelList.map(mapel => (
@@ -807,9 +825,8 @@ export default function InputNilaiGBSClient() {
                         </div>
 
                         {selectedMapelId && (
-                            <div className="animate-[scaleIn_0.3s_ease]">
-                                <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
-                                    <Users size={16} style={{ color: THEME.colors.secondary }} />
+                            <div>
+                                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
                                     Kelas
                                 </label>
                                 <select
@@ -819,12 +836,12 @@ export default function InputNilaiGBSClient() {
                                         setSelectedKelasId(val ? Number(val) : null);
                                         setSearchQuery('');
                                     }}
-                                    className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
+                                    className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
                                     disabled={kelasLoading || kelasFiltered.length === 0}
                                 >
                                     <option value="">
-                                        {kelasLoading 
-                                            ? '⏳ Memuat kelas...' 
+                                        {kelasLoading
+                                            ? '⏳ Memuat kelas...'
                                             : kelasFiltered.length === 0
                                                 ? '❌ Tidak ada kelas'
                                                 : '-- Pilih Kelas --'}
@@ -835,19 +852,13 @@ export default function InputNilaiGBSClient() {
                                         </option>
                                     ))}
                                 </select>
-                                
-                                {kelasFiltered.length > 0 && (
-                                    <p className="text-xs mt-1.5" style={{ color: THEME.colors.primary }}>
-                                        Tersedia {kelasFiltered.length} kelas untuk mata pelajaran ini
-                                    </p>
-                                )}
                             </div>
                         )}
                     </div>
 
                     {/* Search & Controls */}
                     {selectedMapelId && selectedKelasId && (
-                        <div className="pt-4 border-t animate-[fadeInUp_0.3s_ease]" style={{ borderColor: THEME.colors.border }}>
+                        <div className="pt-4 border-t" style={{ borderColor: THEME.colors.border }}>
                             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
                                 {/* Search Input */}
                                 <div className="relative w-full lg:w-96">
@@ -859,7 +870,7 @@ export default function InputNilaiGBSClient() {
                                         placeholder="Cari nama, NIS, atau NISN..."
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full border rounded-xl pl-10 pr-10 py-2.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-white border-orange-200 placeholder:text-gray-400"
+                                        className="w-full border rounded-xl pl-10 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200 placeholder:text-gray-400"
                                     />
                                     {searchQuery && (
                                         <button
@@ -875,24 +886,18 @@ export default function InputNilaiGBSClient() {
 
                                 {/* Controls */}
                                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap"
-                                        style={{ background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }}>
-                                        <CheckCircle2 size={14} /> {filteredSiswa.length} Siswa
-                                    </span>
-
-                                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-orange-200">
-                                        <span className="text-sm font-medium whitespace-nowrap" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                        <select
-                                            value={itemsPerPage}
-                                            onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                            className="text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-400 bg-transparent"
-                                            style={{ color: THEME.colors.primary, minWidth: '50px' }}
-                                        >
+                                    {/* Items per page - Unified design */}
+                                    <div className="flex items-center rounded-xl px-4 py-2" style={{ background: '#fff7ed', border: '1.5px solid #fde0c8' }}>
+                                        <span className="text-sm font-semibold mr-2" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                                        <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                                            className="text-sm font-bold outline-none cursor-pointer"
+                                            style={{ background: 'transparent', color: '#c95b08', minWidth: '40px', textAlign: 'center' }}>
                                             <option value={10}>10</option>
                                             <option value={25}>25</option>
                                             <option value={50}>50</option>
+                                            <option value={100}>100</option>
                                         </select>
-                                        <span className="text-sm font-medium whitespace-nowrap" style={{ color: '#7a3a0a' }}>data</span>
+                                        <span className="text-sm font-semibold ml-2" style={{ color: '#7a3a0a' }}>data</span>
                                     </div>
                                 </div>
                             </div>
@@ -904,7 +909,7 @@ export default function InputNilaiGBSClient() {
                     )}
                 </div>
 
-                {/* TABLE OR EMPTY STATE */}
+                {/* Table or Empty State */}
                 {!selectedMapelId || !selectedKelasId ? (
                     <div className="m-6 text-center py-16 rounded-2xl" style={{ background: '#fff7f0', border: `2px dashed ${THEME.colors.border}` }}>
                         <GraduationCap size={64} className="mx-auto mb-4" style={{ color: THEME.colors.secondary }} />
@@ -921,8 +926,8 @@ export default function InputNilaiGBSClient() {
                     </div>
                 ) : (
                     <>
-                        {/* Desktop Table */}
-                        <div className="hidden lg:block overflow-x-auto scrollbar-thin">
+                        {/* TABLE (TIDAK DIUBAH) */}
+                        <div className="overflow-x-auto scrollbar-thin">
                             <table className="w-full text-sm border-collapse">
                                 <thead>
                                     <tr style={{ background: THEME.gradients.primary }}>
@@ -1013,63 +1018,6 @@ export default function InputNilaiGBSClient() {
                             </table>
                         </div>
 
-                        {/* Mobile Card View */}
-                        <div className="lg:hidden p-4 space-y-3">
-                            {dataLoading ? (
-                                <div className="py-12 text-center">
-                                    <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-2" />
-                                    <p className="text-sm text-gray-400">Memuat data...</p>
-                                </div>
-                            ) : currentSiswa.length === 0 ? (
-                                <div className="py-12 text-center text-gray-400 text-sm">
-                                    {searchQuery ? 'Siswa tidak ditemukan.' : 'Belum ada data siswa.'}
-                                </div>
-                            ) : (
-                                currentSiswa.map((siswa, idx) => (
-                                    <div key={siswa.id} className="p-4 rounded-xl border" style={{ borderColor: THEME.colors.border, background: idx % 2 === 0 ? '#fff' : '#fffaf6' }}>
-                                        <div className="flex items-start justify-between mb-3">
-                                            <div>
-                                                <p className="font-bold text-sm" style={{ color: THEME.colors.text.primary }}>{siswa.nama}</p>
-                                                <p className="text-xs" style={{ color: THEME.colors.text.muted }}>NIS: {siswa.nis} • NISN: {siswa.nisn}</p>
-                                            </div>
-                                            <span className="text-xs font-bold px-2 py-1 rounded" style={{ background: '#fff0e5', color: THEME.colors.primary }}>#{startIndex + idx + 1}</span>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-2 gap-2 mb-3">
-                                            <div className="p-2 rounded-lg" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
-                                                <p className="text-[10px]" style={{ color: THEME.colors.text.muted }}>Rapor PTS</p>
-                                                <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>{siswa.nilai_rapor_pts || '-'}</p>
-                                            </div>
-                                            <div className="p-2 rounded-lg" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
-                                                <p className="text-[10px]" style={{ color: THEME.colors.text.muted }}>Rapor PAS</p>
-                                                <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>{siswa.nilai_rapor_pas || '-'}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <button onClick={() => handleDetail(siswa)}
-                                                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all"
-                                                style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}>
-                                                <Eye size={13} /> Detail
-                                            </button>
-                                            <button
-                                                onClick={() => handleEdit(siswa)}
-                                                disabled={!canEditNilai}
-                                                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                style={{
-                                                    background: canEditNilai ? '#fff0e5' : '#e5e7eb',
-                                                    border: canEditNilai ? `1px solid ${THEME.colors.tertiary}` : '1px solid #d1d5db',
-                                                    color: canEditNilai ? '#b35a08' : '#6b7280'
-                                                }}
-                                            >
-                                                {canEditNilai ? <><Pencil size={13} /> Edit</> : <><Lock size={13} /> Terkunci</>}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
                         {/* Pagination */}
                         {filteredSiswa.length > 0 && (
                             <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: `1px solid ${THEME.colors.border}` }}>
@@ -1081,7 +1029,7 @@ export default function InputNilaiGBSClient() {
                 )}
             </div>
 
-            {/* DETAIL MODAL */}
+            {/* ====== DETAIL MODAL ====== */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
@@ -1275,7 +1223,7 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* EDIT MODAL */}
+            {/* ====== EDIT MODAL ====== */}
             {showEdit && editingSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
@@ -1458,7 +1406,7 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* CONFIRM MODAL */}
+            {/* ====== CONFIRM MODAL ====== */}
             {showConfirmModal && editingSiswa && (
                 <div
                     className="fixed inset-0 z-[110] flex items-center justify-center p-4 fade-in"
