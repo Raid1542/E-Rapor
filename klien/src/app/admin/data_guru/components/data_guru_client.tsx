@@ -700,78 +700,7 @@ export default function DataGuruClient() {
                         <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                     </div>
 
-<<<<<<< HEAD
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
-          <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
-            Halaman {currentPage} dari {totalPages}
-          </span>
-          <div className="flex items-center gap-1">{renderPagination()}</div>
-        </div>
-      </div>
 
-      {/* ── Modal Detail ─────────────────────────────────────────────────── */}
-      {showDetail && selectedGuru && (
-        <div className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
-          onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-            style={CARD_STYLE}>
-
-            <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-              <h2 className="text-base font-bold text-white">Detail Guru</h2>
-              <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                <X size={16} className="text-white" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="flex flex-col items-center mb-6">
-                <div className="w-24 h-24 rounded-full overflow-hidden mb-3 flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)' }}>
-                  {selectedGuru.profileImage ? (
-                    <img src={`http://localhost:5000${selectedGuru.profileImage.startsWith('/') ? selectedGuru.profileImage : '/' + selectedGuru.profileImage}`}
-                      alt="Foto Profil" className="w-full h-full object-cover"
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <span className="text-2xl font-bold" style={{ color: '#c95b08' }}>
-                      {selectedGuru.nama.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('') || '??'}
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-lg font-bold text-gray-800">{selectedGuru.nama}</h3>
-              </div>
-
-              <div className="space-y-2.5">
-                {[
-                  {
-                    label: 'Status', value: (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                        style={selectedGuru.statusGuru === 'aktif'
-                          ? { background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }
-                          : { background: '#f5f5f5', color: '#888', border: '1px solid #ddd' }}>
-                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedGuru.statusGuru === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {selectedGuru.statusGuru?.toUpperCase() || 'AKTIF'}
-                      </span>
-                    )
-                  },
-                  { label: 'NIY', value: selectedGuru.niy || '-' },
-                  { label: 'NUPTK', value: selectedGuru.nuptk || '-' },
-                  { label: 'Jenis Kelamin', value: formatGender(selectedGuru.jenisKelamin) },
-                  { label: 'Tempat Lahir', value: selectedGuru.tempat_lahir || '-' },
-                  { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedGuru.tanggal_lahir) },
-                  { label: 'Telepon', value: selectedGuru.no_telepon || '-' },
-                  { label: 'Alamat', value: selectedGuru.alamat || '-' },
-                  { label: 'Email', value: selectedGuru.email || '-' },
-                  { label: 'Hak Akses', value: selectedGuru.roles?.length ? selectedGuru.roles.map(r => r.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')).join(', ') : '-' },
-                ].map((item, i) => (
-                  <div key={i} className="grid grid-cols-4 gap-2 pb-2.5 items-center" style={{ borderBottom: '1px solid #fde0c8' }}>
-                    <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                    <span className="text-xs text-gray-700 col-span-1">:</span>
-                    <div className="col-span-2 flex items-center">
-                      <span className="text-xs text-gray-700 break-words">{item.value}</span>
-=======
                     {/* Search */}
                     <div className="relative min-w-[200px] sm:min-w-[220px]">
                         <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -786,7 +715,6 @@ export default function DataGuruClient() {
                                 <X className="w-4 h-4" />
                             </button>
                         )}
->>>>>>> klien
                     </div>
 
                     {/* Filter */}
