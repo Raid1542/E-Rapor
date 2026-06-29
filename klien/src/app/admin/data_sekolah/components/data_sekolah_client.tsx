@@ -18,7 +18,7 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG = { background: '#fdf6f0' };
+const PAGE_BG = { background: '#ffffff' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 4px 24px rgba(200,80,10,0.09)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 

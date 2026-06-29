@@ -2,13 +2,18 @@
  * Nama File: ArsipRaporPage.tsx
  * Fungsi: Halaman arsip rapor untuk admin - menggunakan template Data Mata Pelajaran
  *         dengan progressive disclosure dan UI yang konsisten
+ * Update:
+ *   - Dirapikan: Card 1 (filter TA+Semester+Jenis) compact satu baris
+ *   - Panel Status dipisah jadi Card 2 tersendiri (lebih menonjol)
+ *   - Card 3: toolbar Kelas + Search
+ *   - Card 4: tabel siswa + info unduhan
  */
 
 'use client';
 import { useState, useEffect, useCallback, ReactNode } from 'react';
 import {
     Download, Search, X, CheckCircle2, AlertCircle, WifiOff,
-    ShieldAlert, Lock, Play, Pause, FileText, Users, Calendar
+    ShieldAlert, Lock, Play, Pause, FileText, Calendar, CalendarRange
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -93,10 +98,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                 </div>
                 {isConfirm ? (
                     <div className="flex gap-3 w-full">
-                        <button onClick={onClose}
-                            className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
-                            style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                        >Batal</button>
+                        <BtnBatal onClick={onClose} />
                         <button onClick={() => { modal.onConfirm?.(); onClose(); }}
                             className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
                         >Ya, Lanjutkan</button>
@@ -111,12 +113,12 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
-const selectCls = "w-full border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200";
+const selectCls = "border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]";
 
 const btnPrimary = {
     base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
@@ -125,13 +127,16 @@ const btnPrimary = {
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-    >{children}</button>
+const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
+    <button
+        onClick={onClick}
+        className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+        style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+    >
+        {children}
+    </button>
 );
 
 // ─── HELPER: STATUS STYLE ─────────────────────────────────────────────────────
@@ -578,18 +583,16 @@ export default function ArsipRaporPage() {
                 </p>
             </div>
 
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Card Header */}
-                <div className="px-6 py-4" style={HEADER_GRAD}>
-                    <h2 className="text-base font-bold text-white flex items-center gap-2">
-                        <Calendar size={18} />
-                        Filter Arsip Rapor
-                    </h2>
-                </div>
-
-                {/* ═══ DROPDOWN TAHUN AJARAN ═══ */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center gap-3">
+            {/* ====================================================================
+                CARD 1: Filter Tahun Ajaran + Semester + Jenis Penilaian — compact
+                satu baris, sama persis pola Card 1 di Data Mata Pelajaran/Pembelajaran.
+            ==================================================================== */}
+            <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-5" style={CARD_STYLE}>
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+                        <CalendarRange size={16} style={{ color: '#c95b08' }} />
+                    </div>
+                    <div className="flex items-center gap-3">
                         <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
                             Tahun Ajaran
                         </label>
@@ -603,7 +606,7 @@ export default function ArsipRaporPage() {
                                 }
                                 setSelectedTA(Number(value));
                             }}
-                            className={`${selectCls} w-full sm:w-auto sm:min-w-[200px] max-w-xs`}
+                            className={selectCls}
                             disabled={loadingTA}
                         >
                             <option value="">-- Pilih Tahun Ajaran --</option>
@@ -616,358 +619,362 @@ export default function ArsipRaporPage() {
                     </div>
                 </div>
 
-                {selectedTA === null ? (
+                {selectedTA !== null && (
+                    <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                            Semester
+                        </label>
+                        <select
+                            value={selectedSemesterId ?? ''}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || value === 'no-data') {
+                                    setSelectedSemesterId(null);
+                                    setSelectedSemester(null);
+                                    return;
+                                }
+                                const id = Number(value);
+                                const sem = semesterOptions.find(s => s.id === id);
+                                setSelectedSemesterId(id);
+                                setSelectedSemester(sem?.semester || null);
+                            }}
+                            className={selectCls}
+                        >
+                            <option value="">-- Pilih Semester --</option>
+                            {semesterOptions.map(sem => (
+                                <option key={sem.id} value={sem.id}>
+                                    {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
+                                </option>
+                            ))}
+                        </select>
+
+                        {selectedSemesterId && currentSemester && (
+                            currentSemester.is_aktif ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                    style={{ background: '#d4f0dd', color: '#1a7a3a', border: '1px solid #86efac' }}>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                                    Aktif
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                                    style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
+                                    <Lock size={12} />
+                                    Nonaktif
+                                </span>
+                            )
+                        )}
+                    </div>
+                )}
+
+                {selectedTA !== null && selectedSemesterId !== null && (
+                    <div className="flex items-center gap-3">
+                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                            Jenis Penilaian
+                        </label>
+                        <select
+                            value={selectedJenis ?? ''}
+                            onChange={(e) => {
+                                const val = e.target.value as 'PTS' | 'PAS' | '';
+                                setSelectedJenis(val || null);
+                            }}
+                            className={selectCls}
+                        >
+                            <option value="">-- Pilih Jenis --</option>
+                            <option value="PTS">PTS (Penilaian Tengah Semester)</option>
+                            <option value="PAS">PAS (Penilaian Akhir Semester)</option>
+                        </select>
+                    </div>
+                )}
+            </div>
+
+            {selectedTA === null ? (
+                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
                     <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
                         <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
                     </div>
-                ) : (
-                    <>
-                        {/* ═══ DROPDOWN SEMESTER ═══ */}
-                        <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-                                    Semester
-                                </label>
+                </div>
+            ) : selectedSemesterId === null ? (
+                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
+                    </div>
+                </div>
+            ) : selectedJenis === null ? (
+                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Jenis Penilaian Terlebih Dahulu</p>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {/* ====================================================================
+                        CARD 2: Panel Status — berdiri sendiri, lebih menonjol.
+                        Badge status besar + tombol aksi + info box keterangan.
+                    ==================================================================== */}
+                    <div className="bg-white rounded-2xl overflow-hidden mb-5" style={CARD_STYLE}>
+                        <div className="px-6 py-4 flex items-center justify-between" style={HEADER_GRAD}>
+                            <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                <Calendar size={18} />
+                                Status Penilaian {selectedJenis}
+                            </h2>
+                            <span
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+                                style={{
+                                    background: statusStyle.bg,
+                                    color: statusStyle.color,
+                                    border: `1px solid ${statusStyle.border}`
+                                }}
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: statusStyle.dot }} />
+                                {statusStyle.icon}
+                                {statusStyle.text}
+                            </span>
+                        </div>
+
+                        <div className="px-6 py-5">
+                            <div className="flex flex-wrap gap-2">
+                                {statusSaatIni === 'nonaktif' && (
+                                    <button
+                                        onClick={() => {
+                                            showModal({
+                                                type: 'confirm',
+                                                title: `Aktifkan ${selectedJenis}?`,
+                                                message: `Guru akan bisa mulai menginput nilai ${selectedJenis} untuk semua kelas.\n\nLanjutkan?`,
+                                                onConfirm: () => handleUbahStatus('aktif')
+                                            });
+                                        }}
+                                        disabled={loadingAction}
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                        style={{
+                                            background: 'linear-gradient(135deg,#16a34a,#22c55e)',
+                                            boxShadow: '0 3px 10px rgba(22,163,74,0.25)'
+                                        }}
+                                    >
+                                        <Play size={15} /> Aktifkan {selectedJenis}
+                                    </button>
+                                )}
+
+                                {statusSaatIni === 'aktif' && (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                showModal({
+                                                    type: 'confirm',
+                                                    title: `Nonaktifkan ${selectedJenis}?`,
+                                                    message: `Guru tidak akan bisa mengedit nilai ${selectedJenis} untuk sementara waktu.\n\nLanjutkan?`,
+                                                    onConfirm: () => handleUbahStatus('nonaktif')
+                                                });
+                                            }}
+                                            disabled={loadingAction}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                            style={{
+                                                background: 'linear-gradient(135deg,#d97706,#f59e0b)',
+                                                boxShadow: '0 3px 10px rgba(217,119,6,0.25)'
+                                            }}
+                                        >
+                                            <Pause size={15} /> Nonaktifkan
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                showModal({
+                                                    type: 'confirm',
+                                                    title: `⚠️ Arsipkan & Kunci ${selectedJenis}?`,
+                                                    message: `PERHATIAN!\n\nSetelah diarsipkan:\n• Data nilai ${selectedJenis} akan terkunci PERMANEN\n• Guru TIDAK BISA mengedit nilai lagi\n• Rapor bisa diunduh\n\nTindakan ini tidak dapat dibatalkan!`,
+                                                    onConfirm: handleArsipkan
+                                                });
+                                            }}
+                                            disabled={loadingAction}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                                            style={{
+                                                background: 'linear-gradient(135deg,#dc2626,#ef4444)',
+                                                boxShadow: '0 3px 10px rgba(220,38,38,0.25)'
+                                            }}
+                                        >
+                                            <Lock size={15} /> Arsipkan & Kunci
+                                        </button>
+                                    </>
+                                )}
+
+                                {statusSaatIni === 'selesai' && (
+                                    <div
+                                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                                        style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}
+                                    >
+                                        <Lock size={15} /> Data Terkunci Permanen
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-4 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                                    <span className="font-semibold">ℹ️ Info: </span>
+                                    {statusSaatIni === 'nonaktif' && `Penilaian ${selectedJenis} belum dibuka. Guru tidak bisa input nilai.`}
+                                    {statusSaatIni === 'aktif' && `Penilaian ${selectedJenis} sedang aktif. Guru bisa input/edit nilai.`}
+                                    {statusSaatIni === 'selesai' && `Penilaian ${selectedJenis} sudah ditutup dan dikunci. Data tidak bisa diubah.`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ====================================================================
+                        CARD 3: Toolbar — dropdown Kelas + Search siswa.
+                    ==================================================================== */}
+                    <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
+                        <div className="flex items-center gap-3">
+                            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+                                Kelas
+                            </label>
+                            {loadingKelas ? (
+                                <div className="text-sm text-gray-400">Memuat kelas...</div>
+                            ) : (
                                 <select
-                                    value={selectedSemesterId ?? ''}
+                                    value={selectedKelas ?? ''}
                                     onChange={(e) => {
-                                        const value = e.target.value;
-                                        if (value === '' || value === 'no-data') {
-                                            setSelectedSemesterId(null);
-                                            setSelectedSemester(null);
-                                            return;
-                                        }
-                                        const id = Number(value);
-                                        const sem = semesterOptions.find(s => s.id === id);
-                                        setSelectedSemesterId(id);
-                                        setSelectedSemester(sem?.semester || null);
+                                        const val = e.target.value;
+                                        setSelectedKelas(val ? Number(val) : null);
                                     }}
-                                    className={`${selectCls} w-full sm:w-auto sm:min-w-[180px] max-w-xs`}
+                                    className={selectCls}
                                 >
-                                    <option value="">-- Pilih Semester --</option>
-                                    {semesterOptions.map(sem => (
-                                        <option key={sem.id} value={sem.id}>
-                                            {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
+                                    <option value="">-- Pilih Kelas --</option>
+                                    {kelasList.map((k, index) => (
+                                        <option key={`kelas-${k.id_kelas}-${index}`} value={k.id_kelas}>
+                                            {k.nama_kelas}
                                         </option>
                                     ))}
                                 </select>
-
-                                {selectedSemesterId && currentSemester && (
-                                    currentSemester.is_aktif ? (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                                            style={{ background: '#d4f0dd', color: '#1a7a3a', border: '1px solid #86efac' }}>
-                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                                            Aktif
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                                            style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
-                                            <Lock size={12} />
-                                            Nonaktif
-                                        </span>
-                                    )
-                                )}
-                            </div>
+                            )}
                         </div>
 
-                        {selectedSemesterId === null ? (
-                            <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
-                                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
+                        {selectedKelas !== null && (
+                            <div className="relative min-w-[200px] sm:min-w-[220px]">
+                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Cari siswa..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute inset-y-0 right-2 flex items-center"
+                                        style={{ color: '#c95b08' }}
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
-                        ) : (
-                            <>
-                                {/* ═══ DROPDOWN JENIS PENILAIAN ═══ */}
-                                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-                                            Jenis Penilaian
-                                        </label>
-                                        <select
-                                            value={selectedJenis ?? ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value as 'PTS' | 'PAS' | '';
-                                                setSelectedJenis(val || null);
-                                            }}
-                                            className={`${selectCls} w-full sm:w-auto sm:min-w-[180px] max-w-xs`}
-                                        >
-                                            <option value="">-- Pilih Jenis --</option>
-                                            <option value="PTS">PTS (Penilaian Tengah Semester)</option>
-                                            <option value="PAS">PAS (Penilaian Akhir Semester)</option>
-                                        </select>
-                                    </div>
+                        )}
+                    </div>
+
+                    {selectedKelas === null ? (
+                        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                            <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Kelas Terlebih Dahulu</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* ====================================================================
+                                CARD 4: Tabel siswa + info unduhan.
+                            ==================================================================== */}
+                            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                                <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                    <p className="text-xs" style={{ color: '#c95b08' }}>
+                                        Menampilkan {filteredSiswa.length === 0 ? 0 : 1}–{filteredSiswa.length} dari {filteredSiswa.length} data
+                                    </p>
                                 </div>
 
-                                {selectedJenis === null ? (
-                                    <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
-                                        <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Jenis Penilaian Terlebih Dahulu</p>
+                                {loadingSiswa ? (
+                                    <div className="py-12 text-center">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                                            <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data siswa...</span>
+                                        </div>
                                     </div>
                                 ) : (
                                     <>
-                                        {/* ═══ PANEL STATUS ═══ */}
-                                        <div className="px-5 py-5" style={{ borderBottom: '1px solid #fde0c8' }}>
-                                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                                    <span className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-                                                        Status {selectedJenis}:
-                                                    </span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-                                                            style={{
-                                                                background: statusStyle.bg,
-                                                                color: statusStyle.color,
-                                                                border: `1px solid ${statusStyle.border}`
-                                                            }}
-                                                        >
-                                                            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: statusStyle.dot }} />
-                                                            {statusStyle.icon}
-                                                            {statusStyle.text}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2">
-                                                    {statusSaatIni === 'nonaktif' && (
-                                                        <button
-                                                            onClick={() => {
-                                                                showModal({
-                                                                    type: 'confirm',
-                                                                    title: `Aktifkan ${selectedJenis}?`,
-                                                                    message: `Guru akan bisa mulai menginput nilai ${selectedJenis} untuk semua kelas.\n\nLanjutkan?`,
-                                                                    onConfirm: () => handleUbahStatus('aktif')
-                                                                });
-                                                            }}
-                                                            disabled={loadingAction}
-                                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                                                            style={{
-                                                                background: 'linear-gradient(135deg,#16a34a,#22c55e)',
-                                                                boxShadow: '0 3px 10px rgba(22,163,74,0.25)'
-                                                            }}
-                                                        >
-                                                            <Play size={15} /> Aktifkan {selectedJenis}
-                                                        </button>
-                                                    )}
-
-                                                    {statusSaatIni === 'aktif' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => {
-                                                                    showModal({
-                                                                        type: 'confirm',
-                                                                        title: `Nonaktifkan ${selectedJenis}?`,
-                                                                        message: `Guru tidak akan bisa mengedit nilai ${selectedJenis} untuk sementara waktu.\n\nLanjutkan?`,
-                                                                        onConfirm: () => handleUbahStatus('nonaktif')
-                                                                    });
-                                                                }}
-                                                                disabled={loadingAction}
-                                                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                                                                style={{
-                                                                    background: 'linear-gradient(135deg,#d97706,#f59e0b)',
-                                                                    boxShadow: '0 3px 10px rgba(217,119,6,0.25)'
-                                                                }}
-                                                            >
-                                                                <Pause size={15} /> Nonaktifkan
-                                                            </button>
-
-                                                            <button
-                                                                onClick={() => {
-                                                                    showModal({
-                                                                        type: 'confirm',
-                                                                        title: `⚠️ Arsipkan & Kunci ${selectedJenis}?`,
-                                                                        message: `PERHATIAN!\n\nSetelah diarsipkan:\n• Data nilai ${selectedJenis} akan terkunci PERMANEN\n• Guru TIDAK BISA mengedit nilai lagi\n• Rapor bisa diunduh\n\nTindakan ini tidak dapat dibatalkan!`,
-                                                                        onConfirm: handleArsipkan
-                                                                    });
-                                                                }}
-                                                                disabled={loadingAction}
-                                                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
-                                                                style={{
-                                                                    background: 'linear-gradient(135deg,#dc2626,#ef4444)',
-                                                                    boxShadow: '0 3px 10px rgba(220,38,38,0.25)'
-                                                                }}
-                                                            >
-                                                                <Lock size={15} /> Arsipkan & Kunci
-                                                            </button>
-                                                        </>
-                                                    )}
-
-                                                    {statusSaatIni === 'selesai' && (
-                                                        <div
-                                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
-                                                            style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}
-                                                        >
-                                                            <Lock size={15} /> Data Terkunci Permanen
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-4 p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
-                                                    <span className="font-semibold">ℹ️ Info: </span>
-                                                    {statusSaatIni === 'nonaktif' && `Penilaian ${selectedJenis} belum dibuka. Guru tidak bisa input nilai.`}
-                                                    {statusSaatIni === 'aktif' && `Penilaian ${selectedJenis} sedang aktif. Guru bisa input/edit nilai.`}
-                                                    {statusSaatIni === 'selesai' && `Penilaian ${selectedJenis} sudah ditutup dan dikunci. Data tidak bisa diubah.`}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* ═══ DROPDOWN KELAS ═══ */}
-                                        <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                                            <div className="flex flex-wrap items-center gap-3">
-                                                <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
-                                                    Kelas
-                                                </label>
-                                                {loadingKelas ? (
-                                                    <div className="text-sm text-gray-400">Memuat kelas...</div>
-                                                ) : (
-                                                    <select
-                                                        value={selectedKelas ?? ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setSelectedKelas(val ? Number(val) : null);
-                                                        }}
-                                                        className={`${selectCls} w-full sm:w-auto sm:min-w-[180px] max-w-xs`}
-                                                    >
-                                                        <option value="">-- Pilih Kelas --</option>
-                                                        {kelasList.map((k, index) => (
-                                                            <option key={`kelas-${k.id_kelas}-${index}`} value={k.id_kelas}>
-                                                                {k.nama_kelas}
-                                                            </option>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[640px] text-sm border-collapse">
+                                                <thead>
+                                                    <tr style={TH_GRAD}>
+                                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Aksi'].map(h => (
+                                                            <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
                                                         ))}
-                                                    </select>
-                                                )}
-                                            </div>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredSiswa.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
+                                                                {searchQuery ? 'Tidak ada siswa yang cocok dengan pencarian' : 'Tidak ada data siswa'}
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredSiswa.map((siswa, index) => (
+                                                            <tr
+                                                                key={siswa.id_siswa}
+                                                                className="transition-colors"
+                                                                style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
+                                                            >
+                                                                <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                                                                <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
+                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nis}</td>
+                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nisn || '—'}</td>
+                                                                <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                                    <button
+                                                                        onClick={() => handleDownloadRapor(siswa.id_siswa, siswa.nama, siswa.nisn || '')}
+                                                                        disabled={downloadingId === siswa.id_siswa}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                                                                        style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
+                                                                    >
+                                                                        {downloadingId === siswa.id_siswa ? (
+                                                                            <>
+                                                                                <div className="w-3 h-3 rounded-full border-2 border-green-300 border-t-green-600 animate-spin" />
+                                                                                Mengunduh...
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Download size={13} /> Unduh Rapor
+                                                                            </>
+                                                                        )}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
                                         </div>
 
-                                        {selectedKelas === null ? (
-                                            <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
-                                                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Kelas Terlebih Dahulu</p>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                {/* ═══ TOOLBAR - SEARCH ═══ */}
-                                                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                                        <div>
-                                                            <p className="text-xs" style={{ color: '#c95b08' }}>
-                                                                Menampilkan {filteredSiswa.length === 0 ? 0 : 1}–{filteredSiswa.length} dari {filteredSiswa.length} data
-                                                            </p>
-                                                        </div>
-                                                        <div className="relative w-full sm:w-auto sm:min-w-[200px] max-w-xs">
-                                                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                                                <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Cari siswa..."
-                                                                value={searchQuery}
-                                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                                                className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                                                            />
-                                                            {searchQuery && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setSearchQuery('')}
-                                                                    className="absolute inset-y-0 right-2 flex items-center"
-                                                                    style={{ color: '#c95b08' }}
-                                                                >
-                                                                    <X className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                        {/* Info Box */}
+                                        <div className="px-5 py-4" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+                                            <div className="flex items-start gap-2">
+                                                <FileText size={15} className="mt-0.5 shrink-0" style={{ color: '#c95b08' }} />
+                                                <div>
+                                                    <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Informasi Unduhan</p>
+                                                    <ul className="text-xs space-y-0.5" style={{ color: '#c95b08' }}>
+                                                        <li>• Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
+                                                        <li>• Buka dengan Microsoft Word atau LibreOffice untuk tampilan terbaik</li>
+                                                        <li>• PAS Semester Genap mencantumkan status kenaikan kelas</li>
+                                                    </ul>
                                                 </div>
-
-                                                {/* ═══ TABLE SISWA ═══ */}
-                                                {loadingSiswa ? (
-                                                    <div className="py-12 text-center">
-                                                        <div className="flex flex-col items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                                            <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data siswa...</span>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <div className="overflow-x-auto">
-                                                            <table className="w-full min-w-[640px] text-sm border-collapse">
-                                                                <thead>
-                                                                    <tr style={TH_GRAD}>
-                                                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', 'Aksi'].map(h => (
-                                                                            <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
-                                                                        ))}
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {filteredSiswa.length === 0 ? (
-                                                                        <tr>
-                                                                            <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                                                                                {searchQuery ? 'Tidak ada siswa yang cocok dengan pencarian' : 'Tidak ada data siswa'}
-                                                                            </td>
-                                                                        </tr>
-                                                                    ) : (
-                                                                        filteredSiswa.map((siswa, index) => (
-                                                                            <tr
-                                                                                key={siswa.id_siswa}
-                                                                                className="transition-colors"
-                                                                                style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                                                                onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
-                                                                            >
-                                                                                <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
-                                                                                <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
-                                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nis}</td>
-                                                                                <td className="px-5 py-3.5 text-center text-gray-600 font-mono">{siswa.nisn || '—'}</td>
-                                                                                <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                                                                                    <button
-                                                                                        onClick={() => handleDownloadRapor(siswa.id_siswa, siswa.nama, siswa.nisn || '')}
-                                                                                        disabled={downloadingId === siswa.id_siswa}
-                                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                                                                                        style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
-                                                                                    >
-                                                                                        {downloadingId === siswa.id_siswa ? (
-                                                                                            <>
-                                                                                                <div className="w-3 h-3 rounded-full border-2 border-green-300 border-t-green-600 animate-spin" />
-                                                                                                Mengunduh...
-                                                                                            </>
-                                                                                        ) : (
-                                                                                            <>
-                                                                                                <Download size={13} /> Unduh Rapor
-                                                                                            </>
-                                                                                        )}
-                                                                                    </button>
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))
-                                                                    )}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-
-                                                        {/* Info Box */}
-                                                        <div className="px-5 py-4" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
-                                                            <div className="flex items-start gap-2">
-                                                                <FileText size={15} className="mt-0.5 shrink-0" style={{ color: '#c95b08' }} />
-                                                                <div>
-                                                                    <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Informasi Unduhan</p>
-                                                                    <ul className="text-xs space-y-0.5" style={{ color: '#c95b08' }}>
-                                                                        <li>• Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
-                                                                        <li>• Buka dengan Microsoft Word atau LibreOffice untuk tampilan terbaik</li>
-                                                                        <li>• PAS Semester Genap mencantumkan status kenaikan kelas</li>
-                                                                    </ul>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </>
-                                        )}
+                                            </div>
+                                        </div>
                                     </>
                                 )}
-                            </>
-                        )}
-                    </>
-                )}
-            </div>
+                            </div>
+                        </>
+                    )}
+                </>
+            )}
         </div>
     );
 }
