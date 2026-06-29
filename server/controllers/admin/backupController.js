@@ -1,10 +1,8 @@
 /**
  * Nama File: backupController.js
- * Fungsi: Controller untuk backup dan restore database E-Rapor secara menyeluruh.
- *         Backup menghasilkan file ZIP berisi SQL dump + folder uploads.
- *         Restore menerima file .sql atau .zip untuk mengembalikan data database.
+ * Fungsi: Controller backup & restore database (ZIP dengan SQL + uploads)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ *  Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
@@ -15,25 +13,11 @@ const AdmZip = require('adm-zip');
 
 const TEMP_DIR = path.join(__dirname, '../../temp_backup');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. BACKUP DATABASE
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * GET /api/admin/backup
- * Backup seluruh database + folder uploads ke file ZIP.
- * 
- * Proses:
- *   1. Dump semua tabel ke SQL (struktur + data)
- *   2. Gabungkan SQL + folder uploads dalam ZIP
- *   3. Kirim file ZIP ke browser untuk download
- */
+// GET: Backup seluruh database + folder uploads ke file ZIP
 exports.downloadBackup = async (req, res) => {
     try {
         // Step 1: Setup folder temp
-        if (!fs.existsSync(TEMP_DIR)) {
-            fs.mkdirSync(TEMP_DIR, { recursive: true });
-        }
+        if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
         const timestamp = Date.now();
         const fileName = `Backup_E-Rapor_${timestamp}.zip`;
@@ -69,12 +53,8 @@ exports.downloadBackup = async (req, res) => {
                     for (const row of rows) {
                         const values = Object.values(row).map(val => {
                             if (val === null) return 'NULL';
-                            if (typeof val === 'string') {
-                                return `'${val.replace(/'/g, "\\'")}'`;
-                            }
-                            if (typeof val === 'object') {
-                                return `'${JSON.stringify(val)}'`;
-                            }
+                            if (typeof val === 'string') return `'${val.replace(/'/g, "\\'")}'`;
+                            if (typeof val === 'object') return `'${JSON.stringify(val)}'`;
                             return val;
                         }).join(', ');
                         
@@ -108,9 +88,7 @@ exports.downloadBackup = async (req, res) => {
                 
                 if (err) {
                     console.error('Error download:', err);
-                    if (!res.headersSent) {
-                        res.status(500).json({ message: 'Gagal mendownload backup' });
-                    }
+                    if (!res.headersSent) res.status(500).json({ message: 'Gagal mendownload backup' });
                 }
             });
         });
@@ -125,43 +103,23 @@ exports.downloadBackup = async (req, res) => {
 
         // Tambahkan folder uploads ke ZIP
         const uploadsPath = path.join(__dirname, '../../public/uploads');
-        if (fs.existsSync(uploadsPath)) {
-            archive.directory(uploadsPath, 'uploads');
-        }
+        if (fs.existsSync(uploadsPath)) archive.directory(uploadsPath, 'uploads');
 
         archive.finalize();
 
     } catch (err) {
         console.error('Error Backup:', err);
-        res.status(500).json({ 
-            message: 'Gagal melakukan backup database', 
-            error: err.message 
-        });
+        res.status(500).json({ message: 'Gagal melakukan backup database', error: err.message });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. RESTORE DATABASE
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * POST /api/admin/backup/restore
- * Restore database dari file .sql atau .zip.
- * 
- * Proses:
- *   1. Extract SQL dari ZIP atau baca langsung dari .sql
- *   2. Split SQL menjadi per statement
- *   3. Eksekusi dalam transaction (atomic)
- *   4. Rollback jika ada error kritis
- */
+// POST: Restore database dari file .sql atau .zip
 exports.uploadRestore = async (req, res) => {
     const connection = await db.getConnection();
     
     try {
         // Validasi file
-        if (!req.file) {
-            return res.status(400).json({ message: 'File backup wajib diupload' });
-        }
+        if (!req.file) return res.status(400).json({ message: 'File backup wajib diupload' });
 
         const filePath = req.file.path;
         let sqlContent = '';
@@ -173,23 +131,17 @@ exports.uploadRestore = async (req, res) => {
             try {
                 const zip = new AdmZip(filePath);
                 const zipEntries = zip.getEntries();
-                
                 const sqlEntry = zipEntries.find(entry => entry.entryName === 'database.sql');
                 
                 if (!sqlEntry) {
                     fs.unlinkSync(filePath);
-                    return res.status(400).json({ 
-                        message: 'File ZIP tidak valid. Harus mengandung file database.sql.' 
-                    });
+                    return res.status(400).json({ message: 'File ZIP tidak valid. Harus mengandung file database.sql.' });
                 }
                 
                 sqlContent = sqlEntry.getData().toString('utf8');
             } catch (zipErr) {
                 fs.unlinkSync(filePath);
-                return res.status(400).json({ 
-                    message: 'Gagal membaca file ZIP. Pastikan file tidak corrupt.',
-                    error: zipErr.message 
-                });
+                return res.status(400).json({ message: 'Gagal membaca file ZIP. Pastikan file tidak corrupt.', error: zipErr.message });
             }
         } 
         else if (req.file.originalname.endsWith('.sql')) {
@@ -197,20 +149,14 @@ exports.uploadRestore = async (req, res) => {
         } 
         else {
             fs.unlinkSync(filePath);
-            return res.status(400).json({ 
-                message: 'Format file tidak didukung. Gunakan file .sql atau .zip' 
-            });
+            return res.status(400).json({ message: 'Format file tidak didukung. Gunakan file .sql atau .zip' });
         }
 
         // Step 2: Split SQL menjadi per statement
         const statements = sqlContent
             .split(';')
             .map(stmt => stmt.trim())
-            .filter(stmt => 
-                stmt.length > 0 && 
-                !stmt.startsWith('--') && 
-                !stmt.startsWith('SET FOREIGN_KEY_CHECKS')
-            );
+            .filter(stmt => stmt.length > 0 && !stmt.startsWith('--') && !stmt.startsWith('SET FOREIGN_KEY_CHECKS'));
 
         console.log(`Mengeksekusi ${statements.length} statement SQL...`);
 
@@ -247,14 +193,9 @@ exports.uploadRestore = async (req, res) => {
         await connection.rollback();
         console.error('Error Restore:', err);
         
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
-        res.status(500).json({ 
-            message: 'Gagal restore database', 
-            error: err.message 
-        });
+        res.status(500).json({ message: 'Gagal restore database', error: err.message });
     } finally {
         connection.release();
     }

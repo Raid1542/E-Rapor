@@ -1,7 +1,6 @@
 /**
  * Nama File: sekolahController.js
- * Fungsi: Controller untuk manajemen data profil sekolah (identitas, alamat, kontak)
- *         dan upload logo sekolah. Data sekolah bersifat tunggal (single record).
+ * Fungsi: Controller profil sekolah (single record) + upload logo
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -9,23 +8,11 @@
 const sekolahModel = require('../../models/admin/sekolahModel');
 const db = require('../../config/db');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. GET DATA SEKOLAH
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * GET /api/admin/sekolah
- * Ambil data profil sekolah (nama, NPSN, alamat, kontak, kepala sekolah, logo).
- */
+// GET: Ambil data profil sekolah (nama, NPSN, alamat, kontak, kepala sekolah, logo)
 const getSekolah = async (req, res) => {
     try {
         const sekolah = await sekolahModel.getSekolah();
-        if (!sekolah) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Data sekolah belum diatur' 
-            });
-        }
+        if (!sekolah) return res.status(404).json({ success: false, message: 'Data sekolah belum diatur' });
         res.json({ success: true, data: sekolah });
     } catch (err) {
         console.error('Error get sekolah:', err);
@@ -33,41 +20,13 @@ const getSekolah = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. UPDATE DATA SEKOLAH
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * PUT /api/admin/sekolah
- * Update data profil sekolah (partial update).
- * 
- * Field yang dapat diupdate:
- *   - nama_sekolah (wajib), npsn, nss, alamat, kode_pos
- *   - telepon, email, website
- *   - kepala_sekolah, niy_kepala_sekolah
- */
+// PUT: Update data profil sekolah (partial update)
 const editSekolah = async (req, res) => {
     try {
-        const {
-            nama_sekolah,
-            npsn,
-            nss,
-            alamat,
-            kode_pos,
-            telepon,
-            email,
-            website,
-            kepala_sekolah,
-            niy_kepala_sekolah,
-        } = req.body;
+        const { nama_sekolah, npsn, nss, alamat, kode_pos, telepon, email, website, kepala_sekolah, niy_kepala_sekolah } = req.body;
 
         // Validasi nama sekolah
-        if (!nama_sekolah || !nama_sekolah.trim()) {
-            return res.status(400).json({
-                success: false,
-                message: 'Nama sekolah wajib diisi'
-            });
-        }
+        if (!nama_sekolah || !nama_sekolah.trim()) return res.status(400).json({ success: false, message: 'Nama sekolah wajib diisi' });
 
         // Build data object (partial update)
         const data = {};
@@ -83,38 +42,17 @@ const editSekolah = async (req, res) => {
         if (niy_kepala_sekolah !== undefined) data.niy_kepala_sekolah = niy_kepala_sekolah;
 
         await sekolahModel.updateSekolah(data);
-
-        res.json({
-            success: true,
-            message: 'Data sekolah berhasil diperbarui'
-        });
+        res.json({ success: true, message: 'Data sekolah berhasil diperbarui' });
     } catch (err) {
         console.error('Error update sekolah:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal memperbarui data sekolah'
-        });
+        res.status(500).json({ success: false, message: 'Gagal memperbarui data sekolah' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. UPLOAD LOGO SEKOLAH
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * PUT /api/admin/sekolah/logo
- * Upload logo sekolah. Jika data sekolah belum ada, buat record baru dengan nama default.
- * 
- * @param {File} req.file - File logo (dari multer)
- */
+// PUT: Upload logo sekolah (auto-create record jika belum ada)
 const uploadLogo = async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'File logo diperlukan' 
-            });
-        }
+        if (!req.file) return res.status(400).json({ success: false, message: 'File logo diperlukan' });
 
         const logoPath = `/uploads/${req.file.filename}`;
 
@@ -126,32 +64,14 @@ const uploadLogo = async (req, res) => {
             await db.execute('UPDATE sekolah SET logo_path = ? WHERE id = ?', [logoPath, rows[0].id]);
         } else {
             // Insert record baru dengan data minimal
-            await db.execute(
-                `INSERT INTO sekolah (nama_sekolah, logo_path) VALUES (?, ?)`,
-                ['SDIT Ulil Albab Batam', logoPath]
-            );
+            await db.execute('INSERT INTO sekolah (nama_sekolah, logo_path) VALUES (?, ?)', ['SDIT Ulil Albab Batam', logoPath]);
         }
 
-        res.json({
-            success: true,
-            message: 'Logo berhasil diupdate',
-            logoPath
-        });
+        res.json({ success: true, message: 'Logo berhasil diupdate', logoPath });
     } catch (err) {
         console.error('Error upload logo:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal mengupload logo'
-        });
+        res.status(500).json({ success: false, message: 'Gagal mengupload logo' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// EXPORT
-// ═════════════════════════════════════════════════════════════════════════════
-
-module.exports = {
-    getSekolah,
-    editSekolah,
-    uploadLogo
-};
+module.exports = { getSekolah, editSekolah, uploadLogo };

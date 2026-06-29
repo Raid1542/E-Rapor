@@ -1,28 +1,18 @@
 /**
  * Nama File: fetchWrapper.ts
- * Fungsi: Wrapper untuk fetch API dengan auto-attach JWT token dan handling 401 unauthorized.
+ * Fungsi: Wrapper fetch API dengan auto-attach JWT token + handling 401 unauthorized
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
 
 import { getToken } from '@/lib/auth';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// INTERFACE
-// ═════════════════════════════════════════════════════════════════════════════
-
+// Interface: FetchOptions extends RequestInit + skipAuthCheck flag
 interface FetchOptions extends RequestInit {
-    skipAuthCheck?: boolean; // Skip 401 handling untuk endpoint publik
+    skipAuthCheck?: boolean;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// MAIN FUNCTION
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Fetch dengan auto Authorization header dan handling token expired.
- * Trigger event 'sessionExpired' saat server return 401 + TOKEN_EXPIRED.
- */
+// Fetch dengan auto Authorization header + handling 401 (trigger sessionExpired event)
 export async function fetchWithAuth(
     url: string,
     options: FetchOptions = {}
@@ -42,7 +32,6 @@ export async function fetchWithAuth(
         // Handle 401 - token expired
         if (response.status === 401 && !skipAuthCheck) {
             const data = await response.json().catch(() => ({}));
-            
             if (data.code === 'TOKEN_EXPIRED' || data.message?.toLowerCase().includes('expired')) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('currentUser');
@@ -60,28 +49,16 @@ export async function fetchWithAuth(
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
+// Helper: GET request dengan auth
+export const getWithAuth = (url: string) => fetchWithAuth(url, { method: 'GET' });
 
-/** GET request dengan auth */
-export const getWithAuth = (url: string) =>
-    fetchWithAuth(url, { method: 'GET' });
-
-/** POST request dengan auth + JSON body */
+// Helper: POST request dengan auth + JSON body
 export const postWithAuth = (url: string, data: any) =>
-    fetchWithAuth(url, {
-        method: 'POST',
-        body: JSON.stringify(data),
-    });
+    fetchWithAuth(url, { method: 'POST', body: JSON.stringify(data) });
 
-/** PUT request dengan auth + JSON body */
+// Helper: PUT request dengan auth + JSON body
 export const putWithAuth = (url: string, data: any) =>
-    fetchWithAuth(url, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-    });
+    fetchWithAuth(url, { method: 'PUT', body: JSON.stringify(data) });
 
-/** DELETE request dengan auth */
-export const deleteWithAuth = (url: string) =>
-    fetchWithAuth(url, { method: 'DELETE' });
+// Helper: DELETE request dengan auth
+export const deleteWithAuth = (url: string) => fetchWithAuth(url, { method: 'DELETE' });

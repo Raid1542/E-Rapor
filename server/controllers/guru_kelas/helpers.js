@@ -1,15 +1,17 @@
 /**
  * Nama File: helpers.js
- * Fungsi: Helper functions yang dipakai bersama di controller guru kelas
- * ✅ FIXED: Semua query guru_kelas pakai semesterId (bukan tahunAjaranIndukId)
+ * Fungsi: Helper functions untuk validasi, hitung grade, dan recompute nilai rapor
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
 
-/**
- * Helper: Validasi apakah mata pelajaran adalah mapel wajib yang diampu guru kelas
- * ✅ FIXED: Parameter ketiga adalah semesterId (bukan tahunAjaranIndukId)
- */
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. VALIDASI MAPEL WAJIB
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Cek apakah mapel wajib yang diampu guru kelas */
 exports.isMapelWajibGuruKelas = async (userId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(`
@@ -17,53 +19,51 @@ exports.isMapelWajibGuruKelas = async (userId, mapelId, semesterId) => {
             FROM mata_pelajaran mp
             JOIN pembelajaran p ON mp.id_mata_pelajaran = p.mapel_id
             JOIN guru_kelas gk ON p.kelas_id = gk.kelas_id
-            WHERE mp.id_mata_pelajaran = ?
-            AND gk.user_id = ?
-            AND mp.jenis = 'wajib'
-            AND gk.tahun_ajaran_id = ?
-        `, [mapelId, userId, semesterId]);  // ✅ PAKAI semesterId
+            WHERE mp.id_mata_pelajaran = ? AND gk.user_id = ? AND mp.jenis = 'wajib' AND gk.tahun_ajaran_id = ?
+        `, [mapelId, userId, semesterId]);
         return rows.length > 0;
     } catch (err) {
-        console.error('Error di isMapelWajibGuruKelas:', err);
+        console.error('Error isMapelWajibGuruKelas:', err);
         return false;
     }
 };
 
-/**
- * Helper: Hitung grade & deskripsi berdasarkan nilai dan ID aspek
- */
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. HITUNG GRADE KOKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Hitung grade & deskripsi dari konfigurasi */
 exports.getGradeFromConfig = (configList, nilai, idAspek) => {
-    if (nilai === null || nilai === undefined) {
-        return { grade: null, deskripsi: null };
-    }
+    if (nilai == null) return { grade: null, deskripsi: null };
     const configForAspek = configList.filter(c => c.id_aspek_kokurikuler === idAspek);
     for (const conf of configForAspek) {
         if (nilai >= conf.rentang_min && nilai <= conf.rentang_max) {
-            return {
-                grade: conf.grade,
-                deskripsi: conf.deskripsi,
-            };
+            return { grade: conf.grade, deskripsi: conf.deskripsi };
         }
     }
     return { grade: null, deskripsi: null };
 };
 
-/**
- * Helper: Mendapatkan deskripsi berdasarkan nilai dan daftar kategori
- */
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. HITUNG DESKRIPSI AKADEMIK
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Hitung deskripsi dari kategori nilai */
 exports.getDeskripsiFromKategori = (nilai, kategoriList) => {
     if (nilai == null || nilai < 0) return 'Belum ada deskripsi';
     for (const k of kategoriList) {
-        if (nilai >= k.min_nilai && nilai <= k.max_nilai) {
-            return k.deskripsi;
-        }
+        if (nilai >= k.min_nilai && nilai <= k.max_nilai) return k.deskripsi;
     }
     return 'Belum ada deskripsi';
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 4. RECOMPUTE NILAI RAPOR PAS
+// ═════════════════════════════════════════════════════════════════════════════
+
 /**
- * Helper: Memperbarui semua nilai rapor untuk suatu mata pelajaran berdasarkan bobot terbaru
- * ✅ FIXED: Query guru_kelas pakai semesterId
+ * Recompute nilai rapor PAS setelah bobot berubah
+ * Formula: (rataUH × bobotUH) + (PTS × bobotPTS) + (PAS × bobotPAS)
  */
 exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
     try {
@@ -72,34 +72,31 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
         const { semester } = req?.penilaianContext || {};
 
         if (!tahunAjaranIndukId || !semesterId || !semester) {
-            throw new Error('Data tahun ajaran atau semester tidak ditemukan di middleware');
+            throw new Error('Data tahun ajaran tidak ditemukan');
         }
 
-        // ✅ PERBAIKAN: PAKAI semesterId untuk guru_kelas
+        // Ambil kelas & siswa
         const [gkRows] = await db.execute(
             `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
-            [userId, semesterId]  // ✅ semesterId, BUKAN tahunAjaranIndukId
+            [userId, semesterId]
         );
-        if (gkRows.length === 0) throw new Error('Kelas aktif tidak ditemukan');
+        if (gkRows.length === 0) throw new Error('Kelas tidak ditemukan');
         const { kelas_id } = gkRows[0];
 
-        // ✅ PERBAIKAN: id_tahun_ajaran_induk untuk siswa_kelas
         const [siswaRows] = await db.execute(
             `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelas_id, tahunAjaranIndukId]
         );
 
+        // Ambil komponen & bobot
         const [komponenRows] = await db.execute(`SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`);
-
         const [bobotRows] = await db.execute(
             `SELECT komponen_id, bobot, kelas_id FROM konfigurasi_mapel_komponen 
-                WHERE mapel_id = ? AND is_active = 1
-                AND (kelas_id = ? OR kelas_id IS NULL)
-                ORDER BY kelas_id DESC`,
+             WHERE mapel_id = ? AND is_active = 1 AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY kelas_id DESC`,
             [mapelId, kelas_id]
         );
 
-        // Logic prioritas bobot: spesifik kelas menimpa global
+        // Build bobot map (prioritas: spesifik kelas > global)
         const bobotMap = new Map();
         bobotRows.forEach(b => {
             if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
@@ -122,6 +119,7 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             nilaiDetailMap.get(row.siswa_id)[row.komponen_id] = row.nilai;
         });
 
+        // Hitung & simpan per siswa
         for (const siswa of siswaRows) {
             const siswaId = siswa.siswa_id;
             const nilai = nilaiDetailMap.get(siswaId) || {};
@@ -152,8 +150,7 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
 
             const [kategoriRows] = await db.execute(
                 `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
-                    WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND is_active = 1
-                    ORDER BY min_nilai DESC`,
+                 WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND is_active = 1 ORDER BY min_nilai DESC`,
                 [mapelId, semesterId]
             );
 
@@ -167,53 +164,43 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
 
             await db.execute(
                 `INSERT INTO nilai_rapor (siswa_id, mapel_id, kelas_id, tahun_ajaran_id, semester, jenis_penilaian, nilai_rapor, deskripsi, created_by_user_id, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'PAS', ?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE nilai_rapor = VALUES(nilai_rapor), deskripsi = VALUES(deskripsi), updated_at = NOW()`,
+                 VALUES (?, ?, ?, ?, ?, 'PAS', ?, ?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE nilai_rapor = VALUES(nilai_rapor), deskripsi = VALUES(deskripsi), updated_at = NOW()`,
                 [siswaId, mapelId, kelas_id, semesterId, semester, nilaiRapor, deskripsi, userId]
             );
         }
     } catch (err) {
-        console.error('Error di updateAllNilaiRaporForMapel:', err);
+        console.error('Error updateAllNilaiRaporForMapel:', err);
         throw err;
     }
 };
 
-/**
- * Helper internal: mengambil data rekap nilai untuk ekspor
- * ✅ FIXED: Query guru_kelas pakai semesterId
- */
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. REKAPAN DATA UNTUK EKSPOR
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Ambil rekap nilai + rata-rata + ranking untuk ekspor Excel */
 exports.getRekapanData = async (userId, req) => {
     const tahunAjaranIndukId = req?.idTahunAjaranInduk;
     const semesterId = req?.idSemesterAktif;
     const { semester } = req?.penilaianContext || {};
 
-    if (!tahunAjaranIndukId || !semesterId || !semester) throw new Error('Data tahun ajaran atau semester tidak ditemukan');
+    if (!tahunAjaranIndukId || !semesterId || !semester) throw new Error('Data tahun ajaran tidak ditemukan');
 
-    // ✅ PERBAIKAN: PAKAI semesterId untuk guru_kelas
     const [kelasRows] = await db.query(
-        `SELECT k.id_kelas FROM kelas k 
-        JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-        WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-        [userId, semesterId]  // ✅ semesterId, BUKAN tahunAjaranIndukId
+        `SELECT k.id_kelas FROM kelas k JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
+        [userId, semesterId]
     );
     if (kelasRows.length === 0) throw new Error('Kelas tidak ditemukan');
     const kelasId = kelasRows[0].id_kelas;
 
-    // ✅ id_tahun_ajaran_induk untuk siswa_kelas
     const [siswaRows] = await db.query(
-        `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis 
-            FROM siswa s 
-            JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-            WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? 
-            ORDER BY s.nama_lengkap`,
+        `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? ORDER BY s.nama_lengkap`,
         [kelasId, tahunAjaranIndukId]
     );
 
     const [nilaiRows] = await db.query(
-        `SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai 
-            FROM nilai_rapor nr 
-            JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran 
-            WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ?`,
+        `SELECT nr.siswa_id, mp.kode_mapel, nr.nilai_rapor AS nilai FROM nilai_rapor nr JOIN mata_pelajaran mp ON nr.mapel_id = mp.id_mata_pelajaran WHERE nr.kelas_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ?`,
         [kelasId, semesterId, semester]
     );
 
@@ -235,29 +222,24 @@ exports.getRekapanData = async (userId, req) => {
         return { id_siswa: s.id_siswa, nama: s.nama, nis: s.nis, nilai_mapel: nilaiMapel, rata_rata: rataRata };
     });
 
+    // Ranking
     siswa.filter(s => s.rata_rata !== null).sort((a, b) => b.rata_rata - a.rata_rata).forEach((s, i) => { s.ranking = i + 1; });
     siswa.forEach(s => { if (s.rata_rata === null) s.ranking = null; });
 
     return { siswa, mapel_list: mapelList };
 };
 
-/**
- * Helper: Validasi urutan grade untuk kokurikuler
- */
+// ═════════════════════════════════════════════════════════════════════════════
+// 6. VALIDASI URUTAN GRADE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Validasi urutan grade: A(4) > B(3) > C(2) > D(1) > E(0) */
 exports.validateGradeOrder = async (idAspek, tahunAjaranId, semester, kelasId, grade, minNilai, maxNilai, excludeId = null) => {
     const gradeOrder = { 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'E': 0 };
     const newGradeValue = gradeOrder[grade.toUpperCase()];
-
     if (newGradeValue === undefined) return { valid: true };
 
-    let query = `
-        SELECT id_kategori_grade_kokurikuler, grade, rentang_min, rentang_max 
-        FROM kategori_grade_kokurikuler 
-        WHERE id_aspek_kokurikuler = ? 
-        AND tahun_ajaran_id = ? 
-        AND semester = ?
-        AND kelas_id = ?
-    `;
+    let query = `SELECT id_kategori_grade_kokurikuler, grade, rentang_min, rentang_max FROM kategori_grade_kokurikuler WHERE id_aspek_kokurikuler = ? AND tahun_ajaran_id = ? AND semester = ? AND kelas_id = ?`;
     const params = [idAspek, tahunAjaranId, semester, kelasId];
 
     if (excludeId) {
@@ -271,22 +253,11 @@ exports.validateGradeOrder = async (idAspek, tahunAjaranId, semester, kelasId, g
         const existingGradeValue = gradeOrder[existing.grade.toUpperCase()];
         if (existingGradeValue === undefined) continue;
 
-        if (newGradeValue > existingGradeValue) {
-            if (minNilai < existing.rentang_max) {
-                return {
-                    valid: false,
-                    message: `Grade ${grade} (lebih tinggi) harus memiliki range nilai di atas ${existing.grade} (max ${existing.rentang_max}). Range Anda: ${minNilai}-${maxNilai}`
-                };
-            }
+        if (newGradeValue > existingGradeValue && minNilai < existing.rentang_max) {
+            return { valid: false, message: `Grade ${grade} harus di atas ${existing.grade} (max ${existing.rentang_max})` };
         }
-
-        if (newGradeValue < existingGradeValue) {
-            if (maxNilai > existing.rentang_min) {
-                return {
-                    valid: false,
-                    message: `Grade ${grade} (lebih rendah) harus memiliki range nilai di bawah ${existing.grade} (min ${existing.rentang_min}). Range Anda: ${minNilai}-${maxNilai}`
-                };
-            }
+        if (newGradeValue < existingGradeValue && maxNilai > existing.rentang_min) {
+            return { valid: false, message: `Grade ${grade} harus di bawah ${existing.grade} (min ${existing.rentang_min})` };
         }
     }
 

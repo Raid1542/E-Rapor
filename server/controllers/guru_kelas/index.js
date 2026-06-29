@@ -1,55 +1,25 @@
 /**
  * Nama File: index.js
- * Fungsi: Menggabungkan semua controller guru kelas
+ * Fungsi: Export semua controller guru kelas
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
-const profilController = require('./profilController');
-const kelasController = require('./kelasController');
-const absensiController = require('./absensiController');
-const catatanWaliController = require('./catatanWaliController');
-const ekskulController = require('./ekskulController');
-const kokurikulerController = require('./kokurikulerController');
-const nilaiAkademikController = require('./nilaiAkademikController');
-const aturPenilaianController = require('./aturPenilaianController');
-const batchPenilaianController = require('./batchPenilaianController');
-const rekapanController = require('./rekapanController');
-const raporController = require('./raporController');
-const tahunAjaranController = require('./tahunAjaranController');
+// ═════════════════════════════════════════════════════════════════════════════
+// GURU KELAS CONTROLLERS
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
-    // Profil
-    ...profilController,
-
-    // Kelas & Siswa
-    ...kelasController,
-
-    // Absensi
-    ...absensiController,
-
-    // Catatan Wali Kelas
-    ...catatanWaliController,
-
-    // Ekstrakurikuler
-    ...ekskulController,
-
-    // Kokurikuler
-    ...kokurikulerController,
-
-    // Nilai Akademik
-    ...nilaiAkademikController,
-
-    // Atur Penilaian
-    ...aturPenilaianController,
-
-    // Batch Penilaian
-    ...batchPenilaianController,
-
-    // Rekapan
-    ...rekapanController,
-
-    // Rapor
-    ...raporController,
-
-    // Tahun Ajaran
-    ...tahunAjaranController,
+    ...require('./profilController'),           // Profil, password, foto
+    ...require('./kelasController'),            // Data kelas & siswa
+    ...require('./absensiController'),          // Absensi PTS/PAS
+    ...require('./catatanWaliController'),      // Catatan wali kelas
+    ...require('./ekskulController'),           // Ekstrakurikuler
+    ...require('./kokurikulerController'),      // Nilai kokurikuler
+    ...require('./nilaiAkademikController'),    // Nilai akademik
+    ...require('./aturPenilaianController'),    // Konfigurasi penilaian
+    ...require('./batchPenilaianController'),   // Batch save kategori
+    ...require('./rekapanController'),          // Rekapan & ekspor
+    ...require('./raporController'),            // Generate rapor
+    ...require('./tahunAjaranController'),      // Tahun ajaran
 };

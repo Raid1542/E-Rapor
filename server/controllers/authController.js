@@ -1,6 +1,6 @@
 /**
  * Nama File: authController.js
- * Fungsi: Controller untuk autentikasi pengguna (login) dengan JWT token.
+ * Fungsi: Controller autentikasi (login) dengan JWT token
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -10,71 +10,45 @@ const { comparePassword } = require('../utils/hash');
 const db = require('../config/db');
 const userModel = require('../models/authModel');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// LOGIN CONTROLLER
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * POST /api/auth/login
- * Validasi kredensial user dan generate JWT token.
- * 
- * @param {Object} req.body - { email_sekolah, password, role }
- * @returns {Object} Response dengan token dan data user
- */
+// POST: Login user (validasi kredensial + generate JWT token)
 const login = async (req, res) => {
     const { email_sekolah, password, role: selectedRole } = req.body;
 
     // Validasi input
     if (!email_sekolah || !password || !selectedRole) {
-        return res.status(400).json({
-            success: false,
-            message: 'Email, password, dan role wajib diisi',
-        });
+        return res.status(400).json({ success: false, message: 'Email, password, dan role wajib diisi' });
     }
 
     try {
         // Step 1: Cari user berdasarkan email
         const [userRows] = await db.execute(
             `SELECT u.id_user, u.email_sekolah, u.password, u.nama_lengkap, u.status, ur.role
-              FROM user u
-              JOIN user_role ur ON u.id_user = ur.id_user
-              WHERE u.email_sekolah = ?`,
+                FROM user u JOIN user_role ur ON u.id_user = ur.id_user
+                WHERE u.email_sekolah = ?`,
             [email_sekolah]
         );
 
         if (userRows.length === 0) {
-            return res.status(401).json({
-                success: false,
-                message: 'Email atau password salah',
-            });
+            return res.status(401).json({ success: false, message: 'Email atau password salah' });
         }
 
         const user = userRows[0];
 
         // Step 2: Cek status akun
         if (user.status !== 'aktif') {
-            return res.status(403).json({
-                success: false,
-                message: 'Akun tidak aktif',
-            });
+            return res.status(403).json({ success: false, message: 'Akun tidak aktif' });
         }
 
         // Step 3: Verifikasi password
         const isMatch = await comparePassword(password, user.password);
         if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: 'Email atau password salah',
-            });
+            return res.status(401).json({ success: false, message: 'Email atau password salah' });
         }
 
         // Step 4: Validasi role
         const roles = await userModel.getRolesByUserId(user.id_user);
         if (!roles.includes(selectedRole)) {
-            return res.status(403).json({
-                success: false,
-                message: `Anda tidak memiliki akses sebagai ${selectedRole}`,
-            });
+            return res.status(403).json({ success: false, message: `Anda tidak memiliki akses sebagai ${selectedRole}` });
         }
 
         // Step 5: Generate JWT token
@@ -87,8 +61,7 @@ const login = async (req, res) => {
         // Step 6: Ambil data profil (guru)
         const [guruRows] = await db.execute(
             `SELECT niy, nuptk, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, no_telepon, foto_path 
-              FROM guru 
-              WHERE user_id = ?`,
+                FROM guru WHERE user_id = ?`,
             [user.id_user]
         );
         const guruData = guruRows[0] || {};
@@ -114,10 +87,7 @@ const login = async (req, res) => {
             },
         });
     } catch (err) {
-        return res.status(500).json({
-            success: false,
-            message: 'Terjadi kesalahan server: ' + err.message,
-        });
+        return res.status(500).json({ success: false, message: 'Terjadi kesalahan server: ' + err.message });
     }
 };
 

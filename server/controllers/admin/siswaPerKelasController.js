@@ -1,8 +1,6 @@
 /**
  * Nama File: siswaPerKelasController.js
- * Fungsi: Controller untuk mengelola relasi siswa ke kelas (enrollment).
- *         Menangani assign/keluarkan siswa dari kelas dengan validasi read-only
- *         ketika penilaian PTS/PAS telah diarsipkan.
+ * Fungsi: Controller enrollment siswa ke kelas (assign/keluarkan dengan validasi read-only)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -10,25 +8,15 @@
 const SiswaPerKelasModel = require('../../models/admin/siswaPerKelasModel');
 const SiswaModel = require('../../models/admin/siswaModel');
 const db = require('../../config/db');
-
-// Import checkReadOnly dari kelasController untuk validasi read-only
 const { checkReadOnly } = require('./kelasController');
 
 // ═════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * Ambil ID tahun ajaran induk yang sedang aktif.
- * @returns {number|null} ID tahun ajaran induk atau null
- */
+// Ambil ID tahun ajaran induk yang sedang aktif
 const getTahunAjaranAktif = async () => {
-    const [rows] = await db.execute(`
-        SELECT id_tahun_ajaran_induk 
-        FROM tahun_ajaran 
-        WHERE status = 'aktif' 
-        LIMIT 1
-    `);
+    const [rows] = await db.execute('SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1');
     return rows.length > 0 ? rows[0].id_tahun_ajaran_induk : null;
 };
 
@@ -36,53 +24,26 @@ const getTahunAjaranAktif = async () => {
 // 1. GET SISWA BY KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * GET /api/admin/kelas/:id/siswa
- * Ambil daftar siswa yang terdaftar di kelas tertentu.
- * 
- * @param {string} req.params.id - ID kelas
- * @param {string} req.query.tahun_ajaran_id - ID tahun ajaran induk (opsional)
- */
+// GET: Ambil daftar siswa yang terdaftar di kelas tertentu
 const getSiswaByKelas = async (req, res) => {
     try {
         const { id } = req.params;
         const { tahun_ajaran_id } = req.query;
 
-        if (!id) {
-            return res.status(400).json({
-                success: false,
-                message: 'Kelas ID wajib diisi'
-            });
-        }
+        if (!id) return res.status(400).json({ success: false, message: 'Kelas ID wajib diisi' });
 
         // Ambil tahun ajaran dari query atau fallback ke aktif
         let tahunAjaranId = tahun_ajaran_id ? parseInt(tahun_ajaran_id) : null;
-
         if (!tahunAjaranId) {
             tahunAjaranId = await getTahunAjaranAktif();
-            if (!tahunAjaranId) {
-                return res.json({
-                    success: true,
-                    data: [],
-                    message: 'Tidak ada tahun ajaran aktif'
-                });
-            }
+            if (!tahunAjaranId) return res.json({ success: true, data: [], message: 'Tidak ada tahun ajaran aktif' });
         }
 
         const siswaList = await SiswaPerKelasModel.getSiswaByKelas(id, tahunAjaranId);
-
-        res.json({
-            success: true,
-            data: siswaList,
-            total: siswaList.length
-        });
-
+        res.json({ success: true, data: siswaList, total: siswaList.length });
     } catch (err) {
         console.error('Error getSiswaByKelas:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal mengambil data siswa: ' + err.message
-        });
+        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa: ' + err.message });
     }
 };
 
@@ -90,46 +51,23 @@ const getSiswaByKelas = async (req, res) => {
 // 2. GET SISWA AVAILABLE (BELUM PUNYA KELAS)
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * GET /api/admin/siswa/available
- * Ambil daftar siswa yang belum terdaftar di kelas manapun.
- * Digunakan untuk dropdown assign siswa ke kelas.
- * 
- * @param {string} req.query.tahun_ajaran_id - ID tahun ajaran induk (opsional)
- * @param {string} req.query.search - Keyword pencarian (opsional)
- */
+// GET: Ambil daftar siswa yang belum terdaftar di kelas manapun (untuk dropdown assign)
 const getSiswaAvailable = async (req, res) => {
     try {
         const { tahun_ajaran_id, search } = req.query;
 
         // Ambil tahun ajaran dari query atau fallback ke aktif
         let tahunAjaranId = tahun_ajaran_id ? parseInt(tahun_ajaran_id) : null;
-
         if (!tahunAjaranId) {
             tahunAjaranId = await getTahunAjaranAktif();
-            if (!tahunAjaranId) {
-                return res.json({
-                    success: true,
-                    data: [],
-                    message: 'Tidak ada tahun ajaran aktif'
-                });
-            }
+            if (!tahunAjaranId) return res.json({ success: true, data: [], message: 'Tidak ada tahun ajaran aktif' });
         }
 
         const siswaList = await SiswaPerKelasModel.getSiswaBelumPunyaKelas(tahunAjaranId, search);
-
-        res.json({
-            success: true,
-            data: siswaList,
-            total: siswaList.length
-        });
-
+        res.json({ success: true, data: siswaList, total: siswaList.length });
     } catch (err) {
         console.error('Error getSiswaAvailable:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal mengambil data siswa: ' + err.message
-        });
+        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa: ' + err.message });
     }
 };
 
@@ -137,19 +75,7 @@ const getSiswaAvailable = async (req, res) => {
 // 3. ASSIGN SISWA KE KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * POST /api/admin/kelas/:id/siswa
- * Assign satu atau lebih siswa ke kelas tertentu.
- * 
- * Validasi:
- *   - Mode read-only tidak diizinkan (PTS/PAS selesai)
- *   - Siswa tidak boleh sudah terdaftar di kelas lain
- *   - Siswa harus ada di master data
- * 
- * @param {string} req.params.id - ID kelas
- * @param {Array<number>} req.body.siswa_ids - Array ID siswa yang akan di-assign
- * @param {number} req.body.tahun_ajaran_id - ID tahun ajaran induk (opsional)
- */
+// POST: Assign siswa ke kelas (validasi read-only, cek duplikasi kelas)
 const assignSiswaKeKelas = async (req, res) => {
     const connection = await db.getConnection();
     try {
@@ -157,28 +83,14 @@ const assignSiswaKeKelas = async (req, res) => {
         const { siswa_ids, tahun_ajaran_id } = req.body;
 
         // Validasi input
-        if (!kelasId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Kelas ID wajib diisi'
-            });
-        }
-
+        if (!kelasId) return res.status(400).json({ success: false, message: 'Kelas ID wajib diisi' });
         if (!Array.isArray(siswa_ids) || siswa_ids.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Pilih minimal 1 siswa untuk di-assign'
-            });
+            return res.status(400).json({ success: false, message: 'Pilih minimal 1 siswa untuk di-assign' });
         }
 
         // Ambil tahun ajaran
         let tahunAjaranId = tahun_ajaran_id || await getTahunAjaranAktif();
-        if (!tahunAjaranId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Tidak ada tahun ajaran aktif'
-            });
-        }
+        if (!tahunAjaranId) return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
 
         // Cek mode read-only
         const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(tahunAjaranId);
@@ -190,7 +102,6 @@ const assignSiswaKeKelas = async (req, res) => {
         }
 
         await connection.beginTransaction();
-
         let assignedCount = 0;
         const skipped = [];
 
@@ -200,56 +111,36 @@ const assignSiswaKeKelas = async (req, res) => {
                 // Cek keberadaan siswa di master data
                 const siswa = await SiswaModel.getSiswaById(siswaId);
                 if (!siswa) {
-                    skipped.push({
-                        id: siswaId,
-                        reason: 'Siswa tidak ditemukan di master data'
-                    });
+                    skipped.push({ id: siswaId, reason: 'Siswa tidak ditemukan di master data' });
                     continue;
                 }
 
                 // Cek apakah siswa sudah punya kelas
                 const existingKelas = await SiswaPerKelasModel.checkSiswaPunyaKelas(siswaId, tahunAjaranId);
                 if (existingKelas) {
-                    skipped.push({
-                        id: siswaId,
-                        nama: siswa.nama_lengkap,
-                        reason: `Sudah terdaftar di kelas ${existingKelas.nama_kelas}`
-                    });
+                    skipped.push({ id: siswaId, nama: siswa.nama_lengkap, reason: `Sudah terdaftar di kelas ${existingKelas.nama_kelas}` });
                     continue;
                 }
 
                 // Assign siswa ke kelas
                 await SiswaPerKelasModel.assignSiswaKeKelas(siswaId, kelasId, tahunAjaranId, connection);
                 assignedCount++;
-
             } catch (err) {
                 console.error(`Error assign siswa ${siswaId}:`, err);
-                skipped.push({
-                    id: siswaId,
-                    reason: err.message
-                });
+                skipped.push({ id: siswaId, reason: err.message });
             }
         }
 
         await connection.commit();
-
-        // Response dengan info data yang di-skip
         res.json({
             success: true,
-            message: skipped.length > 0
-                ? `Assign selesai: ${assignedCount} berhasil, ${skipped.length} dilewati`
-                : `Berhasil assign ${assignedCount} siswa ke kelas`,
-            assigned: assignedCount,
-            skipped: skipped
+            message: skipped.length > 0 ? `Assign selesai: ${assignedCount} berhasil, ${skipped.length} dilewati` : `Berhasil assign ${assignedCount} siswa ke kelas`,
+            assigned: assignedCount, skipped: skipped
         });
-
     } catch (err) {
         await connection.rollback();
         console.error('Error assignSiswaKeKelas:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal assign siswa: ' + err.message
-        });
+        res.status(500).json({ success: false, message: 'Gagal assign siswa: ' + err.message });
     } finally {
         connection.release();
     }
@@ -259,18 +150,7 @@ const assignSiswaKeKelas = async (req, res) => {
 // 4. KELUARKAN SISWA DARI KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * DELETE /api/admin/kelas/:id/siswa/:siswaId
- * Keluarkan siswa dari kelas (data master siswa tetap aman).
- * 
- * Validasi:
- *   - Mode read-only tidak diizinkan (PTS/PAS selesai)
- *   - Siswa harus terdaftar di kelas tersebut
- * 
- * @param {string} req.params.id - ID kelas
- * @param {string} req.params.siswaId - ID siswa
- * @param {string} req.query.tahun_ajaran_id - ID tahun ajaran induk (opsional)
- */
+// DELETE: Keluarkan siswa dari kelas (validasi read-only, data master tetap aman)
 const keluarkanSiswaDariKelas = async (req, res) => {
     try {
         const { id: kelasId, siswaId } = req.params;
@@ -278,12 +158,7 @@ const keluarkanSiswaDariKelas = async (req, res) => {
 
         // Ambil tahun ajaran
         let tahunAjaranId = tahun_ajaran_id || await getTahunAjaranAktif();
-        if (!tahunAjaranId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Tidak ada tahun ajaran aktif'
-            });
-        }
+        if (!tahunAjaranId) return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
 
         // Cek mode read-only
         const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(tahunAjaranId);
@@ -296,44 +171,17 @@ const keluarkanSiswaDariKelas = async (req, res) => {
 
         // Cek apakah siswa terdaftar di kelas
         const siswaInKelas = await SiswaPerKelasModel.getSiswaByIdInKelas(siswaId, kelasId, tahunAjaranId);
-        if (!siswaInKelas) {
-            return res.status(404).json({
-                success: false,
-                message: 'Siswa tidak terdaftar di kelas ini'
-            });
-        }
+        if (!siswaInKelas) return res.status(404).json({ success: false, message: 'Siswa tidak terdaftar di kelas ini' });
 
         // Hapus relasi siswa-kelas
         const deleted = await SiswaPerKelasModel.hapusSiswaDariKelas(siswaId, kelasId, tahunAjaranId);
+        if (!deleted) return res.status(500).json({ success: false, message: 'Gagal mengeluarkan siswa dari kelas' });
 
-        if (!deleted) {
-            return res.status(500).json({
-                success: false,
-                message: 'Gagal mengeluarkan siswa dari kelas'
-            });
-        }
-
-        res.json({
-            success: true,
-            message: `Siswa "${siswaInKelas.nama_lengkap}" berhasil dikeluarkan dari kelas (data master tetap aman)`
-        });
-
+        res.json({ success: true, message: `Siswa "${siswaInKelas.nama_lengkap}" berhasil dikeluarkan dari kelas (data master tetap aman)` });
     } catch (err) {
         console.error('Error keluarkanSiswaDariKelas:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal mengeluarkan siswa: ' + err.message
-        });
+        res.status(500).json({ success: false, message: 'Gagal mengeluarkan siswa: ' + err.message });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// EXPORT
-// ═════════════════════════════════════════════════════════════════════════════
-
-module.exports = {
-    getSiswaByKelas,
-    getSiswaAvailable,
-    assignSiswaKeKelas,
-    keluarkanSiswaDariKelas
-};
+module.exports = { getSiswaByKelas, getSiswaAvailable, assignSiswaKeKelas, keluarkanSiswaDariKelas };

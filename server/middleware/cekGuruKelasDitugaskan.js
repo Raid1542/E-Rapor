@@ -1,26 +1,13 @@
 /**
  * Nama File: cekGuruKelasDitugaskan.js
- * Fungsi: Middleware untuk memvalidasi apakah guru kelas sudah ditugaskan di tahun ajaran aktif.
- *         Menginject informasi kelas wali ke request object untuk digunakan di controller.
+ * Fungsi: Middleware validasi penugasan guru kelas di tahun ajaran aktif (inject req.infoKelasWali)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../config/db');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// CHECK GURU KELAS ASSIGNMENT MIDDLEWARE
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Middleware untuk validasi penugasan guru kelas.
- * Memastikan user memiliki penugasan sebagai wali kelas di tahun ajaran aktif.
- * 
- * Data yang di-inject ke req:
- *   - req.infoKelasWali: { id_guru_kelas, kelas_id, nama_kelas }
- *   - req.idTahunAjaranInduk: ID tahun ajaran induk (jika belum ada)
- *   - req.idSemesterAktif: ID semester aktif (jika belum ada)
- */
+// Middleware: cek penugasan guru kelas + inject req.infoKelasWali, req.idTahunAjaranInduk, req.idSemesterAktif
 const cekGuruKelasDitugaskan = async (req, res, next) => {
     try {
         const userId = req.user.id;
@@ -28,19 +15,10 @@ const cekGuruKelasDitugaskan = async (req, res, next) => {
 
         // Step 1: Ambil tahun ajaran aktif jika belum ada di request
         if (!idInduk) {
-            const [taRows] = await db.execute(`
-                SELECT id_tahun_ajaran_induk, id_tahun_ajaran, semester
-                FROM tahun_ajaran 
-                WHERE status = 'aktif'
-                LIMIT 1
-            `);
-
-            if (taRows.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Tahun ajaran aktif belum diatur oleh admin.'
-                });
-            }
+            const [taRows] = await db.execute(
+                'SELECT id_tahun_ajaran_induk, id_tahun_ajaran, semester FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1'
+            );
+            if (taRows.length === 0) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur oleh admin.' });
 
             idInduk = taRows[0].id_tahun_ajaran_induk;
             req.idTahunAjaranInduk = idInduk;
@@ -60,11 +38,7 @@ const cekGuruKelasDitugaskan = async (req, res, next) => {
 
         // Step 3: Validasi penugasan
         if (rows.length === 0) {
-            return res.status(403).json({
-                success: false,
-                message: 'Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini. Silakan hubungi Admin.',
-                code: 'NOT_ASSIGNED'
-            });
+            return res.status(403).json({ success: false, message: 'Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini. Silakan hubungi Admin.', code: 'NOT_ASSIGNED' });
         }
 
         // Step 4: Inject informasi kelas wali ke request
@@ -75,13 +49,9 @@ const cekGuruKelasDitugaskan = async (req, res, next) => {
         };
 
         next();
-
     } catch (error) {
         console.error('Error di middleware cekGuruKelasDitugaskan:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Terjadi kesalahan server.' 
-        });
+        res.status(500).json({ success: false, message: 'Terjadi kesalahan server.' });
     }
 };
 
