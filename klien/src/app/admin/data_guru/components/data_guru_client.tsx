@@ -1015,7 +1015,7 @@ export default function DataGuruClient() {
 
                         <div className="p-6 space-y-4">
                             {[
-                                { label: 'Role', name: 'role', options: [{ v: '', l: 'Semua Role' }, { v: 'guru kelas', l: 'Guru Kelas' }, { v: 'guru bidang studi', l: 'Guru Bidang Studi' }] },
+                                { label: 'Role', name: 'role', options: [{ v: '', l: 'Semua Role' }, { v: 'guru_kelas', l: 'Guru Kelas' }, { v: 'guru_bidang_studi', l: 'Guru Bidang Studi' }] },
                                 { label: 'Jenis Kelamin', name: 'jenisKelamin', options: [{ v: '', l: 'Semua' }, { v: 'Laki-laki', l: 'Laki-laki' }, { v: 'Perempuan', l: 'Perempuan' }] },
                                 { label: 'Status', name: 'status', options: [{ v: '', l: 'Semua Status' }, { v: 'aktif', l: 'Aktif' }, { v: 'nonaktif', l: 'Nonaktif' }] },
                             ].map(f => (
