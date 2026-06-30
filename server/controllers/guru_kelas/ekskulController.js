@@ -1,6 +1,7 @@
 /**
  * Nama File: ekskulController.js
  * Fungsi: CRUD ekstrakurikuler siswa (max 3 ekskul per siswa)
+ * UPDATE: Fix bug query guru_kelas yang salah pakai tahunAjaranIndukId
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -27,16 +28,23 @@ exports.getEkskulSiswa = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
         }
 
-        // Ambil kelas guru
+        // ✅ PERBAIKAN: Ambil kelas guru dengan JOIN ke tahun_ajaran
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas 
-                FROM guru_kelas gk JOIN kelas k ON gk.kelas_id = k.id_kelas 
-                WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
-            [userId, tahunAjaranIndukId]
+                FROM guru_kelas gk 
+                INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
+                INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+                WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+                LIMIT 1`,
+            [userId, tahunAjaranIndukId]  // ✅ Pakai tahunAjaranIndukId dengan JOIN
         );
 
         if (guruKelasRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan' });
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini',
+                code: 'NOT_ASSIGNED'  // ✅ Tambah code agar frontend bisa handle
+            });
         }
         const { kelas_id, nama_kelas } = guruKelasRows[0];
 
@@ -120,14 +128,22 @@ exports.updateEkskulSiswa = async (req, res) => {
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
 
-        // Ambil kelas guru
+        // ✅ PERBAIKAN: Ambil kelas guru dengan JOIN ke tahun_ajaran
         const [guruKelasRows] = await db.execute(
-            `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
+            `SELECT gk.kelas_id 
+                FROM guru_kelas gk
+                INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+                WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+                LIMIT 1`,
             [userId, tahunAjaranIndukId]
         );
 
         if (guruKelasRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan' });
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Anda belum ditugaskan sebagai wali kelas',
+                code: 'NOT_ASSIGNED'
+            });
         }
         const { kelas_id } = guruKelasRows[0];
 
