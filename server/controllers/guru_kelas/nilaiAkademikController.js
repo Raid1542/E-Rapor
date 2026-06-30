@@ -400,14 +400,14 @@ exports.updateNilaiKomponen = async (req, res) => {
             // PTS: nilai rapor = nilai PTS
             const nilaiPTS = ptsKomponen ? nilaiFromDB[ptsKomponen.id_komponen] || 0 : 0;
             nilaiRapor = nilaiPTS;
-            deskripsi = await konfigurasiNilaiRaporModel.getDeskripsiByNilai(nilaiRapor, mapelId, semesterId);
+            deskripsi = await konfigurasiNilaiRaporModel.getDeskripsiByNilai(nilaiRapor, mapelId, semesterId, 'PTS');
         } else if (jenis === 'PAS') {
             // PAS: nilai rapor = (rataUH × bobotUH) + (PTS × bobotPTS) + (PAS × bobotPAS)
             let nilaiPTSFinal = 0;
             if (ptsKomponen) {
                 const [ptsRow] = await db.execute(
                     `SELECT nilai_rapor FROM nilai_rapor
-                     WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = 'PTS'`,
+                        WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = 'PTS'`,
                     [siswaId, mapelId, semesterId, semester]
                 );
                 nilaiPTSFinal = ptsRow.length > 0 ? ptsRow[0].nilai_rapor : 0;
@@ -426,7 +426,7 @@ exports.updateNilaiKomponen = async (req, res) => {
                 nilaiRapor = ((rataUH * totalBobotUH) + (nilaiPTSFinal * bobotPTS) + (nilaiPAS * bobotPAS)) / totalBobot;
             }
             nilaiRapor = Math.round(nilaiRapor) || 0;
-            deskripsi = await konfigurasiNilaiRaporModel.getDeskripsiByNilai(nilaiRapor, mapelId, semesterId);
+            deskripsi = await konfigurasiNilaiRaporModel.getDeskripsiByNilai(nilaiRapor, mapelId, semesterId, 'PAS');
         }
 
         // Simpan nilai rapor
@@ -466,7 +466,7 @@ exports.simpanNilai = async (req, res) => {
     const user_id = req.user.id;
     const tahunAjaranIndukId = req.idTahunAjaranInduk;
     const semesterId = req.idSemesterAktif;
-    
+
     try {
         // Validasi input
         if (!siswa_id || !mapel_id || !komponen_id || nilai === undefined) {

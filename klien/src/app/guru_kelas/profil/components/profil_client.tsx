@@ -1,14 +1,8 @@
 /**
  * Nama File: profil_client.tsx
- * Fungsi: Komponen client-side untuk manajemen profil guru kelas.
- *         Memungkinkan pengeditan data pribadi (nama, NUPTK, alamat, tempat/tanggal lahir, dsb.)
- *         dan pengunggahan foto profil.
+ * Fungsi: Komponen client-side untuk manajemen profil guru kelas
+ * UPDATE: Menggunakan template identik dengan profil Guru Bidang Studi
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 15 September 2025
- * Update: 
- *   - Template disesuaikan dengan profil Admin (tambah tempat/tanggal lahir, validasi usia)
- *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
- * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage & Profil Admin
  */
 
 'use client';
@@ -44,17 +38,27 @@ interface UserProfile {
     profileImage?: string;
 }
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+// ─── GLOBAL STYLES (DENGAN ANIMASI) ────────────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes pf-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes pf-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes pf-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .pf-fadeIn  { animation: pf-fadeIn  0.2s ease; }
-    .pf-scaleIn { animation: pf-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .pf-pulse   { animation: pf-pulse   0.6s ease 0.15s; }
-  `}</style>
+        @keyframes pf-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pf-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes pf-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pf-slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .pf-fadeIn  { animation: pf-fadeIn  0.2s ease; }
+        .pf-scaleIn { animation: pf-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .pf-pulse   { animation: pf-pulse   0.6s ease 0.15s; }
+        .pf-slideUp { animation: pf-slideUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+        
+        /* Animasi entrance seperti dashboard */
+        .anim-in { animation: pf-slideUp 0.5s ease forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.1s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.2s; }
+    `}</style>
 );
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
@@ -83,7 +87,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
                 <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
+                    Ok
                 </button>
             </div>
         </div>
@@ -103,7 +107,7 @@ const readonlyCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 const ProfilePage = () => {
     const router = useRouter();
@@ -123,7 +127,6 @@ const ProfilePage = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // ✅ TAMBAHAN: State untuk modal konfirmasi
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     const initialFormDataRef = useRef<typeof formData | null>(null);
@@ -132,7 +135,7 @@ const ProfilePage = () => {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-    // ─ Fetch profil ───────────────────────────────────────────────────────────
+    // ── Fetch profil ───────────────────────────────────────────────────────────
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -238,7 +241,8 @@ const ProfilePage = () => {
         return null;
     };
 
-    // ✅ TAMBAHAN: Buka modal konfirmasi
+    // ── Buka modal konfirmasi ─────────────────────────────────────────────────
+
     const openConfirmModal = () => {
         const tanggalError = validateTanggalLahir(formData.tanggalLahir);
         if (tanggalError) {
@@ -272,7 +276,8 @@ const ProfilePage = () => {
         setShowConfirmModal(true);
     };
 
-    // ✅ TAMBAHAN: Eksekusi submit profil (setelah konfirmasi)
+    // ── Eksekusi submit profil (setelah konfirmasi) ───────────────────────────
+
     const executeSubmitProfile = async () => {
         const token = localStorage.getItem('token');
         const storedUser = localStorage.getItem('currentUser');
@@ -423,16 +428,16 @@ const ProfilePage = () => {
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* Page header */}
-            <div className="mb-6">
+            {/* Page header - DENGAN ANIMASI */}
+            <div className="mb-6 anim-in d1">
                 <h1 className="text-2xl font-bold text-gray-900">Profil Saya</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola informasi akun dan foto profil Anda</p>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-                {/* ── Profile Card (kiri) ─────────────────────────────────────────── */}
-                <div className="lg:w-72 flex-shrink-0 w-full">
+                {/* ── Profile Card (kiri) - DENGAN ANIMASI ─────────────────────────────────────────── */}
+                <div className="lg:w-72 flex-shrink-0 w-full anim-in d2">
                     <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
                         <div className="px-5 py-4" style={HEADER_GRAD}>
@@ -551,15 +556,14 @@ const ProfilePage = () => {
                     </div>
                 </div>
 
-                {/* ── Form Profil (kanan) ─────────────────────────────────────────── */}
-                <div className="flex-1 w-full">
+                {/* ── Form Profil (kanan) - DENGAN ANIMASI ─────────────────────────────────────────── */}
+                <div className="flex-1 w-full anim-in d3">
                     <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
                         <div className="px-6 py-4" style={HEADER_GRAD}>
                             <p className="text-base font-bold text-white">Edit Profil</p>
                         </div>
 
-                        {/* ✅ HAPUS <form> tag, ganti dengan <div> */}
                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
 
                             <div className="flex flex-col gap-1.5">
@@ -652,7 +656,6 @@ const ProfilePage = () => {
                             </div>
                         </div>
 
-                        {/* ✅ HAPUS checkbox konfirmasi, ganti dengan button yang buka modal */}
                         <div className="px-6 pb-6">
                             <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                                 <div className="flex justify-end">
@@ -680,12 +683,11 @@ const ProfilePage = () => {
                                 </div>
                             </div>
                         </div>
-                        {/* ✅ TUTUP </div> sebagai pengganti </form> */}
                     </div>
                 </div>
             </div>
 
-            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {/* Modal Konfirmasi Sederhana */}
             {showConfirmModal && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 pf-fadeIn"

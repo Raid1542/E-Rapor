@@ -2,6 +2,7 @@
  * Nama File: dataPendukungController.js
  * Fungsi: Controller data pendukung guru bidang studi (mapel, kelas, komponen, TA)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');

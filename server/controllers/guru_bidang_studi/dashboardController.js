@@ -127,8 +127,8 @@ exports.getDashboardData = async (req, res) => {
                         k.id_kelas, k.nama_kelas,
                         nr.nilai_rapor, nr.deskripsi,
                         (SELECT COUNT(DISTINCT nd2.komponen_id) 
-                         FROM nilai_detail nd2 
-                         WHERE nd2.siswa_id = s.id_siswa AND nd2.mapel_id = ? AND nd2.tahun_ajaran_id = ? AND nd2.nilai IS NOT NULL) as jumlah_komponen_terisi
+                            FROM nilai_detail nd2 
+                            WHERE nd2.siswa_id = s.id_siswa AND nd2.mapel_id = ? AND nd2.tahun_ajaran_id = ? AND nd2.nilai IS NOT NULL) as jumlah_komponen_terisi
                     FROM siswa s
                     JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
                     JOIN kelas k ON sk.kelas_id = k.id_kelas

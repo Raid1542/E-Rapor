@@ -1,3 +1,10 @@
+/**
+ * Nama File: Header.tsx
+ * Fungsi: Komponen header untuk layout guru bidang studi.
+ * UPDATE: Struktur identik dengan Header Guru Kelas
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ */
+
 'use client';
 
 import { LogOut, ChevronDown, User, Lock, X, FileText, AlertCircle } from 'lucide-react';
@@ -19,6 +26,10 @@ interface TahunAjaranInfo {
     status_pas: 'nonaktif' | 'aktif' | 'selesai';
 }
 
+interface HeaderProps {
+    user: UserData;
+}
+
 const getInitials = (name: string): string => {
     return name
         .split(' ')
@@ -27,29 +38,21 @@ const getInitials = (name: string): string => {
         .join('');
 };
 
-// ✅ BARU: Helper untuk format role: "guru_bidang_studi" → "GURU BIDANG STUDI"
-const formatRole = (role: string): string => {
-    if (!role) return '';
-    return role
-        .replace(/_/g, ' ')  // Ganti underscore dengan spasi
-        .toUpperCase();       // Kapital semua
-};
-
 // ─── GLOBAL STYLES ─────────────────────────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
-        @keyframes gbs-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes gbs-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes gbs-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        @keyframes gbs-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .gbs-fadeIn  { animation: gbs-fadeIn  0.2s ease; }
-        .gbs-scaleIn { animation: gbs-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .gbs-pulse   { animation: gbs-pulse   0.6s ease 0.15s; }
-        .gbs-shimmer { 
+        @keyframes gk-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes gk-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes gk-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes gk-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .gk-fadeIn  { animation: gk-fadeIn  0.2s ease; }
+        .gk-scaleIn { animation: gk-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .gk-pulse   { animation: gk-pulse   0.6s ease 0.15s; }
+        .gk-shimmer { 
             background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.2) 100%);
             background-size: 200% 100%;
-            animation: gbs-shimmer 1.5s infinite;
+            animation: gk-shimmer 1.5s infinite;
         }
     `}</style>
 );
@@ -125,10 +128,10 @@ const ConfirmLogoutModal = ({
     onConfirm: () => void;
     onCancel: () => void;
 }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 gbs-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 gk-fadeIn">
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
         <div
-            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 gbs-scaleIn"
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 gk-scaleIn"
             style={{ border: '1px solid #fde0c8' }}
         >
             <button
@@ -138,7 +141,7 @@ const ConfirmLogoutModal = ({
                 <X size={18} />
             </button>
 
-            <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 gbs-pulse">
+            <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 gk-pulse">
                 <LogOut size={32} style={{ color: '#e8690a' }} />
             </div>
 
@@ -170,7 +173,7 @@ const ConfirmLogoutModal = ({
                     onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
                 >
-                    Ya, Keluar
+                    Ya
                 </button>
             </div>
         </div>
@@ -179,9 +182,9 @@ const ConfirmLogoutModal = ({
 
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
 
-export default function Header() {
+export default function Header({ user: initialUser }: HeaderProps) {
     const router = useRouter();
-    const [user, setUser] = useState<UserData | null>(null);
+    const [user, setUser] = useState<UserData | null>(initialUser || null);
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -200,7 +203,10 @@ export default function Header() {
                     setUser(userData);
                     if (userData.profileImage) {
                         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-                        setProfileImage(baseUrl + userData.profileImage);
+                        const imgUrl = userData.profileImage.startsWith('/')
+                            ? `${baseUrl}${userData.profileImage}`
+                            : `${baseUrl}/${userData.profileImage}`;
+                        setProfileImage(imgUrl);
                     } else {
                         setProfileImage(null);
                     }
@@ -292,7 +298,7 @@ export default function Header() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // ── Handlers ─────────────────────────────────────────────────────────
+    // ── Handlers ──────────────────────────────────────────────────────────
     const handleLogoutClick = () => { setDropdownOpen(false); setShowLogoutConfirm(true); };
     const handleLogoutConfirm = () => {
         setShowLogoutConfirm(false);
@@ -302,10 +308,10 @@ export default function Header() {
         router.push('/login');
     };
     const handleLogoutCancel = () => setShowLogoutConfirm(false);
+
     const handleProfile = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/profil'); };
     const handleUbahPassword = () => { setDropdownOpen(false); router.push('/guru_bidang_studi/ubah_password'); };
 
-    // ✅ LOGIKA: Tentukan jenis penilaian yang ditampilkan
     const getActiveJenisPenilaian = (): { jenis: string; status: string } | null => {
         if (!tahunAjaranInfo) return null;
 
@@ -327,8 +333,8 @@ export default function Header() {
 
     const activeJenisInfo = getActiveJenisPenilaian();
 
-    const isJenisPenilaianBelumAktif = tahunAjaranInfo 
-        && tahunAjaranInfo.status_pts === 'nonaktif' 
+    const isJenisPenilaianBelumAktif = tahunAjaranInfo
+        && tahunAjaranInfo.status_pts === 'nonaktif'
         && tahunAjaranInfo.status_pas === 'nonaktif';
 
     // ── Skeleton ───────────────────────────────────────────────────────────
@@ -336,8 +342,8 @@ export default function Header() {
         return (
             <header className="border-b" style={{ borderColor: '#fde0c8' }}>
                 <div className="px-6 py-3 flex justify-between items-center">
-                    <div className="h-6 w-64 rounded-lg gbs-shimmer" />
-                    <div className="h-10 w-44 rounded-xl gbs-shimmer" />
+                    <div className="h-6 w-64 rounded-lg gk-shimmer" />
+                    <div className="h-10 w-44 rounded-xl gk-shimmer" />
                 </div>
             </header>
         );
@@ -345,7 +351,7 @@ export default function Header() {
 
     // ── Avatar ─────────────────────────────────────────────────────────────
     const Avatar = ({ size = 'sm' }: { size?: 'sm' | 'md' }) => {
-        const dim = size === 'md' ? 'w-11 h-11' : 'w-8 h-8';
+        const dim = size === 'md' ? 'w-10 h-10' : 'w-8 h-8';
         const text = size === 'md' ? 'text-sm' : 'text-xs';
         return (
             <div
@@ -362,7 +368,6 @@ export default function Header() {
         );
     };
 
-    // ✅ Helper untuk render badge status penilaian
     const renderPenilaianBadge = () => {
         if (activeJenisInfo) {
             return <StatusBadge jenis={activeJenisInfo.jenis} status={activeJenisInfo.status} />;
@@ -414,58 +419,60 @@ export default function Header() {
                             </div>
                         </div>
 
-                        {/* KANAN: Profil dropdown */}
+                        {/* KANAN: Profil dropdown - SAMA SEPERTI GURU KELAS */}
                         <div className="relative flex-shrink-0" ref={dropdownRef}>
+                            {/* Trigger Button - Tanpa card background */}
                             <button
                                 onClick={() => setDropdownOpen(v => !v)}
-                                className="flex items-center gap-1.5 sm:gap-2.5 pl-1.5 sm:pl-2 pr-2 sm:pr-3 py-1.5 rounded-xl transition-all duration-150"
-                                style={{
-                                    background: dropdownOpen ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.30)',
-                                    border: '1.5px solid rgba(255,255,255,0.6)',
-                                }}
-                                onMouseEnter={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.40)'; }}
-                                onMouseLeave={e => { if (!dropdownOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.30)'; }}
+                                className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-all duration-150 hover:bg-white/10"
                             >
-                                <Avatar size="sm" />
+                                <Avatar size="md" />
                                 <div className="text-left hidden md:block">
-                                    <p className="text-xs font-bold text-white leading-tight drop-shadow-sm max-w-[120px] truncate">{user.nama_lengkap}</p>
-                                    {/* ✅ FIXED: Gunakan formatRole */}
-                                    <p className="text-[10px] text-white/90 leading-tight font-medium">{formatRole(user.role)}</p>
+                                    <p className="text-sm font-semibold text-white leading-tight drop-shadow-sm max-w-[150px] truncate">
+                                        {user.nama_lengkap}
+                                    </p>
+                                    <p className="text-xs text-white/80 leading-tight font-medium">
+                                        Guru Bidang Studi
+                                    </p>
                                 </div>
                                 <ChevronDown
-                                    className="w-3.5 h-3.5 text-white transition-transform duration-200 hidden md:block"
+                                    className="w-4 h-4 text-white/80 transition-transform duration-200 hidden md:block"
                                     style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
                                 />
                             </button>
 
-                            {/* Dropdown panel */}
+                            {/* Dropdown panel - Card header soft orange */}
                             {dropdownOpen && (
                                 <div
-                                    className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gbs-scaleIn"
+                                    className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gk-scaleIn"
                                     style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
                                 >
-                                    <div className="p-4" style={{ background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)' }}>
-                                        <div className="flex items-center gap-3">
+                                    {/* Info user - Soft orange background */}
+                                    <div className="p-5" style={{ background: 'linear-gradient(135deg, #fce8d6 0%, #fdd4b8 60%, #fbc9a8 100%)' }}>
+                                        <div className="flex items-center gap-4">
                                             <div
-                                                className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
-                                                style={{ background: 'rgba(255,255,255,0.22)', border: '2px solid rgba(255,255,255,0.4)' }}
+                                                className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                                                style={{ background: 'rgba(255,255,255,0.6)', border: '2px solid rgba(255,255,255,0.8)' }}
                                             >
                                                 {profileImage ? (
                                                     <img src={profileImage} alt="Foto Profil" className="w-full h-full object-cover"
                                                         onError={() => setProfileImage(null)} />
                                                 ) : (
-                                                    <span className="text-white text-sm font-bold">{getInitials(user.nama_lengkap)}</span>
+                                                    <span className="text-orange-700 text-base font-bold">{getInitials(user.nama_lengkap)}</span>
                                                 )}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="font-bold text-sm text-white truncate leading-tight">{user.nama_lengkap}</p>
-                                                <p className="text-[11px] text-white/65 truncate mt-0.5">{user.email_sekolah}</p>
-                                                {/* ✅ FIXED: Gunakan formatRole */}
+                                                <p className="font-bold text-base text-orange-900 truncate leading-tight">{user.nama_lengkap}</p>
+                                                <p className="text-sm text-orange-700/80 truncate mt-1">{user.email_sekolah}</p>
                                                 <span
-                                                    className="inline-block mt-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full tracking-wide"
-                                                    style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}
+                                                    className="inline-flex items-center justify-center mt-2 px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wide whitespace-nowrap"
+                                                    style={{
+                                                        background: 'rgba(255,255,255,0.7)',
+                                                        color: '#c95b08',
+                                                        maxWidth: '100%'
+                                                    }}
                                                 >
-                                                    {formatRole(user.role)}
+                                                    GURU BIDANG STUDI
                                                 </span>
                                             </div>
                                         </div>

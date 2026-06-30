@@ -2,6 +2,7 @@
  * Nama File: penilaianNilaiModel.js
  * Fungsi: Model input nilai siswa (validasi akses, bobot per kelas, status aktif)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');

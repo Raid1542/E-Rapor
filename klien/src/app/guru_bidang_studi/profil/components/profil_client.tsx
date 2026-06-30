@@ -8,6 +8,7 @@
  * Update: 
  *   - Template disesuaikan dengan profil Admin (tambah tempat/tanggal lahir, validasi usia)
  *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ *   - ✅ TAMBAH ANIMASI entrance seperti Dashboard
  * UI: Tema oranye elegan, konsisten dengan DataMataPelajaranPage & Profil Admin
  */
 
@@ -19,7 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 
@@ -44,17 +45,27 @@ interface UserProfile {
     profileImage?: string;
 }
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+// ─── GLOBAL STYLES (DENGAN ANIMASI) ────────────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes pf-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes pf-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes pf-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .pf-fadeIn  { animation: pf-fadeIn  0.2s ease; }
-    .pf-scaleIn { animation: pf-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .pf-pulse   { animation: pf-pulse   0.6s ease 0.15s; }
-  `}</style>
+        @keyframes pf-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pf-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes pf-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pf-slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .pf-fadeIn  { animation: pf-fadeIn  0.2s ease; }
+        .pf-scaleIn { animation: pf-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .pf-pulse   { animation: pf-pulse   0.6s ease 0.15s; }
+        .pf-slideUp { animation: pf-slideUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+        
+        /* Animasi entrance seperti dashboard */
+        .anim-in { animation: pf-slideUp 0.5s ease forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.1s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.2s; }
+    `}</style>
 );
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
@@ -83,7 +94,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
                 <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
+                    Ok
                 </button>
             </div>
         </div>
@@ -423,16 +434,16 @@ const ProfilePage = () => {
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* Page header */}
-            <div className="mb-6">
+            {/* Page header - DENGAN ANIMASI */}
+            <div className="mb-6 anim-in d1">
                 <h1 className="text-2xl font-bold text-gray-900">Profil Saya</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola informasi akun dan foto profil Anda</p>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-                {/* ── Profile Card (kiri) ─────────────────────────────────────────── */}
-                <div className="lg:w-72 flex-shrink-0 w-full">
+                {/* ── Profile Card (kiri) - DENGAN ANIMASI ─────────────────────────────────────────── */}
+                <div className="lg:w-72 flex-shrink-0 w-full anim-in d2">
                     <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
                         <div className="px-5 py-4" style={HEADER_GRAD}>
@@ -551,8 +562,8 @@ const ProfilePage = () => {
                     </div>
                 </div>
 
-                {/* ── Form Profil (kanan) ─────────────────────────────────────────── */}
-                <div className="flex-1 w-full">
+                {/* ── Form Profil (kanan) - DENGAN ANIMASI ─────────────────────────────────────────── */}
+                <div className="flex-1 w-full anim-in d3">
                     <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
                         <div className="px-6 py-4" style={HEADER_GRAD}>

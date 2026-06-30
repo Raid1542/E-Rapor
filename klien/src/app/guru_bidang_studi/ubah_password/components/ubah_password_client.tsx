@@ -1,3 +1,15 @@
+/**
+ * Nama File: ubah_password_client.tsx
+ * Fungsi: Komponen client-side untuk mengubah password guru bidang studi
+ *         dengan fitur validasi kekuatan password, show/hide password,
+ *         dan checklist aturan password.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Update: 
+ *   - ✅ TAMBAH ANIMASI entrance seperti Dashboard
+ *   - Endpoint untuk guru bidang studi
+ * UI: Tema oranye elegan, konsisten dengan Dashboard
+ */
+
 'use client';
 
 import React, { useState, useCallback } from 'react';
@@ -15,7 +27,7 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; onConfirm?: () => void; }
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+// ─── GLOBAL STYLES (DENGAN ANIMASI ENTRANCE) ────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
@@ -24,11 +36,19 @@ const GlobalStyles = () => (
         @keyframes in-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         @keyframes in-slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes in-shake   { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+        
         .in-fadeIn   { animation: in-fadeIn  0.2s ease; }
         .in-scaleIn  { animation: in-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .in-pulse    { animation: in-pulse   0.6s ease 0.15s; }
         .in-slideUp  { animation: in-slideUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
         .in-shake    { animation: in-shake   0.35s ease; }
+        
+        /* ✅ ANIMASI ENTRANCE seperti Dashboard */
+        .anim-in { animation: in-slideUp 0.5s ease forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.1s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.2s; }
 
         /* Sembunyikan ikon reveal bawaan browser */
         input[type="password"]::-ms-reveal,
@@ -80,7 +100,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
                 <button onClick={handleOk} className={`w-full ${m.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
+                    Ok
                 </button>
             </div>
         </div>
@@ -277,13 +297,13 @@ const UbahPasswordClient = () => {
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* Subtitle */}
-            <p className="text-sm mb-5 w-full max-w-2xl in-slideUp" style={{ color: '#c95b08' }}>
+            {/* ✅ Subtitle - DENGAN ANIMASI */}
+            <p className="text-sm mb-5 w-full max-w-2xl anim-in d1" style={{ color: '#c95b08' }}>
                 Perbarui kata sandi akun Anda secara berkala untuk keamanan
             </p>
 
-            {/* Banner tips keamanan */}
-            <div className="mb-6 w-full max-w-2xl rounded-xl flex items-start gap-3 px-4 py-3.5 in-slideUp"
+            {/* ✅ Banner tips keamanan - DENGAN ANIMASI */}
+            <div className="mb-6 w-full max-w-2xl rounded-xl flex items-start gap-3 px-4 py-3.5 anim-in d2"
                 style={{ background: '#fff', border: '1px solid #fde0c8' }}>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: '#fff3e8' }}>
@@ -297,9 +317,9 @@ const UbahPasswordClient = () => {
                 </div>
             </div>
 
-            {/* Form card */}
-            <div className="bg-white rounded-2xl overflow-hidden w-full max-w-2xl in-slideUp"
-                style={{ ...CARD_STYLE, animationDelay: '0.05s' }}>
+            {/* ✅ Form card - DENGAN ANIMASI */}
+            <div className="bg-white rounded-2xl overflow-hidden w-full max-w-2xl anim-in d3"
+                style={{ ...CARD_STYLE }}>
 
                 {/* Card header */}
                 <div className="flex items-center justify-between gap-4 px-6 py-4 relative overflow-hidden" style={HEADER_GRAD}>
@@ -448,9 +468,9 @@ const UbahPasswordClient = () => {
                 </form>
             </div>
 
-            {/* Catatan peringatan */}
-            <div className="mt-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 in-slideUp"
-                style={{ background: '#fef2f2', border: '1px solid #fca5a5', animationDelay: '0.1s' }}>
+            {/* ✅ Catatan peringatan - DENGAN ANIMASI */}
+            <div className="mt-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 anim-in d4"
+                style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}>
                 <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs leading-relaxed text-red-600">
                     <strong>Perhatian:</strong> Setelah kata sandi berhasil diubah, Anda akan otomatis keluar dari sistem dan diminta untuk login kembali menggunakan kata sandi baru.

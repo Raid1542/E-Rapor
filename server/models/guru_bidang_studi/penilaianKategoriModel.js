@@ -2,6 +2,7 @@
  * Nama File: penilaianKategoriModel.js
  * Fungsi: Model kategori nilai akademik (filter jenis_penilaian, cek coverage)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
@@ -37,7 +38,7 @@ const getKategoriByMapel = async (mapelId, semesterId, kelasId, jenisPenilaian =
 // Ambil detail kategori by ID
 const getKategoriById = async (id) => {
     const [rows] = await db.execute(
-        'SELECT id_config, mapel_id, kelas_id, min_nilai, max_nilai, deskripsi, urutan FROM konfigurasi_nilai_rapor WHERE id_config = ?',
+        'SELECT id_config, mapel_id, kelas_id, min_nilai, max_nilai, deskripsi, urutan, jenis_penilaian FROM konfigurasi_nilai_rapor WHERE id_config = ?',
         [id]
     );
     return rows.length > 0 ? rows[0] : null;
@@ -116,11 +117,16 @@ const deleteKategori = async (id) => {
 };
 
 // Cek apakah ada nilai siswa yang masuk range kategori
-const cekNilaiSiswaInRange = async (mapelId, semesterId, minNilai, maxNilai, kelasId) => {
-    const [rows] = await db.execute(
-        'SELECT COUNT(*) as total FROM nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND kelas_id = ? AND nilai_rapor BETWEEN ? AND ?',
-        [mapelId, semesterId, kelasId, minNilai, maxNilai]
-    );
+const cekNilaiSiswaInRange = async (mapelId, semesterId, minNilai, maxNilai, kelasId, jenisPenilaian = null) => {
+    let query = 'SELECT COUNT(*) as total FROM nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND kelas_id = ? AND nilai_rapor BETWEEN ? AND ?';
+    const params = [mapelId, semesterId, kelasId, minNilai, maxNilai];
+
+    if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
+        query += ' AND jenis_penilaian = ?';
+        params.push(jenisPenilaian);
+    }
+
+    const [rows] = await db.execute(query, params);
     return rows[0]?.total || 0;
 };
 
