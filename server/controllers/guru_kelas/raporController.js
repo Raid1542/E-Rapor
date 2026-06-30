@@ -1,6 +1,9 @@
 /**
  * Nama File: raporController.js
  * Fungsi: Generate rapor DOCX untuk guru kelas (PTS/PAS, Ganjil/Genap)
+ * UPDATE: Deskripsi rapor dihitung REAL-TIME dari konfigurasi_nilai_rapor
+ *         berdasarkan jenis_penilaian (PTS/PAS), bukan dari kolom deskripsi
+ *         di tabel nilai_rapor (yang bisa berisi data lama)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -137,7 +140,11 @@ exports.generateRaporPDF = async (req, res) => {
         );
         const namagurukelas = guruRows[0]?.nama_lengkap || 'Nama Guru Kelas';
 
-        // ── Nilai Akademik ───────────────────────────────────────────────────
+        // ═════════════════════════════════════════════════════════════════════
+        // ✅ PERBAIKAN: Nilai Akademik dengan Deskripsi REAL-TIME
+        // ═════════════════════════════════════════════════════════════════════
+        
+        // 1. Ambil daftar mata pelajaran
         const [mapelRows] = await db.execute(`
             SELECT DISTINCT mp.id_mata_pelajaran, mp.kode_mapel, mp.nama_mapel, mp.urutan_rapor, mp.jenis
             FROM mata_pelajaran mp
@@ -148,13 +155,49 @@ exports.generateRaporPDF = async (req, res) => {
             ORDER BY mp.urutan_rapor IS NULL, mp.urutan_rapor ASC
         `, [siswaId, semesterId, semesterNorm, jenisNorm]);
 
+        // 2. ✅ PERBAIKAN: Ambil HANYA nilai_rapor (TANPA kolom deskripsi)
         const [nilaiRaporRows] = await db.execute(`
-            SELECT nr.mapel_id, nr.nilai_rapor, nr.deskripsi FROM nilai_rapor nr
+            SELECT nr.mapel_id, nr.nilai_rapor FROM nilai_rapor nr
             WHERE nr.siswa_id = ? AND nr.tahun_ajaran_id = ? AND nr.semester = ? AND nr.jenis_penilaian = ?
         `, [siswaId, semesterId, semesterNorm, jenisNorm]);
 
+        // 3. ✅ PERBAIKAN BARU: Ambil Konfigurasi Kategori REAL-TIME berdasarkan jenis_penilaian
+        const [kategoriRows] = await db.execute(`
+            SELECT knr.mapel_id, knr.min_nilai, knr.max_nilai, knr.deskripsi, knr.kelas_id
+            FROM konfigurasi_nilai_rapor knr
+            WHERE knr.tahun_ajaran_id = ? 
+            AND knr.jenis_penilaian = ? 
+            AND knr.is_active = 1
+            AND (knr.kelas_id IS NULL OR knr.kelas_id = ?)
+            ORDER BY knr.mapel_id, 
+                     CASE WHEN knr.kelas_id = ? THEN 0 ELSE 1 END, 
+                     knr.min_nilai DESC
+        `, [semesterId, jenisNorm, kelas_id, kelas_id]);
+
+        // 4. ✅ PERBAIKAN BARU: Helper untuk Hitung Deskripsi Otomatis
+        const getDeskripsiOtomatis = (mapelId, nilai) => {
+            if (nilai === null || nilai === undefined) return '–';
+            
+            // Cari konfigurasi untuk mapel ini (prioritas: spesifik kelas > global)
+            const configMapel = kategoriRows.filter(k => k.mapel_id === mapelId);
+            
+            // Cocokkan nilai dengan range min-max
+            for (const config of configMapel) {
+                if (nilai >= config.min_nilai && nilai <= config.max_nilai) {
+                    return config.deskripsi;
+                }
+            }
+            return '–'; // Jika tidak ada kategori yang cocok
+        };
+
+        // 5. ✅ PERBAIKAN: Build Map dengan deskripsi yang dihitung REAL-TIME
         const nilaiRaporMap = new Map();
-        nilaiRaporRows.forEach(row => nilaiRaporMap.set(row.mapel_id, { nilai_rapor: row.nilai_rapor, deskripsi: row.deskripsi }));
+        nilaiRaporRows.forEach(row => {
+            nilaiRaporMap.set(row.mapel_id, { 
+                nilai_rapor: row.nilai_rapor, 
+                deskripsi: getDeskripsiOtomatis(row.mapel_id, row.nilai_rapor)  // ✅ Hitung otomatis!
+            });
+        });
 
         // Fallback: hitung dari nilai_detail jika rapor belum ada
         for (const mp of mapelRows) {
@@ -165,9 +208,10 @@ exports.generateRaporPDF = async (req, res) => {
                 );
                 const nilaiValid = detailRows.map(r => r.nilai).filter(n => n != null && !isNaN(n) && n >= 0);
                 if (nilaiValid.length > 0) {
+                    const nilaiRata = Math.floor(nilaiValid.reduce((a, b) => a + b, 0) / nilaiValid.length);
                     nilaiRaporMap.set(mp.id_mata_pelajaran, {
-                        nilai_rapor: Math.floor(nilaiValid.reduce((a, b) => a + b, 0) / nilaiValid.length),
-                        deskripsi: '–'
+                        nilai_rapor: nilaiRata,
+                        deskripsi: getDeskripsiOtomatis(mp.id_mata_pelajaran, nilaiRata)  // ✅ Hitung otomatis!
                     });
                 } else {
                     nilaiRaporMap.set(mp.id_mata_pelajaran, { nilai_rapor: '-', deskripsi: '-' });

@@ -1035,12 +1035,15 @@ export default function InputNilaiGBSClient() {
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={{ border: `1px solid ${THEME.colors.border}` }}>
 
                         {/* Header */}
                         <div className="px-6 py-5 flex items-center justify-between" style={{ background: THEME.gradients.header }}>
                             <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                    <BookOpen size={24} className="text-white" />
+                                </div>
                                 <div>
                                     <h2 className="text-base font-bold text-white">Detail Nilai Siswa</h2>
                                     <p className="text-xs text-white/80 mt-0.5">{selectedSiswa.nama} • {currentKelas?.nama_kelas}</p>
@@ -1071,7 +1074,105 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             </div>
 
-                            {/* Komponen Penilaian - SUSUNAN JELAS: PTS → PAS → UH */}
+                            {/* Rapor PTS & PAS */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></div>
+                                    <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Rapor Penilaian</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Rapor PTS */}
+                                    <div className="rounded-xl p-5 border-2" style={{
+                                        background: selectedSiswa.nilai_rapor_pts > 0 ? '#fff7ed' : '#f9fafb',
+                                        borderColor: selectedSiswa.nilai_rapor_pts > 0 ? '#fdba74' : '#e5e7eb'
+                                    }}>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                                                    style={{ background: selectedSiswa.nilai_rapor_pts > 0 ? '#fed7aa' : '#e5e7eb' }}>
+                                                    <span className="text-sm font-bold"
+                                                        style={{ color: selectedSiswa.nilai_rapor_pts > 0 ? '#c2410c' : '#6b7280' }}>PTS</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold"
+                                                        style={{ color: selectedSiswa.nilai_rapor_pts > 0 ? '#7a3a0a' : '#9ca3af' }}>
+                                                        Rapor PTS
+                                                    </p>
+                                                    <p className="text-xs" style={{ color: '#a89a8c' }}>
+                                                        {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className={`text-3xl font-bold ${selectedSiswa.nilai_rapor_pts > 0 ? '' : 'text-gray-400'}`}
+                                                    style={{ color: selectedSiswa.nilai_rapor_pts > 0 ? '#c2410c' : undefined }}>
+                                                    {selectedSiswa.nilai_rapor_pts > 0 ? selectedSiswa.nilai_rapor_pts : '—'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Deskripsi PTS */}
+                                        <div className="pt-4 border-t" style={{ borderColor: selectedSiswa.nilai_rapor_pts > 0 ? '#fde0c8' : '#e5e7eb' }}>
+                                            <p className="text-xs font-semibold mb-2" style={{ color: selectedSiswa.nilai_rapor_pts > 0 ? '#7a3a0a' : '#9ca3af' }}>Deskripsi:</p>
+                                            <div className="p-4 rounded-lg" style={{
+                                                background: selectedSiswa.nilai_rapor_pts > 0 ? '#fff' : '#f9fafb',
+                                                border: `1px solid ${selectedSiswa.nilai_rapor_pts > 0 ? '#fde0c8' : '#e5e7eb'}`
+                                            }}>
+                                                <p className="text-sm text-gray-700 leading-relaxed" style={{ minHeight: '80px' }}>
+                                                    {selectedSiswa.deskripsi_pts || <span className="italic text-gray-400">Belum ada deskripsi</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Rapor PAS */}
+                                    <div className="rounded-xl p-5 border-2" style={{
+                                        background: selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f9fafb',
+                                        borderColor: selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb'
+                                    }}>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                                                    style={{ background: selectedSiswa.nilai_rapor_pas > 0 ? '#fed7aa' : '#e5e7eb' }}>
+                                                    <span className="text-sm font-bold"
+                                                        style={{ color: selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : '#6b7280' }}>PAS</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold"
+                                                        style={{ color: selectedSiswa.nilai_rapor_pas > 0 ? '#7a3a0a' : '#9ca3af' }}>
+                                                        Rapor PAS
+                                                    </p>
+                                                    <p className="text-xs" style={{ color: '#a89a8c' }}>
+                                                        {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className={`text-3xl font-bold ${selectedSiswa.nilai_rapor_pas > 0 ? '' : 'text-gray-400'}`}
+                                                    style={{ color: selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : undefined }}>
+                                                    {selectedSiswa.nilai_rapor_pas > 0 ? selectedSiswa.nilai_rapor_pas : '—'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Deskripsi PAS */}
+                                        <div className="pt-4 border-t" style={{ borderColor: selectedSiswa.nilai_rapor_pas > 0 ? '#fde0c8' : '#e5e7eb' }}>
+                                            <p className="text-xs font-semibold mb-2" style={{ color: selectedSiswa.nilai_rapor_pas > 0 ? '#7a3a0a' : '#9ca3af' }}>Deskripsi:</p>
+                                            <div className="p-4 rounded-lg" style={{
+                                                background: selectedSiswa.nilai_rapor_pas > 0 ? '#fff' : '#f9fafb',
+                                                border: `1px solid ${selectedSiswa.nilai_rapor_pas > 0 ? '#fde0c8' : '#e5e7eb'}`
+                                            }}>
+                                                <p className="text-sm text-gray-700 leading-relaxed" style={{ minHeight: '80px' }}>
+                                                    {selectedSiswa.deskripsi_pas || <span className="italic text-gray-400">Belum ada deskripsi</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Komponen Penilaian - UH, PTS, PAS */}
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></div>
@@ -1079,103 +1180,7 @@ export default function InputNilaiGBSClient() {
                                 </div>
 
                                 <div className="space-y-3">
-                                    {/* 1. PTS */}
-                                    {(() => {
-                                        const ptsKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PTS');
-                                        if (!ptsKomponen) return null;
-                                        const nilai = selectedSiswa.nilai[ptsKomponen.id_komponen];
-                                        const hasValue = nilai !== null && nilai !== undefined;
-
-                                        return (
-                                            <div className="rounded-xl p-5 border-2" style={{
-                                                background: '#fff7ed',
-                                                borderColor: '#fdba74'
-                                            }}>
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#fed7aa' }}>
-                                                            <span className="text-sm font-bold" style={{ color: '#c2410c' }}>PTS</span>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Penilaian Tengah Semester</p>
-                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>
-                                                                {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className={`text-3xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
-                                                            style={{ color: hasValue ? '#c2410c' : undefined }}>
-                                                            {hasValue ? nilai : '—'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Deskripsi PTS */}
-                                                <div className="pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
-                                                    <p className="text-xs font-semibold mb-2" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
-                                                    <div className="p-4 rounded-lg" style={{ background: '#fff', border: '1px solid #fde0c8' }}>
-                                                        <p className="text-sm text-gray-700 leading-relaxed" style={{ minHeight: '80px' }}>
-                                                            {selectedSiswa.deskripsi_pts || <span className="italic text-gray-400">Belum ada deskripsi</span>}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* 2. PAS */}
-                                    {(() => {
-                                        const pasKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PAS');
-                                        if (!pasKomponen) return null;
-                                        const nilai = selectedSiswa.nilai[pasKomponen.id_komponen];
-                                        const hasValue = nilai !== null && nilai !== undefined;
-
-                                        return (
-                                            <div className="rounded-xl p-5 border-2" style={{
-                                                background: hasValue ? '#fff7ed' : '#f9fafb',
-                                                borderColor: hasValue ? '#fdba74' : '#e5e7eb'
-                                            }}>
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                                                            style={{ background: hasValue ? '#fed7aa' : '#e5e7eb' }}>
-                                                            <span className="text-sm font-bold"
-                                                                style={{ color: hasValue ? '#c2410c' : '#6b7280' }}>PAS</span>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold"
-                                                                style={{ color: hasValue ? '#7a3a0a' : '#9ca3af' }}>Penilaian Akhir Semester</p>
-                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>
-                                                                {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className={`text-3xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
-                                                            style={{ color: hasValue ? '#c2410c' : undefined }}>
-                                                            {hasValue ? nilai : '—'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Deskripsi PAS */}
-                                                <div className="pt-4 border-t" style={{ borderColor: hasValue ? '#fde0c8' : '#e5e7eb' }}>
-                                                    <p className="text-xs font-semibold mb-2" style={{ color: hasValue ? '#7a3a0a' : '#9ca3af' }}>Deskripsi:</p>
-                                                    <div className="p-4 rounded-lg" style={{
-                                                        background: hasValue ? '#fff' : '#f9fafb',
-                                                        border: `1px solid ${hasValue ? '#fde0c8' : '#e5e7eb'}`
-                                                    }}>
-                                                        <p className="text-sm text-gray-700 leading-relaxed" style={{ minHeight: '80px' }}>
-                                                            {selectedSiswa.deskripsi_pas || <span className="italic text-gray-400">Belum ada deskripsi</span>}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* 3. UH1 - UH5 */}
+                                    {/* UH1 - UH5 */}
                                     {komponenList
                                         .filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen))
                                         .sort((a, b) => {
@@ -1183,7 +1188,7 @@ export default function InputNilaiGBSClient() {
                                             const numB = parseInt(b.nama_komponen.match(/\d+/)?.[0] || '0');
                                             return numA - numB;
                                         })
-                                        .map((k, index) => {
+                                        .map((k) => {
                                             const nilai = selectedSiswa.nilai[k.id_komponen];
                                             const hasValue = nilai !== null && nilai !== undefined;
 
@@ -1215,6 +1220,80 @@ export default function InputNilaiGBSClient() {
                                                 </div>
                                             );
                                         })}
+
+                                    {/* PTS Component */}
+                                    {(() => {
+                                        const ptsKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PTS');
+                                        if (!ptsKomponen) return null;
+                                        const nilai = selectedSiswa.nilai[ptsKomponen.id_komponen];
+                                        const hasValue = nilai !== null && nilai !== undefined;
+
+                                        return (
+                                            <div className="flex items-center justify-between px-5 py-4 rounded-xl border"
+                                                style={{
+                                                    background: hasValue ? '#fff7ed' : '#f9fafb',
+                                                    borderColor: hasValue ? '#fdba74' : '#e5e7eb'
+                                                }}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                                        style={{ background: hasValue ? '#fed7aa' : '#e5e7eb' }}>
+                                                        <span className="text-xs font-bold" style={{ color: hasValue ? '#c2410c' : '#6b7280' }}>PTS</span>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold" style={{ color: hasValue ? '#7a3a0a' : '#9ca3af' }}>
+                                                            Penilaian Tengah Semester
+                                                        </p>
+                                                        <p className="text-xs" style={{ color: '#a89a8c' }}>
+                                                            {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={`text-xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
+                                                        style={{ color: hasValue ? '#c2410c' : undefined }}>
+                                                        {hasValue ? nilai : '—'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* PAS Component */}
+                                    {(() => {
+                                        const pasKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PAS');
+                                        if (!pasKomponen) return null;
+                                        const nilai = selectedSiswa.nilai[pasKomponen.id_komponen];
+                                        const hasValue = nilai !== null && nilai !== undefined;
+
+                                        return (
+                                            <div className="flex items-center justify-between px-5 py-4 rounded-xl border"
+                                                style={{
+                                                    background: hasValue ? '#fff7ed' : '#f9fafb',
+                                                    borderColor: hasValue ? '#fdba74' : '#e5e7eb'
+                                                }}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                                        style={{ background: hasValue ? '#fed7aa' : '#e5e7eb' }}>
+                                                        <span className="text-xs font-bold" style={{ color: hasValue ? '#c2410c' : '#6b7280' }}>PAS</span>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold" style={{ color: hasValue ? '#7a3a0a' : '#9ca3af' }}>
+                                                            Penilaian Akhir Semester
+                                                        </p>
+                                                        <p className="text-xs" style={{ color: '#a89a8c' }}>
+                                                            {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={`text-xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
+                                                        style={{ color: hasValue ? '#c2410c' : undefined }}>
+                                                        {hasValue ? nilai : '—'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
