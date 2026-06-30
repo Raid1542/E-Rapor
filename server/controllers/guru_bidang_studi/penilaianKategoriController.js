@@ -411,23 +411,6 @@ exports.deleteKategoriAkademik = async (req, res) => {
             });
         }
 
-        // Cek dependensi nilai siswa
-        const affectedCount = await kategoriModel.cekNilaiSiswaInRange(
-            kategori.mapel_id, 
-            semesterId, 
-            kategori.min_nilai, 
-            kategori.max_nilai, 
-            kategori.kelas_id,
-            kategori.jenis_penilaian 
-        );
-
-        if (affectedCount > 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Tidak bisa menghapus kategori ini karena ada ${affectedCount} siswa yang sudah memiliki nilai di range ${kategori.min_nilai}-${kategori.max_nilai}. Hapus atau ubah nilai siswa tersebut terlebih dahulu` 
-            });
-        }
-
         // Delete kategori
         const affectedRows = await kategoriModel.deleteKategori(id);
 

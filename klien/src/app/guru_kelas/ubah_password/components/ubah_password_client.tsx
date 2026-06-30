@@ -1,3 +1,10 @@
+/**
+ * Nama File: ubah_password_client.tsx
+ * Fungsi: Komponen client-side untuk mengubah password guru kelas
+ * UPDATE: Menggunakan template identik dengan ubah password Guru Bidang Studi
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ */
+
 'use client';
 
 import React, { useState, useCallback } from 'react';
@@ -7,13 +14,15 @@ import {
     CheckCircle2, AlertCircle, WifiOff, ShieldAlert,
     ShieldCheck,
 } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; onConfirm?: () => void; }
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+// ─── GLOBAL STYLES (DENGAN ANIMASI ENTRANCE) ────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
@@ -22,11 +31,19 @@ const GlobalStyles = () => (
         @keyframes in-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         @keyframes in-slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes in-shake   { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+        
         .in-fadeIn   { animation: in-fadeIn  0.2s ease; }
         .in-scaleIn  { animation: in-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .in-pulse    { animation: in-pulse   0.6s ease 0.15s; }
         .in-slideUp  { animation: in-slideUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
         .in-shake    { animation: in-shake   0.35s ease; }
+        
+        /* ANIMASI ENTRANCE seperti Dashboard */
+        .anim-in { animation: in-slideUp 0.5s ease forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.1s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.2s; }
 
         /* Sembunyikan ikon reveal bawaan browser */
         input[type="password"]::-ms-reveal,
@@ -40,8 +57,8 @@ const GlobalStyles = () => (
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG     = { background: '#fffff' };
-const CARD_STYLE = { border: '1px solid #f97316', boxShadow: '0 2px 16px rgba(200,80,10,0.15)' };
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
 const inputBase = [
@@ -49,18 +66,18 @@ const inputBase = [
     "outline-none transition-all bg-orange-50/40 placeholder:text-gray-400",
 ].join(' ');
 const inputNormal = `${inputBase} border-orange-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20`;
-const inputError  = `${inputBase} border-red-400 focus:border-red-500`;
+const inputError = `${inputBase} border-red-400 focus:border-red-500`;
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_META: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -78,7 +95,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
                 <button onClick={handleOk} className={`w-full ${m.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
+                    Ok
                 </button>
             </div>
         </div>
@@ -90,15 +107,15 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 function getStrength(pw: string): { score: number; level: number; label: string; color: string; barColor: string } {
     if (!pw) return { score: 0, level: 0, label: '', color: '', barColor: '' };
     let score = 0;
-    if (pw.length >= 8)              score++;
-    if (pw.length >= 12)             score++;
-    if (/[A-Z]/.test(pw))            score++;
-    if (/[0-9]/.test(pw))            score++;
-    if (/[^A-Za-z0-9]/.test(pw))    score++;
-    if (score <= 1) return { score, level: 1, label: 'Lemah',      color: 'text-red-500',    barColor: 'bg-red-400' };
-    if (score <= 2) return { score, level: 2, label: 'Sedang',     color: 'text-yellow-500', barColor: 'bg-yellow-400' };
-    if (score <= 3) return { score, level: 3, label: 'Kuat',       color: 'text-orange-500', barColor: 'bg-orange-400' };
-    return                { score, level: 4, label: 'Sangat Kuat', color: 'text-green-500',  barColor: 'bg-green-500' };
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    if (score <= 1) return { score, level: 1, label: 'Lemah', color: 'text-red-500', barColor: 'bg-red-400' };
+    if (score <= 2) return { score, level: 2, label: 'Sedang', color: 'text-yellow-500', barColor: 'bg-yellow-400' };
+    if (score <= 3) return { score, level: 3, label: 'Kuat', color: 'text-orange-500', barColor: 'bg-orange-400' };
+    return { score, level: 4, label: 'Sangat Kuat', color: 'text-green-500', barColor: 'bg-green-500' };
 }
 
 // ─── PASSWORD INPUT ───────────────────────────────────────────────────────────
@@ -162,20 +179,22 @@ const PasswordInput = ({
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 const UbahPasswordClient = () => {
-    const router  = useRouter();
+    const router = useRouter();
+    const { showSessionExpired, handleLogout } = useSession();
+
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
     const [form, setForm] = useState({
-        oldPassword:     '',
-        newPassword:     '',
+        oldPassword: '',
+        newPassword: '',
         confirmPassword: '',
     });
-    const [show, setShow]     = useState({ old: false, new: false, confirm: false });
+    const [show, setShow] = useState({ old: false, new: false, confirm: false });
     const [saving, setSaving] = useState(false);
-    const [modal, setModal]   = useState<ModalConfig | null>(null);
+    const [modal, setModal] = useState<ModalConfig | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
     const strength = getStrength(form.newPassword);
@@ -194,12 +213,12 @@ const UbahPasswordClient = () => {
     const validate = (): Record<string, string> => {
         const { oldPassword, newPassword, confirmPassword } = form;
         const errs: Record<string, string> = {};
-        if (!oldPassword)                              errs.oldPassword     = 'Kata sandi lama wajib diisi.';
-        if (!newPassword)                              errs.newPassword     = 'Kata sandi baru wajib diisi.';
-        else if (newPassword.length < 8)              errs.newPassword     = 'Minimal 8 karakter.';
-        else if (newPassword === oldPassword)         errs.newPassword     = 'Tidak boleh sama dengan kata sandi lama.';
-        if (!confirmPassword)                         errs.confirmPassword = 'Konfirmasi wajib diisi.';
-        else if (newPassword !== confirmPassword)     errs.confirmPassword = 'Kata sandi tidak cocok.';
+        if (!oldPassword) errs.oldPassword = 'Kata sandi lama wajib diisi.';
+        if (!newPassword) errs.newPassword = 'Kata sandi baru wajib diisi.';
+        else if (newPassword.length < 8) errs.newPassword = 'Minimal 8 karakter.';
+        else if (newPassword === oldPassword) errs.newPassword = 'Tidak boleh sama dengan kata sandi lama.';
+        if (!confirmPassword) errs.confirmPassword = 'Konfirmasi wajib diisi.';
+        else if (newPassword !== confirmPassword) errs.confirmPassword = 'Kata sandi tidak cocok.';
         return errs;
     };
 
@@ -222,6 +241,7 @@ const UbahPasswordClient = () => {
 
         setSaving(true);
         try {
+            // Endpoint untuk guru kelas
             const res = await fetch(`${API_URL}/api/guru-kelas/ganti-password`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -252,14 +272,14 @@ const UbahPasswordClient = () => {
         }
     };
 
-    // ── Rules checklist — DISAMAKAN dengan admin (CheckCircle2 + warna hijau/abu) ──
+    // ── Rules checklist ────────────────────────────────────────────────────────
 
     const rules = [
-        { label: 'Minimal 8 karakter',        ok: form.newPassword.length >= 8 },
-        { label: 'Mengandung huruf kapital',   ok: /[A-Z]/.test(form.newPassword) },
-        { label: 'Mengandung angka',           ok: /[0-9]/.test(form.newPassword) },
+        { label: 'Minimal 8 karakter', ok: form.newPassword.length >= 8 },
+        { label: 'Mengandung huruf kapital', ok: /[A-Z]/.test(form.newPassword) },
+        { label: 'Mengandung angka', ok: /[0-9]/.test(form.newPassword) },
         { label: 'Mengandung karakter khusus', ok: /[^A-Za-z0-9]/.test(form.newPassword) },
-        { label: 'Konfirmasi cocok',           ok: form.confirmPassword !== '' && form.newPassword === form.confirmPassword },
+        { label: 'Konfirmasi cocok', ok: form.confirmPassword !== '' && form.newPassword === form.confirmPassword },
     ];
 
     // ── RENDER ─────────────────────────────────────────────────────────────────
@@ -268,14 +288,17 @@ const UbahPasswordClient = () => {
         <div className="flex-1 p-6 min-h-screen flex flex-col items-center justify-center" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
 
-            {/* ── [BARU] Subtitle di atas — sama seperti admin ─────────────── */}
-            <p className="text-sm mb-5 w-full max-w-2xl in-slideUp" style={{ color: '#c95b08' }}>
+            {/* Subtitle - DENGAN ANIMASI */}
+            <p className="text-sm mb-5 w-full max-w-2xl anim-in d1" style={{ color: '#c95b08' }}>
                 Perbarui kata sandi akun Anda secara berkala untuk keamanan
             </p>
 
-            {/* ── [DIUBAH] Banner tips keamanan — style sama persis dengan admin ── */}
-            <div className="mb-6 w-full max-w-2xl rounded-xl flex items-start gap-3 px-4 py-3.5 in-slideUp"
+            {/* Banner tips keamanan - DENGAN ANIMASI */}
+            <div className="mb-6 w-full max-w-2xl rounded-xl flex items-start gap-3 px-4 py-3.5 anim-in d2"
                 style={{ background: '#fff', border: '1px solid #fde0c8' }}>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: '#fff3e8' }}>
@@ -289,11 +312,11 @@ const UbahPasswordClient = () => {
                 </div>
             </div>
 
-            {/* ── Form card ─────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl overflow-hidden w-full max-w-2xl in-slideUp"
-                style={{ ...CARD_STYLE, animationDelay: '0.05s' }}>
+            {/* Form card - DENGAN ANIMASI */}
+            <div className="bg-white rounded-2xl overflow-hidden w-full max-w-2xl anim-in d3"
+                style={{ ...CARD_STYLE }}>
 
-                {/* Card header — konsisten dengan tampilan admin */}
+                {/* Card header */}
                 <div className="flex items-center justify-between gap-4 px-6 py-4 relative overflow-hidden" style={HEADER_GRAD}>
                     {/* Decorative circles */}
                     <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
@@ -346,7 +369,7 @@ const UbahPasswordClient = () => {
                     {/* Divider */}
                     <div className="border-t" style={{ borderColor: '#fde0c8' }} />
 
-                    {/* Kata sandi baru + strength bar — DISAMAKAN dengan admin (4 segmen) */}
+                    {/* Kata sandi baru + strength bar */}
                     <PasswordInput
                         label="Kata Sandi Baru"
                         name="newPassword"
@@ -364,14 +387,13 @@ const UbahPasswordClient = () => {
                                         <span className="text-xs text-gray-500">Kekuatan kata sandi</span>
                                         <span className={`text-xs font-bold ${strength.color}`}>{strength.label}</span>
                                     </div>
-                                    {/* 4-segmen bar — sama persis dengan admin */}
+                                    {/* 4-segmen bar */}
                                     <div className="flex gap-1">
                                         {[1, 2, 3, 4].map(i => (
                                             <div
                                                 key={i}
-                                                className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                                                    i <= strength.level ? strength.barColor : 'bg-gray-200'
-                                                }`}
+                                                className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= strength.level ? strength.barColor : 'bg-gray-200'
+                                                    }`}
                                             />
                                         ))}
                                     </div>
@@ -393,7 +415,7 @@ const UbahPasswordClient = () => {
                         error={errors.confirmPassword}
                     />
 
-                    {/* [DIUBAH] Checklist rules — DISAMAKAN dengan admin (CheckCircle2, warna hijau/abu) */}
+                    {/* Checklist rules */}
                     {(form.newPassword || form.confirmPassword) && (
                         <div className="rounded-xl px-5 py-4 space-y-2"
                             style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
@@ -441,9 +463,9 @@ const UbahPasswordClient = () => {
                 </form>
             </div>
 
-            {/* ── Catatan peringatan ──────────────────────────────────────── */}
-            <div className="mt-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 in-slideUp"
-                style={{ background: '#fef2f2', border: '1px solid #fca5a5', animationDelay: '0.1s' }}>
+            {/* Catatan peringatan - DENGAN ANIMASI */}
+            <div className="mt-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 anim-in d4"
+                style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}>
                 <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs leading-relaxed text-red-600">
                     <strong>Perhatian:</strong> Setelah kata sandi berhasil diubah, Anda akan otomatis keluar dari sistem dan diminta untuk login kembali menggunakan kata sandi baru.

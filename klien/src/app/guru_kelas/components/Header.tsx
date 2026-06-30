@@ -1,6 +1,8 @@
 /**
  * Nama File: Header.tsx
- * Fungsi: Komponen header untuk layout guru kelas.
+ * Fungsi: Komponen header untuk layout guru kelas
+ * UPDATE: Menggunakan template identik dengan Header Guru Bidang Studi
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
 'use client';
@@ -172,7 +174,7 @@ const ConfirmLogoutModal = ({
                     onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
                 >
-                    Ya, Keluar
+                    Ya
                 </button>
             </div>
         </div>
@@ -332,8 +334,8 @@ export default function Header({ user: initialUser }: HeaderProps) {
 
     const activeJenisInfo = getActiveJenisPenilaian();
 
-    const isJenisPenilaianBelumAktif = tahunAjaranInfo 
-        && tahunAjaranInfo.status_pts === 'nonaktif' 
+    const isJenisPenilaianBelumAktif = tahunAjaranInfo
+        && tahunAjaranInfo.status_pts === 'nonaktif'
         && tahunAjaranInfo.status_pas === 'nonaktif';
 
     // ── Skeleton ───────────────────────────────────────────────────────────
@@ -377,6 +379,15 @@ export default function Header({ user: initialUser }: HeaderProps) {
         return null;
     };
 
+    // Format role untuk ditampilkan
+    const roleText = user.class 
+        ? `Guru Kelas – ${user.class}` 
+        : 'Guru Kelas';
+
+    const roleBadgeText = user.class 
+        ? `GURU KELAS – ${user.class.toUpperCase()}` 
+        : 'GURU KELAS';
+
     return (
         <>
             <GlobalStyles />
@@ -418,9 +429,9 @@ export default function Header({ user: initialUser }: HeaderProps) {
                             </div>
                         </div>
 
-                        {/* KANAN: Profil dropdown - SAMA SEPERTI ADMIN */}
+                        {/* KANAN: Profil dropdown */}
                         <div className="relative flex-shrink-0" ref={dropdownRef}>
-                            {/* Trigger Button - Tanpa card background */}
+                            {/* Trigger Button */}
                             <button
                                 onClick={() => setDropdownOpen(v => !v)}
                                 className="flex items-center gap-3 px-2 py-1.5 rounded-lg transition-all duration-150 hover:bg-white/10"
@@ -431,7 +442,7 @@ export default function Header({ user: initialUser }: HeaderProps) {
                                         {user.nama_lengkap}
                                     </p>
                                     <p className="text-xs text-white/80 leading-tight font-medium">
-                                        Guru Kelas{user.class ? ` – ${user.class}` : ''}
+                                        {roleText}
                                     </p>
                                 </div>
                                 <ChevronDown
@@ -440,13 +451,13 @@ export default function Header({ user: initialUser }: HeaderProps) {
                                 />
                             </button>
 
-                            {/* Dropdown panel - Card header soft orange */}
+                            {/* Dropdown panel */}
                             {dropdownOpen && (
                                 <div
                                     className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl z-50 overflow-hidden gk-scaleIn"
                                     style={{ border: '1px solid #fde0c8', boxShadow: '0 8px 32px rgba(180,70,10,0.18)' }}
                                 >
-                                    {/* Info user - Soft orange background */}
+                                    {/* Info user */}
                                     <div className="p-5" style={{ background: 'linear-gradient(135deg, #fce8d6 0%, #fdd4b8 60%, #fbc9a8 100%)' }}>
                                         <div className="flex items-center gap-4">
                                             <div
@@ -464,10 +475,14 @@ export default function Header({ user: initialUser }: HeaderProps) {
                                                 <p className="font-bold text-base text-orange-900 truncate leading-tight">{user.nama_lengkap}</p>
                                                 <p className="text-sm text-orange-700/80 truncate mt-1">{user.email_sekolah}</p>
                                                 <span
-                                                    className="inline-block mt-2 px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wide"
-                                                    style={{ background: 'rgba(255,255,255,0.7)', color: '#c95b08' }}
+                                                    className="inline-flex items-center justify-center mt-2 px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wide whitespace-nowrap"
+                                                    style={{
+                                                        background: 'rgba(255,255,255,0.7)',
+                                                        color: '#c95b08',
+                                                        maxWidth: '100%'
+                                                    }}
                                                 >
-                                                    Guru Kelas{user.class ? ` – ${user.class}` : ''}
+                                                    {roleBadgeText}
                                                 </span>
                                             </div>
                                         </div>

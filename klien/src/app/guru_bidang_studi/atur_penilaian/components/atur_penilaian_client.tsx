@@ -886,11 +886,11 @@ export default function AturPenilaianGBSClient() {
             <div className="bg-white rounded-2xl overflow-hidden animate-fade-in-up delay-1" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
                 {/* Tabs */}
                 <div className="px-6 py-3 border-b" style={{ borderColor: THEME.colors.border, background: '#fffaf6' }}>
-                    <div className="flex gap-2 overflow-x-auto scrollbar-thin">
+                    <div className="flex gap-2">
                         <button
                             className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 whitespace-nowrap ${activeTab === 'akademik'
-                                    ? 'border-orange-500 text-orange-600 bg-orange-50'
-                                    : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
+                                ? 'border-orange-500 text-orange-600 bg-orange-50'
+                                : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
                                 }`}
                             onClick={() => handleTabChange('akademik')}
                         >
@@ -901,8 +901,8 @@ export default function AturPenilaianGBSClient() {
                         </button>
                         <button
                             className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 whitespace-nowrap ${activeTab === 'bobot'
-                                    ? 'border-orange-500 text-orange-600 bg-orange-50'
-                                    : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
+                                ? 'border-orange-500 text-orange-600 bg-orange-50'
+                                : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
                                 }`}
                             onClick={() => handleTabChange('bobot')}
                         >

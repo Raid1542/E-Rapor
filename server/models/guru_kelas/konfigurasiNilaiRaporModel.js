@@ -8,12 +8,24 @@ const db = require('../../config/db');
 
 const konfigurasiNilaiRaporModel = {
   // Mendapatkan deskripsi berdasarkan nilai numerik dan mata pelajaran
-  async getDeskripsiByNilai(nilai, mapelId) {
+  async getDeskripsiByNilai(nilai, mapelId, tahunAjaranId = null, jenisPenilaian = 'PAS') {
     if (nilai == null || mapelId == null) return 'Belum ada deskripsi';
-    const [rows] = await db.execute(
-      'SELECT deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND ? BETWEEN min_nilai AND max_nilai AND is_active = 1 ORDER BY min_nilai DESC LIMIT 1',
-      [mapelId, nilai]
-    );
+
+    let query = 'SELECT deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND ? BETWEEN min_nilai AND max_nilai AND is_active = 1';
+    const params = [mapelId, nilai];
+
+    // Tambah filter tahun ajaran jika ada
+    if (tahunAjaranId) {
+      query += ' AND tahun_ajaran_id = ?';
+      params.push(tahunAjaranId);
+    }
+
+    query += ' AND jenis_penilaian = ?';
+    params.push(jenisPenilaian);
+
+    query += ' ORDER BY min_nilai DESC LIMIT 1';
+
+    const [rows] = await db.execute(query, params);
     return rows.length > 0 ? rows[0].deskripsi : 'Belum ada deskripsi';
   },
 

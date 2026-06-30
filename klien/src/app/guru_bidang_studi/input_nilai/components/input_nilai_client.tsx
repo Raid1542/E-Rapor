@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
     Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
-    WifiOff, ShieldAlert, LogOut, Lock, Save, BookOpen,
+    WifiOff, ShieldAlert, LogOut, Lock, BookOpen,
     Users, GraduationCap
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
@@ -1503,7 +1503,6 @@ export default function InputNilaiGBSClient() {
                                     </>
                                 ) : (
                                     <>
-                                        <Save size={14} />
                                         Simpan Nilai
                                     </>
                                 )}

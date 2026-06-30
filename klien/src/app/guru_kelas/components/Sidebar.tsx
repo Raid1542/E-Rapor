@@ -1,7 +1,8 @@
 /**
  * Nama File: Sidebar.tsx
- * Fungsi: Menyediakan navigasi sidebar untuk halaman guru kelas.
- * Update: Struktur menu dengan kategori seperti sidebar admin
+ * Fungsi: Komponen sidebar navigasi untuk guru kelas
+ * UPDATE: Menggunakan template identik dengan Sidebar Guru Bidang Studi
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
 'use client';
@@ -40,13 +41,16 @@ export default function Sidebar({ user }: SidebarProps) {
     const [logoUrl, setLogoUrl] = useState<string>('/images/LogoUA.jpg');
     const [schoolName, setSchoolName] = useState<string>('SDIT Ulil Albab');
 
+    // ── Fetch data sekolah (logo + nama) ──────────────────────────────────
     const fetchSchoolData = async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
+
             const res = await fetch('http://localhost:5000/api/sekolah', {
                 headers: { Authorization: `Bearer ${token}` },
             });
+
             if (res.ok) {
                 const { data } = await res.json();
                 if (data) {
@@ -55,26 +59,32 @@ export default function Sidebar({ user }: SidebarProps) {
                 }
             }
         } catch (err) {
-            console.warn('Gagal fetch data sekolah di sidebar guru kelas', err);
+            console.warn('Gagal fetch data sekolah di sidebar guru kelas:', err);
         }
     };
 
     useEffect(() => {
         fetchSchoolData();
+
         const handleLogoUpdate = (e: Event) => {
             const customEvent = e as CustomEvent;
             const logoPath = customEvent.detail?.logoPath;
             if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
             else fetchSchoolData();
         };
+
+        const handleSchoolUpdate = () => fetchSchoolData();
+
         window.addEventListener('logoUpdated', handleLogoUpdate);
-        window.addEventListener('schoolUpdated', fetchSchoolData);
+        window.addEventListener('schoolUpdated', handleSchoolUpdate);
+
         return () => {
             window.removeEventListener('logoUpdated', handleLogoUpdate);
-            window.removeEventListener('schoolUpdated', fetchSchoolData);
+            window.removeEventListener('schoolUpdated', handleSchoolUpdate);
         };
     }, []);
 
+    // ── Menu Items ─────────────────────────────────────────────────────────
     const menuUtama = [
         { name: 'Dashboard', url: '/guru_kelas/dashboard', icon: <Home className="w-5 h-5" /> },
     ];
@@ -82,7 +92,7 @@ export default function Sidebar({ user }: SidebarProps) {
     const dataSiswa = [
         { name: 'Data Siswa', url: '/guru_kelas/data_siswa', icon: <Users className="w-4 h-4" /> },
     ];
-    
+
     const inputNilai = [
         { name: 'Atur Penilaian', url: '/guru_kelas/atur_penilaian', icon: <Settings className="w-4 h-4" /> },
         { name: 'Input Nilai', url: '/guru_kelas/input_nilai', icon: <ClipboardList className="w-4 h-4" /> },
@@ -102,6 +112,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
     const isProfilActive = pathname === '/guru_kelas/profil';
 
+    // ── Handlers ───────────────────────────────────────────────────────────
     const toggleSidebar = () => {
         setIsExpanded(!isExpanded);
     };
@@ -110,6 +121,7 @@ export default function Sidebar({ user }: SidebarProps) {
         router.push(url);
     };
 
+    // ── Styles ─────────────────────────────────────────────────────────────
     const navBase = 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
     const navActive = 'bg-white text-orange-600 font-semibold shadow-sm';
     const navInactive = 'text-white hover:bg-white/15 hover:text-white';
