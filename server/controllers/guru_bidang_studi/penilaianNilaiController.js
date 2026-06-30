@@ -12,89 +12,117 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
         const { mapelId, kelasId } = req.params;
         const userId = req.user.id;
 
-        // Validasi parameter
         if (!mapelId || !kelasId) return res.status(400).json({ success: false, message: 'ID mata pelajaran dan kelas wajib diisi' });
 
-        // Step 1: Ambil tahun ajaran aktif (semester)
+        // Step 1: Ambil tahun ajaran aktif
         const [taSemesterRows] = await db.execute('SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status_pts, status_pas FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1');
         if (taSemesterRows.length === 0) return res.status(500).json({ success: false, message: 'Tahun ajaran aktif tidak ditemukan' });
         const semesterId = taSemesterRows[0].id_tahun_ajaran;
         const indukId = taSemesterRows[0].id_tahun_ajaran_induk;
         const { semester, status_pts, status_pas } = taSemesterRows[0];
 
-        // Step 2: Tentukan jenis penilaian aktif
         let jenis_penilaian_aktif = null;
         if (status_pts === 'aktif') jenis_penilaian_aktif = 'PTS';
         else if (status_pas === 'aktif') jenis_penilaian_aktif = 'PAS';
 
-        // Step 3: Validasi akses guru
+        // Step 2: Validasi akses guru
         const [valid] = await db.execute('SELECT 1 FROM pembelajaran WHERE user_id = ? AND mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?', [userId, mapelId, kelasId, semesterId]);
         if (valid.length === 0) return res.status(403).json({ success: false, message: 'Anda tidak mengajar mata pelajaran ini di kelas ini' });
 
-        // Step 4: Ambil nama kelas
+        // Step 3: Ambil nama kelas
         const [namaKelasRow] = await db.execute('SELECT nama_kelas FROM kelas WHERE id_kelas = ?', [kelasId]);
         const kelasNama = namaKelasRow[0]?.nama_kelas || 'Kelas Tidak Diketahui';
 
-        // Step 5: Cek apakah bobot sudah diatur
+        // Step 4: Cek bobot
         const [bobotCheck] = await db.execute(
             'SELECT COUNT(*) as total FROM konfigurasi_mapel_komponen WHERE mapel_id = ? AND tahun_ajaran_id = ? AND is_active = 1 AND (kelas_id = ? OR kelas_id IS NULL)',
             [mapelId, semesterId, kelasId]
         );
         const bobotSudahDiatur = (bobotCheck[0]?.total || 0) > 0;
 
-        // Step 6: Ambil daftar siswa aktif
+        // Step 5: Ambil siswa aktif
         const [siswaRows] = await db.execute(
             'SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = \'aktif\' ORDER BY s.nama_lengkap',
             [kelasId, indukId]
         );
 
-        // Return kosong jika tidak ada siswa
         if (siswaRows.length === 0) return res.json({ success: true, siswaList: [], komponen: [], kelas: kelasNama, jenis_penilaian_aktif, bobot_sudah_diatur: bobotSudahDiatur });
 
-        // Step 7: Ambil komponen penilaian
+        // Step 6: Ambil komponen penilaian
         const [komponenRows] = await db.execute('SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan');
 
-        // Step 8: Ambil nilai rapor PTS dan PAS
+        // ═══════════════════════════════════════════════════════════════════════
+        // ✅ UPDATE: Ambil konfigurasi kategori nilai REAL-TIME untuk PTS dan PAS
+        // ═══════════════════════════════════════════════════════════════════════
+        const [configPTSRows] = await db.execute(
+            'SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = \'PTS\' AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY CASE WHEN kelas_id = ? THEN 0 ELSE 1 END, min_nilai DESC',
+            [mapelId, semesterId, kelasId, kelasId]
+        );
+        const [configPASRows] = await db.execute(
+            'SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = \'PAS\' AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY CASE WHEN kelas_id = ? THEN 0 ELSE 1 END, min_nilai DESC',
+            [mapelId, semesterId, kelasId, kelasId]
+        );
+
+        // Helper: Cari deskripsi berdasarkan nilai dari konfigurasi
+        const getDeskripsi = (nilai, configRows) => {
+            if (nilai === null || nilai === undefined) return null;
+            for (const config of configRows) {
+                if (nilai >= config.min_nilai && nilai <= config.max_nilai) {
+                    return config.deskripsi;
+                }
+            }
+            return null;
+        };
+
+        // Step 7: Ambil nilai rapor (HANYA nilai_rapor, BUKAN deskripsi)
         const [nilaiRaporRows] = await db.execute(
-            'SELECT siswa_id, nilai_rapor, deskripsi, jenis_penilaian, is_locked FROM nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND semester = ?',
+            'SELECT siswa_id, nilai_rapor, jenis_penilaian, is_locked FROM nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND semester = ?',
             [mapelId, semesterId, semester]
         );
 
-        // Step 9: Ambil nilai detail untuk semua siswa
+        // Step 8: Ambil nilai detail
         const siswaIds = siswaRows.map(s => s.id);
         const [allNilaiDetail] = await db.execute(
             `SELECT siswa_id, komponen_id, nilai FROM nilai_detail WHERE mapel_id = ? AND tahun_ajaran_id = ? AND siswa_id IN (${siswaIds.map(() => '?').join(',')})`,
             [mapelId, semesterId, ...siswaIds]
         );
 
-        // Step 10: Group nilai detail by siswa_id
         const nilaiBySiswa = new Map();
         allNilaiDetail.forEach(row => {
             if (!nilaiBySiswa.has(row.siswa_id)) nilaiBySiswa.set(row.siswa_id, new Map());
             nilaiBySiswa.get(row.siswa_id).set(row.komponen_id, row.nilai);
         });
 
-        // Step 11: Bangun Map untuk nilai rapor PTS dan PAS
         const nilaiRaporPTSMap = new Map();
         const nilaiRaporPASMap = new Map();
         nilaiRaporRows.forEach(row => {
-            const data = { nilai_rapor: row.nilai_rapor, deskripsi: row.deskripsi, is_locked: row.is_locked || false };
+            const data = { nilai_rapor: row.nilai_rapor, is_locked: row.is_locked || false };
             if (row.jenis_penilaian === 'PTS') nilaiRaporPTSMap.set(row.siswa_id, data);
             else if (row.jenis_penilaian === 'PAS') nilaiRaporPASMap.set(row.siswa_id, data);
         });
 
-        // Step 12: Bangun list siswa dengan nilai detail dan rapor
+        // Step 9: Bangun list siswa dengan deskripsi REAL-TIME
         const siswaList = [];
         for (const s of siswaRows) {
             const nilaiMap = nilaiBySiswa.get(s.id) || new Map();
             const nilaiRecord = {};
             komponenRows.forEach(k => { nilaiRecord[k.id_komponen] = nilaiMap.get(k.id_komponen) ?? null; });
+            
             const raporPTS = nilaiRaporPTSMap.get(s.id);
             const raporPAS = nilaiRaporPASMap.get(s.id);
+            
+            // ✅ Ambil deskripsi dari konfigurasi REAL-TIME
+            const deskripsiPTS = raporPTS ? getDeskripsi(raporPTS.nilai_rapor, configPTSRows) : null;
+            const deskripsiPAS = raporPAS ? getDeskripsi(raporPAS.nilai_rapor, configPASRows) : null;
+            
             siswaList.push({
                 id: s.id, nama: s.nama, nis: s.nis, nisn: s.nisn, nilai: nilaiRecord,
-                nilai_rapor_pts: raporPTS?.nilai_rapor ?? null, deskripsi_pts: raporPTS?.deskripsi ?? null, is_locked_pts: raporPTS?.is_locked || false,
-                nilai_rapor_pas: raporPAS?.nilai_rapor ?? null, deskripsi_pas: raporPAS?.deskripsi ?? null, is_locked_pas: raporPAS?.is_locked || false
+                nilai_rapor_pts: raporPTS?.nilai_rapor ?? null, 
+                deskripsi_pts: deskripsiPTS, // ← REAL-TIME dari konfigurasi
+                is_locked_pts: raporPTS?.is_locked || false,
+                nilai_rapor_pas: raporPAS?.nilai_rapor ?? null, 
+                deskripsi_pas: deskripsiPAS, // ← REAL-TIME dari konfigurasi
+                is_locked_pas: raporPAS?.is_locked || false
             });
         }
 
@@ -269,10 +297,10 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
         let nilaiRaporPTS = null, nilaiRaporPAS = null, deskripsiPTS = null, deskripsiPAS = null;
 
         // Helper: Ambil konfigurasi kategori nilai
-        const getConfigRows = async () => {
+        const getConfigRows = async (jenisPenilaian) => {
             const [rows] = await db.execute(
-                'SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY CASE WHEN kelas_id = ? THEN 0 ELSE 1 END, min_nilai DESC',
-                [mapelIdNum, semesterId, kelasIdNum, kelasIdNum]
+                'SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ? AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY CASE WHEN kelas_id = ? THEN 0 ELSE 1 END, min_nilai DESC',
+                [mapelIdNum, semesterId, jenisPenilaian, kelasIdNum, kelasIdNum]
             );
             return rows;
         };
@@ -282,7 +310,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             const nilaiPTS = nilaiMap.get(ptsKomponen.id_komponen);
             if (nilaiPTS !== undefined && nilaiPTS !== null) {
                 nilaiRaporPTS = Math.round(nilaiPTS);
-                const configRowsPTS = await getConfigRows();
+                const configRowsPTS = await getConfigRows('PTS');
                 for (const config of configRowsPTS) {
                     if (nilaiRaporPTS >= config.min_nilai && nilaiRaporPTS <= config.max_nilai) { deskripsiPTS = config.deskripsi; break; }
                 }
@@ -312,7 +340,7 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             if (totalBobot > 0) {
                 const nilaiRapor = ((rataUH * totalBobotUH) + (nilaiPTSForPAS * bobotPTSForPAS) + (nilaiPAS * bobotPAS)) / totalBobot;
                 nilaiRaporPAS = Math.round(nilaiRapor);
-                const configRowsPAS = await getConfigRows();
+                const configRowsPAS = await getConfigRows('PAS');
                 for (const config of configRowsPAS) {
                     if (nilaiRaporPAS >= config.min_nilai && nilaiRaporPAS <= config.max_nilai) { deskripsiPAS = config.deskripsi; break; }
                 }

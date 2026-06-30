@@ -97,7 +97,7 @@ const parseBackendError = async (res: Response): Promise<{ message: string; code
     }
 };
 
-// ====== GLOBAL STYLES (SAMA DENGAN ATUR PENILAIAN) ======
+// ====== GLOBAL STYLES (DENGAN ANIMASI) ======
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes fadeInUp {
@@ -108,6 +108,12 @@ const GlobalStyles = () => (
             from { opacity: 0; transform: scale(0.93) translateY(10px); }
             to { opacity: 1; transform: scale(1) translateY(0); }
         }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+        .delay-1 { animation-delay: 0.06s; }
+        .delay-2 { animation-delay: 0.12s; }
         .scale-in { animation: scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .fade-in { animation: fadeInUp 0.2s ease; }
         .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -153,7 +159,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                         >Ya</button>
                     </div>
                 ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
                 )}
             </div>
         </div>
@@ -187,7 +193,7 @@ const PeriodNotActiveModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
                     className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
                     style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.md }}
                 >
-                    OK, Mengerti
+                    Ok
                 </button>
             </div>
         </div>
@@ -686,7 +692,7 @@ export default function InputNilaiGBSClient() {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
                 <GlobalStyles />
-                <div className="text-center">
+                <div className="text-center fade-in">
                     <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin mx-auto mb-4" />
                     <p className="text-sm font-medium" style={{ color: THEME.colors.primary }}>Memuat data...</p>
                 </div>
@@ -732,15 +738,15 @@ export default function InputNilaiGBSClient() {
                 onClose={() => setShowPeriodNotActiveModal(false)}
             />
 
-            {/* ====== HEADER (TANPA ANIMASI) ====== */}
-            <div className="mb-6">
+            {/* ====== HEADER ====== */}
+            <div className="mb-6 animate-fade-in-up">
                 <h1 className="text-2xl font-bold text-gray-900">Input Nilai Siswa</h1>
                 <p className="text-sm mt-1" style={{ color: THEME.colors.primary }}>Kelola nilai komponen & rapor siswa per mata pelajaran</p>
             </div>
 
             {/* ====== STATUS BANNERS ====== */}
             {isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
                     style={{
                         background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7',
                         border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}`
@@ -760,7 +766,7 @@ export default function InputNilaiGBSClient() {
             )}
 
             {showBobotWarning && jenisPenilaianAktif === 'PAS' && !isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
                     style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
                     <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
                     <div className="flex-1">
@@ -794,8 +800,8 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ====== MAIN CARD (TANPA ANIMASI) ====== */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
+            {/* ====== MAIN CARD ====== */}
+            <div className="bg-white rounded-2xl overflow-hidden animate-fade-in-up delay-1" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
                 {/* Filter Section */}
                 <div className="px-6 py-5 space-y-4" style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: '#fffaf6' }}>
 
@@ -886,16 +892,16 @@ export default function InputNilaiGBSClient() {
 
                                 {/* Controls */}
                                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                                    {/* Items per page - Unified design */}
                                     <div className="flex items-center rounded-xl px-4 py-2" style={{ background: '#fff7ed', border: '1.5px solid #fde0c8' }}>
                                         <span className="text-sm font-semibold mr-2" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                        <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                                        <select
+                                            value={itemsPerPage}
+                                            onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                                             className="text-sm font-bold outline-none cursor-pointer"
                                             style={{ background: 'transparent', color: '#c95b08', minWidth: '40px', textAlign: 'center' }}>
                                             <option value={10}>10</option>
                                             <option value={25}>25</option>
                                             <option value={50}>50</option>
-                                            <option value={100}>100</option>
                                         </select>
                                         <span className="text-sm font-semibold ml-2" style={{ color: '#7a3a0a' }}>data</span>
                                     </div>
@@ -1029,18 +1035,21 @@ export default function InputNilaiGBSClient() {
                 )}
             </div>
 
-            {/* ====== DETAIL MODAL ====== */}
+            {/* ====== DETAIL MODAL (REDESIGNED - SUSUNAN JELAS) ====== */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={{ border: `1px solid ${THEME.colors.border}` }}>
 
-                        <div className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: THEME.gradients.header }}>
-                            <div>
-                                <h2 className="text-lg font-bold text-white">Detail Nilai Siswa</h2>
-                                <p className="text-xs text-orange-100 mt-0.5">{selectedSiswa.nama} - {currentKelas?.nama_kelas}</p>
+                        {/* Header */}
+                        <div className="px-6 py-5 flex items-center justify-between" style={{ background: THEME.gradients.header }}>
+                            <div className="flex items-center gap-3">
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Detail Nilai Siswa</h2>
+                                    <p className="text-xs text-white/80 mt-0.5">{selectedSiswa.nama} • {currentKelas?.nama_kelas}</p>
+                                </div>
                             </div>
                             <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
                                 style={{ background: 'rgba(255,255,255,0.2)' }}>
@@ -1048,173 +1057,188 @@ export default function InputNilaiGBSClient() {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
-                                    <p className="text-xs text-gray-500 mb-1">NIS</p>
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-6">
+
+                            {/* Info Siswa */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="rounded-xl px-4 py-3" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#c95b08' }}>NIS</p>
                                     <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{selectedSiswa.nis}</p>
                                 </div>
-                                <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
-                                    <p className="text-xs text-gray-500 mb-1">NISN</p>
+                                <div className="rounded-xl px-4 py-3" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#c95b08' }}>NISN</p>
                                     <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{selectedSiswa.nisn}</p>
                                 </div>
-                            </div>
-
-                            <div>
-                                <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
-                                    <span className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></span>
-                                    Nilai Rapor
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="rounded-xl p-5 border-2" style={{
-                                        background: '#fff7ed',
-                                        borderColor: '#fdba74',
-                                        boxShadow: '0 2px 8px rgba(232,105,10,0.1)'
-                                    }}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#fed7aa' }}>
-                                                    <span className="text-xs font-bold" style={{ color: '#c2410c' }}>PTS</span>
-                                                </div>
-                                                <span className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Rapor PTS</span>
-                                            </div>
-                                            <span className="px-2.5 py-1 rounded-full text-xs font-bold"
-                                                style={{
-                                                    background: statusPTS === 'aktif' ? '#fed7aa' : statusPTS === 'selesai' ? '#e5e7eb' : '#fef3c7',
-                                                    color: statusPTS === 'aktif' ? '#c2410c' : statusPTS === 'selesai' ? '#6b7280' : '#92400e'
-                                                }}>
-                                                {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
-                                            </span>
-                                        </div>
-                                        <div className="text-center py-3">
-                                            <div className="text-4xl font-bold mb-2" style={{ color: '#c2410c' }}>
-                                                {selectedSiswa.nilai_rapor_pts !== null && selectedSiswa.nilai_rapor_pts !== undefined ? selectedSiswa.nilai_rapor_pts : '-'}
-                                            </div>
-                                        </div>
-                                        <div className="pt-3 border-t" style={{ borderColor: THEME.colors.border }}>
-                                            <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
-                                            <p className="text-xs text-gray-600 leading-relaxed">
-                                                {selectedSiswa.deskripsi_pts || <span className="text-gray-400 italic">Belum ada deskripsi</span>}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="rounded-xl p-5 border-2" style={{
-                                        background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f9fafb',
-                                        borderColor: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb'
-                                    }}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                                                    style={{ background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fed7aa' : '#e5e7eb' }}>
-                                                    <span className="text-xs font-bold" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : '#6b7280' }}>PAS</span>
-                                                </div>
-                                                <span className="text-sm font-bold" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#7a3a0a' : '#9ca3af' }}>Rapor PAS</span>
-                                            </div>
-                                            <span className="px-2.5 py-1 rounded-full text-xs font-bold"
-                                                style={{
-                                                    background: statusPAS === 'aktif' ? '#fed7aa' : statusPAS === 'selesai' ? '#e5e7eb' : '#fef3c7',
-                                                    color: statusPAS === 'aktif' ? '#c2410c' : statusPAS === 'selesai' ? '#6b7280' : '#92400e'
-                                                }}>
-                                                {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
-                                            </span>
-                                        </div>
-                                        <div className="text-center py-3">
-                                            <div className="text-4xl font-bold mb-2"
-                                                style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : '#d1d5db' }}>
-                                                {selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? selectedSiswa.nilai_rapor_pas : '-'}
-                                            </div>
-                                        </div>
-                                        <div className="pt-3 border-t" style={{ borderColor: THEME.colors.border }}>
-                                            <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
-                                            <p className="text-xs text-gray-600 leading-relaxed">
-                                                {selectedSiswa.deskripsi_pas || <span className="text-gray-400 italic">Belum ada deskripsi</span>}
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="rounded-xl px-4 py-3" style={{ background: '#fff7ed', border: `1px solid ${THEME.colors.border}` }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: '#c95b08' }}>Kelas</p>
+                                    <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{currentKelas?.nama_kelas || '-'}</p>
                                 </div>
                             </div>
 
+                            {/* Komponen Penilaian - SUSUNAN JELAS: PTS → PAS → UH */}
                             <div>
-                                <h3 className="text-sm font-bold mb-4 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
-                                    <span className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></span>
-                                    Nilai Komponen Penilaian
-                                </h3>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></div>
+                                    <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Komponen Penilaian</p>
+                                </div>
 
-                                <div className="mb-5">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-1 h-4 rounded-full" style={{ background: '#fbbf24' }}></div>
-                                        <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7a3a0a' }}>Ulangan Harian</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                        {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(k => {
-                                            const nilai = selectedSiswa.nilai[k.id_komponen];
-                                            return (
-                                                <div key={k.id_komponen} className="rounded-xl p-4 text-center border-2 transition-all"
-                                                    style={{
-                                                        background: nilai !== null && nilai !== undefined ? '#fff' : '#f9fafb',
-                                                        borderColor: nilai !== null && nilai !== undefined ? THEME.colors.border : '#e5e7eb',
-                                                        boxShadow: nilai !== null && nilai !== undefined ? '0 2px 8px rgba(232,105,10,0.08)' : 'none'
-                                                    }}>
-                                                    <div className="text-xs font-bold mb-2" style={{ color: '#7a3a0a' }}>{k.nama_komponen}</div>
-                                                    <div className="text-2xl font-bold"
-                                                        style={{
-                                                            color: nilai !== null && nilai !== undefined ? THEME.colors.primary : '#d1d5db'
-                                                        }}>
-                                                        {nilai !== null && nilai !== undefined ? nilai : '-'}
+                                <div className="space-y-3">
+                                    {/* 1. PTS */}
+                                    {(() => {
+                                        const ptsKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PTS');
+                                        if (!ptsKomponen) return null;
+                                        const nilai = selectedSiswa.nilai[ptsKomponen.id_komponen];
+                                        const hasValue = nilai !== null && nilai !== undefined;
+
+                                        return (
+                                            <div className="rounded-xl p-5 border-2" style={{
+                                                background: '#fff7ed',
+                                                borderColor: '#fdba74'
+                                            }}>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#fed7aa' }}>
+                                                            <span className="text-sm font-bold" style={{ color: '#c2410c' }}>PTS</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Penilaian Tengah Semester</p>
+                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>
+                                                                {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className={`text-3xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
+                                                            style={{ color: hasValue ? '#c2410c' : undefined }}>
+                                                            {hasValue ? nilai : '—'}
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
 
-                                <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-1 h-4 rounded-full" style={{ background: THEME.colors.secondary }}></div>
-                                        <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7a3a0a' }}>Penilaian Tengah & Akhir Semester</p>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(k => {
-                                            const nilai = selectedSiswa.nilai[k.id_komponen];
-                                            return (
-                                                <div key={k.id_komponen} className="rounded-xl p-5 text-center border-2 relative overflow-hidden"
-                                                    style={{
-                                                        background: '#fff7ed',
-                                                        borderColor: '#fdba74',
-                                                        boxShadow: '0 2px 8px rgba(232,105,10,0.1)'
+                                                {/* Deskripsi PTS */}
+                                                <div className="pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
+                                                    <p className="text-xs font-semibold mb-2" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
+                                                    <div className="p-4 rounded-lg" style={{ background: '#fff', border: '1px solid #fde0c8' }}>
+                                                        <p className="text-sm text-gray-700 leading-relaxed" style={{ minHeight: '80px' }}>
+                                                            {selectedSiswa.deskripsi_pts || <span className="italic text-gray-400">Belum ada deskripsi</span>}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* 2. PAS */}
+                                    {(() => {
+                                        const pasKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PAS');
+                                        if (!pasKomponen) return null;
+                                        const nilai = selectedSiswa.nilai[pasKomponen.id_komponen];
+                                        const hasValue = nilai !== null && nilai !== undefined;
+
+                                        return (
+                                            <div className="rounded-xl p-5 border-2" style={{
+                                                background: hasValue ? '#fff7ed' : '#f9fafb',
+                                                borderColor: hasValue ? '#fdba74' : '#e5e7eb'
+                                            }}>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                                                            style={{ background: hasValue ? '#fed7aa' : '#e5e7eb' }}>
+                                                            <span className="text-sm font-bold"
+                                                                style={{ color: hasValue ? '#c2410c' : '#6b7280' }}>PAS</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold"
+                                                                style={{ color: hasValue ? '#7a3a0a' : '#9ca3af' }}>Penilaian Akhir Semester</p>
+                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>
+                                                                {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className={`text-3xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
+                                                            style={{ color: hasValue ? '#c2410c' : undefined }}>
+                                                            {hasValue ? nilai : '—'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Deskripsi PAS */}
+                                                <div className="pt-4 border-t" style={{ borderColor: hasValue ? '#fde0c8' : '#e5e7eb' }}>
+                                                    <p className="text-xs font-semibold mb-2" style={{ color: hasValue ? '#7a3a0a' : '#9ca3af' }}>Deskripsi:</p>
+                                                    <div className="p-4 rounded-lg" style={{
+                                                        background: hasValue ? '#fff' : '#f9fafb',
+                                                        border: `1px solid ${hasValue ? '#fde0c8' : '#e5e7eb'}`
                                                     }}>
-                                                    <div className="relative">
-                                                        <div className="text-center mb-3">
-                                                            <span className="text-sm font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>
+                                                        <p className="text-sm text-gray-700 leading-relaxed" style={{ minHeight: '80px' }}>
+                                                            {selectedSiswa.deskripsi_pas || <span className="italic text-gray-400">Belum ada deskripsi</span>}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* 3. UH1 - UH5 */}
+                                    {komponenList
+                                        .filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen))
+                                        .sort((a, b) => {
+                                            const numA = parseInt(a.nama_komponen.match(/\d+/)?.[0] || '0');
+                                            const numB = parseInt(b.nama_komponen.match(/\d+/)?.[0] || '0');
+                                            return numA - numB;
+                                        })
+                                        .map((k, index) => {
+                                            const nilai = selectedSiswa.nilai[k.id_komponen];
+                                            const hasValue = nilai !== null && nilai !== undefined;
+
+                                            return (
+                                                <div key={k.id_komponen}
+                                                    className="flex items-center justify-between px-5 py-4 rounded-xl border"
+                                                    style={{
+                                                        background: hasValue ? '#fff' : '#f9fafb',
+                                                        borderColor: hasValue ? '#fde0c8' : '#e5e7eb'
+                                                    }}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                                            style={{ background: '#fef3c7', color: '#92400e' }}>
+                                                            <span className="text-xs font-bold">UH</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
                                                                 {k.nama_komponen}
-                                                            </span>
+                                                            </p>
+                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>Ulangan Harian</p>
                                                         </div>
-                                                        <div className="text-3xl font-bold mb-2"
-                                                            style={{
-                                                                color: nilai !== null && nilai !== undefined ? '#c2410c' : '#d1d5db'
-                                                            }}>
-                                                            {nilai !== null && nilai !== undefined ? nilai : '-'}
-                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className={`text-xl font-bold ${hasValue ? '' : 'text-gray-400'}`}
+                                                            style={{ color: hasValue ? THEME.colors.primary : undefined }}>
+                                                            {hasValue ? nilai : '—'}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             );
                                         })}
-                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: THEME.colors.border, background: '#fffaf6' }}>
+                        {/* Footer */}
+                        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                             <button onClick={closeDetail}
                                 className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}>
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                 Tutup
                             </button>
                             {canEditNilai && (
                                 <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
                                     className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2"
-                                    style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}>
+                                    style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = THEME.gradients.primary)}
+                                    onMouseLeave={e => (e.currentTarget.style.background = THEME.gradients.secondary)}>
                                     <Pencil size={14} /> Edit Nilai
                                 </button>
                             )}
@@ -1223,18 +1247,21 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ====== EDIT MODAL ====== */}
+            {/* ====== EDIT MODAL (REDESIGNED - SUSUNAN JELAS) ====== */}
             {showEdit && editingSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={{ border: `1px solid ${THEME.colors.border}` }}>
 
-                        <div className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: THEME.gradients.header }}>
-                            <div>
-                                <h2 className="text-lg font-bold text-white">Edit Nilai Siswa</h2>
-                                <p className="text-xs text-orange-100 mt-0.5">{editingSiswa.nama} - {currentKelas?.nama_kelas}</p>
+                        {/* Header */}
+                        <div className="px-6 py-5 flex items-center justify-between" style={{ background: THEME.gradients.header }}>
+                            <div className="flex items-center gap-3">
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Edit Nilai Siswa</h2>
+                                    <p className="text-xs text-white/80 mt-0.5">{editingSiswa.nama} • {currentKelas?.nama_kelas}</p>
+                                </div>
                             </div>
                             <button onClick={closeEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
                                 style={{ background: 'rgba(255,255,255,0.2)' }}>
@@ -1242,7 +1269,10 @@ export default function InputNilaiGBSClient() {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-5">
+
+                            {/* Info Periode */}
                             {jenisPenilaianAktif && (
                                 <div className="rounded-xl px-4 py-3 flex items-center gap-3"
                                     style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
@@ -1261,26 +1291,56 @@ export default function InputNilaiGBSClient() {
                                     style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
                                     <AlertCircle size={18} style={{ color: '#a16207', flexShrink: 0 }} className="mt-0.5" />
                                     <p className="text-xs" style={{ color: '#78350f' }}>
-                                        <strong>⚠️ Peringatan:</strong> Bobot penilaian untuk mata pelajaran ini belum diatur. Nilai rapor akan dihitung dengan bobot default.
+                                        <strong>⚠️ Peringatan:</strong> Bobot penilaian belum diatur. Nilai rapor akan dihitung dengan bobot default.
                                     </p>
                                 </div>
                             )}
 
+                            {/* Komponen Penilaian - SUSUNAN JELAS: PTS → PAS → UH */}
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-1 h-5 rounded-full" style={{ background: '#fbbf24' }}></div>
-                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Ulangan Harian</h3>
+                                    <div className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></div>
+                                    <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Komponen Penilaian</p>
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                    {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(komponen => {
-                                        const isDisabled = jenisPenilaianAktif === 'PTS';
-                                        const nilai = editingNilai[komponen.id_komponen];
+
+                                <div className="space-y-3">
+                                    {/* 1. PTS */}
+                                    {(() => {
+                                        const ptsKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PTS');
+                                        if (!ptsKomponen) return null;
+
+                                        const isDisabled = jenisPenilaianAktif === 'PAS';
+                                        const nilai = editingNilai[ptsKomponen.id_komponen];
+
                                         return (
-                                            <div key={komponen.id_komponen}>
-                                                <label className="block text-xs font-bold mb-2 text-center"
-                                                    style={{ color: isDisabled ? '#9ca3af' : '#7a3a0a' }}>
-                                                    {komponen.nama_komponen}
-                                                </label>
+                                            <div className={`rounded-xl p-5 border-2 transition-all ${!isDisabled ? 'border-orange-400 shadow-lg' : 'border-gray-200 bg-gray-50'}`}>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                                                            style={{ background: !isDisabled ? '#fed7aa' : '#e5e7eb' }}>
+                                                            <span className="text-sm font-bold" style={{ color: !isDisabled ? '#c2410c' : '#6b7280' }}>PTS</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold" style={{ color: !isDisabled ? '#7a3a0a' : '#9ca3af' }}>
+                                                                Penilaian Tengah Semester
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {!isDisabled ? (
+                                                            <>
+                                                                <CheckCircle2 size={14} style={{ color: '#16a34a' }} />
+                                                                <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>Aktif</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Lock size={14} style={{ color: '#9ca3af' }} />
+                                                                <span className="text-xs font-semibold" style={{ color: '#9ca3af' }}>Terkunci</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -1292,54 +1352,113 @@ export default function InputNilaiGBSClient() {
                                                         const num = parseFloat(val);
                                                         setEditingNilai(prev => ({
                                                             ...prev,
-                                                            [komponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
+                                                            [ptsKomponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
                                                         }));
                                                     }}
                                                     disabled={isDisabled}
-                                                    placeholder="-"
-                                                    className={`w-full px-3 py-3 rounded-xl text-center font-bold transition-all border-2 ${isDisabled
-                                                        ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                        : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                    placeholder="0"
+                                                    className={`w-full h-16 px-4 text-3xl font-bold text-center rounded-xl border-2 outline-none transition-all ${isDisabled
+                                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                        : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                                         }`}
-                                                    style={isDisabled ? {} : { boxShadow: '0 2px 8px rgba(232,105,10,0.08)' }}
                                                 />
                                             </div>
                                         );
-                                    })}
-                                </div>
-                            </div>
+                                    })()}
 
-                            <div>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></div>
-                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Penilaian Tengah & Akhir Semester</h3>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(komponen => {
-                                        const isPTS = /PTS/i.test(komponen.nama_komponen);
-                                        const isActive = (jenisPenilaianAktif === 'PTS' && isPTS) || (jenisPenilaianAktif === 'PAS' && !isPTS);
-                                        const isDisabled = !isActive;
-                                        const nilai = editingNilai[komponen.id_komponen];
+                                    {/* 2. PAS */}
+                                    {(() => {
+                                        const pasKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PAS');
+                                        if (!pasKomponen) return null;
+
+                                        const isDisabled = jenisPenilaianAktif === 'PTS';
+                                        const nilai = editingNilai[pasKomponen.id_komponen];
 
                                         return (
-                                            <div key={komponen.id_komponen}
-                                                className={`rounded-xl p-5 border-2 transition-all relative overflow-hidden ${isActive
-                                                    ? 'border-orange-400 shadow-lg'
-                                                    : 'border-gray-200 bg-gray-50'
-                                                    }`}>
-                                                {isActive && (
-                                                    <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-10"
-                                                        style={{ background: THEME.colors.secondary, transform: 'translate(30%, -30%)' }}></div>
-                                                )}
-
-                                                <div className="relative">
-                                                    <div className="text-center mb-4">
-                                                        <span className="text-base font-bold uppercase tracking-wide"
-                                                            style={{ color: isActive ? '#c2410c' : '#9ca3af' }}>
-                                                            {komponen.nama_komponen}
-                                                        </span>
+                                            <div className={`rounded-xl p-5 border-2 transition-all ${!isDisabled ? 'border-orange-400 shadow-lg' : 'border-gray-200 bg-gray-50'}`}>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                                                            style={{ background: !isDisabled ? '#fed7aa' : '#e5e7eb' }}>
+                                                            <span className="text-sm font-bold" style={{ color: !isDisabled ? '#c2410c' : '#6b7280' }}>PAS</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold" style={{ color: !isDisabled ? '#7a3a0a' : '#9ca3af' }}>
+                                                                Penilaian Akhir Semester
+                                                            </p>
+                                                        </div>
                                                     </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {!isDisabled ? (
+                                                            <>
+                                                                <CheckCircle2 size={14} style={{ color: '#16a34a' }} />
+                                                                <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>Aktif</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Lock size={14} style={{ color: '#9ca3af' }} />
+                                                                <span className="text-xs font-semibold" style={{ color: '#9ca3af' }}>Terkunci</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
 
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    step="1"
+                                                    value={nilai ?? ''}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        const num = parseFloat(val);
+                                                        setEditingNilai(prev => ({
+                                                            ...prev,
+                                                            [pasKomponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
+                                                        }));
+                                                    }}
+                                                    disabled={isDisabled}
+                                                    placeholder="0"
+                                                    className={`w-full h-16 px-4 text-3xl font-bold text-center rounded-xl border-2 outline-none transition-all ${isDisabled
+                                                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                        : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                        }`}
+                                                />
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* 3. UH1 - UH5 */}
+                                    {komponenList
+                                        .filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen))
+                                        .sort((a, b) => {
+                                            const numA = parseInt(a.nama_komponen.match(/\d+/)?.[0] || '0');
+                                            const numB = parseInt(b.nama_komponen.match(/\d+/)?.[0] || '0');
+                                            return numA - numB;
+                                        })
+                                        .map((komponen) => {
+                                            const isDisabled = jenisPenilaianAktif === 'PTS';
+                                            const nilai = editingNilai[komponen.id_komponen];
+
+                                            return (
+                                                <div key={komponen.id_komponen}
+                                                    className="flex items-center justify-between px-5 py-4 rounded-xl border"
+                                                    style={{
+                                                        background: isDisabled ? '#f9fafb' : '#fffaf6',
+                                                        borderColor: isDisabled ? '#e5e7eb' : '#fde0c8'
+                                                    }}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                                            style={{ background: '#fef3c7', color: '#92400e' }}>
+                                                            <span className="text-xs font-bold">UH</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-semibold" style={{ color: isDisabled ? '#9ca3af' : '#7a3a0a' }}>
+                                                                {komponen.nama_komponen}
+                                                            </p>
+                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>Ulangan Harian</p>
+                                                        </div>
+                                                    </div>
                                                     <input
                                                         type="number"
                                                         min="0"
@@ -1355,50 +1474,43 @@ export default function InputNilaiGBSClient() {
                                                             }));
                                                         }}
                                                         disabled={isDisabled}
-                                                        placeholder="0"
-                                                        className={`w-full px-4 py-4 rounded-xl text-3xl font-bold text-center transition-all border-2 ${isDisabled
+                                                        placeholder="-"
+                                                        className={`w-24 h-12 px-3 text-center text-lg font-bold rounded-lg border-2 outline-none transition-all ${isDisabled
                                                             ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                            : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                            : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                                             }`}
-                                                        style={isActive ? { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' } : {}}
                                                     />
-
-                                                    {isActive && (
-                                                        <div className="flex items-center justify-center gap-1.5 mt-3">
-                                                            <CheckCircle2 size={12} style={{ color: '#16a34a' }} />
-                                                            <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>Dapat diubah</span>
-                                                        </div>
-                                                    )}
-                                                    {isDisabled && (
-                                                        <div className="flex items-center justify-center gap-1.5 mt-3">
-                                                            <Lock size={12} style={{ color: '#9ca3af' }} />
-                                                            <span className="text-xs font-semibold" style={{ color: '#9ca3af' }}>Terkunci</span>
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: THEME.colors.border, background: '#fffaf6' }}>
+                        {/* Footer */}
+                        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                             <button onClick={closeEdit} disabled={saving}
                                 className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}>
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                onMouseEnter={e => { if (!saving) e.currentTarget.style.background = '#fff0e5'; }}
+                                onMouseLeave={e => { if (!saving) e.currentTarget.style.background = '#fff'; }}>
                                 Batal
                             </button>
                             <button onClick={openConfirmSimpan} disabled={saving}
-                                className={`px-6 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}>
+                                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                onMouseEnter={e => { if (!saving) e.currentTarget.style.background = THEME.gradients.primary; }}
+                                onMouseLeave={e => { if (!saving) e.currentTarget.style.background = THEME.gradients.secondary; }}>
                                 {saving ? (
                                     <>
-                                        <div className="w-5 h-5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                                         Menyimpan...
                                     </>
                                 ) : (
-                                    <>Simpan Nilai</>
+                                    <>
+                                        <Save size={14} />
+                                        Simpan Nilai
+                                    </>
                                 )}
                             </button>
                         </div>

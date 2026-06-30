@@ -1,16 +1,16 @@
 /**
  * Nama File: atur_penilaian_gbs_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian guru bidang studi
- * UPDATE: UI lebih simple - hapus hero section dan stat cards
+ * UPDATE: Redesign menggunakan template input_nilai untuk konsistensi UI
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle,
-    WifiOff, ShieldAlert, LogOut, Lock, Save, FileText,
-    Users, Target, TrendingUp
+    Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
+    WifiOff, ShieldAlert, LogOut, Lock, Save, BookOpen,
+    Users, GraduationCap, Trash2, Plus, FileText, TrendingUp
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -40,6 +40,7 @@ const THEME = {
     gradients: {
         primary: 'linear-gradient(135deg, #c95b08 0%, #e8690a 100%)',
         secondary: 'linear-gradient(135deg, #e8690a 0%, #f5870a 100%)',
+        header: 'linear-gradient(120deg, #b6500a 0%, #e8690a 45%, #f5a623 100%)',
     },
     shadows: {
         sm: '0 1px 3px rgba(124, 68, 9, 0.06)',
@@ -172,7 +173,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                         >Ya</button>
                     </div>
                 ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
                 )}
             </div>
         </div>
@@ -813,7 +814,7 @@ export default function AturPenilaianGBSClient() {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
                 <GlobalStyles />
-                <div className="text-center">
+                <div className="text-center fade-in">
                     <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin mx-auto mb-4" />
                     <p className="text-sm font-medium" style={{ color: THEME.colors.primary }}>Memuat data...</p>
                 </div>
@@ -837,7 +838,7 @@ export default function AturPenilaianGBSClient() {
                             <p className="text-sm text-gray-600">Anda belum ditugaskan mengajar mata pelajaran.</p>
                         </div>
                         <button onClick={handleLogout} className="w-full py-3 rounded-xl text-sm font-bold text-white" style={{ background: THEME.gradients.primary }}>
-                            <LogOut size={18} /> Logout
+                            <LogOut size={18} className="inline mr-2" /> Logout
                         </button>
                     </div>
                 </div>
@@ -858,13 +859,34 @@ export default function AturPenilaianGBSClient() {
                 <p className="text-sm mt-1" style={{ color: THEME.colors.primary }}>Kelola kategori dan bobot penilaian</p>
             </div>
 
+            {/* ====== STATUS BANNERS ====== */}
+            {isReadOnly && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
+                    style={{
+                        background: isPeriodLocked ? '#fef2f2' : '#fef3c7',
+                        border: `1px solid ${isPeriodLocked ? '#fca5a5' : '#fcd34d'}`
+                    }}>
+                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isPeriodLocked ? 'text-red-600' : 'text-yellow-600'}`} />
+                    <div className="flex-1">
+                        <p className={`text-sm font-bold mb-1 ${isPeriodLocked ? 'text-red-900' : 'text-yellow-900'}`}>
+                            {isPeriodLocked ? '🔒 Periode Penilaian Selesai' : '⏳ Periode Penilaian Belum Aktif'}
+                        </p>
+                        <p className={`text-xs ${isPeriodLocked ? 'text-red-800' : 'text-yellow-800'}`}>
+                            {isPeriodLocked
+                                ? 'Konfigurasi kategori dan bobot sudah dikunci dan tidak dapat diubah.'
+                                : 'Anda dapat menyiapkan kategori dan bobot penilaian sebagai persiapan.'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* ====== MAIN CARD ====== */}
             <div className="bg-white rounded-2xl overflow-hidden animate-fade-in-up delay-1" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
                 {/* Tabs */}
                 <div className="px-6 py-3 border-b" style={{ borderColor: THEME.colors.border, background: '#fffaf6' }}>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 overflow-x-auto scrollbar-thin">
                         <button
-                            className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 ${activeTab === 'akademik'
+                            className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 whitespace-nowrap ${activeTab === 'akademik'
                                     ? 'border-orange-500 text-orange-600 bg-orange-50'
                                     : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
                                 }`}
@@ -876,7 +898,7 @@ export default function AturPenilaianGBSClient() {
                             </div>
                         </button>
                         <button
-                            className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 ${activeTab === 'bobot'
+                            className={`px-6 py-2.5 text-sm font-bold transition-all rounded-t-lg border-b-2 whitespace-nowrap ${activeTab === 'bobot'
                                     ? 'border-orange-500 text-orange-600 bg-orange-50'
                                     : 'border-transparent text-gray-500 hover:text-orange-600 hover:bg-orange-50/50'
                                 }`}
@@ -944,8 +966,10 @@ export default function AturPenilaianGBSClient() {
                                         <button
                                             onClick={() => openEditKategori()}
                                             disabled={isReadOnly}
-                                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50"
-                                            style={{ background: THEME.gradients.secondary }}
+                                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                            style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                            onMouseEnter={(e) => { if (!isReadOnly) e.currentTarget.style.background = THEME.gradients.primary; }}
+                                            onMouseLeave={(e) => { if (!isReadOnly) e.currentTarget.style.background = THEME.gradients.secondary; }}
                                         >
                                             {isReadOnly ? <Lock size={16} /> : <Plus size={16} />}
                                             {isReadOnly ? 'Terkunci' : 'Tambah Kategori'}
@@ -953,56 +977,93 @@ export default function AturPenilaianGBSClient() {
                                     </div>
 
                                     {/* Table */}
-                                    <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${THEME.colors.border}` }}>
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr style={{ background: THEME.gradients.primary }}>
-                                                    {['No.', 'Range Nilai', 'Deskripsi', 'Aksi'].map(h => (
-                                                        <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white">{h}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {kategoriLoading ? (
-                                                    <tr><td colSpan={4} className="py-12 text-center text-gray-400">Memuat data...</td></tr>
-                                                ) : kategoriList.length === 0 ? (
-                                                    <tr><td colSpan={4} className="py-12 text-center text-gray-400">Belum ada kategori</td></tr>
-                                                ) : (
-                                                    kategoriList.map((kategori, index) => (
-                                                        <tr key={kategori.id} className="border-t" style={{ borderColor: THEME.colors.border, background: index % 2 === 0 ? '#fff' : '#fffaf6' }}>
-                                                            <td className="px-5 py-3.5 text-center text-gray-500">{index + 1}</td>
-                                                            <td className="px-5 py-3.5 text-center">
-                                                                <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#fff0e5', color: THEME.colors.primary }}>
-                                                                    {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-5 py-3.5 text-gray-700">{kategori.deskripsi}</td>
-                                                            <td className="px-5 py-3.5 text-center">
-                                                                <div className="flex justify-center gap-2">
-                                                                    <button onClick={() => openEditKategori(kategori)} disabled={isReadOnly}
-                                                                        className="px-3 py-1.5 rounded-lg text-xs font-bold"
-                                                                        style={{ background: isReadOnly ? '#e5e7eb' : '#fff0e5', color: isReadOnly ? '#6b7280' : '#b35a08' }}>
-                                                                        {isReadOnly ? 'Terkunci' : 'Edit'}
-                                                                    </button>
-                                                                    <button onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)} disabled={isReadOnly}
-                                                                        className="px-3 py-1.5 rounded-lg text-xs font-bold"
-                                                                        style={{ background: isReadOnly ? '#e5e7eb' : '#fef2f2', color: isReadOnly ? '#6b7280' : '#dc2626' }}>
-                                                                        {isReadOnly ? 'Terkunci' : 'Hapus'}
-                                                                    </button>
+                                    <div className="overflow-x-auto scrollbar-thin rounded-xl" style={{ border: `1px solid ${THEME.colors.border}` }}>
+                                        <div className="min-w-[640px]">
+                                            <table className="w-full text-sm border-collapse">
+                                                <thead>
+                                                    <tr style={{ background: THEME.gradients.primary }}>
+                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">No.</th>
+                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Range Nilai</th>
+                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Deskripsi</th>
+                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Aksi</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {kategoriLoading ? (
+                                                        <tr>
+                                                            <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                                                                    Memuat data...
                                                                 </div>
                                                             </td>
                                                         </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
+                                                    ) : kategoriList.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
+                                                                Belum ada kategori
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        kategoriList.map((kategori, index) => (
+                                                            <tr key={kategori.id} className="transition-colors"
+                                                                style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
+                                                                <td className="px-4 py-3 text-center text-gray-500 font-medium">{index + 1}</td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    <span className="inline-block px-3 py-1 rounded-full text-xs font-bold"
+                                                                        style={{ background: '#fff0e5', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}` }}>
+                                                                        {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-gray-700">{kategori.deskripsi}</td>
+                                                                <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                                    <div className="flex justify-center gap-2">
+                                                                        <button onClick={() => openEditKategori(kategori)} disabled={isReadOnly}
+                                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            style={{
+                                                                                background: isReadOnly ? '#e5e7eb' : '#fff0e5',
+                                                                                border: isReadOnly ? '1px solid #d1d5db' : `1px solid ${THEME.colors.tertiary}`,
+                                                                                color: isReadOnly ? '#6b7280' : '#b35a08'
+                                                                            }}
+                                                                            onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8'; }}
+                                                                            onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fff0e5'; }}>
+                                                                            <Pencil size={13} />
+                                                                            {isReadOnly ? 'Terkunci' : 'Edit'}
+                                                                        </button>
+                                                                        <button onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)} disabled={isReadOnly}
+                                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            style={{
+                                                                                background: isReadOnly ? '#e5e7eb' : '#fef2f2',
+                                                                                border: isReadOnly ? '1px solid #d1d5db' : '1px solid #fca5a5',
+                                                                                color: isReadOnly ? '#6b7280' : '#dc2626'
+                                                                            }}
+                                                                            onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#fee2e2'; }}
+                                                                            onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fef2f2'; }}>
+                                                                            <Trash2 size={13} />
+                                                                            {isReadOnly ? 'Terkunci' : 'Hapus'}
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </>
                             ) : (
-                                <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: `2px dashed ${THEME.colors.border}` }}>
-                                    <FileText size={48} className="mx-auto mb-3" style={{ color: THEME.colors.secondary }} />
-                                    <p className="text-base font-bold" style={{ color: THEME.colors.primary }}>
+                                <div className="py-12 text-center rounded-2xl" style={{ background: '#fff7f0', border: `2px dashed ${THEME.colors.border}` }}>
+                                    <FileText size={64} className="mx-auto mb-4" style={{ color: THEME.colors.secondary }} />
+                                    <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>
                                         {!selectedMapelAkademik ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
+                                    </p>
+                                    <p className="text-sm mt-2" style={{ color: THEME.colors.text.muted }}>
+                                        {!selectedMapelAkademik
+                                            ? 'Silakan pilih mata pelajaran terlebih dahulu'
+                                            : 'Silakan pilih kelas untuk melihat kategori'}
                                     </p>
                                 </div>
                             )}
@@ -1054,13 +1115,20 @@ export default function AturPenilaianGBSClient() {
 
                             {selectedMapelBobot && selectedKelasBobot ? (
                                 bobotLoading ? (
-                                    <div className="py-12 text-center"><div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" /><p className="text-sm text-gray-400">Memuat bobot...</p></div>
+                                    <div className="py-12 text-center">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                                            <p className="text-sm text-gray-400">Memuat bobot...</p>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div>
                                         {isPTSActive && (
-                                            <div className="mb-4 p-3 rounded-lg flex items-center gap-2" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                                                <AlertCircle size={14} style={{ color: THEME.colors.primary }} />
-                                                <p className="text-xs" style={{ color: '#7a3a0a' }}>Periode <strong>PTS</strong> aktif — bobot otomatis <strong>PTS = 100%</strong></p>
+                                            <div className="mb-4 p-3 rounded-xl flex items-center gap-3" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                                <AlertCircle size={18} style={{ color: THEME.colors.primary, flexShrink: 0 }} />
+                                                <p className="text-sm" style={{ color: '#7a3a0a' }}>
+                                                    Periode <strong>PTS</strong> aktif — bobot otomatis <strong>PTS = 100%</strong>
+                                                </p>
                                             </div>
                                         )}
 
@@ -1081,7 +1149,7 @@ export default function AturPenilaianGBSClient() {
                                                             <input type="number" min="0" max="100" step="0.01" value={displayBobot}
                                                                 onChange={(e) => { if (isEditable) handleBobotChange(bobot.komponen_id, e.target.value); }}
                                                                 disabled={!isEditable}
-                                                                className={`w-24 h-11 px-3 text-center font-bold rounded-xl border-2 outline-none ${isEditable ? 'bg-white border-orange-200' : 'bg-gray-100 border-gray-200 cursor-not-allowed'}`}
+                                                                className={`w-24 h-11 px-3 text-center font-bold rounded-xl border-2 outline-none transition-all ${isEditable ? 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400' : 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'}`}
                                                                 readOnly={!isEditable} />
                                                             <span className="text-base font-bold" style={{ color: '#7a3a0a' }}>%</span>
                                                         </div>
@@ -1100,20 +1168,36 @@ export default function AturPenilaianGBSClient() {
                                         {!isPTSActive && !isReadOnly && (
                                             <div className="flex justify-end pt-4" style={{ borderTop: `1px solid ${THEME.colors.border}` }}>
                                                 <button onClick={openConfirmSaveBobot} disabled={isSavingBobot || !isBobotValid}
-                                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50"
-                                                    style={{ background: THEME.gradients.secondary }}>
-                                                    {isSavingBobot ? <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <Save size={16} />}
-                                                    {isSavingBobot ? 'Menyimpan...' : 'Simpan Bobot'}
+                                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                    style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                                    onMouseEnter={(e) => { if (!isSavingBobot && isBobotValid) e.currentTarget.style.background = THEME.gradients.primary; }}
+                                                    onMouseLeave={(e) => { if (!isSavingBobot && isBobotValid) e.currentTarget.style.background = THEME.gradients.secondary; }}>
+                                                    {isSavingBobot ? (
+                                                        <>
+                                                            <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                                            Menyimpan...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Save size={16} />
+                                                            Simpan Bobot
+                                                        </>
+                                                    )}
                                                 </button>
                                             </div>
                                         )}
                                     </div>
                                 )
                             ) : (
-                                <div className="py-12 text-center rounded-2xl" style={{ background: '#fffaf6', border: `2px dashed ${THEME.colors.border}` }}>
-                                    <TrendingUp size={48} className="mx-auto mb-3" style={{ color: THEME.colors.secondary }} />
-                                    <p className="text-base font-bold" style={{ color: THEME.colors.primary }}>
+                                <div className="py-12 text-center rounded-2xl" style={{ background: '#fff7f0', border: `2px dashed ${THEME.colors.border}` }}>
+                                    <TrendingUp size={64} className="mx-auto mb-4" style={{ color: THEME.colors.secondary }} />
+                                    <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>
                                         {!selectedMapelBobot ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
+                                    </p>
+                                    <p className="text-sm mt-2" style={{ color: THEME.colors.text.muted }}>
+                                        {!selectedMapelBobot
+                                            ? 'Silakan pilih mata pelajaran terlebih dahulu'
+                                            : 'Silakan pilih kelas untuk mengatur bobot'}
                                     </p>
                                 </div>
                             )}
@@ -1124,7 +1208,7 @@ export default function AturPenilaianGBSClient() {
 
             {/* ====== MODAL EDIT KATEGORI ====== */}
             {showEditKategori && (
-                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 ${editKategoriClosing ? 'opacity-0' : 'opacity-100'}`}
+                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${editKategoriClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeEditKategori(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md ${editKategoriClosing ? 'scale-95' : 'scale-100'} transition-all`}
@@ -1163,15 +1247,28 @@ export default function AturPenilaianGBSClient() {
 
                         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: `1px solid ${THEME.colors.border}`, background: '#fffaf6' }}>
                             <button onClick={closeEditKategori} disabled={isSavingKategori}
-                                className="px-5 py-2.5 rounded-xl text-sm font-semibold border"
-                                style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}>
+                                className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}
+                                onMouseEnter={e => { if (!isSavingKategori) e.currentTarget.style.background = '#fff0e5'; }}
+                                onMouseLeave={e => { if (!isSavingKategori) e.currentTarget.style.background = '#fff'; }}>
                                 Batal
                             </button>
                             <button onClick={openConfirmSaveKategori} disabled={isSavingKategori}
-                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50"
-                                style={{ background: THEME.gradients.secondary }}>
-                                {isSavingKategori ? <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <Save size={16} />}
-                                {isSavingKategori ? 'Menyimpan...' : 'Simpan'}
+                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                onMouseEnter={e => { if (!isSavingKategori) e.currentTarget.style.background = THEME.gradients.primary; }}
+                                onMouseLeave={e => { if (!isSavingKategori) e.currentTarget.style.background = THEME.gradients.secondary; }}>
+                                {isSavingKategori ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save size={16} />
+                                        Simpan
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -1185,7 +1282,7 @@ export default function AturPenilaianGBSClient() {
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 scale-in">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                                 <ShieldAlert size={24} className="text-orange-500" />
                             </div>
                             <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
@@ -1195,13 +1292,17 @@ export default function AturPenilaianGBSClient() {
                         </p>
                         <div className="flex gap-3">
                             <button onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border"
-                                style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}>
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                 Batal
                             </button>
                             <button onClick={() => { setShowConfirmModal(false); confirmAction === 'save-bobot' ? executeSaveBobot() : executeSaveKategori(); }}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white"
-                                style={{ background: THEME.gradients.secondary }}>
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                onMouseEnter={e => (e.currentTarget.style.background = THEME.gradients.primary)}
+                                onMouseLeave={e => (e.currentTarget.style.background = THEME.gradients.secondary)}>
                                 Simpan
                             </button>
                         </div>
