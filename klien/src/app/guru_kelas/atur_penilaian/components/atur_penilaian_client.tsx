@@ -10,6 +10,7 @@
  *   - ✅ Kategori Kokurikuler: PTS → hanya Mutaba'ah, PAS → semua aspek
  *   - ✅ Tab Deskripsi Rata-rata: HANYA PTS
  *   - ✅ Bobot: PTS = auto 100%, PAS = editable
+ *   - ✅ UI REFRESH: background putih bersih, tombol konsisten (Batal merah, Reset biru, Simpan orange)
  */
 
 'use client';
@@ -158,8 +159,10 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
         {isConfirm ? (
           <div className="flex gap-3 w-full">
             <button onClick={onClose}
-              className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
-              style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+              className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
             >Batal</button>
             <button onClick={() => { modal.onConfirm?.(); onClose(); }}
               className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
@@ -187,8 +190,10 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
       </div>
       <div className="flex gap-3 w-full">
         <button onClick={onCancel}
-          className="flex-1 py-3 rounded-xl border font-semibold text-sm transition-colors"
-          style={{ borderColor: '#fde0c8', color: '#7a3a0a' }}>
+          className="flex-1 py-3 rounded-xl font-semibold text-sm transition-all"
+          style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}>
           Batal
         </button>
         <button onClick={onConfirm}
@@ -247,14 +252,15 @@ const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 out
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+// ✅ UPDATED: background putih bersih, konsisten dengan data_admin_client
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
   base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
-  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
+  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)', border: '1.5px solid #c95b08' } as React.CSSProperties,
   hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
   leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
@@ -262,12 +268,23 @@ const btnPrimary = {
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
+// ✅ BtnSecondary kini "Batal" bergaya merah, konsisten dengan data_admin_client
 const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
   <button onClick={onClick} disabled={disabled}
-    className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-    style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-    onMouseEnter={e => { if (!disabled) (e.currentTarget.style.background = '#fff0e5'); }}
-    onMouseLeave={e => { if (!disabled) (e.currentTarget.style.background = '#fff'); }}
+    className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+    style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; } }}
+    onMouseLeave={e => { if (!disabled) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; } }}
+  >{children}</button>
+);
+
+// ✅ BtnReset biru, dipakai pada form batch/edit yang butuh tombol reset terpisah dari batal
+const BtnReset = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
+  <button onClick={onClick} disabled={disabled}
+    className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+    style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
+    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; } }}
+    onMouseLeave={e => { if (!disabled) { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; } }}
   >{children}</button>
 );
 
@@ -2781,8 +2798,10 @@ export default function AturPenilaianGuruKelasClient() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
               >
                 Batal
               </button>
@@ -2800,7 +2819,7 @@ export default function AturPenilaianGuruKelasClient() {
                 }}
                 disabled={isSavingBobot || isSavingKategori || isSavingBatch || isSavingDeskripsiRataRata}
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)', border: '1.5px solid #c95b08' }}
               >
                 {(isSavingBobot || isSavingKategori || isSavingBatch || isSavingDeskripsiRataRata) ? (
                   <>
@@ -2818,3 +2837,5 @@ export default function AturPenilaianGuruKelasClient() {
     </div>
   );
 }
+
+
