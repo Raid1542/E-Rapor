@@ -2,6 +2,7 @@
  * Nama File: penilaianBobotController.js
  * Fungsi: Controller bobot penilaian per mapel (validasi 100%, recompute rapor)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const bobotModel = require('../../models/guru_bidang_studi/penilaianBobotModel');

@@ -2,6 +2,7 @@
  * Nama File: penilaianBobotModel.js
  * Fungsi: Model bobot penilaian guru bidang studi + recompute nilai rapor
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');

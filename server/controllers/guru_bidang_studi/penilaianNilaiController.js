@@ -2,6 +2,7 @@
  * Nama File: penilaianNilaiController.js
  * Fungsi: Controller input nilai siswa (ambil, simpan single, simpan batch + hitung rapor)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');

@@ -1,7 +1,9 @@
 /**
  * Nama File: atur_penilaian_gbs_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian guru bidang studi
- * UPDATE: Redesign menggunakan template input_nilai untuk konsistensi UI
+ * UPDATE: 
+ *   - Sorting kategori dari nilai terbesar ke terkecil
+ *   - Perbaiki border radius modal
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -9,7 +11,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
-    WifiOff, ShieldAlert, LogOut, Lock, Save, BookOpen,
+    WifiOff, ShieldAlert, LogOut, Lock, BookOpen,
     Users, GraduationCap, Trash2, Plus, FileText, TrendingUp
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
@@ -193,7 +195,7 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
                 <AlertCircle size={20} className="text-yellow-700" />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-bold mb-2" style={{ color: '#78350f' }}>⚠️ Range Nilai 0-100 Belum Lengkap</p>
+                <p className="text-sm font-bold mb-2" style={{ color: '#78350f' }}>Range Nilai 0-100 Belum Lengkap</p>
                 {gaps.length === 1 ? (
                     <p className="text-xs" style={{ color: '#92400e' }}>
                         Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <strong className="px-2 py-0.5 rounded bg-yellow-200">{gaps[0].gap}</strong>.
@@ -962,7 +964,7 @@ export default function AturPenilaianGBSClient() {
                                     <CoverageWarning coverage={coverageInfo} />
 
                                     <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                        <p className="text-xs" style={{ color: THEME.colors.primary }}>Menampilkan {kategoriList.length} kategori</p>
+                                        <p className="text-xs" style={{ color: THEME.colors.primary }}>Menampilkan {kategoriList.length} kategori (urut dari nilai tertinggi)</p>
                                         <button
                                             onClick={() => openEditKategori()}
                                             disabled={isReadOnly}
@@ -1005,49 +1007,53 @@ export default function AturPenilaianGBSClient() {
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        kategoriList.map((kategori, index) => (
-                                                            <tr key={kategori.id} className="transition-colors"
-                                                                style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                                                onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
-                                                                <td className="px-4 py-3 text-center text-gray-500 font-medium">{index + 1}</td>
-                                                                <td className="px-4 py-3 text-center">
-                                                                    <span className="inline-block px-3 py-1 rounded-full text-xs font-bold"
-                                                                        style={{ background: '#fff0e5', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}` }}>
-                                                                        {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-3 text-gray-700">{kategori.deskripsi}</td>
-                                                                <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                                    <div className="flex justify-center gap-2">
-                                                                        <button onClick={() => openEditKategori(kategori)} disabled={isReadOnly}
-                                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                            style={{
-                                                                                background: isReadOnly ? '#e5e7eb' : '#fff0e5',
-                                                                                border: isReadOnly ? '1px solid #d1d5db' : `1px solid ${THEME.colors.tertiary}`,
-                                                                                color: isReadOnly ? '#6b7280' : '#b35a08'
-                                                                            }}
-                                                                            onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8'; }}
-                                                                            onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fff0e5'; }}>
-                                                                            <Pencil size={13} />
-                                                                            {isReadOnly ? 'Terkunci' : 'Edit'}
-                                                                        </button>
-                                                                        <button onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)} disabled={isReadOnly}
-                                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                            style={{
-                                                                                background: isReadOnly ? '#e5e7eb' : '#fef2f2',
-                                                                                border: isReadOnly ? '1px solid #d1d5db' : '1px solid #fca5a5',
-                                                                                color: isReadOnly ? '#6b7280' : '#dc2626'
-                                                                            }}
-                                                                            onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#fee2e2'; }}
-                                                                            onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fef2f2'; }}>
-                                                                            <Trash2 size={13} />
-                                                                            {isReadOnly ? 'Terkunci' : 'Hapus'}
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))
+                                                        // ✅ SORTING: Urutkan dari nilai tertinggi (max_nilai) ke terendah
+                                                        kategoriList
+                                                            .slice()
+                                                            .sort((a, b) => b.max_nilai - a.max_nilai)
+                                                            .map((kategori, index) => (
+                                                                <tr key={kategori.id} className="transition-colors"
+                                                                    style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                                                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                                                                    onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
+                                                                    <td className="px-4 py-3 text-center text-gray-500 font-medium">{index + 1}</td>
+                                                                    <td className="px-4 py-3 text-center">
+                                                                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold"
+                                                                            style={{ background: '#fff0e5', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}` }}>
+                                                                            {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-gray-700">{kategori.deskripsi}</td>
+                                                                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                                                                        <div className="flex justify-center gap-2">
+                                                                            <button onClick={() => openEditKategori(kategori)} disabled={isReadOnly}
+                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                                style={{
+                                                                                    background: isReadOnly ? '#e5e7eb' : '#fff0e5',
+                                                                                    border: isReadOnly ? '1px solid #d1d5db' : `1px solid ${THEME.colors.tertiary}`,
+                                                                                    color: isReadOnly ? '#6b7280' : '#b35a08'
+                                                                                }}
+                                                                                onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8'; }}
+                                                                                onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fff0e5'; }}>
+                                                                                <Pencil size={13} />
+                                                                                {isReadOnly ? 'Terkunci' : 'Edit'}
+                                                                            </button>
+                                                                            <button onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)} disabled={isReadOnly}
+                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                                style={{
+                                                                                    background: isReadOnly ? '#e5e7eb' : '#fef2f2',
+                                                                                    border: isReadOnly ? '1px solid #d1d5db' : '1px solid #fca5a5',
+                                                                                    color: isReadOnly ? '#6b7280' : '#dc2626'
+                                                                                }}
+                                                                                onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#fee2e2'; }}
+                                                                                onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fef2f2'; }}>
+                                                                                <Trash2 size={13} />
+                                                                                {isReadOnly ? 'Terkunci' : 'Hapus'}
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))
                                                     )}
                                                 </tbody>
                                             </table>
@@ -1179,7 +1185,6 @@ export default function AturPenilaianGBSClient() {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <Save size={16} />
                                                             Simpan Bobot
                                                         </>
                                                     )}
@@ -1211,9 +1216,10 @@ export default function AturPenilaianGBSClient() {
                 <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${editKategoriClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeEditKategori(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md ${editKategoriClosing ? 'scale-95' : 'scale-100'} transition-all`}
+                    {/* ✅ PERBAIKAN: rounded-2xl + overflow-hidden untuk border radius konsisten */}
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden ${editKategoriClosing ? 'scale-95' : 'scale-100'} transition-all`}
                         style={{ border: `1px solid ${THEME.colors.border}` }}>
-                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: THEME.gradients.primary }}>
+                        <div className="flex items-center justify-between px-6 py-4" style={{ background: THEME.gradients.primary }}>
                             <h2 className="text-base font-bold text-white">{editKategoriId ? 'Edit Kategori' : 'Tambah Kategori'}</h2>
                             <button onClick={closeEditKategori} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
@@ -1265,7 +1271,6 @@ export default function AturPenilaianGBSClient() {
                                     </>
                                 ) : (
                                     <>
-                                        <Save size={16} />
                                         Simpan
                                     </>
                                 )}

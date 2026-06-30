@@ -924,11 +924,6 @@ export default function InputNilaiGBSClient() {
                                 ? 'Pilih Mata Pelajaran'
                                 : 'Pilih Kelas'}
                         </p>
-                        <p className="text-sm mt-2" style={{ color: THEME.colors.text.muted }}>
-                            {!selectedMapelId
-                                ? 'Silakan pilih mata pelajaran terlebih dahulu'
-                                : 'Silakan pilih kelas untuk melihat data siswa'}
-                        </p>
                     </div>
                 ) : (
                     <>
