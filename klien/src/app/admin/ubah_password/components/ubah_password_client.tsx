@@ -42,18 +42,19 @@ const GlobalStyles = () => (
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
+// Input lebih lega: border 2px, padding lebih besar, transisi focus ring halus
 const inputBase = [
     "w-full border-2 rounded-xl px-4 py-3 pr-12 text-sm text-gray-800",
     "outline-none transition-all bg-orange-50/40 placeholder:text-gray-400",
 ].join(' ');
-const inputNormal = `${inputBase} border-orange-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20`;
-const inputError = `${inputBase} border-red-400 focus:border-red-500`;
+const inputNormal = `${inputBase} border-orange-200 focus:border-orange-400 focus:ring-[3px] focus:ring-orange-400/15`;
+const inputError = `${inputBase} border-red-400 focus:border-red-500 focus:ring-[3px] focus:ring-red-400/15`;
 
-const labelCls = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ const PasswordInput = ({
                 onClick={onToggle}
                 tabIndex={-1}
                 aria-label={show ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
-                className="absolute right-4 transition-colors"
+                className="absolute right-4 flex items-center transition-colors"
                 style={{ color: '#c95b08' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#e8690a')}
                 onMouseLeave={e => (e.currentTarget.style.color = '#c95b08')}
@@ -256,7 +257,7 @@ const UbahPasswordClient = () => {
         }
     };
 
-    // ── Rules checklist — DISAMAKAN dengan admin (CheckCircle2 + warna hijau/abu) ──
+    // ── Rules checklist ──
 
     const rules = [
         { label: 'Minimal 8 karakter', ok: form.newPassword.length >= 8 },
@@ -276,14 +277,17 @@ const UbahPasswordClient = () => {
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* ── [BARU] Subtitle di atas — sama seperti admin ─────────────── */}
-            <p className="text-sm mb-5 w-full max-w-2xl in-slideUp" style={{ color: '#c95b08' }}>
-                Perbarui kata sandi akun Anda secara berkala untuk keamanan
-            </p>
+            {/* Subtitle di atas */}
+            <div className="w-full max-w-2xl mb-5 in-slideUp">
+                <h1 className="text-2xl font-bold text-gray-900">Ubah Kata Sandi</h1>
+                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
+                    Perbarui kata sandi akun Anda secara berkala untuk keamanan
+                </p>
+            </div>
 
-            {/* ── [DIUBAH] Banner tips keamanan — style sama persis dengan admin ── */}
+            {/* Banner tips keamanan */}
             <div className="mb-6 w-full max-w-2xl rounded-xl flex items-start gap-3 px-4 py-3.5 in-slideUp"
-                style={{ background: '#fff', border: '1px solid #fde0c8' }}>
+                style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: '#fff3e8' }}>
                     <ShieldCheck size={18} style={{ color: '#e8690a' }} />
@@ -296,17 +300,18 @@ const UbahPasswordClient = () => {
                 </div>
             </div>
 
-            {/* ── Form card ─────────────────────────────────────────────────── */}
+            {/* Form card */}
             <div className="bg-white rounded-2xl overflow-hidden w-full max-w-2xl in-slideUp"
-                style={{ ...CARD_STYLE, animationDelay: '0.05s' }}>
+                style={{ ...CARD_STYLE, animationDelay: '0.05s', marginBottom: '28px' }}>
 
-                {/* Card header — konsisten dengan tampilan admin */}
+                {/* Gradient bar tipis */}
+                <div className="h-[5px]" style={{ background: 'linear-gradient(90deg,#c95b08,#e8690a,#f5870a,#fb923c)' }} />
+
+                {/* Card header */}
                 <div className="flex items-center justify-between gap-4 px-6 py-4 relative overflow-hidden" style={HEADER_GRAD}>
-                    {/* Decorative circles */}
                     <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }} />
                     <div className="absolute -bottom-6 right-16 w-32 h-32 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }} />
 
-                    {/* Kiri: ikon + judul */}
                     <div className="flex items-center gap-3 relative z-10">
                         <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                             style={{ background: 'rgba(255,255,255,0.2)' }}>
@@ -320,7 +325,6 @@ const UbahPasswordClient = () => {
                         </div>
                     </div>
 
-                    {/* Kanan: tombol X kembali */}
                     <button
                         type="button"
                         onClick={() => router.back()}
@@ -337,7 +341,6 @@ const UbahPasswordClient = () => {
                 {/* Form body */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
 
-                    {/* Kata sandi lama */}
                     <PasswordInput
                         label="Kata Sandi Lama"
                         name="oldPassword"
@@ -350,10 +353,8 @@ const UbahPasswordClient = () => {
                         error={errors.oldPassword}
                     />
 
-                    {/* Divider */}
                     <div className="border-t" style={{ borderColor: '#fde0c8' }} />
 
-                    {/* Kata sandi baru + strength bar — DISAMAKAN dengan admin (4 segmen) */}
                     <PasswordInput
                         label="Kata Sandi Baru"
                         name="newPassword"
@@ -366,12 +367,11 @@ const UbahPasswordClient = () => {
                         error={errors.newPassword}
                         hint={
                             form.newPassword ? (
-                                <div className="mt-1">
+                                <div className="mt-1.5">
                                     <div className="flex items-center justify-between mb-1.5">
-                                        <span className="text-xs text-gray-500">Kekuatan kata sandi</span>
+                                        <span className="text-xs text-gray-400">Kekuatan kata sandi</span>
                                         <span className={`text-xs font-bold ${strength.color}`}>{strength.label}</span>
                                     </div>
-                                    {/* 4-segmen bar — sama persis dengan admin */}
                                     <div className="flex gap-1">
                                         {[1, 2, 3, 4].map(i => (
                                             <div
@@ -386,7 +386,6 @@ const UbahPasswordClient = () => {
                         }
                     />
 
-                    {/* Konfirmasi kata sandi baru */}
                     <PasswordInput
                         label="Konfirmasi Kata Sandi Baru"
                         name="confirmPassword"
@@ -399,9 +398,8 @@ const UbahPasswordClient = () => {
                         error={errors.confirmPassword}
                     />
 
-                    {/* [DIUBAH] Checklist rules — DISAMAKAN dengan admin (CheckCircle2, warna hijau/abu) */}
                     {(form.newPassword || form.confirmPassword) && (
-                        <div className="rounded-xl px-5 py-4 space-y-2"
+                        <div className="rounded-xl px-4 py-3.5 flex flex-col gap-2"
                             style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
                             {rules.map((r, i) => (
                                 <div key={i} className="flex items-center gap-2">
@@ -409,7 +407,7 @@ const UbahPasswordClient = () => {
                                         size={16}
                                         className={`flex-shrink-0 transition-colors duration-200 ${r.ok ? 'text-green-500' : 'text-gray-300'}`}
                                     />
-                                    <span className={`text-sm transition-colors duration-200 ${r.ok ? 'text-green-600' : 'text-gray-400'}`}>
+                                    <span className={`text-[12.5px] transition-colors duration-200 ${r.ok ? 'text-green-600' : 'text-gray-400'}`}>
                                         {r.label}
                                     </span>
                                 </div>
@@ -418,18 +416,26 @@ const UbahPasswordClient = () => {
                     )}
 
                     {/* Footer actions */}
-                    <div className="flex items-center justify-end pt-2"
+                    <div className="flex items-center justify-end pt-4"
                         style={{ borderTop: '1px solid #fde0c8' }}>
                         <button
                             type="submit"
                             disabled={saving}
-                            className="inline-flex items-center gap-2 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-2 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{
-                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)',
+                                background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)',
+                                boxShadow: '0 4px 14px rgba(249,115,22,0.45)',
                             }}
-                            onMouseEnter={e => { if (!saving) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
+                            onMouseEnter={e => {
+                                if (!saving) {
+                                    e.currentTarget.style.filter = 'brightness(1.08)';
+                                    e.currentTarget.style.boxShadow = '0 6px 18px rgba(249,115,22,0.55)';
+                                }
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.filter = 'none';
+                                e.currentTarget.style.boxShadow = '0 4px 14px rgba(249,115,22,0.45)';
+                            }}
                         >
                             {saving ? (
                                 <>
@@ -447,8 +453,8 @@ const UbahPasswordClient = () => {
                 </form>
             </div>
 
-            {/* ── Catatan peringatan ──────────────────────────────────────── */}
-            <div className="mt-5 w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 in-slideUp"
+            {/* Catatan peringatan */}
+            <div className="w-full max-w-2xl rounded-2xl p-4 flex items-start gap-3 in-slideUp"
                 style={{ background: '#fef2f2', border: '1px solid #fca5a5', animationDelay: '0.1s' }}>
                 <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs leading-relaxed text-red-600">

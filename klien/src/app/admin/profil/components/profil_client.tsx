@@ -6,7 +6,10 @@
  *         Data profil disinkronkan antara localStorage dan API backend.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ * Update: 
+ *   - Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ *   - Disamakan PAGE_BG (putih) dan CARD_STYLE dengan halaman admin lain,
+ *     tombol Batal pada modal konfirmasi memakai BtnBatal standar
  */
 
 'use client';
@@ -91,8 +94,8 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
@@ -100,6 +103,18 @@ const readonlyCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 
 
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
+
+const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
+  <button
+    onClick={onClick}
+    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+    style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+    onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+  >
+    {children}
+  </button>
+);
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
@@ -120,7 +135,7 @@ const ProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // ✅ TAMBAHAN: State untuk modal konfirmasi
+  // State untuk modal konfirmasi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Simpan data awal untuk mendeteksi perubahan
@@ -232,7 +247,7 @@ const ProfilePage = () => {
     return null;
   };
 
-  // ✅ TAMBAHAN: Buka modal konfirmasi
+  // ── Buka modal konfirmasi ──────────────────────────────────────────────────
   const openConfirmModal = () => {
     // Cek tanggal lahir (usia minimal 18 tahun)
     const tanggalError = validateTanggalLahir(formData.tanggalLahir);
@@ -268,7 +283,7 @@ const ProfilePage = () => {
     setShowConfirmModal(true);
   };
 
-  // ✅ TAMBAHAN: Eksekusi submit (setelah konfirmasi)
+  // ── Eksekusi submit (setelah konfirmasi) ────────────────────────────────────
   const executeSubmitProfile = async () => {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('currentUser');
@@ -649,7 +664,7 @@ const ProfilePage = () => {
               </div>
             </div>
 
-            {/* ✅ HAPUS checkbox konfirmasi, ganti dengan button yang buka modal */}
+            {/* Tombol Simpan */}
             <div className="px-6 pb-6">
               <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                 <div className="flex justify-end">
@@ -702,13 +717,7 @@ const ProfilePage = () => {
             </p>
 
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-              >
-                Batal
-              </button>
+              <BtnBatal onClick={() => setShowConfirmModal(false)} />
               <button
                 onClick={() => {
                   setShowConfirmModal(false);
