@@ -40,8 +40,8 @@ const kelasModel = {
   },
 
   /** Ambil kelas dengan detail (wali, jumlah siswa, status TA) */
-  async getByIdWithDetails(id, tahunAjaranIdInduk) {
-    // ✅ FIXED: Query langsung pakai tahunAjaranIdInduk
+  // ✅ BENAR - Parameter dan query menggunakan nama yang sama
+async getByIdWithDetails(id, tahunAjaranIdInduk) {
     const [rows] = await db.execute(`
       SELECT 
           k.id_kelas AS id, k.nama_kelas, k.fase, k.tahun_ajaran_id,
@@ -51,11 +51,8 @@ const kelasModel = {
       FROM kelas k
       LEFT JOIN (
           SELECT gk.kelas_id, u.nama_lengkap, gk.user_id
-          FROM guru_kelas gk 
-          JOIN user u ON gk.user_id = u.id_user
-          JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-          WHERE ta.id_tahun_ajaran_induk = ? AND ta.status = 'aktif'
-          LIMIT 1
+          FROM guru_kelas gk JOIN user u ON gk.user_id = u.id_user
+          WHERE gk.tahun_ajaran_id = ?
       ) wk ON k.id_kelas = wk.kelas_id
       LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = ?
       LEFT JOIN tahun_ajaran ta ON ta.id_tahun_ajaran_induk = ? AND ta.status = 'aktif'
@@ -64,7 +61,7 @@ const kelasModel = {
     `, [tahunAjaranIdInduk, tahunAjaranIdInduk, tahunAjaranIdInduk, id, tahunAjaranIdInduk]);
 
     return rows[0] || null;
-  },
+},
 
   /** Tambah kelas baru (validasi fase & duplikasi) */
   async create(data) {
