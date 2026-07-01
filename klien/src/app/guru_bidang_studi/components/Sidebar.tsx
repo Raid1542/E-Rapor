@@ -1,10 +1,7 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Komponen sidebar navigasi untuk guru bidang studi.
- *         Struktur:
- *         - Dashboard
- *         - Menu Utama: Atur Penilaian, Input Nilai
- *         - Saya: Profil
+ *         UI Template disesuaikan dengan sidebar admin
  */
 
 'use client';
@@ -18,6 +15,49 @@ import {
     X,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+
+// ─── GLOBAL STYLES (Animasi Playful - SAMA DENGAN ADMIN) ────────────────────
+const SidebarStyles = () => (
+    <style jsx global>{`
+        @keyframes sb_slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                max-height: 500px;
+            }
+        }
+        @keyframes sb_fadeIn {
+            from { opacity: 0; transform: translateX(-4px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes sb_badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .sb-slideDown { animation: sb_slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .sb-fadeIn { animation: sb_fadeIn 0.25s ease-out; }
+        .sb-badgePulse { animation: sb_badgePulse 2s ease-in-out infinite; }
+        .sb-nav-item {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sb-nav-item:hover:not(:disabled) {
+            transform: translateX(3px);
+        }
+        .sb-chevron {
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sb-chevron-open {
+            transform: rotate(180deg);
+        }
+        .sb-scrollbar-none::-webkit-scrollbar { display: none; }
+        .sb-scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+    `}</style>
+);
 
 export default function Sidebar() {
     const router = useRouter();
@@ -68,10 +108,21 @@ export default function Sidebar() {
     const toggleSidebar = () => setIsExpanded(!isExpanded);
     const handleNavigation = (url: string) => router.push(url);
 
+    // ── Reusable nav item styles (SAMA DENGAN ADMIN) ───────────────────────
     const navBase =
-        'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
-    const navActive = 'bg-white text-orange-600 font-semibold shadow-sm';
-    const navInactive = 'text-white hover:bg-white/15 hover:text-white';
+        'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
+    const navActive =
+        'bg-white text-orange-600 shadow-sm font-semibold';
+    const navInactive =
+        'text-white hover:bg-white/15 hover:text-white';
+
+    // ── Navigation Items ────────────────────────────────────────────────────
+    const menuItems = [
+        { name: 'Dashboard', url: '/guru_bidang_studi/dashboard', icon: Home },
+        { name: 'Atur Penilaian', url: '/guru_bidang_studi/atur_penilaian', icon: Settings },
+        { name: 'Input Nilai', url: '/guru_bidang_studi/input_nilai', icon: Edit },
+        { name: 'Profil', url: '/guru_bidang_studi/profil', icon: UserCircle },
+    ];
 
     return (
         <div
@@ -80,7 +131,9 @@ export default function Sidebar() {
                 background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
             }}
         >
-            {/* ── Header: Logo + Nama Sekolah ─────────────────────────────── */}
+            <SidebarStyles />
+
+            {/* ── Header: Logo + Nama Sekolah (SAMA DENGAN ADMIN) ─────────── */}
             <div
                 className="flex items-center justify-between px-4 py-4"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
@@ -89,7 +142,7 @@ export default function Sidebar() {
                     <>
                         <div className="flex items-center gap-3 min-w-0">
                             <div
-                                className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden"
+                                className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-110 hover:rotate-6"
                                 style={{ background: 'rgba(255,255,255,0.18)' }}
                             >
                                 <img
@@ -99,14 +152,14 @@ export default function Sidebar() {
                                     onError={() => setLogoUrl('/images/LogoUA.jpg')}
                                 />
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 sb-fadeIn">
                                 <h2 className="text-sm font-bold text-white leading-tight truncate">{schoolName}</h2>
                                 <p className="text-xs text-white/60 leading-tight">E-Rapor</p>
                             </div>
                         </div>
                         <button
                             onClick={toggleSidebar}
-                            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:rotate-90"
                             style={{ background: 'rgba(255,255,255,0.12)' }}
                         >
                             <X className="w-4 h-4 text-white" />
@@ -115,7 +168,7 @@ export default function Sidebar() {
                 ) : (
                     <button
                         onClick={toggleSidebar}
-                        className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-colors"
+                        className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110"
                         style={{ background: 'rgba(255,255,255,0.15)' }}
                     >
                         <img
@@ -128,8 +181,8 @@ export default function Sidebar() {
                 )}
             </div>
 
-            {/* ── Navigation ──────────────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-none">
+            {/* ── Navigation (SAMA DENGAN ADMIN) ─────────────────────────── */}
+            <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
 
                 {/* Dashboard */}
                 <button
@@ -140,9 +193,9 @@ export default function Sidebar() {
                     {isExpanded && <span>Dashboard</span>}
                 </button>
 
-                {/* ── MENU UTAMA label ── */}
+                {/* ── MENU UTAMA label (SAMA DENGAN ADMIN) ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Menu Utama
                     </p>
                 )}
@@ -166,9 +219,9 @@ export default function Sidebar() {
                     {isExpanded && <span>Input Nilai</span>}
                 </button>
 
-                {/* ── SAYA label ── */}
+                {/* ── SAYA label (SAMA DENGAN ADMIN) ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Saya
                     </p>
                 )}

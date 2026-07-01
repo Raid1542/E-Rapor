@@ -3,10 +3,9 @@
  * Fungsi: Komponen klien untuk mengelola data guru,
  *         mencakup fitur tambah, edit, detail, import Excel, filter,
  *         pencarian, dan pagination.
+ * UPDATE: Notifikasi import lebih clean (tanpa emoji berlebihan) + auto-download CSV
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * Update: Konsistenkan UI dengan data_admin_client — back-button navigation,
- *         avatar warna gender, button footer berwarna, tabel modern
  */
 
 'use client';
@@ -75,11 +74,11 @@ const GlobalStyles = () => (
 );
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
-    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -114,22 +113,22 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
    SHARED STYLE CONSTANTS
    ========================================================================== */
 
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG     = { background: '#ffffff' };
-const CARD_STYLE  = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
-    base:  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+    base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
     style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
     hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
@@ -149,7 +148,7 @@ const formatTanggalIndonesia = (dateStr?: string | null): string => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return '-';
-    const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][date.getMonth()];
+    const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
     return `${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
 
@@ -183,30 +182,30 @@ export default function DataGuruClient() {
        STATE
     ------------------------------------------------------------------ */
 
-    const [guruList,      setGuruList]      = useState<Guru[]>([]);
-    const [loading,       setLoading]       = useState(true);
-    const [showDetail,    setShowDetail]    = useState(false);
-    const [showTambah,    setShowTambah]    = useState(false);
-    const [showEdit,      setShowEdit]      = useState(false);
-    const [editId,        setEditId]        = useState<number | null>(null);
-    const [selectedGuru,  setSelectedGuru]  = useState<Guru | null>(null);
-    const [searchQuery,   setSearchQuery]   = useState('');
-    const [itemsPerPage,  setItemsPerPage]  = useState(10);
-    const [currentPage,   setCurrentPage]   = useState(1);
-    const [showImport,    setShowImport]    = useState(false);
-    const [importFile,    setImportFile]    = useState<File | null>(null);
+    const [guruList, setGuruList] = useState<Guru[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showDetail, setShowDetail] = useState(false);
+    const [showTambah, setShowTambah] = useState(false);
+    const [showEdit, setShowEdit] = useState(false);
+    const [editId, setEditId] = useState<number | null>(null);
+    const [selectedGuru, setSelectedGuru] = useState<Guru | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [showImport, setShowImport] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
     const [detailClosing, setDetailClosing] = useState(false);
     const [importClosing, setImportClosing] = useState(false);
     const [filterClosing, setFilterClosing] = useState(false);
-    const [showFilter,    setShowFilter]    = useState(false);
-    const [filterValues,     setFilterValues]     = useState({ role: '', jenisKelamin: '', status: '' });
+    const [showFilter, setShowFilter] = useState(false);
+    const [filterValues, setFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
     const [tempFilterValues, setTempFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [confirmAction,    setConfirmAction]    = useState<'add' | 'edit' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
 
-    const [modal,    setModal]    = useState<ModalConfig | null>(null);
-    const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const [modal, setModal] = useState<ModalConfig | null>(null);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
     const [formData, setFormData] = useState<FormDataType>({
@@ -223,7 +222,7 @@ export default function DataGuruClient() {
         try {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-            const res  = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (res.ok) {
                 const validRoles = ['guru_kelas', 'guru_bidang_studi'];
@@ -277,10 +276,10 @@ export default function DataGuruClient() {
 
     const validate = (isEdit: boolean): boolean => {
         const ne: Record<string, string> = {};
-        if (!formData.nama?.trim())        ne.nama        = 'Nama wajib diisi';
-        if (!formData.email?.trim())       ne.email       = 'Email sekolah wajib diisi';
+        if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
+        if (!formData.email?.trim()) ne.email = 'Email sekolah wajib diisi';
         if (!formData.tempatLahir?.trim()) ne.tempatLahir = 'Tempat lahir wajib diisi';
-        if (!formData.jenisKelamin)        ne.jenisKelamin = 'Pilih jenis kelamin';
+        if (!formData.jenisKelamin) ne.jenisKelamin = 'Pilih jenis kelamin';
         if (!formData.roles || formData.roles.length === 0) ne.roles = 'Pilih minimal satu role';
         if (!formData.tanggalLahir) {
             ne.tanggalLahir = 'Tanggal lahir wajib diisi';
@@ -311,11 +310,11 @@ export default function DataGuruClient() {
             const norm = (s?: string | null) => (s || '').trim().toLowerCase();
             const changed =
                 formData.nama !== (ori.nama || '') || formData.email !== (ori.email || '') ||
-                formData.niy  !== (ori.niy  || '') || formData.nuptk !== (ori.nuptk || '') ||
-                formData.tempatLahir  !== (ori.tempat_lahir  || '') ||
+                formData.niy !== (ori.niy || '') || formData.nuptk !== (ori.nuptk || '') ||
+                formData.tempatLahir !== (ori.tempat_lahir || '') ||
                 formData.tanggalLahir !== (ori.tanggal_lahir || '') ||
                 norm(formData.jenisKelamin) !== norm(ori.jenisKelamin) ||
-                formData.alamat     !== (ori.alamat     || '') ||
+                formData.alamat !== (ori.alamat || '') ||
                 formData.no_telepon !== (ori.no_telepon || '') ||
                 formData.statusGuru !== (ori.statusGuru || 'aktif') ||
                 JSON.stringify(formData.roles.sort()) !== JSON.stringify((ori.roles || []).sort());
@@ -371,23 +370,103 @@ export default function DataGuruClient() {
         setErrors({});
     };
 
+    // ✅ PERBAIKAN: Notifikasi import lebih clean dan simpel
     const handleImportExcel = async () => {
-        if (!importFile) { showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file Excel terlebih dahulu.' }); return; }
+        if (!importFile) {
+            showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file Excel terlebih dahulu.' });
+            return;
+        }
+
         const fd = new FormData();
         fd.append('file', importFile);
+
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/admin/guru/import', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+            const res = await fetch('http://localhost:5000/api/admin/guru/import', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: fd
+            });
+
             const result = await res.json();
-            if (res.ok) {
-                setShowImport(false); setImportFile(null); await fetchGuru();
+
+            if (res.ok && result.success) {
+                setShowImport(false);
+                setImportFile(null);
+                await fetchGuru();
+
                 if (result.skipped && result.skipped.length > 0) {
-                    showModal({ type: 'warning', title: 'Import Selesai dengan Peringatan', message: `${result.success} data berhasil diimport.\n\n${result.skipped.length} data dilewati:\n` + result.skipped.map((d: any) => `• Baris ${d.row} (${d.nama}) - ${d.reason}`).join('\n') });
+                    const skippedCount = result.skipped.length;
+
+                    // ✅ FORMAT NOTIFIKASI - SIMPLE & CLEAR (tanpa emoji berlebihan)
+                    const summaryLines = [
+                        `Berhasil: ${result.total} guru`,
+                        `Dilewati: ${skippedCount} guru`,
+                        '',
+                        skippedCount <= 5
+                            ? 'Data yang dilewati:'
+                            : `Contoh error (3 dari ${skippedCount}):`,
+                        ...result.skipped.slice(0, skippedCount <= 5 ? skippedCount : 3).map((d: any, i: number) =>
+                            `${i + 1}. Baris ${d.row}: ${d.nama} - ${d.reason}`
+                        ),
+                        ...(skippedCount > 5 ? [`\n... dan ${skippedCount - 3} data lainnya`] : []),
+                    ];
+
+                    showModal({
+                        type: 'warning',
+                        title: 'Import Selesai',
+                        message: summaryLines.join('\n')
+                    });
+
+                    // ✅ AUTO-DOWNLOAD CSV jika error > 5
+                    if (skippedCount > 5) {
+                        downloadErrorReport(result.skipped);
+                    }
                 } else {
-                    showModal({ type: 'success', title: 'Import Berhasil!', message: result.message || `Berhasil mengimport ${result.total} data guru.` });
+                    showModal({
+                        type: 'success',
+                        title: 'Import Berhasil',
+                        message: `Berhasil mengimport ${result.total} data guru.`
+                    });
                 }
-            } else { showModal({ type: 'error', title: 'Import Gagal', message: result.message || 'Terjadi kesalahan saat mengimpor data guru.' }); }
-        } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
+            } else {
+                showModal({
+                    type: 'error',
+                    title: 'Import Gagal',
+                    message: result.message || 'Terjadi kesalahan saat mengimpor data guru.'
+                });
+            }
+        } catch {
+            showModal({
+                type: 'network',
+                title: 'Koneksi Gagal',
+                message: 'Tidak dapat terhubung ke server.'
+            });
+        }
+    };
+
+    // ✅ FUNGSI DOWNLOAD ERROR REPORT
+    const downloadErrorReport = (skipped: any[]) => {
+        const csvContent = [
+            ['No', 'Baris', 'Nama', 'Alasan Error'].join(','),
+            ...skipped.map((d, index) => [
+                index + 1,
+                d.row,
+                `"${d.nama}"`,
+                `"${d.reason}"`
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `error_import_guru_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     /* ------------------------------------------------------------------
@@ -403,15 +482,15 @@ export default function DataGuruClient() {
         return ms && mr && mj && ms2;
     });
 
-    const totalPages  = Math.max(1, Math.ceil(filteredGuru.length / itemsPerPage));
-    const startIndex  = (currentPage - 1) * itemsPerPage;
-    const endIndex    = startIndex + itemsPerPage;
+    const totalPages = Math.max(1, Math.ceil(filteredGuru.length / itemsPerPage));
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const currentGuru = filteredGuru.slice(startIndex, endIndex);
 
     const renderPagination = () => {
         const pages: ReactNode[] = [];
-        const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive   = "text-white border-orange-500";
+        const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+        const btnActive = "text-white border-orange-500";
         const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
         pages.push(<button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>);
         const range: number[] = [];
@@ -431,12 +510,12 @@ export default function DataGuruClient() {
         return pages;
     };
 
-    const resetFilter      = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
-    const openFilterModal  = () => { setTempFilterValues(filterValues); setShowFilter(true); };
-    const applyFilter      = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
+    const resetFilter = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
+    const openFilterModal = () => { setTempFilterValues(filterValues); setShowFilter(true); };
+    const applyFilter = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
     const closeFilterModal = () => { setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); };
-    const closeDetail      = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
-    const closeImport      = () => { setImportClosing(true); setTimeout(() => { setShowImport(false); setImportClosing(false); }, 200); };
+    const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
+    const closeImport = () => { setImportClosing(true); setTimeout(() => { setShowImport(false); setImportClosing(false); }, 200); };
 
     /* ------------------------------------------------------------------
        FORM RENDER — konsisten dengan data_admin: back-button + gradient header
@@ -665,7 +744,7 @@ export default function DataGuruClient() {
     );
 
     if (showTambah) return renderForm(false);
-    if (showEdit)   return renderForm(true);
+    if (showEdit) return renderForm(true);
 
     /* ------------------------------------------------------------------
        MAIN LIST VIEW
@@ -798,7 +877,7 @@ export default function DataGuruClient() {
                                     </td>
 
                                     <td className="px-5 py-3.5 text-center text-xs text-gray-600">{formatGender(guru.jenisKelamin)}</td>
-                                    <td className="px-5 py-3.5 text-center text-xs text-gray-500 font-mono">{guru.niy   || '-'}</td>
+                                    <td className="px-5 py-3.5 text-center text-xs text-gray-500 font-mono">{guru.niy || '-'}</td>
                                     <td className="px-5 py-3.5 text-center text-xs text-gray-500 font-mono">{guru.nuptk || '-'}</td>
 
                                     <td className="px-5 py-3.5 text-center">
@@ -904,11 +983,11 @@ export default function DataGuruClient() {
                             {/* Info grid 2 kolom */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {[
-                                    { label: 'NIY',           value: selectedGuru.niy   || '-' },
-                                    { label: 'NUPTK',         value: selectedGuru.nuptk || '-' },
+                                    { label: 'NIY', value: selectedGuru.niy || '-' },
+                                    { label: 'NUPTK', value: selectedGuru.nuptk || '-' },
                                     { label: 'Jenis Kelamin', value: formatGender(selectedGuru.jenisKelamin) },
-                                    { label: 'No. Telepon',   value: selectedGuru.no_telepon || '-' },
-                                    { label: 'Tempat Lahir',  value: selectedGuru.tempat_lahir || '-' },
+                                    { label: 'No. Telepon', value: selectedGuru.no_telepon || '-' },
+                                    { label: 'Tempat Lahir', value: selectedGuru.tempat_lahir || '-' },
                                     { label: 'Tanggal Lahir', value: formatTanggalIndonesia(selectedGuru.tanggal_lahir) },
                                 ].map((item, i) => (
                                     <div key={i} className="rounded-xl px-4 py-3" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>

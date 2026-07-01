@@ -1,6 +1,7 @@
 /**
  * Nama File: guruController.js
  * Fungsi: Controller CRUD guru + import Excel
+ * UPDATE: ✅ Import sekarang skip error per baris (tidak stop seluruh proses)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -124,7 +125,7 @@ const editGuru = async (req, res) => {
     }
 };
 
-// POST: Import data guru dari file Excel (.xlsx) dengan role mapping
+// ✅ PERBAIKAN: Import data guru dari file Excel - skip error per baris
 const importGuru = async (req, res) => {
     const connection = await db.getConnection();
     try {
@@ -134,17 +135,26 @@ const importGuru = async (req, res) => {
         const workbook = XLSX.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-        if (data.length === 0) throw new Error('File Excel kosong');
+        
+        if (data.length === 0) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ message: 'File Excel kosong' });
+        }
 
-        // Validasi kolom wajib
+        // Validasi kolom wajib di baris pertama
         const requiredColumns = ['email_sekolah', 'nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin', 'roles'];
         const firstRow = data[0];
-        for (const col of requiredColumns) {
-            if (!(col in firstRow)) throw new Error(`Format tidak valid: Kolom "${col}" tidak ditemukan di template`);
+        const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+        if (missingColumns.length > 0) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ 
+                message: `Format tidak valid: Kolom "${missingColumns.join(', ')}" tidak ditemukan di template` 
+            });
         }
 
         await connection.beginTransaction();
-        const duplicates = [];
+        const skipped = [];
+        let processedCount = 0;
         
         // Role mapping untuk normalisasi
         const roleMapping = {
@@ -153,93 +163,148 @@ const importGuru = async (req, res) => {
             'gurubidangstudi': 'guru_bidang_studi', 'guru mapel': 'guru_bidang_studi', 'guru_mapel': 'guru_bidang_studi',
         };
 
-        // Proses setiap baris
+        // Proses setiap baris - skip jika ada error
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNum = i + 2;
 
-            // Validasi data lengkap
-            if (!row.email_sekolah || !row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
-                throw new Error(`Baris ${rowNum}: Data tidak lengkap. Field nama, email, tempat lahir, tanggal lahir, dan jenis kelamin wajib diisi`);
-            }
-
-            // Validasi format email
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(row.email_sekolah)) throw new Error(`Baris ${rowNum}: Format email "${row.email_sekolah}" tidak valid`);
-
-            // Konversi tanggal lahir
-            let tanggal_lahir = row.tanggal_lahir;
-            if (typeof tanggal_lahir === 'number') {
-                const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
-                if (!isNaN(date.getTime())) {
-                    tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                } else {
-                    throw new Error(`Baris ${rowNum}: Format tanggal lahir tidak valid`);
+            try {
+                // Validasi data lengkap
+                if (!row.email_sekolah || !row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
+                    skipped.push({
+                        row: rowNum, 
+                        nama: row.nama_lengkap || '-', 
+                        reason: 'Data tidak lengkap (nama, email, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)'
+                    });
+                    continue;
                 }
-            } else if (typeof tanggal_lahir === 'string') {
-                tanggal_lahir = tanggal_lahir.trim();
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) throw new Error(`Baris ${rowNum}: Format tanggal lahir harus YYYY-MM-DD`);
-            } else {
-                throw new Error(`Baris ${rowNum}: Tanggal lahir wajib diisi`);
-            }
 
-            // Validasi jenis kelamin
-            if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
-                throw new Error(`Baris ${rowNum}: Jenis kelamin harus "Laki-laki" atau "Perempuan"`);
-            }
+                // Validasi format email
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(row.email_sekolah)) {
+                    skipped.push({
+                        row: rowNum, 
+                        nama: row.nama_lengkap, 
+                        reason: `Format email "${row.email_sekolah}" tidak valid`
+                    });
+                    continue;
+                }
 
-            // Parsing dan normalisasi role
-            const roles = row.roles ? row.roles.toString().split(',').map(r => r.trim().toLowerCase()) : [];
-            const validRoles = roles.map(r => roleMapping[r]).filter(Boolean);
-            if (validRoles.length === 0) {
-                throw new Error(`Baris ${rowNum}: Role harus berisi "guru kelas" atau "guru bidang studi". Nilai: "${row.roles}"`);
-            }
+                // Konversi tanggal lahir
+                let tanggal_lahir = row.tanggal_lahir;
+                if (typeof tanggal_lahir === 'number') {
+                    const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
+                    if (!isNaN(date.getTime())) {
+                        tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    } else {
+                        skipped.push({
+                            row: rowNum, 
+                            nama: row.nama_lengkap, 
+                            reason: 'Format tanggal lahir tidak valid'
+                        });
+                        continue;
+                    }
+                } else if (typeof tanggal_lahir === 'string') {
+                    tanggal_lahir = tanggal_lahir.trim();
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                        skipped.push({
+                            row: rowNum, 
+                            nama: row.nama_lengkap, 
+                            reason: 'Format tanggal lahir harus YYYY-MM-DD'
+                        });
+                        continue;
+                    }
+                } else {
+                    skipped.push({
+                        row: rowNum, 
+                        nama: row.nama_lengkap, 
+                        reason: 'Tanggal lahir wajib diisi'
+                    });
+                    continue;
+                }
 
-            // Cek duplikasi
-            const [existingEmail] = await connection.execute('SELECT id_user FROM user WHERE email_sekolah = ?', [row.email_sekolah]);
-            const [existingNiy] = row.niy ? await connection.execute('SELECT id_guru FROM guru WHERE niy = ?', [row.niy]) : [[]];
-            const [existingNuptk] = row.nuptk ? await connection.execute('SELECT id_guru FROM guru WHERE nuptk = ?', [row.nuptk]) : [[]];
+                // Validasi jenis kelamin
+                if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
+                    skipped.push({
+                        row: rowNum, 
+                        nama: row.nama_lengkap, 
+                        reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${row.jenis_kelamin}"`
+                    });
+                    continue;
+                }
 
-            if (existingEmail.length > 0 || existingNiy.length > 0 || existingNuptk.length > 0) {
-                duplicates.push({
-                    row: rowNum, nama: row.nama_lengkap, email: row.email_sekolah,
-                    reason: existingEmail.length > 0 ? 'Email sudah terdaftar' : existingNiy.length > 0 ? 'NIY sudah terdaftar' : 'NUPTK sudah terdaftar'
+                // Parsing dan normalisasi role
+                const roles = row.roles ? row.roles.toString().split(',').map(r => r.trim().toLowerCase()) : [];
+                const validRoles = roles.map(r => roleMapping[r]).filter(Boolean);
+                if (validRoles.length === 0) {
+                    skipped.push({
+                        row: rowNum, 
+                        nama: row.nama_lengkap, 
+                        reason: `Role tidak valid: "${row.roles}". Gunakan "guru kelas" atau "guru bidang studi"`
+                    });
+                    continue;
+                }
+
+                // Cek duplikasi
+                const [existingEmail] = await connection.execute('SELECT id_user FROM user WHERE email_sekolah = ?', [row.email_sekolah]);
+                const [existingNiy] = row.niy ? await connection.execute('SELECT id_guru FROM guru WHERE niy = ?', [row.niy]) : [[]];
+                const [existingNuptk] = row.nuptk ? await connection.execute('SELECT id_guru FROM guru WHERE nuptk = ?', [row.nuptk]) : [[]];
+
+                if (existingEmail.length > 0 || existingNiy.length > 0 || existingNuptk.length > 0) {
+                    let reason = 'Data duplikat';
+                    if (existingEmail.length > 0) reason = 'Email sudah terdaftar';
+                    else if (existingNiy.length > 0) reason = 'NIY sudah terdaftar';
+                    else if (existingNuptk.length > 0) reason = 'NUPTK sudah terdaftar';
+                    
+                    skipped.push({
+                        row: rowNum, 
+                        nama: row.nama_lengkap, 
+                        reason: reason
+                    });
+                    continue;
+                }
+
+                // Insert data guru
+                const password = row.password || 'sekolah123';
+                const userData = { email_sekolah: row.email_sekolah, password, nama_lengkap: row.nama_lengkap };
+                const guruData = {
+                    niy: row.niy || null, nuptk: row.nuptk || null, tempat_lahir: row.tempat_lahir, tanggal_lahir,
+                    jenis_kelamin: row.jenis_kelamin, alamat: row.alamat || null, no_telepon: row.no_telepon || null
+                };
+                await guruModel.createGuru(userData, guruData, validRoles, connection);
+                processedCount++;
+
+            } catch (rowErr) {
+                // Tangani error tak terduga per baris
+                skipped.push({
+                    row: rowNum, 
+                    nama: row.nama_lengkap || '-', 
+                    reason: rowErr.message || 'Gagal memproses data'
                 });
-                continue;
             }
-
-            // Insert data guru
-            const password = row.password || 'sekolah123';
-            const userData = { email_sekolah: row.email_sekolah, password, nama_lengkap: row.nama_lengkap };
-            const guruData = {
-                niy: row.niy || null, nuptk: row.nuptk || null, tempat_lahir: row.tempat_lahir, tanggal_lahir,
-                jenis_kelamin: row.jenis_kelamin, alamat: row.alamat || null, no_telepon: row.no_telepon || null
-            };
-            await guruModel.createGuru(userData, guruData, validRoles, connection);
         }
 
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
-        // Response dengan info duplikat
-        if (duplicates.length > 0) {
-            return res.status(200).json({
-                message: `Import selesai: ${data.length - duplicates.length} data berhasil, ${duplicates.length} data dilewati (duplikat)`,
-                success: data.length - duplicates.length, skipped: duplicates
-            });
-        }
-        res.json({ message: 'Import data guru berhasil', total: data.length });
+        // Response dengan info skipped
+        res.json({
+            success: true,
+            message: skipped.length > 0 
+                ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati` 
+                : `Import berhasil: ${processedCount} data guru ditambahkan`,
+            total: processedCount,
+            skipped: skipped
+        });
+
     } catch (err) {
         await connection.rollback();
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('Import guru error:', err);
-        if (err.message && (err.message.includes('Format') || err.message.includes('Baris'))) {
-            return res.status(400).json({ message: err.message });
-        }
-        if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
-            return res.status(400).json({ message: 'Import gagal: Data duplikat ditemukan (Email/NIY/NUPTK sudah terdaftar)' });
-        }
-        res.status(500).json({ message: err.message || 'Gagal mengimport data guru' });
+        res.status(500).json({ 
+            success: false,
+            message: err.message || 'Gagal mengimport data guru' 
+        });
     } finally {
         connection.release();
     }

@@ -1,6 +1,7 @@
 /**
  * Nama File: pembelajaranModel.js
  * Fungsi: Model CRUD pembelajaran (penugasan guru ke mapel & kelas)
+ * UPDATE: ✅ FIXED - Pisahkan guru berdasarkan role untuk mapel wajib/pilihan
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -140,7 +141,32 @@ const pembelajaranModel = {
     return rows[0].jumlah;
   },
 
-  /** Ambil guru aktif */
+  // ✅ FIXED: Pisahkan guru berdasarkan role
+  /** Ambil guru kelas aktif (untuk mapel wajib) */
+  async getGuruKelasAktif() {
+    const [rows] = await db.execute(`
+      SELECT u.id_user AS id, u.nama_lengkap AS nama
+      FROM user u
+      INNER JOIN user_role ur ON u.id_user = ur.id_user
+      WHERE u.status = 'aktif' AND ur.role = 'guru_kelas'
+      ORDER BY u.nama_lengkap ASC
+    `);
+    return rows;
+  },
+
+  /** Ambil guru bidang studi aktif (untuk mapel pilihan) */
+  async getGuruBidangStudiAktif() {
+    const [rows] = await db.execute(`
+      SELECT u.id_user AS id, u.nama_lengkap AS nama
+      FROM user u
+      INNER JOIN user_role ur ON u.id_user = ur.id_user
+      WHERE u.status = 'aktif' AND ur.role = 'guru_bidang_studi'
+      ORDER BY u.nama_lengkap ASC
+    `);
+    return rows;
+  },
+
+  /** Ambil semua guru aktif (legacy - untuk backward compatibility) */
   async getGuruAktif() {
     const [rows] = await db.execute(`
       SELECT u.id_user AS id, u.nama_lengkap AS nama
@@ -152,11 +178,11 @@ const pembelajaranModel = {
     return rows;
   },
 
-  /** Ambil kelas per semester (pakai semesterId) */
-  async getKelasByTahunAjaran(semesterId) {
+  /** Ambil kelas per tahun ajaran induk */
+  async getKelasByTahunAjaran(idInduk) {
     const [rows] = await db.execute(
       'SELECT id_kelas AS id, nama_kelas AS nama FROM kelas WHERE tahun_ajaran_id = ? ORDER BY nama_kelas ASC',
-      [semesterId]
+      [idInduk]
     );
     return rows;
   },

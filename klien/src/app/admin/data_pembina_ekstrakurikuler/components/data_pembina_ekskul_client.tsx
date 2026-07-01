@@ -4,13 +4,14 @@
  *         mencakup fitur tambah, edit, detail, import Excel, filter,
  *         pencarian, dan pagination.
  * Update: Konsisten dengan data_admin_client.tsx — tanpa avatar inisial di kolom nama
+ * UPDATE: ✅ Menambahkan fitur filter berdasarkan Jenis Kelamin dan Status
  */
 
 'use client';
 
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
 import {
-    Eye, Pencil, Upload, X, Plus, Search, CheckCircle2, AlertCircle,
+    Eye, Pencil, Upload, X, Plus, Search, Filter, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, ChevronLeft, Users, Award,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
@@ -75,11 +76,11 @@ const GlobalStyles = () => (
    ========================================================================== */
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50',  ring: 'ring-green-100',  icon: <CheckCircle2 size={40} className="text-green-500" />,  btn: 'bg-green-500 hover:bg-green-600' },
-    error:   { iconBg: 'bg-red-50',    ring: 'ring-red-100',    icon: <AlertCircle  size={40} className="text-red-500" />,    btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200',  icon: <WifiOff      size={40} className="text-slate-500" />,  btn: 'bg-slate-600 hover:bg-slate-700' },
-    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert  size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
@@ -114,22 +115,22 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
    SHARED STYLE CONSTANTS
    ========================================================================== */
 
-const inputCls    = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
 
-const PAGE_BG     = { background: '#ffffff' };
-const CARD_STYLE  = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD     = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
 const btnPrimary = {
-    base:  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+    base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
     style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
     hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls   = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
@@ -140,6 +141,18 @@ const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: Re
         onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
         onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
     >{children}</button>
+);
+
+const BtnReset = ({ onClick, children = 'Reset' }: { onClick: () => void; children?: React.ReactNode }) => (
+    <button
+        onClick={onClick}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+        style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
+    >
+        {children}
+    </button>
 );
 
 /* ==========================================================================
@@ -160,9 +173,9 @@ const formatDateInput = (dateString?: string): string => {
         if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString;
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return '';
-        const year  = date.getFullYear();
+        const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day   = String(date.getDate()).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     } catch { return ''; }
 };
@@ -200,6 +213,10 @@ export default function DataPembinaEkskulClient() {
     const [importFile, setImportFile] = useState<File | null>(null);
     const [detailClosing, setDetailClosing] = useState(false);
     const [importClosing, setImportClosing] = useState(false);
+    const [filterClosing, setFilterClosing] = useState(false);
+    const [showFilter, setShowFilter] = useState(false);
+    const [filterValues, setFilterValues] = useState({ jenisKelamin: '', status: '' });
+    const [tempFilterValues, setTempFilterValues] = useState({ jenisKelamin: '', status: '' });
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
@@ -312,7 +329,7 @@ export default function DataPembinaEkskulClient() {
             if (isNaN(dob.getTime())) {
                 ne.tanggal_lahir = 'Tanggal lahir tidak valid';
             } else {
-                const today  = new Date();
+                const today = new Date();
                 const dobMid = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
                 const todMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                 if (dobMid > todMid) {
@@ -343,14 +360,14 @@ export default function DataPembinaEkskulClient() {
     };
 
     const hasChanges = (): boolean => (
-        formData.nama          !== originalFormData.nama          ||
-        formData.niy           !== originalFormData.niy           ||
-        formData.nuptk         !== originalFormData.nuptk         ||
-        formData.tempat_lahir  !== originalFormData.tempat_lahir  ||
+        formData.nama !== originalFormData.nama ||
+        formData.niy !== originalFormData.niy ||
+        formData.nuptk !== originalFormData.nuptk ||
+        formData.tempat_lahir !== originalFormData.tempat_lahir ||
         formData.tanggal_lahir !== originalFormData.tanggal_lahir ||
-        formData.jenisKelamin  !== originalFormData.jenisKelamin  ||
-        formData.alamat        !== originalFormData.alamat        ||
-        formData.no_telepon    !== originalFormData.no_telepon    ||
+        formData.jenisKelamin !== originalFormData.jenisKelamin ||
+        formData.alamat !== originalFormData.alamat ||
+        formData.no_telepon !== originalFormData.no_telepon ||
         formData.statusPembina !== originalFormData.statusPembina
     );
 
@@ -446,13 +463,40 @@ export default function DataPembinaEkskulClient() {
         setErrors({});
     };
 
+    // ✅ FUNGSI DOWNLOAD ERROR REPORT
+    const downloadErrorReport = (skipped: any[]) => {
+        const csvContent = [
+            ['No', 'Baris', 'Nama', 'Alasan Error'].join(','),
+            ...skipped.map((d, index) => [
+                index + 1,
+                d.row,
+                `"${d.nama}"`,
+                `"${d.reason}"`
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `error_import_pembina_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // ✅ PERBAIKAN: Notifikasi import lebih clean dan simpel
     const handleImportExcel = async () => {
         if (!importFile) {
             showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file Excel terlebih dahulu.' });
             return;
         }
+
         const fd = new FormData();
         fd.append('file', importFile);
+
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('http://localhost:5000/api/admin/pembina-ekskul/import', {
@@ -460,27 +504,61 @@ export default function DataPembinaEkskulClient() {
                 headers: { Authorization: `Bearer ${token}` },
                 body: fd,
             });
+
             const result = await res.json();
-            if (res.ok) {
+
+            if (res.ok && result.success) {
                 setShowImport(false);
                 setImportFile(null);
                 await fetchPembina();
 
                 if (result.skipped && result.skipped.length > 0) {
+                    const skippedCount = result.skipped.length;
+
+                    // ✅ FORMAT NOTIFIKASI - SIMPLE & CLEAR (tanpa emoji berlebihan)
+                    const summaryLines = [
+                        `Berhasil: ${result.total} pembina`,
+                        `Dilewati: ${skippedCount} pembina`,
+                        '',
+                        skippedCount <= 5
+                            ? 'Data yang dilewati:'
+                            : `Contoh error (3 dari ${skippedCount}):`,
+                        ...result.skipped.slice(0, skippedCount <= 5 ? skippedCount : 3).map((d: any, i: number) =>
+                            `${i + 1}. Baris ${d.row}: ${d.nama} - ${d.reason}`
+                        ),
+                        ...(skippedCount > 5 ? [`\n... dan ${skippedCount - 3} data lainnya`] : []),
+                    ];
+
                     showModal({
                         type: 'warning',
-                        title: 'Import Selesai dengan Peringatan',
-                        message: `${result.total - result.skipped.length} data berhasil diimport.\n\n${result.skipped.length} data dilewati (duplikat):\n` +
-                            result.skipped.map((d: any) => `• Baris ${d.row} (${d.nama}) - ${d.reason}`).join('\n')
+                        title: 'Import Selesai',
+                        message: summaryLines.join('\n')
                     });
+
+                    // ✅ AUTO-DOWNLOAD CSV jika error > 5
+                    if (skippedCount > 5) {
+                        downloadErrorReport(result.skipped);
+                    }
                 } else {
-                    showModal({ type: 'success', title: 'Import Berhasil!', message: result.message || `Berhasil mengimport ${result.total} data pembina.` });
+                    showModal({
+                        type: 'success',
+                        title: 'Import Berhasil',
+                        message: `Berhasil mengimport ${result.total} data pembina.`
+                    });
                 }
             } else {
-                showModal({ type: 'error', title: 'Import Gagal', message: result.message || 'Terjadi kesalahan saat mengimpor data.' });
+                showModal({
+                    type: 'error',
+                    title: 'Import Gagal',
+                    message: result.message || 'Terjadi kesalahan saat mengimpor data.'
+                });
             }
         } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+            showModal({
+                type: 'network',
+                title: 'Koneksi Gagal',
+                message: 'Tidak dapat terhubung ke server.'
+            });
         }
     };
 
@@ -490,8 +568,16 @@ export default function DataPembinaEkskulClient() {
 
     const filteredPembina = pembinaList.filter(p => {
         const q = searchQuery.toLowerCase().trim();
-        return !q || p.nama?.toLowerCase().includes(q) || p.niy?.includes(q) ||
+        const matchesSearch = !q || p.nama?.toLowerCase().includes(q) || p.niy?.includes(q) ||
             p.nuptk?.includes(q) || p.tempat_lahir?.toLowerCase().includes(q) || p.no_telepon?.includes(q);
+
+        const matchesGender = !filterValues.jenisKelamin ||
+            p.jenisKelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
+
+        const matchesStatus = !filterValues.status ||
+            p.statusPembina?.toLowerCase() === filterValues.status.toLowerCase();
+
+        return matchesSearch && matchesGender && matchesStatus;
     });
 
     const totalPages = Math.max(1, Math.ceil(filteredPembina.length / itemsPerPage));
@@ -509,10 +595,32 @@ export default function DataPembinaEkskulClient() {
         setTimeout(() => { setShowImport(false); setImportClosing(false); }, 200);
     };
 
+    const resetFilter = () => {
+        const e = { jenisKelamin: '', status: '' };
+        setFilterValues(e);
+        setTempFilterValues(e);
+    };
+
+    const openFilterModal = () => {
+        setTempFilterValues(filterValues);
+        setShowFilter(true);
+    };
+
+    const applyFilter = () => {
+        setFilterValues(tempFilterValues);
+        setFilterClosing(true);
+        setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200);
+    };
+
+    const closeFilterModal = () => {
+        setFilterClosing(true);
+        setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200);
+    };
+
     const renderPagination = () => {
         const pages: ReactNode[] = [];
-        const btnBase     = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive   = "text-white border-orange-500";
+        const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
+        const btnActive = "text-white border-orange-500";
         const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
 
         pages.push(
@@ -832,21 +940,32 @@ export default function DataPembinaEkskulClient() {
                         )}
                     </div>
 
+                    {/* ✅ Filter Button */}
+                    <button
+                        onClick={openFilterModal}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+                        style={{ background: '#fff', border: '1.5px solid #d97706', color: '#b35a08', boxShadow: '0 1px 4px rgba(217,119,6,0.15)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    >
+                        <Filter size={15} /> Filter
+                    </button>
+
                     {/* Import Excel */}
-<button
-    onClick={() => setShowImport(true)}
-    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
-    style={{
-        background: '#eff6ff',
-        border: '1.5px solid #93c5fd',
-        color: '#1d4ed8',
-        boxShadow: '0 1px 4px rgba(59,130,246,0.15)'
-    }}
-    onMouseEnter={e => (e.currentTarget.style.background = '#dbeafe')}
-    onMouseLeave={e => (e.currentTarget.style.background = '#eff6ff')}
->
-    <Upload size={14} /> Import
-</button>
+                    <button
+                        onClick={() => setShowImport(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+                        style={{
+                            background: '#eff6ff',
+                            border: '1.5px solid #93c5fd',
+                            color: '#1d4ed8',
+                            boxShadow: '0 1px 4px rgba(59,130,246,0.15)'
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#dbeafe')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#eff6ff')}
+                    >
+                        <Upload size={14} /> Import
+                    </button>
                 </div>
             </div>
 
@@ -905,7 +1024,7 @@ export default function DataPembinaEkskulClient() {
                                         </td>
 
                                         <td className="px-5 py-3.5 text-center text-xs text-gray-600">{formatGender(pembina.jenisKelamin)}</td>
-                                        <td className="px-5 py-3.5 text-center text-xs text-gray-500 font-mono">{pembina.niy   || '-'}</td>
+                                        <td className="px-5 py-3.5 text-center text-xs text-gray-500 font-mono">{pembina.niy || '-'}</td>
                                         <td className="px-5 py-3.5 text-center text-xs text-gray-500 font-mono">{pembina.nuptk || '-'}</td>
 
                                         <td className="px-5 py-3.5 text-center">
@@ -1014,11 +1133,11 @@ export default function DataPembinaEkskulClient() {
                             {/* Info grid — dua kolom */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {[
-                                    { label: 'NIY',           value: selectedPembina.niy          || '-' },
-                                    { label: 'NUPTK',         value: selectedPembina.nuptk        || '-' },
+                                    { label: 'NIY', value: selectedPembina.niy || '-' },
+                                    { label: 'NUPTK', value: selectedPembina.nuptk || '-' },
                                     { label: 'Jenis Kelamin', value: formatGender(selectedPembina.jenisKelamin) },
-                                    { label: 'No. Telepon',   value: selectedPembina.no_telepon   || '-' },
-                                    { label: 'Tempat Lahir',  value: selectedPembina.tempat_lahir || '-' },
+                                    { label: 'No. Telepon', value: selectedPembina.no_telepon || '-' },
+                                    { label: 'Tempat Lahir', value: selectedPembina.tempat_lahir || '-' },
                                     { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedPembina.tanggal_lahir) },
                                 ].map((item, i) => (
                                     <div key={i} className="rounded-xl px-4 py-3" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
@@ -1045,6 +1164,66 @@ export default function DataPembinaEkskulClient() {
                                     onMouseLeave={btnPrimary.leave}
                                 >
                                     <Pencil size={14} /> Edit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ================================================================
+                ✅ MODAL FILTER — TAMBAHAN BARU
+            ================================================================ */}
+            {showFilter && (
+                <div
+                    className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${filterClosing ? 'opacity-0' : 'opacity-100'}`}
+                    onClick={e => { if (e.target === e.currentTarget) closeFilterModal(); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div
+                        className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-sm transform transition-all duration-200 ${filterClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                        style={CARD_STYLE}
+                    >
+                        {/* Modal header */}
+                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                            <div className="flex items-center gap-2">
+                                <Filter size={15} className="text-white/80" />
+                                <h2 className="text-sm font-bold text-white">Filter Pembina</h2>
+                            </div>
+                            <button onClick={closeFilterModal}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                <X size={15} className="text-white" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {[
+                                { label: 'Jenis Kelamin', name: 'jenisKelamin', options: [{ v: '', l: 'Semua Jenis Kelamin' }, { v: 'Laki-laki', l: 'Laki-laki' }, { v: 'Perempuan', l: 'Perempuan' }] },
+                                { label: 'Status', name: 'status', options: [{ v: '', l: 'Semua Status' }, { v: 'aktif', l: 'Aktif' }, { v: 'nonaktif', l: 'Nonaktif' }] },
+                            ].map(f => (
+                                <div key={f.name} className="flex flex-col gap-1.5">
+                                    <label className={labelCls} style={labelColor}>{f.label}</label>
+                                    <select
+                                        value={(tempFilterValues as any)[f.name]}
+                                        onChange={e => setTempFilterValues(p => ({ ...p, [f.name]: e.target.value }))}
+                                        className={inputCls}
+                                    >
+                                        {f.options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                                    </select>
+                                </div>
+                            ))}
+
+                            <div className="pt-2 flex gap-3" style={{ borderTop: '1px solid #fde0c8' }}>
+                                <BtnReset onClick={resetFilter} />
+                                <button
+                                    onClick={applyFilter}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', border: '1.5px solid #c95b08', boxShadow: '0 3px 10px rgba(232,105,10,0.25)' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
+                                >
+                                    Terapkan Filter
                                 </button>
                             </div>
                         </div>

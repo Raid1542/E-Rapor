@@ -191,24 +191,30 @@ export default function DataSiswaClient() {
 
     // ── fetch ──────────────────────────────────────────────────────────────────
 
-    const fetchSiswa = useCallback(async () => {
+    const fetchSiswa = useCallback(async (page = 1, limit = 100) => {
         try {
             const token = localStorage.getItem('token');
             if (!token) {
-                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
+                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
                 return;
             }
-            const res = await fetch('http://localhost:5000/api/admin/siswa-master', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+
+            // ✅ KIRIM PARAMETER PAGINATION
+            const res = await fetch(
+                `http://localhost:5000/api/admin/siswa-master?page=${page}&limit=${limit}&status=semua`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
             const data = await res.json();
             if (res.ok) {
                 setSiswaList(Array.isArray(data.data) ? data.data : []);
             } else {
-                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan saat memuat data siswa.' });
+                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message });
             }
         } catch {
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
             setLoading(false);
         }
@@ -386,8 +392,10 @@ export default function DataSiswaClient() {
             showModal({ type: 'warning', title: 'File Belum Dipilih', message: 'Pilih file Excel terlebih dahulu.' });
             return;
         }
+
         const fd = new FormData();
         fd.append('file', importFile);
+
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('http://localhost:5000/api/admin/siswa-master/import', {
@@ -395,27 +403,81 @@ export default function DataSiswaClient() {
                 headers: { Authorization: `Bearer ${token}` },
                 body: fd,
             });
+
             const result = await res.json();
+
             if (res.ok) {
                 setShowImport(false);
                 setImportFile(null);
                 await fetchSiswa();
+
                 if (result.skipped && result.skipped.length > 0) {
+                    const skippedCount = result.skipped.length;
+
+                    // ✅ HANYA AUTO-DOWNLOAD JIKA ERROR > 5
+                    if (skippedCount > 5) {
+                        downloadErrorReport(result.skipped);
+                    }
+
+                    const summaryLines = [
+                        `Berhasil: ${result.total} siswa`,
+                        `Dilewati: ${skippedCount} siswa (duplikat)`,
+                        '',
+                        skippedCount <= 5
+                            ? 'Data yang dilewati:'
+                            : `Contoh error (3 dari ${skippedCount}):`,
+                        ...result.skipped.slice(0, skippedCount <= 5 ? skippedCount : 3).map((d: any, i: number) =>
+                            `${i + 1}. Baris ${d.row}: ${d.nama} - ${d.reason}`
+                        ),
+                        ...(skippedCount > 5 ? [`\n... dan ${skippedCount - 3} data lainnya`] : []),
+                        '',
+                        skippedCount > 5 ? 'File CSV error telah diunduh otomatis.' : ''
+                    ];
+
                     showModal({
                         type: 'warning',
-                        title: 'Import Selesai dengan Peringatan',
-                        message: `${result.total} data berhasil diimport.\n\n${result.skipped.length} data dilewati (duplikat):\n` +
-                            result.skipped.map((d: any) => `• Baris ${d.row} (${d.nama}) - ${d.reason}`).join('\n')
+                        title: 'Import Selesai',
+                        message: summaryLines.join('\n')
                     });
                 } else {
-                    showModal({ type: 'success', title: 'Import Berhasil!', message: result.message || `Berhasil mengimport ${result.total} data siswa.` });
+                    showModal({
+                        type: 'success',
+                        title: 'Import Berhasil',
+                        message: `Berhasil mengimport ${result.total} data siswa.`
+                    });
                 }
             } else {
-                showModal({ type: 'error', title: 'Import Gagal', message: result.message || 'Terjadi kesalahan saat mengimpor data siswa.' });
+                showModal({ type: 'error', title: 'Import Gagal', message: result.message });
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         }
+    };
+
+    // Fungsi download error report
+    const downloadErrorReport = (skipped: any[]) => {
+        const csvContent = [
+            ['No', 'Baris', 'Nama', 'NIS', 'NISN', 'Alasan Error'].join(','),
+            ...skipped.map((d, index) => [
+                index + 1,
+                d.row,
+                `"${d.nama}"`,
+                d.nis || '-',
+                d.nisn || '-',
+                `"${d.reason}"`
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `error_import_siswa_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     // ── filter & pagination ────────────────────────────────────────────────────
