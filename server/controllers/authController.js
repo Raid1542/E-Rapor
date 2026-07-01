@@ -28,27 +28,44 @@ const login = async (req, res) => {
             [email_sekolah]
         );
 
+        // ✅ UPDATED: Bedakan error email tidak ditemukan vs password salah
         if (userRows.length === 0) {
-            return res.status(401).json({ success: false, message: 'Email atau password salah' });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Email tidak ditemukan',
+                code: 'EMAIL_NOT_FOUND'
+            });
         }
 
         const user = userRows[0];
 
         // Step 2: Cek status akun
         if (user.status !== 'aktif') {
-            return res.status(403).json({ success: false, message: 'Akun tidak aktif' });
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Akun tidak aktif. Silakan hubungi administrator.',
+                code: 'ACCOUNT_INACTIVE'
+            });
         }
 
         // Step 3: Verifikasi password
         const isMatch = await comparePassword(password, user.password);
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Email atau password salah' });
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Password salah',
+                code: 'WRONG_PASSWORD'
+            });
         }
 
         // Step 4: Validasi role
         const roles = await userModel.getRolesByUserId(user.id_user);
         if (!roles.includes(selectedRole)) {
-            return res.status(403).json({ success: false, message: `Anda tidak memiliki akses sebagai ${selectedRole}` });
+            return res.status(403).json({ 
+                success: false, 
+                message: `Anda tidak memiliki akses sebagai ${selectedRole}`,
+                code: 'ROLE_NOT_ALLOWED'
+            });
         }
 
         // Step 5: Generate JWT token
