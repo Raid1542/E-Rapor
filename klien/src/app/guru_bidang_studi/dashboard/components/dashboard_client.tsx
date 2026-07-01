@@ -100,7 +100,7 @@ const THEME = {
         primaryLight: '#fb923c',
         secondary: '#f97316',
         accent: '#fdba74',
-        background: '#fff7ed',
+        background: '#ffffff',
         surface: '#ffffff',
         border: '#fed7aa',
         text: {

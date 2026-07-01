@@ -26,7 +26,7 @@ const THEME = {
         primary: '#c95b08',
         secondary: '#e8690a',
         tertiary: '#f5870a',
-        background: '#fdf6f0',
+        background: '#ffffff',
         border: '#fde0c8',
         text: {
             primary: '#15110d',
@@ -1065,11 +1065,6 @@ export default function AturPenilaianGBSClient() {
                                     <FileText size={64} className="mx-auto mb-4" style={{ color: THEME.colors.secondary }} />
                                     <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>
                                         {!selectedMapelAkademik ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
-                                    </p>
-                                    <p className="text-sm mt-2" style={{ color: THEME.colors.text.muted }}>
-                                        {!selectedMapelAkademik
-                                            ? 'Silakan pilih mata pelajaran terlebih dahulu'
-                                            : 'Silakan pilih kelas untuk melihat kategori'}
                                     </p>
                                 </div>
                             )}

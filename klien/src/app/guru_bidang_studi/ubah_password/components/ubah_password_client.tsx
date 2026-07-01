@@ -62,7 +62,7 @@ const GlobalStyles = () => (
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-const PAGE_BG = { background: '#fdf6f0' };
+const PAGE_BG = { background: '#ffffff' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 
