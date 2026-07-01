@@ -231,6 +231,18 @@ router.put('/atur-penilaian/deskripsi-rata-rata/:id', authenticate, guruKelasOnl
 router.delete('/atur-penilaian/deskripsi-rata-rata/:id', authenticate, guruKelasOnly, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.deleteKategoriDeskripsiRataRata));
 
 // ═════════════════════════════════════════════════════════════════════════════
+// 11.3 ATUR PENILAIAN: BATCH SAVE DESKRIPSI RATA-RATA
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.post('/atur-penilaian/deskripsi-rata-rata-batch', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    cekGuruKelasDitugaskan, 
+    safeHandler(guruKelasControllers.saveBatchKategoriDeskripsiRataRata)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
 // 12. REKAPAN NILAI (GET list, GET export Excel)
 // ═════════════════════════════════════════════════════════════════════════════
 

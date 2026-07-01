@@ -13,6 +13,7 @@
  *   - ✅ Kategori Kokurikuler: PTS → hanya Mutaba'ah, PAS → semua aspek
  *   - ✅ Tab Deskripsi Rata-rata: HANYA PTS
  *   - ✅ Bobot: PTS = auto 100%, PAS = editable
+ *   - ✅ DESKRIPSI RATA-RATA: Support nilai desimal (2 digit di belakang koma)
  */
 
 'use client';
@@ -436,10 +437,11 @@ export default function AturPenilaianGuruKelasClient() {
         });
         if (res.ok) {
           const data = await res.json();
+          // ✅ DESKRIPSI RATA-RATA: Gunakan parseFloat untuk support desimal
           setDeskripsiRataRataList((data.data || []).map((item: any) => ({
             ...item,
-            min_nilai: Math.floor(parseFloat(item.min_nilai)),
-            max_nilai: Math.floor(parseFloat(item.max_nilai)),
+            min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+            max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)),
           })));
           setDeskripsiRataRataCoverage(data.coverage || null);
         }
@@ -636,11 +638,18 @@ export default function AturPenilaianGuruKelasClient() {
 
         const data = await res.json();
 
-        const formattedData = (data.data || []).map((item: any) => ({
-          ...item,
-          min_nilai: Math.floor(parseFloat(item.min_nilai)),
-          max_nilai: Math.floor(parseFloat(item.max_nilai)),
-        }));
+        // ✅ DESKRIPSI RATA-RATA: Gunakan parseFloat untuk support desimal
+        const formattedData = activeTab === 'deskripsi-rata-rata'
+          ? (data.data || []).map((item: any) => ({
+              ...item,
+              min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+              max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)),
+            }))
+          : (data.data || []).map((item: any) => ({
+              ...item,
+              min_nilai: Math.floor(parseFloat(item.min_nilai)),
+              max_nilai: Math.floor(parseFloat(item.max_nilai)),
+            }));
 
         if (activeTab === 'deskripsi-rata-rata') {
           setDeskripsiRataRataList(formattedData);
@@ -1241,8 +1250,8 @@ export default function AturPenilaianGuruKelasClient() {
     const existingGrades = deskripsiRataRataList
       .map(k => ({
         id: k.id,
-        min_nilai: Math.floor(k.min_nilai),
-        max_nilai: Math.floor(k.max_nilai),
+        min_nilai: parseFloat(k.min_nilai),  // ✅ parseFloat untuk desimal
+        max_nilai: parseFloat(k.max_nilai),  // ✅ parseFloat untuk desimal
         deskripsi: k.deskripsi,
         isNew: false,
       }))
@@ -1331,18 +1340,20 @@ export default function AturPenilaianGuruKelasClient() {
       }
     });
 
+    // ✅ DESKRIPSI RATA-RATA: Validasi overlap untuk desimal (cek range, bukan loop integer)
     const sorted = [...batchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
-    let covered = new Set<number>();
     let hasOverlap = false;
 
-    sorted.forEach(g => {
-      for (let i = g.min_nilai; i <= g.max_nilai; i++) {
-        if (covered.has(i)) {
-          hasOverlap = true;
-        }
-        covered.add(i);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const current = sorted[i];
+      const next = sorted[i + 1];
+      
+      // Cek overlap: max saat ini harus < min berikutnya
+      if (current.max_nilai >= next.min_nilai) {
+        hasOverlap = true;
+        break;
       }
-    });
+    }
 
     if (hasOverlap) {
       errors.push('Ada overlap pada range nilai. Pastikan tidak ada nilai yang masuk ke 2 kategori.');
@@ -1418,8 +1429,8 @@ export default function AturPenilaianGuruKelasClient() {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          min_nilai: Math.floor(g.min_nilai),
-          max_nilai: Math.floor(g.max_nilai),
+          min_nilai: parseFloat(g.min_nilai.toFixed(2)),  // ✅ 2 desimal
+          max_nilai: parseFloat(g.max_nilai.toFixed(2)),  // ✅ 2 desimal
           deskripsi: g.deskripsi.trim(),
         })
       }));
@@ -2228,7 +2239,8 @@ export default function AturPenilaianGuruKelasClient() {
                             <tr key={k.id} style={{ borderTop: idx > 0 ? '1px solid #fde0c8' : 'none' }}>
                               <td className="px-4 py-2.5 text-gray-500 font-medium">{idx + 1}</td>
                               <td className="px-4 py-2.5 text-gray-700">
-                                {Math.floor(k.min_nilai)} – {Math.floor(k.max_nilai)}
+                                {/* ✅ DESKRIPSI RATA-RATA: Tampilkan 2 desimal */}
+                                {parseFloat(k.min_nilai).toFixed(2)} – {parseFloat(k.max_nilai).toFixed(2)}
                               </td>
                               <td className="px-4 py-2.5 text-gray-700">{k.deskripsi}</td>
                             </tr>
@@ -2776,8 +2788,9 @@ export default function AturPenilaianGuruKelasClient() {
                               type="number"
                               min="0"
                               max="100"
+                              step="0.01"
                               value={kategori.min_nilai}
-                              onChange={(e) => updateBatchDeskripsi(index, 'min_nilai', parseInt(e.target.value) || 0)}
+                              onChange={(e) => updateBatchDeskripsi(index, 'min_nilai', parseFloat(e.target.value) || 0)}
                               className={inputCls}
                             />
                           </div>
@@ -2790,8 +2803,9 @@ export default function AturPenilaianGuruKelasClient() {
                               type="number"
                               min="0"
                               max="100"
+                              step="0.01"
                               value={kategori.max_nilai}
-                              onChange={(e) => updateBatchDeskripsi(index, 'max_nilai', parseInt(e.target.value) || 0)}
+                              onChange={(e) => updateBatchDeskripsi(index, 'max_nilai', parseFloat(e.target.value) || 0)}
                               className={inputCls}
                             />
                           </div>

@@ -130,7 +130,7 @@ const editPembinaEkskul = async (req, res) => {
     }
 };
 
-// POST: Import data pembina dari file Excel (.xlsx)
+// POST: Import data pembina dari file Excel (.xlsx) - SKIP ERROR PER BARIS
 const importPembinaEkskul = async (req, res) => {
     const connection = await db.getConnection();
     try {
@@ -149,63 +149,100 @@ const importPembinaEkskul = async (req, res) => {
         }
 
         await connection.beginTransaction();
-        const duplicates = [];
-        let successCount = 0;
+        const skipped = [];
+        let processedCount = 0;
 
-        // Proses setiap baris
+        // Proses setiap baris - SKIP jika ada error
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNum = i + 2;
 
-            // Validasi data per baris
-            if (!row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
-                throw new Error(`Baris ${rowNum}: Data tidak lengkap`);
-            }
-            if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
-                throw new Error(`Baris ${rowNum}: Jenis kelamin harus Laki-laki atau Perempuan`);
-            }
+            try {
+                // Validasi data per baris
+                if (!row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
+                    skipped.push({
+                        row: rowNum,
+                        nama: row.nama_lengkap || '-',
+                        reason: 'Data tidak lengkap (nama, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)'
+                    });
+                    continue;
+                }
 
-            // Cek duplikasi NIY
-            const [existingNiy] = row.niy ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?', [row.niy]) : [[]];
-            
-            // Cek duplikasi NUPTK
-            const [existingNuptk] = row.nuptk ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?', [row.nuptk]) : [[]];
+                // Validasi jenis kelamin
+                if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
+                    skipped.push({
+                        row: rowNum,
+                        nama: row.nama_lengkap,
+                        reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${row.jenis_kelamin}"`
+                    });
+                    continue;
+                }
 
-            if (existingNiy.length > 0 || existingNuptk.length > 0) {
-                duplicates.push({
-                    row: rowNum, nama: row.nama_lengkap,
-                    reason: existingNiy.length > 0 ? 'NIY sudah terdaftar' : 'NUPTK sudah terdaftar'
+                // Cek duplikasi NIY
+                const [existingNiy] = row.niy ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?', [row.niy]) : [[]];
+                
+                // Cek duplikasi NUPTK
+                const [existingNuptk] = row.nuptk ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?', [row.nuptk]) : [[]];
+
+                if (existingNiy.length > 0 || existingNuptk.length > 0) {
+                    let reason = 'Data duplikat';
+                    if (existingNiy.length > 0) reason = 'NIY sudah terdaftar';
+                    else if (existingNuptk.length > 0) reason = 'NUPTK sudah terdaftar';
+                    
+                    skipped.push({
+                        row: rowNum,
+                        nama: row.nama_lengkap,
+                        reason: reason
+                    });
+                    continue;
+                }
+
+                // Insert data pembina
+                await pembinaEkskulModel.create({
+                    nama_lengkap: row.nama_lengkap,
+                    niy: row.niy || null,
+                    nuptk: row.nuptk || null,
+                    tempat_lahir: row.tempat_lahir,
+                    tanggal_lahir: row.tanggal_lahir,
+                    jenis_kelamin: row.jenis_kelamin,
+                    alamat: row.alamat || null,
+                    no_telepon: row.no_telepon || null,
+                    status: 'aktif'
+                }, connection);
+                
+                processedCount++;
+
+            } catch (rowErr) {
+                // Tangani error tak terduga per baris
+                skipped.push({
+                    row: rowNum,
+                    nama: row.nama_lengkap || '-',
+                    reason: rowErr.message || 'Gagal memproses data'
                 });
-                continue; 
             }
-
-            // Insert data pembina
-            await pembinaEkskulModel.create({
-                nama_lengkap: row.nama_lengkap, niy: row.niy || null, nuptk: row.nuptk || null,
-                tempat_lahir: row.tempat_lahir, tanggal_lahir: row.tanggal_lahir, jenis_kelamin: row.jenis_kelamin,
-                alamat: row.alamat || null, no_telepon: row.no_telepon || null, status: 'aktif'
-            }, connection);
-            successCount++;
         }
 
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
-        // Response dengan info duplikat
-        if (duplicates.length > 0) {
-            return res.json({
-                success: true,
-                message: `Import selesai: ${successCount} data berhasil, ${duplicates.length} data dilewati (duplikat)`,
-                total: data.length, skipped: duplicates 
-            });
-        }
+        // Response dengan info skipped
+        res.json({
+            success: true,
+            message: skipped.length > 0 
+                ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati` 
+                : `Import berhasil: ${processedCount} data pembina ditambahkan`,
+            total: processedCount,
+            skipped: skipped
+        });
 
-        res.json({ success: true, message: 'Import berhasil', total: successCount });
     } catch (err) {
         await connection.rollback();
         if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('Import pembina error:', err);
-        res.status(400).json({ success: false, message: err.message || 'Gagal mengimport data' });
+        res.status(400).json({ 
+            success: false,
+            message: err.message || 'Gagal mengimport data' 
+        });
     } finally {
         connection.release();
     }

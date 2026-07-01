@@ -245,8 +245,8 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
         const jenis = getJenisPenilaian(req);
 
         // Sanitasi dan validasi nilai
-        const minNilai = Math.floor(parseFloat(min_nilai));
-        const maxNilai = Math.floor(parseFloat(max_nilai));
+        const minNilai = parseFloat(parseFloat(min_nilai).toFixed(2));  // ✅ parseFloat + toFixed(2)
+const maxNilai = parseFloat(parseFloat(max_nilai).toFixed(2));  // ✅ parseFloat + toFixed(2)
 
         if (isNaN(minNilai) || isNaN(maxNilai)) {
             return res.status(400).json({ success: false, message: 'Nilai min dan max harus berupa angka' });
@@ -829,8 +829,12 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
 
         // Ambil kategori
         const kategori = await model.getKategoriDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId);
+        
+        // ✅ Support desimal (2 digit di belakang koma)
         const kategoriParsed = kategori.map(k => ({
-            ...k, min_nilai: Math.floor(parseFloat(k.min_nilai)), max_nilai: Math.floor(parseFloat(k.max_nilai))
+            ...k, 
+            min_nilai: parseFloat(parseFloat(k.min_nilai).toFixed(2)),
+            max_nilai: parseFloat(parseFloat(k.max_nilai).toFixed(2))
         }));
 
         // Hitung coverage
@@ -859,9 +863,9 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(403).json({ success: false, code: 'DESKRIPSI_LOCKED', message: accessCheck.message });
         }
 
-        // Sanitasi dan validasi nilai
-        const minNilai = Math.floor(parseFloat(min_nilai));
-        const maxNilai = Math.floor(parseFloat(max_nilai));
+        // ✅ Support desimal
+        const minNilai = parseFloat(parseFloat(min_nilai).toFixed(2));
+        const maxNilai = parseFloat(parseFloat(max_nilai).toFixed(2));
 
         if (isNaN(minNilai) || isNaN(maxNilai)) {
             return res.status(400).json({ success: false, message: 'Nilai min dan max harus berupa angka' });
@@ -870,13 +874,19 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nilai harus antara 0 dan 100' });
         }
         if (minNilai >= maxNilai) {
-            return res.status(400).json({ success: false, message: `Nilai minimum (${minNilai}) harus lebih kecil dari nilai maksimum (${maxNilai})` });
+            return res.status(400).json({ 
+                success: false, 
+                message: `Nilai minimum (${minNilai}) harus lebih kecil dari nilai maksimum (${maxNilai})` 
+            });
         }
 
-        // Validasi range minimal 3 poin
+        // ✅ Untuk desimal, range minimal 0.01
         const range = maxNilai - minNilai;
-        if (range < 3) {
-            return res.status(400).json({ success: false, message: `Range nilai minimal 3 poin. Saat ini: ${range} poin (${minNilai}-${maxNilai})` });
+        if (range < 0.01) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Range nilai minimal 0.01. Saat ini: ${range.toFixed(2)} (${minNilai.toFixed(2)}-${maxNilai.toFixed(2)})` 
+            });
         }
 
         // Validasi deskripsi
@@ -889,8 +899,9 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
             return res.status(400).json({
-                success: false, code: 'RANGE_OVERLAP',
-                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${Math.floor(overlap.rentang_min)}-${Math.floor(overlap.rentang_max)}). Silakan gunakan range lain atau edit kategori tersebut.`
+                success: false, 
+                code: 'RANGE_OVERLAP',
+                message: `Range ${minNilai.toFixed(2)}-${maxNilai.toFixed(2)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${parseFloat(overlap.rentang_min).toFixed(2)}-${parseFloat(overlap.rentang_max).toFixed(2)}). Silakan gunakan range lain atau edit kategori tersebut.`
             });
         }
 
@@ -921,9 +932,9 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(403).json({ success: false, code: 'DESKRIPSI_LOCKED', message: accessCheck.message });
         }
 
-        // Sanitasi dan validasi nilai
-        const minNilai = Math.floor(parseFloat(min_nilai));
-        const maxNilai = Math.floor(parseFloat(max_nilai));
+        // ✅ Support desimal
+        const minNilai = parseFloat(parseFloat(min_nilai).toFixed(2));
+        const maxNilai = parseFloat(parseFloat(max_nilai).toFixed(2));
 
         if (isNaN(minNilai) || isNaN(maxNilai)) {
             return res.status(400).json({ success: false, message: 'Nilai min dan max harus berupa angka' });
@@ -932,13 +943,19 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nilai harus antara 0 dan 100' });
         }
         if (minNilai >= maxNilai) {
-            return res.status(400).json({ success: false, message: `Nilai minimum (${minNilai}) harus lebih kecil dari nilai maksimum (${maxNilai})` });
+            return res.status(400).json({ 
+                success: false, 
+                message: `Nilai minimum (${minNilai}) harus lebih kecil dari nilai maksimum (${maxNilai})` 
+            });
         }
 
-        // Validasi range minimal 3 poin
+        // ✅ Untuk desimal, range minimal 0.01
         const range = maxNilai - minNilai;
-        if (range < 3) {
-            return res.status(400).json({ success: false, message: `Range nilai minimal 3 poin. Saat ini: ${range} poin (${minNilai}-${maxNilai})` });
+        if (range < 0.01) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Range nilai minimal 0.01. Saat ini: ${range.toFixed(2)} (${minNilai.toFixed(2)}-${maxNilai.toFixed(2)})` 
+            });
         }
 
         // Validasi deskripsi
@@ -950,8 +967,11 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
         const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
         if (!existing) return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
 
-        // Cek apakah ada perubahan
-        if (existing.rentang_min == minNilai && existing.rentang_max == maxNilai && existing.deskripsi.trim() === deskripsi.trim()) {
+        // ✅ Bandingkan dengan parseFloat untuk desimal
+        const existingMin = parseFloat(parseFloat(existing.rentang_min).toFixed(2));
+        const existingMax = parseFloat(parseFloat(existing.rentang_max).toFixed(2));
+        
+        if (existingMin === minNilai && existingMax === maxNilai && existing.deskripsi.trim() === deskripsi.trim()) {
             return res.status(400).json({ success: false, message: 'Tidak ada perubahan data' });
         }
 
@@ -960,8 +980,9 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
         if (overlaps.length > 0) {
             const overlap = overlaps[0];
             return res.status(400).json({
-                success: false, code: 'RANGE_OVERLAP',
-                message: `Range ${Math.floor(minNilai)}-${Math.floor(maxNilai)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${Math.floor(overlap.rentang_min)}-${Math.floor(overlap.rentang_max)}). Silakan gunakan range lain atau edit kategori tersebut.`
+                success: false, 
+                code: 'RANGE_OVERLAP',
+                message: `Range ${minNilai.toFixed(2)}-${maxNilai.toFixed(2)} sudah digunakan oleh kategori "${overlap.deskripsi}" (${parseFloat(overlap.rentang_min).toFixed(2)}-${parseFloat(overlap.rentang_max).toFixed(2)}). Silakan gunakan range lain atau edit kategori tersebut.`
             });
         }
 
@@ -972,6 +993,139 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
     } catch (err) {
         console.error('Error updateKategoriDeskripsiRataRata:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
+    }
+};
+
+// DELETE: Hapus kategori deskripsi rata-rata (hanya saat PTS aktif)
+exports.deleteKategoriDeskripsiRataRata = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const kelasId = getKelasId(req);
+
+        // Ambil tahun ajaran aktif
+        const taAktif = await model.getTahunAjaranAktif();
+        if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+
+        // Validasi akses
+        const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
+        if (!accessCheck.allowed) {
+            return res.status(403).json({ success: false, code: 'DESKRIPSI_LOCKED', message: accessCheck.message });
+        }
+
+        // Cek keberadaan kategori
+        const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
+        if (!existing) return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
+
+        // Delete kategori
+        await model.deleteKategoriDeskripsiRataRata(id, kelasId);
+
+        res.json({ success: true, message: 'Kategori deskripsi rata-rata (PTS) berhasil dihapus' });
+    } catch (err) {
+        console.error('Error deleteKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus kategori: ' + err.message });
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 5.1 BATCH SAVE DESKRIPSI RATA-RATA (ANTI-DEADLOCK)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// POST: Batch save kategori deskripsi rata-rata
+exports.saveBatchKategoriDeskripsiRataRata = async (req, res) => {
+    try {
+        const { categories } = req.body;
+        const kelasId = getKelasId(req);
+
+        // Validasi
+        if (!Array.isArray(categories) || categories.length === 0) {
+            return res.status(400).json({ success: false, message: 'Data kategori tidak valid' });
+        }
+
+        // Ambil tahun ajaran aktif
+        const taAktif = await model.getTahunAjaranAktif();
+        if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+
+        // Validasi akses
+        const accessCheck = validateDeskripsiRataRataAccess(taAktif.status_pts, taAktif.status_pas);
+        if (!accessCheck.allowed) {
+            return res.status(403).json({ success: false, code: 'DESKRIPSI_LOCKED', message: accessCheck.message });
+        }
+
+        // Validasi setiap kategori
+        for (let i = 0; i < categories.length; i++) {
+            const cat = categories[i];
+            const minNilai = parseFloat(parseFloat(cat.min_nilai).toFixed(2));
+            const maxNilai = parseFloat(parseFloat(cat.max_nilai).toFixed(2));
+
+            if (isNaN(minNilai) || isNaN(maxNilai)) {
+                return res.status(400).json({ success: false, message: `Kategori ${i + 1}: Nilai harus angka` });
+            }
+            if (minNilai < 0 || maxNilai > 100) {
+                return res.status(400).json({ success: false, message: `Kategori ${i + 1}: Nilai harus 0-100` });
+            }
+            if (minNilai >= maxNilai) {
+                return res.status(400).json({ success: false, message: `Kategori ${i + 1}: Min harus < Max` });
+            }
+            if (!cat.deskripsi || cat.deskripsi.trim().length < 3) {
+                return res.status(400).json({ success: false, message: `Kategori ${i + 1}: Deskripsi minimal 3 karakter` });
+            }
+        }
+
+        // Cek overlap antar kategori dalam batch
+        for (let i = 0; i < categories.length; i++) {
+            for (let j = i + 1; j < categories.length; j++) {
+                const catA = categories[i];
+                const catB = categories[j];
+                const minA = parseFloat(catA.min_nilai);
+                const maxA = parseFloat(catA.max_nilai);
+                const minB = parseFloat(catB.min_nilai);
+                const maxB = parseFloat(catB.max_nilai);
+
+                if (minA <= maxB && maxA >= minB) {
+                    return res.status(400).json({
+                        success: false,
+                        code: 'RANGE_OVERLAP',
+                        message: `Range kategori ${i + 1} (${minA.toFixed(2)}-${maxA.toFixed(2)}) overlap dengan kategori ${j + 1} (${minB.toFixed(2)}-${maxB.toFixed(2)})`
+                    });
+                }
+            }
+        }
+
+        // Cek overlap dengan data existing di database
+        for (const cat of categories) {
+            const minNilai = parseFloat(parseFloat(cat.min_nilai).toFixed(2));
+            const maxNilai = parseFloat(parseFloat(cat.max_nilai).toFixed(2));
+
+            const overlaps = await model.cekOverlapDeskripsiRataRata(
+                taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai
+            );
+
+            if (overlaps.length > 0) {
+                const overlap = overlaps[0];
+                return res.status(400).json({
+                    success: false,
+                    code: 'RANGE_OVERLAP',
+                    message: `Range ${minNilai.toFixed(2)}-${maxNilai.toFixed(2)} overlap dengan "${overlap.deskripsi}"`
+                });
+            }
+        }
+
+        // ✅ Batch insert dengan transaction (ANTI-DEADLOCK)
+        await model.saveBatchKategoriDeskripsiRataRata(
+            taAktif.id_tahun_ajaran,
+            taAktif.semester,
+            kelasId,
+            categories.map(cat => ({
+                min_nilai: parseFloat(parseFloat(cat.min_nilai).toFixed(2)),
+                max_nilai: parseFloat(parseFloat(cat.max_nilai).toFixed(2)),
+                deskripsi: cat.deskripsi.trim()
+            }))
+        );
+
+        res.json({ success: true, message: `${categories.length} kategori deskripsi rata-rata berhasil disimpan` });
+    } catch (err) {
+        console.error('Error saveBatchKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan: ' + err.message });
     }
 };
 

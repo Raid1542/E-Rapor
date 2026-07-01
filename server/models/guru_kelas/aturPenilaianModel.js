@@ -379,20 +379,89 @@ exports.cekOverlapDeskripsiRataRata = async (tahunAjaranId, semester, kelasId, m
     return overlaps;
 };
 
-// Cek coverage deskripsi rata-rata
+// Cek coverage deskripsi rata-rata (SUPPORT DESIMAL)
 exports.cekCoverageDeskripsiRataRata = async (tahunAjaranId, semester, kelasId) => {
     const [kategoriRows] = await db.execute(
         'SELECT rentang_min, rentang_max FROM kategori_deskripsi_rata_rata WHERE tahun_ajaran_id = ? AND semester = ? AND kelas_id = ? ORDER BY rentang_min ASC',
         [tahunAjaranId, semester, kelasId]
     );
-    if (kategoriRows.length === 0) return { covered: false, gap: '0-100' };
-    if (kategoriRows[0].rentang_min > 0) return { covered: false, gap: `0-${kategoriRows[0].rentang_min - 1}` };
-    for (let i = 0; i < kategoriRows.length - 1; i++) {
-        const currentMax = kategoriRows[i].rentang_max;
-        const nextMin = kategoriRows[i + 1].rentang_min;
-        if (nextMin > currentMax + 1) return { covered: false, gap: `${currentMax + 1}-${nextMin - 1}` };
+    
+    if (kategoriRows.length === 0) return { covered: false, gap: '0.00-100.00' };
+    
+    // ✅ PERBAIKAN: Gunakan parseFloat untuk desimal
+    const firstMin = parseFloat(kategoriRows[0].rentang_min);
+    if (firstMin > 0.01) {
+        return { covered: false, gap: `0.00-${(firstMin - 0.01).toFixed(2)}` };
     }
-    const lastMax = kategoriRows[kategoriRows.length - 1].rentang_max;
-    if (lastMax < 100) return { covered: false, gap: `${lastMax + 1}-100` };
+    
+    for (let i = 0; i < kategoriRows.length - 1; i++) {
+        const currentMax = parseFloat(kategoriRows[i].rentang_max);
+        const nextMin = parseFloat(kategoriRows[i + 1].rentang_min);
+        
+        // ✅ PERBAIKAN: Gunakan step 0.01 untuk desimal
+        const gapStart = (currentMax + 0.01).toFixed(2);
+        const gapEnd = (nextMin - 0.01).toFixed(2);
+        
+        if (nextMin > currentMax + 0.01) {
+            return { covered: false, gap: `${gapStart}-${gapEnd}` };
+        }
+    }
+    
+    const lastMax = parseFloat(kategoriRows[kategoriRows.length - 1].rentang_max);
+    if (lastMax < 99.99) {
+        return { covered: false, gap: `${(lastMax + 0.01).toFixed(2)}-100.00` };
+    }
+    
     return { covered: true };
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// BATCH SAVE DESKRIPSI RATA-RATA (ANTI-DEADLOCK)
+// ═════════════════════════════════════════════════════════════════════════════
+
+exports.saveBatchKategoriDeskripsiRataRata = async (tahunAjaranId, semester, kelasId, categories) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        // Step 1: Hapus data lama
+        await connection.execute(
+            'DELETE FROM kategori_deskripsi_rata_rata WHERE tahun_ajaran_id = ? AND semester = ? AND kelas_id = ?',
+            [tahunAjaranId, semester, kelasId]
+        );
+        
+        // Step 2: Ambil urutan awal
+        const [maxUrutan] = await connection.execute(
+            'SELECT COALESCE(MAX(urutan), 0) as max_urutan FROM kategori_deskripsi_rata_rata WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ?',
+            [kelasId, tahunAjaranId, semester]
+        );
+        
+        let urutan = maxUrutan[0].max_urutan + 1;
+        
+        // Step 3: Insert semua kategori dengan urutan manual
+        for (const cat of categories) {
+            await connection.execute(
+                `INSERT INTO kategori_deskripsi_rata_rata 
+                    (tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, deskripsi, urutan)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    tahunAjaranId, 
+                    semester, 
+                    kelasId, 
+                    cat.min_nilai, 
+                    cat.max_nilai, 
+                    cat.deskripsi, 
+                    urutan++  // ✅ Urutan manual, tidak pakai subquery
+                ]
+            );
+        }
+        
+        await connection.commit();
+        return true;
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
 };

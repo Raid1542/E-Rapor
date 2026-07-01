@@ -303,23 +303,23 @@ export default function DataPembelajaranPage() {
 
   const fetchKelasList = useCallback(async (idInduk: number) => {
     try {
-        const token = getToken();
-        if (!token) return;
-        
-        // ✅ PERBAIKAN: Kirim sebagai query parameter
-        const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-            setKelasList(removeDuplicatesById(
-                (data.data || []).map((k: any) => ({ id: k.id, nama: k.nama_kelas }))
-            ));
-        }
+      const token = getToken();
+      if (!token) return;
+
+      // ✅ PERBAIKAN: Kirim sebagai query parameter
+      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setKelasList(removeDuplicatesById(
+          (data.data || []).map((k: any) => ({ id: k.id, nama: k.nama_kelas }))
+        ));
+      }
     } catch {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data kelas.' });
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data kelas.' });
     }
-}, [showModal]);
+  }, [showModal]);
 
   const fetchDropdowns = useCallback(async (semesterId: number) => {
     setDropdownLoading(true);
@@ -331,7 +331,11 @@ export default function DataPembelajaranPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setGuruList(removeDuplicatesById(data.data.guru || []));
+        // ✅ BACKWARD COMPATIBLE: 
+        // - Backend baru: menggunakan guru_bidang_studi (hanya guru bidang studi)
+        // - Backend lama: fallback ke guru (semua guru)
+        const guruData = data.data.guru_bidang_studi || data.data.guru || [];
+        setGuruList(removeDuplicatesById(guruData));
       }
     } catch {
       showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data dropdown.' });
@@ -344,7 +348,7 @@ export default function DataPembelajaranPage() {
   const fetchDataPerKelas = useCallback(async (kelasId: number, semesterIdParam?: number) => {
     // ✅ Gunakan parameter jika ada, fallback ke state
     const semId = semesterIdParam || selectedSemesterId;
-    
+
     if (!semId) {
       // Silent return - tidak tampilkan modal
       console.warn('Semester belum dipilih');
@@ -397,18 +401,18 @@ export default function DataPembelajaranPage() {
               if (sem) {
                 setSelectedSemesterId(semesterId);
                 setIsSemesterActive(sem.is_aktif);
-                
+
                 // ✅ Kirim idInduk ke fetchKelasList
                 fetchKelasList(id);
 
                 if (savedKelas) {
                   const kelasId = Number(savedKelas);
                   setSelectedKelasId(kelasId);
-                  
+
                   // ✅ KIRIM semesterId LANGSUNG sebagai parameter!
                   // Ini menghindari race condition dengan state selectedSemesterId
                   fetchDataPerKelas(kelasId, semesterId);
-                  
+
                   if (sem.is_aktif) fetchDropdowns(semesterId);
                 }
               }
@@ -487,10 +491,10 @@ export default function DataPembelajaranPage() {
   // ✅ FIXED: Validasi semester sebelum pilih kelas
   const handleKelasChange = (value: string) => {
     if (!selectedSemesterId) {
-      showModal({ 
-        type: 'warning', 
-        title: 'Semester Belum Dipilih', 
-        message: 'Silakan pilih semester terlebih dahulu sebelum memilih kelas.' 
+      showModal({
+        type: 'warning',
+        title: 'Semester Belum Dipilih',
+        message: 'Silakan pilih semester terlebih dahulu sebelum memilih kelas.'
       });
       return;
     }
