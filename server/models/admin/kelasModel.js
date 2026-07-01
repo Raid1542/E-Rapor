@@ -31,21 +31,26 @@ const kelasModel = {
     // ✅ FIXED: Query langsung pakai tahunAjaranIdInduk
     const [rows] = await db.execute(`
       SELECT 
-          k.id_kelas AS id, k.nama_kelas, k.fase, k.tahun_ajaran_id,
-          COALESCE(wk.nama_lengkap, '-') AS wali_kelas, wk.user_id AS wali_kelas_id,
-          COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa,
-          ta.status AS status_tahun_ajaran
+          k.id_kelas,
+          k.nama_kelas,
+          k.fase,
+          k.tahun_ajaran_id,
+          COALESCE(u.nama_lengkap, '-') AS wali_kelas,
+          COALESCE(gk.user_id, NULL) AS wali_kelas_id,
+          COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa
       FROM kelas k
-      LEFT JOIN (
-          SELECT gk.kelas_id, u.nama_lengkap, gk.user_id
-          FROM guru_kelas gk JOIN user u ON gk.user_id = u.id_user
-          WHERE gk.tahun_ajaran_id = ?
-      ) wk ON k.id_kelas = wk.kelas_id
-      LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id AND sk.id_tahun_ajaran_induk = ?
-      LEFT JOIN tahun_ajaran ta ON ta.id_tahun_ajaran_induk = ? AND ta.status = 'aktif'
-      WHERE k.id_kelas = ? AND k.tahun_ajaran_id = ?
-      GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, wk.nama_lengkap, wk.user_id, ta.status
-    `, [tahunAjaranIdInduk, tahunAjaranIdInduk, tahunAjaranIdInduk, id, tahunAjaranIdInduk]);
+      LEFT JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
+          AND gk.tahun_ajaran_id IN (
+              SELECT id_tahun_ajaran 
+              FROM tahun_ajaran 
+              WHERE id_tahun_ajaran_induk = ?
+          )
+      LEFT JOIN user u ON gk.user_id = u.id_user
+      LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
+          AND sk.id_tahun_ajaran_induk = ?
+      WHERE k.id_kelas = ?
+      GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, u.nama_lengkap, gk.user_id
+    `, [tahunAjaranIdInduk, tahunAjaranIdInduk, id]);
 
     return rows[0] || null;
 },

@@ -6,7 +6,8 @@ import {
     TrendingUp, BookOpen, Settings,
     ArrowRight, Sparkles, Target, AlertTriangle,
     CheckCircle2, AlertCircle, CalendarDays, LogOut, X,
-    GraduationCap, ClipboardList, ArrowUpRight, UserCheck
+    GraduationCap, ClipboardList, ArrowUpRight, UserCheck,
+    MapPin, Check
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
@@ -24,75 +25,143 @@ interface UserData {
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
 
-interface KelasInfo {
-    kelas: string;
-    jumlah_siswa: number;
-    tahun_ajaran: string;
-    semester: string;
+interface KomponenDetail {
+    nama_komponen: string;
+    nilai: number | null;
+    status: 'sudah' | 'belum';
 }
 
-interface NilaiProgress {
-    mata_pelajaran: string;
-    kode_mapel: string;
+interface NilaiRaporItem {
+    id_siswa: number;
+    nama: string;
+    nis: string;
+    kelas_id: number;
+    nama_kelas: string;
+    nilai_rapor: number | null;
+    deskripsi: string | null;
+    jumlah_komponen_terisi: number;
+    total_komponen: number;
+    status: string;
+    komponen_detail?: KomponenDetail[];
+}
+
+interface MapelItem {
+    id: number;
+    nama: string;
+    total_kelas: number;
+    total_siswa: number;
     sudah_dinilai: number;
     belum_dinilai: number;
-    total_siswa: number;
-    jenis: 'wajib' | 'pilihan';
+    nilai_rapor_list: NilaiRaporItem[];
+    konfigurasi: {
+        bobot: boolean;
+        kategori: boolean;
+        lengkap: boolean;
+    };
+}
+
+interface Jadwal {
+    pts: string | null;
+    pas: string | null;
+}
+
+interface Warning {
+    mapel: string;
+    masalah: string;
 }
 
 interface DashboardData {
+    tahun_ajaran: string;
+    semester: string;
     status_pts: 'aktif' | 'nonaktif' | 'selesai';
     status_pas: 'aktif' | 'nonaktif' | 'selesai';
-    kelas_info: KelasInfo;
-    progress_list: NilaiProgress[];
-    total_mapel: number;
+    jenis_penilaian_aktif: 'PTS' | 'PAS' | null;
+    jadwal: Jadwal;
+    total_kelas: number;
     total_siswa: number;
+    total_mapel: number;
+    total_penilaian_dibutuhkan: number;
+    total_penilaian_ada: number;
     overall_progress: number;
+    mata_pelajaran_list: MapelItem[];
+    warnings: Warning[];
+    total_komponen: number;
 }
 
 /* ==========================================================================
-   THEME - SAMA DENGAN ADMIN DASHBOARD
+   THEME - SAMA DENGAN GBS DASHBOARD
    ========================================================================== */
 const THEME = {
+    colors: {
+        primary: '#ea580c',
+        primaryDark: '#c2410c',
+        primaryLight: '#fb923c',
+        secondary: '#f97316',
+        accent: '#fdba74',
+        background: '#ffffff',
+        surface: '#ffffff',
+        border: '#fed7aa',
+        text: {
+            primary: '#1c0f07',
+            secondary: '#7c2d12',
+            muted: '#9a3412',
+        },
+        status: {
+            aktif: { bg: '#dcfce7', text: '#166534', border: '#86efac', dot: '#22c55e' },
+            selesai: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d', dot: '#f59e0b' },
+            nonaktif: { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
+        },
+    },
+    // ✅ Soft pastel backgrounds seperti dashboard admin
     statCards: [
-        { iconBg: '#e8690a', cardBg: '#fff5ee', cardBorder: '#fdd9b5', label: 'Total Siswa',    path: '/guru_kelas/data_siswa' },
-        { iconBg: '#c95b08', cardBg: '#fff2ea', cardBorder: '#fcc9a0', label: 'Kelas',          path: '/guru_kelas/data_siswa' },
-        { iconBg: '#e07b1a', cardBg: '#fff6f0', cardBorder: '#fdd4b0', label: 'Mata Pelajaran', path: '/guru_kelas/input_nilai' },
-        { iconBg: '#d4700f', cardBg: '#fff4ec', cardBorder: '#fccaa5', label: 'Progress',       path: '/guru_kelas/input_nilai' },
+        { iconBg: '#e8690a', cardBg: '#fff5ee', cardBorder: '#fdd9b5' },
+        { iconBg: '#c95b08', cardBg: '#fff2ea', cardBorder: '#fcc9a0' },
+        { iconBg: '#e07b1a', cardBg: '#fff6f0', cardBorder: '#fdd4b0' },
+        { iconBg: '#d4700f', cardBg: '#fff4ec', cardBorder: '#fccaa5' },
     ],
-    primary:     '#c95b08',
-    primaryMid:  '#e8690a',
+    primary: '#c95b08',
+    primaryMid: '#e8690a',
     chartColors: ['#c95b08', '#e8690a', '#f0953a', '#f5a947', '#ffc080'],
     semantic: { success: '#10b981', warning: '#f59e0b', danger: '#ef4444' },
+    gradients: {
+        primary: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)',
+        secondary: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)',
+        light: 'linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)',
+    },
+    shadows: {
+        sm: '0 2px 8px rgba(234, 88, 12, 0.08)',
+        md: '0 4px 16px rgba(234, 88, 12, 0.12)',
+        lg: '0 8px 24px rgba(234, 88, 12, 0.16)',
+    },
 };
 
-/* STATUS badge - SAMA DENGAN ADMIN */
+/* STATUS badge - SAMA DENGAN GBS */
 type StatusType = 'aktif' | 'nonaktif' | 'selesai';
 const STATUS_CFG: Record<StatusType, { bg: string; color: string; border: string; dot: string; label: string }> = {
-    aktif:    { bg: '#e6f9f0', color: '#0d6e48', border: '#6dd4c4', dot: '#10b981', label: 'Aktif' },
-    selesai:  { bg: '#fff7e6', color: '#8b4513', border: '#ffc080', dot: '#f59e0b', label: 'Selesai' },
+    aktif: { bg: '#e6f9f0', color: '#0d6e48', border: '#6dd4c4', dot: '#10b981', label: 'Aktif' },
+    selesai: { bg: '#fff7e6', color: '#8b4513', border: '#ffc080', dot: '#f59e0b', label: 'Selesai' },
     nonaktif: { bg: '#f5f5f5', color: '#666666', border: '#d0d0d0', dot: '#9ca3af', label: 'Belum Aktif' },
 };
 
-// ─── GLOBAL STYLES - SAMA DENGAN ADMIN ────────────────────────────────────────
+// ─── GLOBAL STYLES - SAMA DENGAN GBS ────────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         @keyframes growBar {
             from { transform: scaleX(0); }
-            to   { transform: scaleX(1); }
+            to { transform: scaleX(1); }
         }
         @keyframes pulseDot {
             0%, 100% { opacity: 1; }
-            50%      { opacity: 0.35; }
+            50% { opacity: 0.35; }
         }
-        @keyframes db-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes db-fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes db-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes db-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes db-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
         .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
         .d1 { animation-delay: 0.05s; }
@@ -105,9 +174,9 @@ const GlobalStyles = () => (
         .grow-bar { transform-origin: left; animation: growBar 0.8s cubic-bezier(0.4,0,0.2,1) forwards; }
         .pulse-dot { animation: pulseDot 1.8s ease-in-out infinite; }
 
-        .db-fadeIn  { animation: db-fadeIn  0.2s ease; }
+        .db-fadeIn { animation: db-fadeIn 0.2s ease; }
         .db-scaleIn { animation: db-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .db-pulse   { animation: db-pulse   0.6s ease 0.15s; }
+        .db-pulse { animation: db-pulse 0.6s ease 0.15s; }
 
         /* STAT CARD */
         .stat-card {
@@ -119,12 +188,12 @@ const GlobalStyles = () => (
             transform: translateY(-5px) scale(1.025);
             box-shadow: 0 14px 32px rgba(180,70,10,0.18) !important;
         }
-        .stat-card:hover .s-icon  { transform: scale(1.18) rotate(-6deg); }
+        .stat-card:hover .s-icon { transform: scale(1.18) rotate(-6deg); }
         .stat-card:hover .s-arrow { opacity: 1; transform: translate(2px,-2px); }
         .stat-card:hover .s-value { transform: scale(1.06); transform-origin: left; }
         .stat-card:active { transform: translateY(-2px) scale(0.99); }
 
-        .s-icon  { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+        .s-icon { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
         .s-arrow { opacity: 0.45; transition: opacity 0.2s ease, transform 0.2s ease; }
         .s-value { transition: transform 0.2s ease; display: inline-block; }
 
@@ -154,13 +223,19 @@ const GlobalStyles = () => (
         .btn-primary {
             transition: transform 0.18s ease, box-shadow 0.18s ease;
         }
-        .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(180,70,10,0.28); }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(180,70,10,0.28); }
         .btn-primary:active { transform: translateY(0); }
+
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #fdba74;
+            border-radius: 10px;
+        }
     `}</style>
 );
 
 /* ==========================================================================
-   SUB-COMPONENTS - SAMA DENGAN ADMIN
+   SUB-COMPONENTS - SAMA DENGAN GBS
    ========================================================================== */
 
 const CardHeader = ({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) => (
@@ -242,97 +317,61 @@ export default function GuruKelasDashboard() {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-    const stats = useMemo(() => {
-        if (!dashboard) return { totalMapel: 0, selesai: 0, belumMulai: 0, sedangBerjalan: 0, overallPct: 0, filled: 0, empty: 0 };
-        
-        const totalMapel = dashboard.progress_list.length;
-        const selesai = dashboard.progress_list.filter(p => p.belum_dinilai === 0 && p.total_siswa > 0).length;
-        const belumMulai = dashboard.progress_list.filter(p => p.sudah_dinilai === 0).length;
-        const sedangBerjalan = totalMapel - selesai - belumMulai;
-        const overallPct = dashboard.overall_progress;
-
-        const CIRC = 87.96;
-        const filled = (overallPct / 100) * CIRC;
-        const empty = CIRC - filled;
-
-        return { totalMapel, selesai, belumMulai, sedangBerjalan, overallPct, filled, empty };
-    }, [dashboard]);
-
     useEffect(() => {
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
 
-        if (!token || !userData) { router.push('/login'); return; }
+        if (!token || !userData) {
+            router.push('/login');
+            return;
+        }
 
         try {
             const parsedUser: UserData = JSON.parse(userData);
-            if (parsedUser.role !== 'guru_kelas') { router.push('/login'); return; }
+            if (parsedUser.role !== 'guru_kelas') {
+                router.push('/login');
+                return;
+            }
             setUser(parsedUser);
 
             const fetchDashboard = async () => {
                 try {
-                    const headers = { Authorization: `Bearer ${token}` };
-                    
-                    const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
-                    const taData = await taRes.json().catch(() => ({ data: {} }));
-                    
-                    const kelasRes = await fetch('http://localhost:5000/api/guru-kelas/kelas', { headers });
-                    
-                    if (kelasRes.status === 404) {
-                        setIsNotAssigned(true);
-                        setLoading(false);
-                        return;
-                    }
-                    
-                    const kelasData = await kelasRes.json();
-                    
-                    const progressRes = await fetch('http://localhost:5000/api/guru-kelas/progress-penilaian', { headers });
-                    const progressData = await progressRes.json().catch(() => ({ data: [] }));
-
-                    let kelasInfo: KelasInfo;
-                    if (kelasData.success && kelasData.data) {
-                        kelasInfo = {
-                            kelas: kelasData.data.nama_kelas,
-                            jumlah_siswa: kelasData.data.jumlah_siswa,
-                            tahun_ajaran: kelasData.data.tahun_ajaran || taData.data?.tahun_ajaran || '2024/2025',
-                            semester: kelasData.data.semester || taData.data?.semester || 'Ganjil'
-                        };
-                    } else if (Array.isArray(kelasData) && kelasData.length > 0) {
-                        kelasInfo = {
-                            kelas: kelasData[0].nama_kelas || kelasData[0].kelas,
-                            jumlah_siswa: kelasData[0].jumlah_siswa || 0,
-                            tahun_ajaran: kelasData[0].tahun_ajaran || taData.data?.tahun_ajaran || '2024/2025',
-                            semester: kelasData[0].semester || taData.data?.semester || 'Ganjil'
-                        };
-                    } else {
-                        setIsNotAssigned(true);
-                        setLoading(false);
-                        return;
-                    }
-
-                    const progressList: NilaiProgress[] = Array.isArray(progressData.data) ? progressData.data : [];
-                    const totalSiswa = kelasInfo.jumlah_siswa;
-                    const totalMapel = progressList.length;
-                    
-                    const totalPenilaianDibutuhkan = totalSiswa * totalMapel;
-                    const totalPenilaianAda = progressList.reduce((sum, p) => sum + p.sudah_dinilai, 0);
-                    const overallProgress = totalPenilaianDibutuhkan > 0 
-                        ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100) 
-                        : 0;
-
-                    setDashboard({
-                        status_pts: taData.data?.status_pts || 'nonaktif',
-                        status_pas: taData.data?.status_pas || 'nonaktif',
-                        kelas_info: kelasInfo,
-                        progress_list: progressList,
-                        total_mapel: totalMapel,
-                        total_siswa: totalSiswa,
-                        overall_progress: overallProgress
+                    const res = await fetch('http://localhost:5000/api/guru-kelas/dashboard', {
+                        headers: { Authorization: `Bearer ${token}` },
                     });
 
+                    if (res.status === 401) {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('currentUser');
+                        router.push('/login');
+                        return;
+                    }
+
+                    if (res.status === 403) {
+                        const errData = await res.json().catch(() => ({}));
+                        if (errData.code === 'NOT_ASSIGNED') {
+                            setIsNotAssigned(true);
+                            setLoading(false);
+                            return;
+                        }
+                    }
+
+                    if (res.ok) {
+                        const result = await res.json();
+                        if (result.success && result.data) {
+                            setDashboard(result.data);
+                            if (result.data.total_mapel === 0) {
+                                setIsNotAssigned(true);
+                            }
+                        }
+                    }
                 } catch (err) {
-                    console.error('❌ Error fetching data:', err);
-                    showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal memuat data dashboard.' });
+                    console.error('Error koneksi:', err);
+                    showModal({
+                        type: 'network',
+                        title: 'Koneksi Gagal',
+                        message: 'Tidak dapat terhubung ke server.'
+                    });
                 } finally {
                     setLoading(false);
                 }
@@ -359,11 +398,11 @@ export default function GuruKelasDashboard() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-white">
+            <div className="flex items-center justify-center min-h-screen" style={{ background: THEME.colors.background }}>
                 <GlobalStyles />
                 <div className="text-center">
-                    <div className="w-10 h-10 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin mx-auto" />
-                    <p className="mt-4 text-sm font-semibold" style={{ color: THEME.primary }}>Memuat dashboard...</p>
+                    <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto" />
+                    <p className="mt-4 text-base font-semibold" style={{ color: THEME.colors.primary }}>Memuat dashboard...</p>
                 </div>
             </div>
         );
@@ -371,34 +410,22 @@ export default function GuruKelasDashboard() {
 
     if (isNotAssigned) {
         return (
-            <div className="flex-1 min-h-screen p-6 flex items-center justify-center bg-white">
+            <div className="flex-1 min-h-screen p-6 flex items-center justify-center" style={{ background: THEME.colors.background }}>
                 <GlobalStyles />
                 {modal && <NotifModal modal={modal} onClose={closeModal} />}
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 db-fadeIn">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in-up">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 db-scaleIn">
-                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 db-pulse">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100">
                             <AlertCircle size={48} className="text-red-500" />
                         </div>
                         <div className="text-center">
                             <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
-                            <p className="text-sm text-gray-600 leading-relaxed">
-                                Anda belum ditugaskan sebagai guru kelas di tahun ajaran ini.
-                                <br />
-                                Silakan hubungi Administrator untuk penugasan kelas.
-                            </p>
+                            <p className="text-sm text-gray-600">Anda belum ditugaskan sebagai guru kelas di tahun ajaran ini.</p>
                         </div>
-                        <button
-                            onClick={handleLogout}
-                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
-                            style={{
-                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
-                            }}
-                        >
-                            <LogOut size={18} /> Logout
+                        <button onClick={handleLogout} className="w-full py-3 rounded-xl text-sm font-bold text-white" style={{ background: THEME.gradients.primary }}>
+                            Logout
                         </button>
                     </div>
                 </div>
@@ -408,31 +435,17 @@ export default function GuruKelasDashboard() {
 
     if (!user || !dashboard) return null;
 
+    const userName = user.nama_lengkap || user.name || user.nama_lengkap || 'Guru';
     const isPeriodNotActive = dashboard.status_pts !== 'aktif' && dashboard.status_pas !== 'aktif';
     const isPeriodLocked = dashboard.status_pts === 'selesai' && dashboard.status_pas === 'selesai';
 
-    const statValues = [dashboard.total_siswa, dashboard.kelas_info.kelas, dashboard.total_mapel, `${dashboard.overall_progress}%`];
-    const statIcons = [
-        <Users className="w-5 h-5 text-white" />,
-        <GraduationCap className="w-5 h-5 text-white" />,
-        <BookOpen className="w-5 h-5 text-white" />,
-        <Target className="w-5 h-5 text-white" />,
-    ];
-
-    const statusItems = [
-        { label: 'Selesai', value: stats.selesai, bg: '#e6f9f0', color: '#0d6e48', border: '#6dd4c4', Icon: CheckCircle2 },
-        { label: 'Sedang berjalan', value: stats.sedangBerjalan, bg: '#fff7e6', color: '#8b4513', border: '#ffc080', Icon: CalendarDays },
-        { label: 'Belum dimulai', value: stats.belumMulai, bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', Icon: AlertCircle },
-    ];
-
     return (
-        <div className="flex-1 min-h-screen p-8 bg-white">
+        <div className="flex-1 min-h-screen p-6" style={{ background: THEME.colors.background }}>
             <GlobalStyles />
-
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* ── HEADER: teks polos, tanpa card ── */}
+            {/* WELCOME HEADER */}
             <div className="mb-8 anim-in d1">
                 <div className="flex items-center gap-2 mb-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -442,273 +455,202 @@ export default function GuruKelasDashboard() {
                         Dashboard Guru Kelas
                     </span>
                 </div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                    Selamat Datang, {user.nama_lengkap || 'Guru'} 👋
+                <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: THEME.colors.text.primary }}>
+                    Selamat datang, {userName} 👋
                 </h1>
-                <p className="text-sm text-gray-400">
-                    Kelas {dashboard.kelas_info.kelas} • {dashboard.kelas_info.tahun_ajaran} - {dashboard.kelas_info.semester}
+                <p className="text-base" style={{ color: THEME.colors.text.muted }}>
+                    Kelas {dashboard.total_siswa} siswa • {dashboard.tahun_ajaran} - {dashboard.semester}
                 </p>
-                <div className="mt-5 h-px" style={{ background: 'linear-gradient(to right, #fde0c8, transparent)' }} />
             </div>
 
-            {/* ── 4 STAT CARDS: soft pastel ── */}
+            {/* STATISTICS CARDS - SOFT PASTEL BACKGROUNDS (SEPERTI ADMIN) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-                {THEME.statCards.map((card, i) => (
-                    <div
-                        key={card.label}
-                        className={`stat-card rounded-2xl p-5 anim-in d${i + 1}`}
-                        style={{
-                            background: card.cardBg,
-                            border: `1.5px solid ${card.cardBorder}`,
-                            boxShadow: '0 2px 8px rgba(180,70,10,0.07)',
-                        }}
-                        onClick={() => router.push(card.path)}
-                    >
-                        <div className="flex items-start justify-between mb-4">
-                            <div
-                                className="s-icon w-11 h-11 rounded-xl flex items-center justify-center"
-                                style={{ background: card.iconBg }}
-                            >
-                                {statIcons[i]}
+                {[
+                    {
+                        label: 'Mata Pelajaran',
+                        value: dashboard.total_mapel,
+                        icon: <Book className="w-6 h-6" />,
+                        desc: 'Total mapel yang diajar',
+                    },
+                    {
+                        label: 'Total Kelas',
+                        value: dashboard.total_kelas,
+                        icon: <GraduationCap className="w-6 h-6" />,
+                        desc: 'Kelas yang Anda ajar',
+                    },
+                    {
+                        label: 'Total Siswa',
+                        value: dashboard.total_siswa,
+                        icon: <Users className="w-6 h-6" />,
+                        desc: `${dashboard.total_penilaian_ada} sudah dinilai`,
+                    },
+                    {
+                        label: 'Progress Penilaian',
+                        value: `${dashboard.overall_progress}%`,
+                        icon: <Target className="w-6 h-6" />,
+                        desc: `${dashboard.total_penilaian_ada} dari ${dashboard.total_penilaian_dibutuhkan} penilaian`,
+                    },
+                ].map((stat, index) => {
+                    const cardStyle = THEME.statCards[index] || THEME.statCards[0];
+                    return (
+                        <div
+                            key={stat.label}
+                            className="rounded-2xl p-6 animate-fade-in-up"
+                            style={{
+                                background: cardStyle.cardBg,
+                                border: `1.5px solid ${cardStyle.cardBorder}`,
+                                boxShadow: THEME.shadows.md,
+                                animationDelay: `${index * 0.1}s`
+                            }}
+                        >
+                            <div className="flex items-start justify-between mb-4">
+                                <div
+                                    className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                                    style={{
+                                        background: cardStyle.iconBg,
+                                        color: '#ffffff'
+                                    }}
+                                >
+                                    {stat.icon}
+                                </div>
                             </div>
-                            <ArrowUpRight className="s-arrow w-4 h-4" style={{ color: card.iconBg }} />
+                            <div className="mb-3">
+                                <p className="text-3xl font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{stat.value}</p>
+                                <p className="text-sm font-semibold" style={{ color: cardStyle.iconBg }}>{stat.label}</p>
+                            </div>
+                            <p className="text-xs" style={{ color: THEME.colors.text.muted }}>{stat.desc}</p>
                         </div>
-                        <p className="s-value text-3xl font-bold text-gray-900 mb-1">{statValues[i]}</p>
-                        <p className="text-sm font-semibold" style={{ color: card.iconBg }}>{card.label}</p>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
-            {/* ── PROGRESS PENILAIAN + PERIODE ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* PROGRESS PER MAPEL */}
+            <div className="animate-fade-in-up delay-2 mb-8">
+                <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.md }}>
+                    <div className="px-6 py-5 flex items-center justify-between" style={{ background: THEME.gradients.primary }}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                <TrendingUp className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-white">Progress Penilaian per Mata Pelajaran</h3>
+                                <p className="text-sm text-white/80 mt-0.5">
+                                    {dashboard.jenis_penilaian_aktif
+                                        ? `Periode ${dashboard.jenis_penilaian_aktif} • ${dashboard.total_komponen} komponen`
+                                        : 'Status input nilai siswa'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => router.push('/guru_kelas/input_nilai')}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:bg-white/25 shadow-lg"
+                            style={{ background: 'rgba(255,255,255,0.2)' }}
+                        >
+                            Input Nilai <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
 
-                {/* Progress Penilaian per Mapel */}
-                <div
-                    className="section-card lg:col-span-2 rounded-2xl overflow-hidden anim-in d2"
-                    style={{ border: '1.5px solid #fde0c8', boxShadow: '0 2px 12px rgba(180,70,10,0.08)' }}
-                >
-                    <CardHeader
-                        icon={<TrendingUp className="w-5 h-5 text-white" />}
-                        title="Progress Penilaian per Mata Pelajaran"
-                        subtitle="Status input nilai siswa"
-                    />
-                    <div className="p-6 bg-white">
-                        {dashboard.progress_list.length === 0 ? (
-                            <div className="text-center py-12">
-                                <div
-                                    className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
-                                    style={{ background: '#fff5ee' }}
-                                >
-                                    <ClipboardList className="w-10 h-10" style={{ color: '#e8690a' }} />
+                    <div className="p-6">
+                        {dashboard.mata_pelajaran_list.length === 0 ? (
+                            <div className="text-center py-16">
+                                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: '#fff0e5' }}>
+                                    <BookOpen className="w-8 h-8" style={{ color: THEME.colors.secondary }} />
                                 </div>
-                                <p className="text-sm font-semibold text-gray-700 mb-2">
-                                    Belum Ada Mata Pelajaran
-                                </p>
-                                <p className="text-xs text-gray-400 mb-6">
-                                    Hubungi administrator untuk penugasan mata pelajaran
-                                </p>
+                                <p className="text-lg font-bold mb-2" style={{ color: THEME.colors.text.primary }}>Belum ada mata pelajaran</p>
+                                <p className="text-sm" style={{ color: THEME.colors.text.muted }}>Hubungi administrator untuk penugasan</p>
                             </div>
                         ) : (
-                            <>
-                                {/* Summary */}
-                                <div className="grid grid-cols-3 gap-4 mb-6">
-                                    {[
-                                        { label: 'Total Mapel', value: dashboard.total_mapel, icon: <BookOpen className="w-5 h-5" style={{ color: THEME.primary }} /> },
-                                        { label: 'Total Siswa', value: dashboard.total_siswa, icon: <Users className="w-5 h-5" style={{ color: THEME.primaryMid }} /> },
-                                        { label: 'Progress', value: `${dashboard.overall_progress}%`, icon: <Target className="w-5 h-5" style={{ color: '#f5870a' }} /> },
-                                    ].map(s => (
-                                        <div
-                                            key={s.label}
-                                            className="rounded-xl p-4 text-center"
-                                            style={{ background: '#fff5ee', border: '1px solid #fde0c8' }}
-                                        >
-                                            <div className="flex justify-center mb-2">{s.icon}</div>
-                                            <p className="text-2xl font-bold mb-1" style={{ color: THEME.primary }}>{s.value}</p>
-                                            <p className="text-xs font-semibold text-gray-500">{s.label}</p>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Mapel list */}
-                                <div className="space-y-3">
-                                    {dashboard.progress_list.map((mapel, idx) => {
-                                        const percentage = mapel.total_siswa > 0
-                                            ? Math.round((mapel.sudah_dinilai / mapel.total_siswa) * 100)
-                                            : 0;
-                                        const isComplete = percentage === 100;
-                                        const isHighProgress = percentage >= 60;
-
-                                        return (
-                                            <div
-                                                key={mapel.kode_mapel}
-                                                className="item-hover p-4 rounded-xl"
-                                                style={{ background: '#fafafa', border: '1px solid #f0e0d0' }}
-                                                onClick={() => router.push('/guru_kelas/input_nilai')}
-                                            >
-                                                <div className="flex items-center justify-between mb-2.5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                                                            style={{ background: isComplete ? THEME.semantic.success : THEME.chartColors[idx % THEME.chartColors.length] }}
-                                                        >
-                                                            {isComplete ? <CheckCircle2 size={18} /> : mapel.kode_mapel.slice(0, 2)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold text-gray-800">{mapel.mata_pelajaran}</p>
-                                                            <p className="text-[10px] text-gray-400">
-                                                                {mapel.sudah_dinilai}/{mapel.total_siswa} siswa dinilai
-                                                                {mapel.jenis === 'pilihan' && ' • Pilihan'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span
-                                                            className="text-xs font-bold px-2 py-0.5 rounded-full"
-                                                            style={{
-                                                                background: isComplete ? '#e6f9f0' : isHighProgress ? '#fff7e6' : '#fee2e2',
-                                                                color: isComplete ? '#0d6e48' : isHighProgress ? '#8b4513' : '#991b1b',
-                                                            }}
-                                                        >
-                                                            {percentage}%
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="h-2 rounded-full flex overflow-hidden bg-gray-100">
-                                                    <div
-                                                        className="grow-bar"
-                                                        style={{
-                                                            width: `${percentage}%`,
-                                                            background: isComplete
-                                                                ? THEME.semantic.success
-                                                                : `linear-gradient(90deg, ${THEME.primary}, ${THEME.primaryMid})`
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <button
-                                    onClick={() => router.push('/guru_kelas/input_nilai')}
-                                    className="btn-primary w-full mt-4 px-4 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
-                                    style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)', boxShadow: '0 3px 12px rgba(180,70,10,0.22)' }}
-                                >
-                                    Input Nilai <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </>
+                            <div className="space-y-4">
+                                {dashboard.mata_pelajaran_list.map((mapel) => (
+                                    <MapelCard key={mapel.id} mapel={mapel} jenisAktif={dashboard.jenis_penilaian_aktif} />
+                                ))}
+                            </div>
                         )}
                     </div>
                 </div>
+            </div>
 
-                {/* Periode Penilaian */}
-                <div
-                    className="section-card rounded-2xl overflow-hidden anim-in d3"
-                    style={{ border: '1.5px solid #fde0c8', boxShadow: '0 2px 12px rgba(180,70,10,0.08)' }}
-                >
-                    <CardHeader
-                        icon={<CalendarDays className="w-5 h-5 text-white" />}
-                        title="Periode Penilaian"
-                        subtitle="Status periode aktif"
-                    />
-                    <div className="p-5 bg-white space-y-3">
-                        {/* PTS */}
-                        <div
-                            className="item-hover p-4 rounded-xl"
-                            style={{ background: '#fafafa', border: '1px solid #f0e0d0' }}
-                        >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="font-bold text-sm text-gray-800">PTS</span>
-                                <StatusBadge status={dashboard.status_pts} />
+            {/* BOTTOM SECTION */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                {/* Jadwal */}
+                <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.md }}>
+                    <div className="p-6">
+                        <div className="flex items-center gap-3 mb-6 pb-4" style={{ borderBottom: `2px solid ${THEME.colors.border}` }}>
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#fff0e5' }}>
+                                <CalendarDays size={20} style={{ color: THEME.colors.primary }} />
                             </div>
-                            <p className="text-xs text-gray-400">Penilaian Tengah Semester</p>
-                        </div>
-                        {/* PAS */}
-                        <div
-                            className="item-hover p-4 rounded-xl"
-                            style={{ background: '#fafafa', border: '1px solid #f0e0d0' }}
-                        >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="font-bold text-sm text-gray-800">PAS</span>
-                                <StatusBadge status={dashboard.status_pas} />
+                            <div>
+                                <p className="text-base font-bold" style={{ color: THEME.colors.text.primary }}>Jadwal Penting</p>
+                                <p className="text-xs" style={{ color: THEME.colors.text.muted }}>Status periode penilaian</p>
                             </div>
-                            <p className="text-xs text-gray-400">Penilaian Akhir Semester</p>
                         </div>
+                        <div className="space-y-4">
+                            <JadwalItem label="PTS" status={dashboard.status_pts} tanggal={dashboard.jadwal.pts} />
+                            <JadwalItem label="PAS" status={dashboard.status_pas} tanggal={dashboard.jadwal.pas} />
+                        </div>
+                    </div>
+                </div>
 
-                        {/* Ringkasan */}
-                        <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                            <p className="text-xs font-bold text-gray-600 mb-3">Ringkasan Penilaian</p>
-                            <div className="flex flex-col gap-2">
-                                {statusItems.map((s) => (
-                                    <div
-                                        key={s.label}
-                                        className="flex items-center justify-between px-3 py-2 rounded-lg"
-                                        style={{ background: s.bg, border: `1px solid ${s.border}` }}
-                                    >
-                                        <div className="flex items-center gap-2 text-xs font-bold" style={{ color: s.color }}>
-                                            <s.Icon size={14} />
-                                            {s.label}
-                                        </div>
-                                        <span className="text-sm font-bold" style={{ color: s.color }}>
-                                            {s.value}
-                                        </span>
+                {/* Konfigurasi */}
+                <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.md }}>
+                    <div className="p-6">
+                        <div className="flex items-center gap-3 mb-6 pb-4" style={{ borderBottom: `2px solid ${THEME.colors.border}` }}>
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#fff0e5' }}>
+                                <Settings size={20} style={{ color: THEME.colors.primary }} />
+                            </div>
+                            <div>
+                                <p className="text-base font-bold" style={{ color: THEME.colors.text.primary }}>Status Konfigurasi</p>
+                                <p className="text-xs" style={{ color: THEME.colors.text.muted }}>Kelengkapan bobot & kategori</p>
+                            </div>
+                        </div>
+                        {dashboard.warnings.length === 0 ? (
+                            <div className="flex items-center gap-4 p-5 rounded-xl" style={{ background: '#dcfce7', border: '2px solid #86efac' }}>
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-white">
+                                    <CheckCircle2 size={20} className="text-green-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-green-800">Semua Mapel Sudah Dikonfigurasi</p>
+                                    <p className="text-xs text-green-700 mt-0.5">Bobot dan kategori nilai sudah lengkap</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {dashboard.warnings.map((w, i) => (
+                                    <div key={i} className="p-4 rounded-xl" style={{ background: '#fef2f2', border: '2px solid #fca5a5' }}>
+                                        <p className="text-sm font-bold text-red-700 mb-1">{w.mapel}</p>
+                                        <p className="text-xs text-red-600">{w.masalah}</p>
                                     </div>
                                 ))}
                             </div>
-                        </div>
-
-                        <button
-                            onClick={() => router.push('/guru_kelas/input_nilai')}
-                            className="btn-primary w-full px-4 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
-                            style={{ background: 'linear-gradient(135deg,#c95b08,#e8690a)', boxShadow: '0 3px 12px rgba(180,70,10,0.22)' }}
-                        >
-                            Lihat Detail <ChevronRight className="w-4 h-4" />
-                        </button>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Period Modal */}
+            {/* MODAL PERIODE */}
             {showPeriodModal && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 db-fadeIn"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowPeriodModal(false); }}
-                >
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 db-scaleIn">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <AlertTriangle size={24} className="text-orange-500" />
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in-up">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowPeriodModal(false)} />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center">
+                                <AlertCircle size={28} className="text-orange-500" />
                             </div>
-                            <div>
-                                <h3 className="text-base font-bold text-gray-900">
-                                    {isPeriodLocked ? '🔒 Periode Penilaian Selesai' : '⏳ Periode Penilaian Belum Aktif'}
-                                </h3>
-                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">
+                                {isPeriodLocked ? '🔒 Periode Selesai' : '⏳ Periode Belum Aktif'}
+                            </h3>
                         </div>
-
-                        <div className="space-y-3 text-sm text-gray-600 mb-6">
-                            <p>
-                                {isPeriodLocked
-                                    ? 'Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah.'
-                                    : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data dashboard, tetapi belum dapat menginput nilai siswa.'}
-                            </p>
-                            {isPeriodNotActive && (
-                                <p className="text-xs" style={{ color: '#c95b08' }}>
-                                    💡 <strong>Tip:</strong> Silakan hubungi Administrator untuk membuka periode penilaian.
-                                </p>
-                            )}
-                        </div>
-
+                        <p className="text-sm text-gray-600 mb-8 leading-relaxed">
+                            {isPeriodLocked
+                                ? 'Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah.'
+                                : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data dashboard, tetapi belum dapat menginput nilai siswa.'}
+                        </p>
                         <button
                             onClick={() => setShowPeriodModal(false)}
-                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
-                            style={{
-                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
-                            }}
+                            className="w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-lg"
+                            style={{ background: THEME.gradients.primary }}
                         >
-                            Ok
+                            OK, Mengerti
                         </button>
                     </div>
                 </div>
@@ -716,3 +658,199 @@ export default function GuruKelasDashboard() {
         </div>
     );
 }
+
+/* ==========================================================================
+   HELPER COMPONENTS
+   ========================================================================== */
+
+const JadwalItem = ({ label, status, tanggal }: { label: string; status: string; tanggal: string | null }) => {
+    const statusConfig: any = {
+        aktif: { bg: '#fff0e5', border: '#fed7aa' },
+        selesai: { bg: '#f9fafb', border: '#e5e7eb' },
+        nonaktif: { bg: '#fef3c7', border: '#fcd34d' },
+    };
+    const c = statusConfig[status] || statusConfig.nonaktif;
+
+    return (
+        <div className="flex items-center justify-between px-5 py-4 rounded-xl" style={{ background: c.bg, border: `2px solid ${c.border}` }}>
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: status === 'aktif' ? THEME.gradients.primary : '#e5e7eb' }}>
+                    <AlertCircle size={20} className={status === 'aktif' ? 'text-white' : 'text-gray-400'} />
+                </div>
+                <div>
+                    <p className="text-sm font-bold mb-0.5" style={{ color: THEME.colors.text.primary }}>{label}</p>
+                    <p className="text-xs" style={{ color: THEME.colors.text.muted }}>
+                        {status === 'aktif' ? '● Aktif' : status === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                    </p>
+                </div>
+            </div>
+            <span className="text-sm font-bold px-3 py-1.5 rounded-lg" style={{ color: THEME.colors.primary, background: '#fff' }}>
+                {tanggal || '-'}
+            </span>
+        </div>
+    );
+};
+
+const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string | null }) => {
+    const [showDetail, setShowDetail] = useState(false);
+    const [filterKelas, setFilterKelas] = useState<string>('all');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'incomplete'>('incomplete');
+
+    const percentage = mapel.total_siswa > 0 ? Math.round((mapel.sudah_dinilai / mapel.total_siswa) * 100) : 0;
+    const isComplete = percentage === 100;
+
+    const kelasList = useMemo(() => Array.from(new Set(mapel.nilai_rapor_list.map(s => s.nama_kelas))).sort(), [mapel.nilai_rapor_list]);
+
+    const filteredSiswa = useMemo(() => {
+        return mapel.nilai_rapor_list
+            .filter(s => {
+                if (filterKelas !== 'all' && s.nama_kelas !== filterKelas) return false;
+                if (filterStatus === 'incomplete' && s.jumlah_komponen_terisi === s.total_komponen) return false;
+                return true;
+            })
+            .sort((a, b) => {
+                if (a.jumlah_komponen_terisi === a.total_komponen && b.jumlah_komponen_terisi < b.total_komponen) return 1;
+                if (a.jumlah_komponen_terisi < a.total_komponen && b.jumlah_komponen_terisi === b.total_komponen) return -1;
+                return a.nama_kelas.localeCompare(b.nama_kelas);
+            });
+    }, [mapel.nilai_rapor_list, filterKelas, filterStatus]);
+
+    const groupedByKelas = useMemo(() => {
+        return filteredSiswa.reduce((acc, siswa) => {
+            if (!acc[siswa.nama_kelas]) acc[siswa.nama_kelas] = [];
+            acc[siswa.nama_kelas].push(siswa);
+            return acc;
+        }, {} as Record<string, typeof filteredSiswa>);
+    }, [filteredSiswa]);
+
+    const incompleteCount = mapel.nilai_rapor_list.filter(s => s.jumlah_komponen_terisi < s.total_komponen).length;
+
+    return (
+        <div className="border-2 rounded-2xl p-5 transition-all hover:shadow-lg" style={{ borderColor: isComplete ? '#86efac' : THEME.colors.border, background: isComplete ? '#f0fdf4' : '#fff' }}>
+            <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md" style={{ background: isComplete ? THEME.gradients.secondary : THEME.gradients.primary }}>
+                        {isComplete ? <CheckCircle2 size={20} /> : <BookOpen size={20} />}
+                    </div>
+                    <div>
+                        <p className="text-base font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{mapel.nama}</p>
+                        <p className="text-sm" style={{ color: THEME.colors.text.muted }}>{mapel.total_kelas} kelas • {mapel.total_siswa} siswa</p>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <p className={`text-3xl font-bold ${isComplete ? 'text-green-600' : 'text-orange-600'}`}>{percentage}%</p>
+                    <p className="text-xs" style={{ color: THEME.colors.text.muted }}>{isComplete ? 'Selesai' : 'Berjalan'}</p>
+                </div>
+            </div>
+
+            <div className="h-3 rounded-full overflow-hidden mb-4" style={{ background: '#fde0c8' }}>
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${percentage}%`, background: isComplete ? '#16a34a' : THEME.gradients.primary }} />
+            </div>
+
+            <button
+                onClick={() => setShowDetail(!showDetail)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all"
+                style={{
+                    background: isComplete ? '#dcfce7' : '#fef9c3',
+                    color: isComplete ? '#15803d' : '#92400e',
+                    border: `1.5px solid ${isComplete ? '#86efac' : '#fcd34d'}`
+                }}
+            >
+                <span>{isComplete ? '✓ Semua siswa sudah lengkap' : `⚠️ ${incompleteCount} siswa belum lengkap`}</span>
+                <span>{showDetail ? 'Sembunyikan Detail ▲' : 'Lihat Detail ▼'}</span>
+            </button>
+
+            {showDetail && (
+                <div className="mt-5 pt-5 border-t-2" style={{ borderTop: `2px solid ${THEME.colors.border}` }}>
+                    {/* Filter Kelas */}
+                    <div className="mb-4">
+                        <p className="text-xs font-bold mb-2" style={{ color: THEME.colors.text.secondary }}>Filter Kelas:</p>
+                        <div className="flex gap-2 flex-wrap">
+                            <button onClick={() => setFilterKelas('all')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterKelas === 'all' ? 'text-white' : 'bg-gray-100'}`} style={filterKelas === 'all' ? { background: THEME.colors.primary } : {}}>
+                                Semua Kelas
+                            </button>
+                            {kelasList.map(k => (
+                                <button key={k} onClick={() => setFilterKelas(k)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterKelas === k ? 'text-white' : 'bg-gray-100'}`} style={filterKelas === k ? { background: THEME.colors.primary } : {}}>
+                                    {k}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Filter Status */}
+                    <div className="mb-5">
+                        <p className="text-xs font-bold mb-2" style={{ color: THEME.colors.text.secondary }}>Filter Status:</p>
+                        <div className="flex gap-2">
+                            <button onClick={() => setFilterStatus('all')} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterStatus === 'all' ? 'text-white' : 'bg-gray-100'}`} style={filterStatus === 'all' ? { background: THEME.colors.primary } : {}}>
+                                Semua Siswa
+                            </button>
+                            <button onClick={() => setFilterStatus('incomplete')} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterStatus === 'incomplete' ? 'text-white' : 'bg-gray-100'}`} style={filterStatus === 'incomplete' ? { background: '#ef4444' } : {}}>
+                                Belum Lengkap ({incompleteCount})
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Daftar Siswa - KOMPONEN PENILAIAN DIPERBESAR */}
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-thin">
+                        {Object.entries(groupedByKelas).map(([kelasName, siswaList]) => (
+                            <div key={kelasName}>
+                                <div className="flex items-center justify-between mb-3 p-3 rounded-xl" style={{ background: '#fff0e5', border: `2px solid #fed7aa` }}>
+                                    <div className="flex items-center gap-2">
+                                        <MapPin size={14} className="text-orange-600" />
+                                        <p className="text-sm font-bold text-orange-800">Kelas {kelasName}</p>
+                                    </div>
+                                    <span className="text-xs font-bold text-orange-600 px-2 py-1 rounded-lg bg-white">{siswaList.filter(s => s.jumlah_komponen_terisi < s.total_komponen).length} belum lengkap</span>
+                                </div>
+                                <div className="space-y-3 ml-3">
+                                    {siswaList.map(siswa => (
+                                        <div key={siswa.id_siswa} className="p-4 rounded-xl border-2" style={{ background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#f0fdf4' : '#fff', borderColor: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#86efac' : '#fca5a5' }}>
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div>
+                                                    <p className="text-base font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{siswa.nama}</p>
+                                                    <p className="text-xs" style={{ color: THEME.colors.text.muted }}>NIS: {siswa.nis}</p>
+                                                </div>
+                                                {siswa.jumlah_komponen_terisi === siswa.total_komponen ? (
+                                                    <span className="text-xs font-bold text-green-700 px-3 py-1.5 rounded-lg bg-green-100">LENGKAP ✓</span>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-red-700 px-3 py-1.5 rounded-lg bg-red-100">BELUM</span>
+                                                )}
+                                            </div>
+
+                                            {/* KOMPONEN DETAIL - FONT DIPERBESAR */}
+                                            {siswa.komponen_detail && siswa.komponen_detail.length > 0 ? (
+                                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                                    {siswa.komponen_detail.map((komp, idx) => (
+                                                        <div key={idx} className="flex items-center gap-2 text-sm">
+                                                            {komp.status === 'sudah' ? <Check size={14} className="text-green-600" /> : <X size={14} className="text-red-600" />}
+                                                            <span className={`font-medium ${komp.status === 'sudah' ? 'text-gray-700' : 'text-gray-500'}`}>{komp.nama_komponen}:</span>
+                                                            <span className={`font-bold text-base ${komp.status === 'sudah' ? 'text-green-700' : 'text-red-600'}`}>{komp.nilai ?? '-'}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="mb-3">
+                                                    <div className="h-2 rounded-full overflow-hidden bg-gray-200">
+                                                        <div className="h-full rounded-full" style={{ width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`, background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444' }} />
+                                                    </div>
+                                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>{siswa.jumlah_komponen_terisi}/{siswa.total_komponen} komponen terisi</p>
+                                                </div>
+                                            )}
+
+                                            {/* NILAI RAPOR - DIPERBESAR */}
+                                            {siswa.nilai_rapor !== null && (
+                                                <div className="flex items-center justify-between pt-3 border-t-2" style={{ borderTop: `2px solid ${THEME.colors.border}` }}>
+                                                    <span className="text-sm font-bold" style={{ color: THEME.colors.text.secondary }}>Nilai Rapor:</span>
+                                                    <span className="text-2xl font-bold text-green-700">{siswa.nilai_rapor}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

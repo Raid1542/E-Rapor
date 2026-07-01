@@ -11,6 +11,7 @@
 
 module.exports = {
     ...require('./profilController'),           // Profil, password, foto
+    ...require('./dashboardController'),        // Dashboard guru kelas
     ...require('./kelasController'),            // Data kelas & siswa
     ...require('./absensiController'),          // Absensi PTS/PAS
     ...require('./catatanWaliController'),      // Catatan wali kelas

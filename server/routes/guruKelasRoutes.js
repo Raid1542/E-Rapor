@@ -91,8 +91,6 @@ const safeHandler = (fn) => {
 // 1. DATA KELAS & SISWA
 // ═════════════════════════════════════════════════════════════════════════════
 
-router.get('/dashboard', authenticate, guruKelasOnly, cekTahunAjaranAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getDashboardData));
-
 // GET: Data kelas guru, siswa di kelas, progress penilaian
 router.get('/kelas', authenticate, guruKelasOnly, cekTahunAjaranAktif, safeHandler(guruKelasControllers.getKelasSaya));
 router.get('/siswa', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getSiswaByKelas));
