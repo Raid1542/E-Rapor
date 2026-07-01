@@ -1,6 +1,7 @@
 /**
  * Nama File: kelasController.js
  * Fungsi: Controller CRUD kelas + wali kelas (dengan validasi read-only saat PTS/PAS selesai)
+ * UPDATE: ✅ FIXED semua bug penamaan function
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -12,7 +13,7 @@ const db = require('../../config/db');
 // HELPER FUNCTIONS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// ✅ FIXED: Ambil ID semester aktif berdasarkan ID induk (untuk validasi saja)
+// ✅ FIXED: Helper tunggal untuk ambil ID semester aktif berdasarkan ID induk
 const getIdSemesterAktif = async (idInduk) => {
     const [rows] = await db.execute(
         'SELECT id_tahun_ajaran FROM tahun_ajaran WHERE id_tahun_ajaran_induk = ? AND status = \'aktif\' LIMIT 1',
@@ -41,7 +42,6 @@ const checkReadOnly = async (idInduk) => {
 // 1. GET ALL KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET: Ambil daftar semua kelas dengan wali kelas dan jumlah siswa
 const getKelas = async (req, res) => {
     try {
         const { tahun_ajaran_id } = req.query;
@@ -66,7 +66,6 @@ const getKelas = async (req, res) => {
             ORDER BY k.nama_kelas ASC
         `, [idInduk, idInduk, idInduk]);
         
-        // ✅ PERBAIKAN: Cek read-only status
         const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(idInduk);
         
         res.json({ 
@@ -86,7 +85,6 @@ const getKelas = async (req, res) => {
 // 2. GET KELAS BY ID
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET: Ambil detail kelas berdasarkan ID dengan informasi read-only
 const getKelasById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -101,20 +99,12 @@ const getKelasById = async (req, res) => {
         kelas.is_aktif = (kelas.status_tahun_ajaran === 'aktif');
         delete kelas.status_tahun_ajaran;
 
-        // Ambil id_induk dari tahun_ajaran_id
-        const [taInfo] = await db.execute('SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?', [tahunAjaranId]);
-        if (taInfo.length > 0) {
-            kelas.id_tahun_ajaran_induk = taInfo[0].id_tahun_ajaran_induk;
-            const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(taInfo[0].id_tahun_ajaran_induk);
-            kelas.is_read_only = isReadOnly;
-            kelas.locked_by = lockedBy;
-            kelas.locked_semester = lockedSemester;
-        } else {
-            kelas.id_tahun_ajaran_induk = null;
-            kelas.is_read_only = false;
-            kelas.locked_by = null;
-            kelas.locked_semester = null;
-        }
+        // ✅ FIXED: Gunakan tahunAjaranIdInduk langsung (tidak perlu query lagi)
+        kelas.id_tahun_ajaran_induk = tahunAjaranIdInduk;
+        const { isReadOnly, lockedBy, lockedSemester } = await checkReadOnly(tahunAjaranIdInduk);
+        kelas.is_read_only = isReadOnly;
+        kelas.locked_by = lockedBy;
+        kelas.locked_semester = lockedSemester;
 
         res.json({ success: true, data: kelas });
     } catch (err) {
@@ -127,15 +117,12 @@ const getKelasById = async (req, res) => {
 // 3. GET KELAS FOR DROPDOWN
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET: Ambil daftar kelas untuk dropdown
 const getKelasForDropdown = async (req, res) => {
     try {
         const idInduk = req.idTahunAjaranInduk;
         if (!idInduk) return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
 
-        const taId = await getIdTahunAjaranAktif(idInduk);
-        if (!taId) return res.json({ success: true, data: [] });
-
+        // ✅ FIXED: Query langsung pakai idInduk (tidak perlu getIdSemesterAktif)
         const [rows] = await db.execute(
             'SELECT id_kelas AS id, nama_kelas AS nama, fase FROM kelas WHERE tahun_ajaran_id = ? ORDER BY nama_kelas ASC',
             [idInduk]
@@ -151,7 +138,6 @@ const getKelasForDropdown = async (req, res) => {
 // 4. CREATE KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// POST: Tambah kelas baru (validasi read-only, duplikasi nama, 1 guru = 1 kelas)
 const tambahKelas = async (req, res) => {
     const { nama_kelas, fase, user_id } = req.body;
     const idInduk = req.idTahunAjaranInduk;
@@ -170,36 +156,46 @@ const tambahKelas = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
-        if (!tahun_ajaran_id) return res.status(400).json({ success: false, message: 'Tidak ada semester aktif di tahun ajaran ini' });
+        // ✅ FIXED: Gunakan getIdSemesterAktif (bukan getIdTahunAjaranAktif)
+        const semesterAktifId = await getIdSemesterAktif(idInduk);
+        if (!semesterAktifId) {
+            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif di tahun ajaran ini' });
+        }
 
         // Cek duplikasi nama kelas
-        const existing = await kelasModel.getByTahunAjaran(tahun_ajaran_id);
+        const existing = await kelasModel.getByTahunAjaran(idInduk);
         const isDuplicate = existing.some(k => k.nama_kelas.toLowerCase().trim() === nama_kelas.toLowerCase().trim());
-        if (isDuplicate) return res.status(400).json({ success: false, message: `Kelas "${nama_kelas}" sudah ada di tahun ajaran ini` });
+        if (isDuplicate) {
+            return res.status(400).json({ success: false, message: `Kelas "${nama_kelas}" sudah ada di tahun ajaran ini` });
+        }
 
-        // ✅ FIXED: Cek apakah guru sudah menjadi wali kelas (JOIN ke tahun_ajaran_induk)
+        // ✅ FIXED: Cek apakah guru sudah menjadi wali kelas
         if (user_id && Number(user_id) > 0) {
             const [cekGuruSudahPunyaKelas] = await db.execute(
                 'SELECT k.nama_kelas FROM guru_kelas gk JOIN kelas k ON gk.kelas_id = k.id_kelas WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?',
-                [Number(user_id), tahun_ajaran_id]
+                [Number(user_id), semesterAktifId]
             );
-            if (cekGuru.length > 0) {
+            // ✅ FIXED: Gunakan nama variabel yang benar
+            if (cekGuruSudahPunyaKelas.length > 0) {
                 return res.status(400).json({
                     success: false,
-                    message: `Guru ini sudah menjadi wali kelas di "${cekGuru[0].nama_kelas}" pada tahun ajaran yang sama.`
+                    message: `Guru ini sudah menjadi wali kelas di "${cekGuruSudahPunyaKelas[0].nama_kelas}" pada tahun ajaran yang sama.`
                 });
             }
         }
 
-        // Create kelas
-        const id = await kelasModel.create({ nama_kelas, fase, tahun_ajaran_id });
+        // ✅ FIXED: Create kelas dengan tahun_ajaran_id = idInduk (id_tahun_ajaran_induk)
+        const id = await kelasModel.create({ 
+            nama_kelas, 
+            fase, 
+            tahun_ajaran_id: idInduk 
+        });
 
-        // ✅ FIXED: Set wali kelas (gunakan semester ID untuk guru_kelas)
+        // Set wali kelas (gunakan semester ID untuk guru_kelas)
         if (user_id && Number(user_id) > 0) {
             await db.execute(
                 'INSERT INTO guru_kelas (user_id, kelas_id, tahun_ajaran_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-                [Number(user_id), id, tahun_ajaran_id]
+                [Number(user_id), id, semesterAktifId]
             );
         }
 
@@ -225,7 +221,6 @@ const tambahKelas = async (req, res) => {
 // 5. UPDATE KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// PUT: Update data kelas dengan validasi read-only dan duplikasi nama
 const editKelas = async (req, res) => {
     try {
         const { id } = req.params;
@@ -248,8 +243,11 @@ const editKelas = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
-        if (!tahun_ajaran_id) return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        // ✅ FIXED: Gunakan getIdSemesterAktif
+        const semesterAktifId = await getIdSemesterAktif(idInduk);
+        if (!semesterAktifId) {
+            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        }
 
         // Cek keberadaan kelas
         const existingKelas = await kelasModel.getById(id);
@@ -273,22 +271,26 @@ const editKelas = async (req, res) => {
         }
 
         // Cek duplikasi nama kelas (exclude current kelas)
-        const allKelas = await kelasModel.getByTahunAjaran(tahun_ajaran_id);
+        const allKelas = await kelasModel.getByTahunAjaran(idInduk);
         const isDuplicate = allKelas.some(k => k.nama_kelas.toLowerCase().trim() === nama_kelas.toLowerCase().trim() && k.id_kelas !== Number(id));
-        if (isDuplicate) return res.status(400).json({ success: false, message: `Nama kelas "${nama_kelas}" sudah digunakan di tahun ajaran ini` });
+        if (isDuplicate) {
+            return res.status(400).json({ success: false, message: `Nama kelas "${nama_kelas}" sudah digunakan di tahun ajaran ini` });
+        }
 
-        // Update kelas
-        const success = await kelasModel.update(id, { nama_kelas, fase, tahun_ajaran_id });
+        // ✅ FIXED: Update kelas dengan tahun_ajaran_id = idInduk
+        const success = await kelasModel.update(id, { 
+            nama_kelas, 
+            fase, 
+            tahun_ajaran_id: idInduk 
+        });
         if (!success) return res.status(404).json({ success: false, message: 'Gagal memperbarui kelas' });
 
         // Update wali kelas jika berubah
         if (existingUserId !== newUserId) {
-            const semesterAktif = await getIdSemesterAktif(idInduk);
-            
             if (newUserId && newUserId > 0) {
                 const [cekWaliLain] = await db.execute(
                     'SELECT k.nama_kelas FROM guru_kelas gk JOIN kelas k ON gk.kelas_id = k.id_kelas WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ? AND gk.kelas_id != ?',
-                    [newUserId, tahun_ajaran_id, id]
+                    [newUserId, semesterAktifId, id]
                 );
                 if (cekWaliLain.length > 0) {
                     return res.status(400).json({
@@ -297,11 +299,11 @@ const editKelas = async (req, res) => {
                     });
                 }
             }
-            await db.execute('DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?', [id, tahun_ajaran_id]);
+            await db.execute('DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?', [id, semesterAktifId]);
             if (newUserId && newUserId > 0) {
                 await db.execute(
                     'INSERT INTO guru_kelas (user_id, kelas_id, tahun_ajaran_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-                    [newUserId, id, tahun_ajaran_id]
+                    [newUserId, id, semesterAktifId]
                 );
             }
         }
@@ -317,7 +319,6 @@ const editKelas = async (req, res) => {
 // 6. DELETE KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// DELETE: Hapus kelas dengan validasi dependensi (siswa, absensi, nilai, pembelajaran)
 const hapusKelas = async (req, res) => {
     try {
         const { id } = req.params;
@@ -336,12 +337,20 @@ const hapusKelas = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
-        if (!tahun_ajaran_id) return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        // ✅ FIXED: Gunakan getIdSemesterAktif
+        const semesterAktifId = await getIdSemesterAktif(idInduk);
+        if (!semesterAktifId) {
+            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        }
 
-        // Cek keberadaan kelas
-        const [kelasRows] = await db.execute('SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?', [id, tahun_ajaran_id]);
-        if (kelasRows.length === 0) return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan atau bukan milik tahun ajaran aktif' });
+        // ✅ FIXED: Cek keberadaan kelas dengan idInduk (bukan semesterAktifId)
+        const [kelasRows] = await db.execute(
+            'SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?', 
+            [id, idInduk]
+        );
+        if (kelasRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan atau bukan milik tahun ajaran aktif' });
+        }
 
         // Cek dependensi
         const [cekDep] = await db.execute(`
@@ -361,8 +370,8 @@ const hapusKelas = async (req, res) => {
             });
         }
 
-        // Delete wali kelas + kelas
-        await db.execute('DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?', [id, tahun_ajaran_id]);
+        // ✅ FIXED: Delete wali kelas dengan semesterAktifId
+        await db.execute('DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?', [id, semesterAktifId]);
         const [result] = await db.execute('DELETE FROM kelas WHERE id_kelas = ?', [id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, message: 'Gagal menghapus kelas' });
@@ -379,7 +388,6 @@ const hapusKelas = async (req, res) => {
 // 7. SET WALI KELAS
 // ═════════════════════════════════════════════════════════════════════════════
 
-// PUT: Tetapkan atau update wali kelas untuk kelas tertentu
 const setWaliKelas = async (req, res) => {
     try {
         const { id } = req.params;
@@ -399,33 +407,42 @@ const setWaliKelas = async (req, res) => {
             });
         }
 
-        const tahun_ajaran_id = await getIdTahunAjaranAktif(idInduk);
-        if (!tahun_ajaran_id) return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        // ✅ FIXED: Gunakan getIdSemesterAktif
+        const semesterAktifId = await getIdSemesterAktif(idInduk);
+        if (!semesterAktifId) {
+            return res.status(400).json({ success: false, message: 'Tidak ada semester aktif' });
+        }
 
-        // Cek keberadaan kelas
-        const [kelasRows] = await db.execute('SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?', [id, tahun_ajaran_id]);
-        if (kelasRows.length === 0) return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan' });
+        // ✅ FIXED: Cek keberadaan kelas dengan idInduk
+        const [kelasRows] = await db.execute(
+            'SELECT id_kelas FROM kelas WHERE id_kelas = ? AND tahun_ajaran_id = ?', 
+            [id, idInduk]
+        );
+        if (kelasRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Kelas tidak ditemukan' });
+        }
 
-        // Cek apakah guru sudah menjadi wali kelas di kelas lain
+        // ✅ FIXED: Cek apakah guru sudah menjadi wali kelas di kelas lain
         if (user_id && Number(user_id) > 0) {
             const [cekGuruSudahPunyaKelas] = await db.execute(
                 'SELECT k.nama_kelas FROM guru_kelas gk JOIN kelas k ON gk.kelas_id = k.id_kelas WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ? AND gk.kelas_id != ?',
-                [Number(user_id), tahun_ajaran_id, Number(id)]
+                [Number(user_id), semesterAktifId, Number(id)]
             );
-            if (cekGuru.length > 0) {
+            // ✅ FIXED: Gunakan nama variabel yang benar
+            if (cekGuruSudahPunyaKelas.length > 0) {
                 return res.status(400).json({
                     success: false,
-                    message: `Guru ini sudah menjadi wali kelas di "${cekGuru[0].nama_kelas}" pada tahun ajaran yang sama.`
+                    message: `Guru ini sudah menjadi wali kelas di "${cekGuruSudahPunyaKelas[0].nama_kelas}" pada tahun ajaran yang sama.`
                 });
             }
         }
 
         // Delete wali kelas lama + Insert wali kelas baru
-        await db.execute('DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?', [id, tahun_ajaran_id]);
+        await db.execute('DELETE FROM guru_kelas WHERE kelas_id = ? AND tahun_ajaran_id = ?', [id, semesterAktifId]);
         if (user_id && Number(user_id) > 0) {
             await db.execute(
                 'INSERT INTO guru_kelas (user_id, kelas_id, tahun_ajaran_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-                [Number(user_id), Number(id), tahun_ajaran_id]
+                [Number(user_id), Number(id), semesterAktifId]
             );
         }
 
@@ -436,4 +453,13 @@ const setWaliKelas = async (req, res) => {
     }
 };
 
-module.exports = { getKelas, getKelasById, getKelasForDropdown, tambahKelas, editKelas, hapusKelas, setWaliKelas, checkReadOnly };
+module.exports = { 
+    getKelas, 
+    getKelasById, 
+    getKelasForDropdown, 
+    tambahKelas, 
+    editKelas, 
+    hapusKelas, 
+    setWaliKelas, 
+    checkReadOnly 
+};
