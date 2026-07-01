@@ -1,12 +1,16 @@
 /**
  * Nama File: ArsipRaporPage.tsx
- * Fungsi: Halaman arsip rapor untuk admin - menggunakan template Data Mata Pelajaran
- *         dengan progressive disclosure dan UI yang konsisten
- * Update:
- *   - Dirapikan: Card 1 (filter TA+Semester+Jenis) compact satu baris
- *   - Panel Status dipisah jadi Card 2 tersendiri (lebih menonjol)
- *   - Card 3: toolbar Kelas + Search
- *   - Card 4: tabel siswa + info unduhan
+ * Fungsi: Halaman arsip rapor untuk admin
+ * UPDATE:
+ *   - ✅ FIXED: Persistensi localStorage (sama persis Data Pembelajaran)
+ *   - ✅ FIXED: Auto-select aktif HANYA jika tidak ada data di localStorage
+ *   - ✅ FIXED: Saat kembali ke fitur, tetap menampilkan pilihan user sebelumnya
+ *   - ✅ FIXED: Race condition dihindari dengan parameter langsung ke fetch
+ *   - ✅ FIXED: Sentinel value "" untuk tandai user sengaja kosongkan
+ *   - Card 1: Filter TA + Semester + Jenis (compact satu baris)
+ *   - Card 2: Panel Status (terpisah, menonjol)
+ *   - Card 3: Toolbar Kelas + Search
+ *   - Card 4: Tabel siswa + info unduhan
  */
 
 'use client';
@@ -127,13 +131,14 @@ const btnPrimary = {
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
+const BtnBatal = ({ onClick, children = 'Batal', disabled }: { onClick: () => void; children?: React.ReactNode; disabled?: boolean }) => (
     <button
         onClick={onClick}
-        className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+        disabled={disabled}
+        className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+        onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; } }}
+        onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; } }}
     >
         {children}
     </button>
@@ -194,12 +199,14 @@ export default function ArsipRaporPage() {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
+    const getToken = (): string | null => localStorage.getItem('token');
+
     // ── Fetch Functions ────────────────────────────────────────────────────────
 
-    const fetchTahunAjaranList = async () => {
+    const fetchTahunAjaranList = useCallback(async () => {
         setLoadingTA(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             if (!token) return;
 
             const res = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
@@ -217,31 +224,29 @@ export default function ArsipRaporPage() {
                 ) as TahunAjaran[];
 
                 setTahunAjaranList(uniqueTA);
-
-                const activeTA = uniqueTA.find(ta => ta.is_aktif);
-                if (activeTA) {
-                    setSelectedTA(prev => prev ?? activeTA.id);
-                }
             }
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
             setLoadingTA(false);
         }
-    };
+    }, [showModal]);
 
-    const fetchSemesterByTahunAjaran = async (idInduk: number) => {
+    const fetchSemesterByTahunAjaran = useCallback(async (idInduk: number): Promise<SemesterOption[]> => {
         try {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+            const token = getToken();
+            if (!token) return [];
 
-            const res = await fetch(`${API_BASE}/admin/semester-list`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const [semRes, taRes] = await Promise.all([
+                fetch(`${API_BASE}/admin/semester-list`, { headers: { Authorization: `Bearer ${token}` } }),
+                fetch(`${API_BASE}/admin/tahun-ajaran`, { headers: { Authorization: `Bearer ${token}` } })
+            ]);
 
-            if (res.ok && data.success) {
-                const semesters = data.data
+            const semData = await semRes.json();
+            const taData = await taRes.json();
+
+            if (semRes.ok && semData.success) {
+                const semesters = semData.data
                     .filter((sem: any) => sem.id_induk === idInduk)
                     .map((sem: any) => ({
                         id: sem.id,
@@ -252,77 +257,65 @@ export default function ArsipRaporPage() {
                     }));
 
                 // Ambil status PTS/PAS
-                const resTA = await fetch(`${API_BASE}/admin/tahun-ajaran`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const dataTA = await resTA.json();
-                if (resTA.ok && dataTA.success) {
-                    const taData = dataTA.data.find((t: any) => t.id_induk === idInduk);
-                    if (taData) {
+                if (taRes.ok && taData.success) {
+                    const taInfo = taData.data.find((t: any) => t.id_induk === idInduk);
+                    if (taInfo) {
                         semesters.forEach(sem => {
                             if (sem.semester === 'Ganjil') {
-                                sem.status_pts = taData.status_pts_ganjil || 'nonaktif';
-                                sem.status_pas = taData.status_pas_ganjil || 'nonaktif';
+                                sem.status_pts = taInfo.status_pts_ganjil || 'nonaktif';
+                                sem.status_pas = taInfo.status_pas_ganjil || 'nonaktif';
                             } else if (sem.semester === 'Genap') {
-                                sem.status_pts = taData.status_pts_genap || 'nonaktif';
-                                sem.status_pas = taData.status_pas_genap || 'nonaktif';
+                                sem.status_pts = taInfo.status_pts_genap || 'nonaktif';
+                                sem.status_pas = taInfo.status_pas_genap || 'nonaktif';
                             }
                         });
                     }
                 }
 
                 setSemesterOptions(semesters);
-
-                const activeSemester = semesters.find(s => s.is_aktif);
-                if (activeSemester && !selectedSemesterId) {
-                    setSelectedSemesterId(activeSemester.id);
-                    setSelectedSemester(activeSemester.semester);
-                }
+                return semesters;
             }
+            return [];
         } catch (err) {
             console.error('Error fetch semester:', err);
+            return [];
         }
-    };
+    }, []);
 
-    const fetchKelas = async () => {
-    if (!selectedTA || !selectedSemester) return;  // ✅ Gunakan selectedTA (ID induk)
-
-    setLoadingKelas(true);
-    setKelasList([]);
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        // ✅ GUNAKAN selectedTA (ID induk = 1), bukan selectedSemesterId
-        const res = await fetch(
-            `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${selectedTA}&semester=${selectedSemester}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            setKelasList(data.data || []);
-        } else {
-            setKelasList([]);
-        }
-    } catch {
+    const fetchKelas = useCallback(async (idInduk: number, semester: string) => {
+        setLoadingKelas(true);
         setKelasList([]);
-    } finally {
-        setLoadingKelas(false);
-    }
-};
-
-    const fetchSiswa = async () => {
-        if (!selectedTA || !selectedKelas || !selectedSemester) return;
-
-        setLoadingSiswa(true);
-        setSiswaList([]);
         try {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             if (!token) return;
 
             const res = await fetch(
-                `${API_BASE}/admin/arsip-rapor/daftar-siswa/${selectedTA}/${selectedKelas}?semester=${selectedSemester}`,
+                `${API_BASE}/admin/arsip-rapor/kelas?tahun_ajaran_id=${idInduk}&semester=${semester}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                setKelasList(data.data || []);
+            } else {
+                setKelasList([]);
+            }
+        } catch {
+            setKelasList([]);
+        } finally {
+            setLoadingKelas(false);
+        }
+    }, []);
+
+    const fetchSiswa = useCallback(async (idInduk: number, kelasId: number, semester: string) => {
+        setLoadingSiswa(true);
+        setSiswaList([]);
+        try {
+            const token = getToken();
+            if (!token) return;
+
+            const res = await fetch(
+                `${API_BASE}/admin/arsip-rapor/daftar-siswa/${idInduk}/${kelasId}?semester=${semester}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await res.json();
@@ -337,53 +330,280 @@ export default function ArsipRaporPage() {
         } finally {
             setLoadingSiswa(false);
         }
-    };
+    }, []);
 
-    // ── Effects ────────────────────────────────────────────────────────────────
+    // ── useEffect: Load awal ───────────────────────────────────────────────────
 
     useEffect(() => {
         fetchTahunAjaranList();
-    }, []);
+    }, [fetchTahunAjaranList]);
 
+    // ✅ FIXED: Load dari localStorage - PRIORITAS: localStorage > auto-select aktif
+    // ✅ FIXED: Bedakan "belum pernah" (null) vs "sengaja kosong" ("")
     useEffect(() => {
-        if (selectedTA) {
-            fetchSemesterByTahunAjaran(selectedTA);
-            setKelasList([]);
-            setSiswaList([]);
-            setSelectedKelas(null);
+        if (tahunAjaranList.length > 0 && selectedTA === null) {
+            const savedTA = localStorage.getItem('arsip_selectedTA');
+            const savedSemester = localStorage.getItem('arsip_selectedSemester');
+            const savedJenis = localStorage.getItem('arsip_selectedJenis');
+            const savedKelas = localStorage.getItem('arsip_selectedKelas');
+
+            // ✅ PERBAIKAN: Cek apakah user pernah memilih (termasuk sengaja kosongkan)
+            // null = belum pernah memilih → auto-select yang aktif
+            // "" = sengaja kosongkan → JANGAN auto-select
+            // "1", "2", dll = user memilih value tertentu → load value tersebut
+            const hasUserMadeTAChoice = savedTA !== null;
+
+            let taToSelect: TahunAjaran | undefined;
+
+            if (hasUserMadeTAChoice) {
+                // User sudah pernah memilih (bisa kosong atau ada value)
+                if (savedTA !== '') {
+                    const id = Number(savedTA);
+                    taToSelect = tahunAjaranList.find(t => t.id === id);
+                }
+                // Jika savedTA === '', biarkan taToSelect undefined (tidak auto-select)
+            } else {
+                // User belum pernah memilih → auto-select yang aktif
+                taToSelect = tahunAjaranList.find(t => t.is_aktif);
+            }
+
+            if (taToSelect) {
+                setSelectedTA(taToSelect.id);
+                localStorage.setItem('arsip_selectedTA', taToSelect.id.toString());
+
+                // Fetch semester lalu auto-select
+                fetchSemesterByTahunAjaran(taToSelect.id).then((semesters) => {
+                    if (semesters.length === 0) return;
+
+                    let semToSelect: SemesterOption | undefined;
+
+                    // ✅ PERBAIKAN: Cek apakah user pernah memilih semester
+                    const hasUserMadeSemesterChoice = savedSemester !== null;
+
+                    if (hasUserMadeSemesterChoice) {
+                        if (savedSemester !== '') {
+                            const semId = Number(savedSemester);
+                            semToSelect = semesters.find(s => s.id === semId);
+                        }
+                    } else {
+                        // Auto-select yang aktif
+                        semToSelect = semesters.find(s => s.is_aktif);
+                    }
+
+                    // ✅ PRIORITAS 3: Fallback ke semester pertama
+                    if (!semToSelect && semesters.length > 0) {
+                        semToSelect = semesters[0];
+                    }
+
+                    if (semToSelect) {
+                        setSelectedSemesterId(semToSelect.id);
+                        setSelectedSemester(semToSelect.semester);
+                        localStorage.setItem('arsip_selectedSemester', semToSelect.id.toString());
+
+                        // ✅ PRIORITAS 1: Auto-select jenis dari localStorage
+                        let jenisToSelect: 'PTS' | 'PAS' | null = null;
+
+                        const hasUserMadeJenisChoice = savedJenis !== null;
+
+                        if (hasUserMadeJenisChoice) {
+                            if (savedJenis === 'PTS' || savedJenis === 'PAS') {
+                                jenisToSelect = savedJenis as 'PTS' | 'PAS';
+                            }
+                            // Jika savedJenis === '', biarkan null
+                        } else {
+                            // Auto-select jenis aktif
+                            if (semToSelect.status_pas === 'aktif') {
+                                jenisToSelect = 'PAS';
+                            } else if (semToSelect.status_pts === 'aktif') {
+                                jenisToSelect = 'PTS';
+                            } else if (semToSelect.status_pas === 'selesai') {
+                                jenisToSelect = 'PAS';
+                            } else if (semToSelect.status_pts === 'selesai') {
+                                jenisToSelect = 'PTS';
+                            }
+                        }
+
+                        if (jenisToSelect) {
+                            setSelectedJenis(jenisToSelect);
+                            localStorage.setItem('arsip_selectedJenis', jenisToSelect);
+                        }
+
+                        // Fetch kelas
+                        fetchKelas(taToSelect!.id, semToSelect.semester);
+
+                        // ✅ PRIORITAS: Auto-select kelas dari localStorage
+                        const hasUserMadeKelasChoice = savedKelas !== null;
+                        if (hasUserMadeKelasChoice && savedKelas !== '') {
+                            const kelasId = Number(savedKelas);
+                            setSelectedKelas(kelasId);
+                            localStorage.setItem('arsip_selectedKelas', kelasId.toString());
+                            fetchSiswa(taToSelect!.id, kelasId, semToSelect.semester);
+                        }
+                    }
+                });
+            }
+        }
+    }, [tahunAjaranList]);
+
+    // ── Handler: Pilih Tahun Ajaran ────────────────────────────────────────────
+
+    const handleTahunAjaranChange = async (value: string) => {
+        if (value === '' || value === 'no-data') {
+            setSelectedTA(null);
+            setSelectedSemesterId(null);
+            setSelectedSemester(null);
             setSelectedJenis(null);
-        } else {
+            setSelectedKelas(null);
             setSemesterOptions([]);
             setKelasList([]);
             setSiswaList([]);
+
+            // ✅ PERBAIKAN: Simpan string kosong (bukan hapus) untuk tandai "user sengaja kosongkan"
+            localStorage.setItem('arsip_selectedTA', '');
+            localStorage.setItem('arsip_selectedSemester', '');
+            localStorage.setItem('arsip_selectedJenis', '');
+            localStorage.setItem('arsip_selectedKelas', '');
+            return;
+        }
+
+        const id = Number(value);
+        setSelectedTA(id);
+        setSelectedSemesterId(null);
+        setSelectedSemester(null);
+        setSelectedJenis(null);
+        setSelectedKelas(null);
+        setKelasList([]);
+        setSiswaList([]);
+        localStorage.setItem('arsip_selectedTA', id.toString());
+        localStorage.setItem('arsip_selectedSemester', '');  // Reset semester saat ganti TA
+        localStorage.setItem('arsip_selectedJenis', '');
+        localStorage.setItem('arsip_selectedKelas', '');
+
+        const semesters = await fetchSemesterByTahunAjaran(id);
+
+        // ✅ Auto-select semester aktif (karena user ganti TA manual)
+        const activeSem = semesters.find(s => s.is_aktif) || semesters[0];
+        if (activeSem) {
+            setSelectedSemesterId(activeSem.id);
+            setSelectedSemester(activeSem.semester);
+            localStorage.setItem('arsip_selectedSemester', activeSem.id.toString());
+
+            // ✅ Auto-select jenis penilaian aktif
+            let jenisToSelect: 'PTS' | 'PAS' | null = null;
+            if (activeSem.status_pas === 'aktif') {
+                jenisToSelect = 'PAS';
+            } else if (activeSem.status_pts === 'aktif') {
+                jenisToSelect = 'PTS';
+            } else if (activeSem.status_pas === 'selesai') {
+                jenisToSelect = 'PAS';
+            } else if (activeSem.status_pts === 'selesai') {
+                jenisToSelect = 'PTS';
+            }
+
+            if (jenisToSelect) {
+                setSelectedJenis(jenisToSelect);
+                localStorage.setItem('arsip_selectedJenis', jenisToSelect);
+            }
+
+            fetchKelas(id, activeSem.semester);
+        }
+    };
+
+    // ── Handler: Pilih Semester ────────────────────────────────────────────────
+
+    const handleSemesterChange = (value: string) => {
+        if (value === '' || value === 'no-data') {
             setSelectedSemesterId(null);
             setSelectedSemester(null);
-            setSelectedKelas(null);
             setSelectedJenis(null);
-        }
-    }, [selectedTA]);
-
-    useEffect(() => {
-        if (selectedSemesterId && selectedSemester) {
-            fetchKelas();
             setSelectedKelas(null);
-            setSiswaList([]);
-            setSelectedJenis(null);
-        } else {
             setKelasList([]);
+            setSiswaList([]);
+
+            // ✅ PERBAIKAN: Simpan string kosong (bukan hapus)
+            localStorage.setItem('arsip_selectedSemester', '');
+            localStorage.setItem('arsip_selectedJenis', '');
+            localStorage.setItem('arsip_selectedKelas', '');
+            return;
+        }
+
+        const id = Number(value);
+        const sem = semesterOptions.find(s => s.id === id);
+
+        setSelectedSemesterId(id);
+        setSelectedSemester(sem?.semester || null);
+        setSelectedJenis(null);
+        setSelectedKelas(null);
+        setKelasList([]);
+        setSiswaList([]);
+        localStorage.setItem('arsip_selectedSemester', id.toString());
+        localStorage.setItem('arsip_selectedJenis', '');  // Reset jenis saat ganti semester
+        localStorage.setItem('arsip_selectedKelas', '');
+
+        if (sem && selectedTA) {
+            // ✅ Auto-select jenis penilaian aktif
+            let jenisToSelect: 'PTS' | 'PAS' | null = null;
+            if (sem.status_pas === 'aktif') {
+                jenisToSelect = 'PAS';
+            } else if (sem.status_pts === 'aktif') {
+                jenisToSelect = 'PTS';
+            } else if (sem.status_pas === 'selesai') {
+                jenisToSelect = 'PAS';
+            } else if (sem.status_pts === 'selesai') {
+                jenisToSelect = 'PTS';
+            }
+
+            if (jenisToSelect) {
+                setSelectedJenis(jenisToSelect);
+                localStorage.setItem('arsip_selectedJenis', jenisToSelect);
+            }
+
+            fetchKelas(selectedTA, sem.semester);
+        }
+    };
+
+    // ── Handler: Pilih Jenis Penilaian ─────────────────────────────────────────
+
+    const handleJenisChange = (value: string) => {
+        if (value === '' || value === 'no-data') {
+            setSelectedJenis(null);
             setSelectedKelas(null);
             setSiswaList([]);
-            setSelectedJenis(null);
-        }
-    }, [selectedSemesterId, selectedSemester]);
 
-    useEffect(() => {
-        if (selectedKelas) {
-            fetchSiswa();
-        } else {
-            setSiswaList([]);
+            // ✅ PERBAIKAN: Simpan string kosong (bukan hapus)
+            localStorage.setItem('arsip_selectedJenis', '');
+            localStorage.setItem('arsip_selectedKelas', '');
+            return;
         }
-    }, [selectedKelas]);
+
+        const jenis = value as 'PTS' | 'PAS';
+        setSelectedJenis(jenis);
+        setSelectedKelas(null);
+        setSiswaList([]);
+        localStorage.setItem('arsip_selectedJenis', jenis);
+        localStorage.setItem('arsip_selectedKelas', '');  // Reset kelas saat ganti jenis
+    };
+
+    // ── Handler: Pilih Kelas ───────────────────────────────────────────────────
+
+    const handleKelasChange = (value: string) => {
+        if (value === '' || value === 'no-data') {
+            setSelectedKelas(null);
+            setSiswaList([]);
+
+            // ✅ PERBAIKAN: Simpan string kosong (bukan hapus)
+            localStorage.setItem('arsip_selectedKelas', '');
+            return;
+        }
+
+        const id = Number(value);
+        setSelectedKelas(id);
+        localStorage.setItem('arsip_selectedKelas', id.toString());
+
+        if (selectedTA && selectedSemester) {
+            fetchSiswa(selectedTA, id, selectedSemester);
+        }
+    };
 
     // ── Derived Data ───────────────────────────────────────────────────────────
 
@@ -403,14 +623,14 @@ export default function ArsipRaporPage() {
         );
     });
 
-    // ── Handlers ──────────────────────────────────────────────────────────────
+    // ── Handlers: Status & Arsip ───────────────────────────────────────────────
 
     const handleUbahStatus = async (statusBaru: StatusPenilaian) => {
         if (!selectedTA || !selectedJenis || !selectedSemester) return;
 
         setLoadingAction(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             if (!token) return;
 
             const res = await fetch(`${API_BASE}/admin/atur-status-penilaian`, {
@@ -455,7 +675,7 @@ export default function ArsipRaporPage() {
 
         setLoadingAction(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             if (!token) return;
 
             const res = await fetch(`${API_BASE}/admin/arsipkan-rapor`, {
@@ -500,7 +720,7 @@ export default function ArsipRaporPage() {
             return;
         }
 
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) {
             showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
             return;
@@ -549,25 +769,6 @@ export default function ArsipRaporPage() {
         }
     };
 
-    const handleDownloadAll = async () => {
-        if (siswaList.length === 0) {
-            showModal({ type: 'warning', title: 'Tidak Ada Data', message: 'Tidak ada siswa untuk diunduh rapornya.' });
-            return;
-        }
-
-        showModal({
-            type: 'confirm',
-            title: `Unduh ${siswaList.length} Rapor?`,
-            message: `Akan mengunduh ${siswaList.length} rapor ${selectedJenis}.\n\nFile akan diunduh satu per satu.`,
-            onConfirm: async () => {
-                for (const siswa of siswaList) {
-                    await handleDownloadRapor(siswa.id_siswa, siswa.nama, siswa.nisn || '');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            }
-        });
-    };
-
     // ── RENDER ─────────────────────────────────────────────────────────────────
 
     return (
@@ -584,8 +785,7 @@ export default function ArsipRaporPage() {
             </div>
 
             {/* ====================================================================
-                CARD 1: Filter Tahun Ajaran + Semester + Jenis Penilaian — compact
-                satu baris, sama persis pola Card 1 di Data Mata Pelajaran/Pembelajaran.
+                CARD 1: Filter Tahun Ajaran + Semester + Jenis Penilaian
             ==================================================================== */}
             <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-5" style={CARD_STYLE}>
                 <div className="flex items-center gap-3">
@@ -598,14 +798,7 @@ export default function ArsipRaporPage() {
                         </label>
                         <select
                             value={selectedTA ?? ''}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === '' || value === 'no-data') {
-                                    setSelectedTA(null);
-                                    return;
-                                }
-                                setSelectedTA(Number(value));
-                            }}
+                            onChange={(e) => handleTahunAjaranChange(e.target.value)}
                             className={selectCls}
                             disabled={loadingTA}
                         >
@@ -626,18 +819,7 @@ export default function ArsipRaporPage() {
                         </label>
                         <select
                             value={selectedSemesterId ?? ''}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === '' || value === 'no-data') {
-                                    setSelectedSemesterId(null);
-                                    setSelectedSemester(null);
-                                    return;
-                                }
-                                const id = Number(value);
-                                const sem = semesterOptions.find(s => s.id === id);
-                                setSelectedSemesterId(id);
-                                setSelectedSemester(sem?.semester || null);
-                            }}
+                            onChange={(e) => handleSemesterChange(e.target.value)}
                             className={selectCls}
                         >
                             <option value="">-- Pilih Semester --</option>
@@ -673,10 +855,7 @@ export default function ArsipRaporPage() {
                         </label>
                         <select
                             value={selectedJenis ?? ''}
-                            onChange={(e) => {
-                                const val = e.target.value as 'PTS' | 'PAS' | '';
-                                setSelectedJenis(val || null);
-                            }}
+                            onChange={(e) => handleJenisChange(e.target.value)}
                             className={selectCls}
                         >
                             <option value="">-- Pilih Jenis --</option>
@@ -708,8 +887,7 @@ export default function ArsipRaporPage() {
             ) : (
                 <>
                     {/* ====================================================================
-                        CARD 2: Panel Status — berdiri sendiri, lebih menonjol.
-                        Badge status besar + tombol aksi + info box keterangan.
+                        CARD 2: Panel Status
                     ==================================================================== */}
                     <div className="bg-white rounded-2xl overflow-hidden mb-5" style={CARD_STYLE}>
                         <div className="px-6 py-4 flex items-center justify-between" style={HEADER_GRAD}>
@@ -818,7 +996,7 @@ export default function ArsipRaporPage() {
                     </div>
 
                     {/* ====================================================================
-                        CARD 3: Toolbar — dropdown Kelas + Search siswa.
+                        CARD 3: Toolbar Kelas + Search
                     ==================================================================== */}
                     <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
                         <div className="flex items-center gap-3">
@@ -830,10 +1008,7 @@ export default function ArsipRaporPage() {
                             ) : (
                                 <select
                                     value={selectedKelas ?? ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setSelectedKelas(val ? Number(val) : null);
-                                    }}
+                                    onChange={(e) => handleKelasChange(e.target.value)}
                                     className={selectCls}
                                 >
                                     <option value="">-- Pilih Kelas --</option>
@@ -881,7 +1056,7 @@ export default function ArsipRaporPage() {
                     ) : (
                         <>
                             {/* ====================================================================
-                                CARD 4: Tabel siswa + info unduhan.
+                                CARD 4: Tabel siswa
                             ==================================================================== */}
                             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
                                 <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
