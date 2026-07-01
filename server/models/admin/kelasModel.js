@@ -27,15 +27,8 @@ const kelasModel = {
   },
 
   /** Ambil kelas dengan detail (wali, jumlah siswa, status TA) */
-  async getByIdWithDetails(id, tahunAjaranId) {
-    const [taInfo] = await db.execute(
-      `SELECT id_tahun_ajaran_induk FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
-      [tahunAjaranId]
-    );
-    if (taInfo.length === 0) return null;
-
-    const idTahunAjaranInduk = taInfo[0].id_tahun_ajaran_induk;
-
+  async getByIdWithDetails(id, tahunAjaranIdInduk) {
+    // ✅ FIXED: Query langsung pakai tahunAjaranIdInduk
     const [rows] = await db.execute(`
       SELECT 
           k.id_kelas AS id, k.nama_kelas, k.fase, k.tahun_ajaran_id,
@@ -55,7 +48,7 @@ const kelasModel = {
     `, [tahunAjaranIdInduk, tahunAjaranIdInduk, tahunAjaranIdInduk, id, tahunAjaranIdInduk]);
 
     return rows[0] || null;
-  },
+},
 
   /** Tambah kelas baru (validasi fase & duplikasi) */
   async create(data) {
