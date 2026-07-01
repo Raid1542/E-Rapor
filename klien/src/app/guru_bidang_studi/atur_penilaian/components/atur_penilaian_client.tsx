@@ -1132,11 +1132,6 @@ export default function AturPenilaianGBSClient() {
                                     <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>
                                         {!selectedMapelAkademik ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
                                     </p>
-                                    <p className="text-sm mt-2" style={{ color: THEME.colors.text.muted }}>
-                                        {!selectedMapelAkademik
-                                            ? 'Silakan pilih mata pelajaran terlebih dahulu'
-                                            : 'Silakan pilih kelas untuk melihat kategori'}
-                                    </p>
                                 </div>
                             )}
                         </div>
