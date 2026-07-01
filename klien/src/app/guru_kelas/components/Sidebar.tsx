@@ -24,6 +24,49 @@ import {
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
+// ─── GLOBAL STYLES (Animasi Playful - SAMA DENGAN ADMIN & GBS) ──────────────
+const SidebarStyles = () => (
+    <style jsx global>{`
+        @keyframes sb_slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                max-height: 500px;
+            }
+        }
+        @keyframes sb_fadeIn {
+            from { opacity: 0; transform: translateX(-4px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes sb_badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .sb-slideDown { animation: sb_slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .sb-fadeIn { animation: sb_fadeIn 0.25s ease-out; }
+        .sb-badgePulse { animation: sb_badgePulse 2s ease-in-out infinite; }
+        .sb-nav-item {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sb-nav-item:hover:not(:disabled) {
+            transform: translateX(3px);
+        }
+        .sb-chevron {
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sb-chevron-open {
+            transform: rotate(180deg);
+        }
+        .sb-scrollbar-none::-webkit-scrollbar { display: none; }
+        .sb-scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+    `}</style>
+);
+
 interface SidebarProps {
     user: {
         id: number;
@@ -86,57 +129,53 @@ export default function Sidebar({ user }: SidebarProps) {
 
     // ── Menu Items ─────────────────────────────────────────────────────────
     const menuUtama = [
-        { name: 'Dashboard', url: '/guru_kelas/dashboard', icon: <Home className="w-5 h-5" /> },
+        { name: 'Dashboard', url: '/guru_kelas/dashboard', icon: Home },
     ];
 
     const dataSiswa = [
-        { name: 'Data Siswa', url: '/guru_kelas/data_siswa', icon: <Users className="w-4 h-4" /> },
+        { name: 'Data Siswa', url: '/guru_kelas/data_siswa', icon: Users },
     ];
 
     const inputNilai = [
-        { name: 'Atur Penilaian', url: '/guru_kelas/atur_penilaian', icon: <Settings className="w-4 h-4" /> },
-        { name: 'Input Nilai', url: '/guru_kelas/input_nilai', icon: <ClipboardList className="w-4 h-4" /> },
-        { name: 'Kokurikuler', url: '/guru_kelas/kokurikuler', icon: <TrendingUp className="w-4 h-4" /> },
-        { name: 'Absensi', url: '/guru_kelas/absensi_siswa', icon: <FileText className="w-4 h-4" /> },
-        { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_wali_kelas', icon: <MessageSquare className="w-4 h-4" /> },
+        { name: 'Atur Penilaian', url: '/guru_kelas/atur_penilaian', icon: Settings },
+        { name: 'Input Nilai', url: '/guru_kelas/input_nilai', icon: ClipboardList },
+        { name: 'Kokurikuler', url: '/guru_kelas/kokurikuler', icon: TrendingUp },
+        { name: 'Absensi', url: '/guru_kelas/absensi_siswa', icon: FileText },
+        { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_wali_kelas', icon: MessageSquare },
     ];
 
     const kegiatan = [
-        { name: 'Ekstrakurikuler', url: '/guru_kelas/ekstrakurikuler', icon: <Award className="w-4 h-4" /> },
+        { name: 'Ekstrakurikuler', url: '/guru_kelas/ekstrakurikuler', icon: Award },
     ];
 
     const laporan = [
-        { name: 'Rekapan Nilai', url: '/guru_kelas/rekapan_nilai', icon: <BarChart3 className="w-4 h-4" /> },
-        { name: 'Cetak Rapor', url: '/guru_kelas/rapor', icon: <BookOpen className="w-4 h-4" /> },
+        { name: 'Rekapan Nilai', url: '/guru_kelas/rekapan_nilai', icon: BarChart3 },
+        { name: 'Cetak Rapor', url: '/guru_kelas/rapor', icon: BookOpen },
     ];
 
-    const isProfilActive = pathname === '/guru_kelas/profil';
-
     // ── Handlers ───────────────────────────────────────────────────────────
-    const toggleSidebar = () => {
-        setIsExpanded(!isExpanded);
-    };
+    const toggleSidebar = () => setIsExpanded(!isExpanded);
+    const handleNavigation = (url: string) => router.push(url);
 
-    const handleNavigation = (url: string) => {
-        router.push(url);
-    };
-
-    // ── Styles ─────────────────────────────────────────────────────────────
-    const navBase = 'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 transition-all duration-150 text-sm font-medium';
-    const navActive = 'bg-white text-orange-600 font-semibold shadow-sm';
+    // ── Reusable nav item styles (SAMA DENGAN ADMIN & GBS) ─────────────────
+    const navBase = 'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
+    const navActive = 'bg-white text-orange-600 shadow-sm font-semibold';
     const navInactive = 'text-white hover:bg-white/15 hover:text-white';
 
-    // Helper untuk render menu item
-    const renderMenuItem = (item: any, isActive: boolean) => (
-        <button
-            key={item.url}
-            onClick={() => handleNavigation(item.url)}
-            className={`${navBase} ${isActive ? navActive : navInactive}`}
-        >
-            {item.icon}
-            {isExpanded && <span>{item.name}</span>}
-        </button>
-    );
+    // Helper untuk render menu item dengan icon component
+    const renderMenuItem = (item: any, isActive: boolean) => {
+        const IconComponent = item.icon;
+        return (
+            <button
+                key={item.url}
+                onClick={() => handleNavigation(item.url)}
+                className={`${navBase} ${isActive ? navActive : navInactive}`}
+            >
+                <IconComponent className="w-5 h-5 flex-shrink-0" />
+                {isExpanded && <span>{item.name}</span>}
+            </button>
+        );
+    };
 
     return (
         <div
@@ -145,7 +184,9 @@ export default function Sidebar({ user }: SidebarProps) {
                 background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
             }}
         >
-            {/* ── Header: Logo + Nama Sekolah ─────────────────────────────── */}
+            <SidebarStyles />
+
+            {/* ── Header: Logo + Nama Sekolah (SAMA DENGAN ADMIN & GBS) ───── */}
             <div
                 className="flex items-center justify-between px-4 py-4"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
@@ -154,7 +195,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     <>
                         <div className="flex items-center gap-3 min-w-0">
                             <div
-                                className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden"
+                                className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-110 hover:rotate-6"
                                 style={{ background: 'rgba(255,255,255,0.18)' }}
                             >
                                 <img
@@ -164,14 +205,14 @@ export default function Sidebar({ user }: SidebarProps) {
                                     onError={() => setLogoUrl('/images/LogoUA.jpg')}
                                 />
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 sb-fadeIn">
                                 <h2 className="text-sm font-bold text-white leading-tight truncate">{schoolName}</h2>
                                 <p className="text-xs text-white/60 leading-tight">E-Rapor</p>
                             </div>
                         </div>
                         <button
                             onClick={toggleSidebar}
-                            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:rotate-90"
                             style={{ background: 'rgba(255,255,255,0.12)' }}
                         >
                             <X className="w-4 h-4 text-white" />
@@ -180,7 +221,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 ) : (
                     <button
                         onClick={toggleSidebar}
-                        className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-colors"
+                        className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110"
                         style={{ background: 'rgba(255,255,255,0.15)' }}
                     >
                         <img
@@ -193,15 +234,15 @@ export default function Sidebar({ user }: SidebarProps) {
                 )}
             </div>
 
-            {/* ── Navigation ─────────────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-none">
+            {/* ── Navigation (SAMA DENGAN ADMIN & GBS) ───────────────────── */}
+            <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
 
-                {/* Menu Utama */}
+                {/* ── MENU UTAMA ── */}
                 {menuUtama.map((item) => renderMenuItem(item, pathname === item.url))}
 
                 {/* ── DATA SISWA ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Data Siswa
                     </p>
                 )}
@@ -211,7 +252,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── INPUT NILAI ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Input Nilai
                     </p>
                 )}
@@ -221,7 +262,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── KEGIATAN ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Kegiatan
                     </p>
                 )}
@@ -231,7 +272,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── LAPORAN ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Laporan
                     </p>
                 )}
@@ -241,7 +282,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── SAYA ── */}
                 {isExpanded && (
-                    <p className="text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Saya
                     </p>
                 )}
@@ -249,7 +290,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 <button
                     onClick={() => handleNavigation('/guru_kelas/profil')}
-                    className={`${navBase} ${isProfilActive ? navActive : navInactive}`}
+                    className={`${navBase} ${pathname === '/guru_kelas/profil' ? navActive : navInactive}`}
                 >
                     <UserCircle className="w-5 h-5 flex-shrink-0" />
                     {isExpanded && <span>Profil</span>}

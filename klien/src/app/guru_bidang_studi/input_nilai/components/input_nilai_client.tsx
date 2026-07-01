@@ -17,7 +17,7 @@ const THEME = {
         primary: '#c95b08',
         secondary: '#e8690a',
         tertiary: '#f5870a',
-        background: '#fdf6f0',
+        background: '#ffffff',
         border: '#fde0c8',
         text: {
             primary: '#15110d',
