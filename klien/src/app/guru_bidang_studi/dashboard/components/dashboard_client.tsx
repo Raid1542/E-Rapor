@@ -1,6 +1,7 @@
 /**
  * Nama File: dashboard_client.tsx
- * FINAL FIX: Perbesar teks komponen, seragamkan warna icon, perbaiki icon
+ * UPDATE: Detail komponen hanya muncul saat PAS aktif
+ *         Saat PTS aktif: hanya tampilkan status input PTS (sudah/belum)
  */
 
 "use client";
@@ -114,6 +115,12 @@ const THEME = {
             nonaktif: { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
         },
     },
+    statCards: [
+        { iconBg: '#e8690a', cardBg: '#fff5ee', cardBorder: '#fdd9b5' },
+        { iconBg: '#c95b08', cardBg: '#fff2ea', cardBorder: '#fcc9a0' },
+        { iconBg: '#e07b1a', cardBg: '#fff6f0', cardBorder: '#fdd4b0' },
+        { iconBg: '#d4700f', cardBg: '#fff4ec', cardBorder: '#fccaa5' },
+    ],
     gradients: {
         primary: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)',
         secondary: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)',
@@ -344,70 +351,65 @@ export default function DashboardClient() {
                 </p>
             </div>
 
-            {/* STATISTICS CARDS - SEMUA ICON WARNA ORANYE SAMA */}
+            {/* STATISTICS CARDS - SOFT PASTEL BACKGROUNDS (SEPERTI ADMIN) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
                 {[
-                    { 
-                        label: 'Mata Pelajaran', 
-                        value: dashboard.total_mapel, 
-                        icon: <Book className="w-6 h-6" />, 
-                        gradient: THEME.gradients.primary, 
+                    {
+                        label: 'Mata Pelajaran',
+                        value: dashboard.total_mapel,
+                        icon: <Book className="w-6 h-6" />,
                         desc: 'Total mapel yang Anda ajar',
-                        iconColor: THEME.colors.primary
                     },
-                    { 
-                        label: 'Total Kelas', 
-                        value: dashboard.total_kelas, 
-                        icon: <School className="w-6 h-6" />, 
-                        gradient: THEME.gradients.secondary, 
+                    {
+                        label: 'Total Kelas',
+                        value: dashboard.total_kelas,
+                        icon: <School className="w-6 h-6" />,
                         desc: 'Kelas yang Anda ajar',
-                        iconColor: THEME.colors.primary
                     },
-                    { 
-                        label: 'Total Siswa', 
-                        value: dashboard.total_siswa, 
-                        icon: <Users className="w-6 h-6" />, 
-                        gradient: THEME.gradients.light, 
+                    {
+                        label: 'Total Siswa',
+                        value: dashboard.total_siswa,
+                        icon: <Users className="w-6 h-6" />,
                         desc: `${dashboard.total_penilaian_ada} sudah dinilai`,
-                        iconColor: THEME.colors.primary
                     },
-                    { 
-                        label: 'Progress Penilaian', 
-                        value: `${dashboard.overall_progress}%`, 
-                        icon: <Target className="w-6 h-6" />, 
-                        gradient: THEME.gradients.primary, 
+                    {
+                        label: 'Progress Penilaian',
+                        value: `${dashboard.overall_progress}%`,
+                        icon: <Target className="w-6 h-6" />,
                         desc: `${dashboard.total_penilaian_ada} dari ${dashboard.total_penilaian_dibutuhkan} penilaian`,
-                        iconColor: THEME.colors.primary
                     },
-                ].map((stat, index) => (
-                    <div
-                        key={stat.label}
-                        className="bg-white rounded-2xl p-6 animate-fade-in-up"
-                        style={{ 
-                            border: `1.5px solid ${THEME.colors.border}`, 
-                            boxShadow: THEME.shadows.md,
-                            animationDelay: `${index * 0.1}s`
-                        }}
-                    >
-                        <div className="flex items-start justify-between mb-4">
-                            {/* ICON DENGAN WARNA ORANYE SERAGAM */}
-                            <div 
-                                className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg" 
-                                style={{ 
-                                    background: THEME.colors.primary,
-                                    color: '#ffffff'
-                                }}
-                            >
-                                {stat.icon}
+                ].map((stat, index) => {
+                    const cardStyle = THEME.statCards[index] || THEME.statCards[0];
+                    return (
+                        <div
+                            key={stat.label}
+                            className="rounded-2xl p-6 animate-fade-in-up"
+                            style={{
+                                background: cardStyle.cardBg,
+                                border: `1.5px solid ${cardStyle.cardBorder}`,
+                                boxShadow: THEME.shadows.md,
+                                animationDelay: `${index * 0.1}s`
+                            }}
+                        >
+                            <div className="flex items-start justify-between mb-4">
+                                <div
+                                    className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                                    style={{
+                                        background: cardStyle.iconBg,
+                                        color: '#ffffff'
+                                    }}
+                                >
+                                    {stat.icon}
+                                </div>
                             </div>
+                            <div className="mb-3">
+                                <p className="text-3xl font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{stat.value}</p>
+                                <p className="text-sm font-semibold" style={{ color: cardStyle.iconBg }}>{stat.label}</p>
+                            </div>
+                            <p className="text-xs" style={{ color: THEME.colors.text.muted }}>{stat.desc}</p>
                         </div>
-                        <div className="mb-3">
-                            <p className="text-3xl font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{stat.value}</p>
-                            <p className="text-sm font-semibold" style={{ color: THEME.colors.primary }}>{stat.label}</p>
-                        </div>
-                        <p className="text-xs" style={{ color: THEME.colors.text.muted }}>{stat.desc}</p>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* PROGRESS PER MAPEL */}
@@ -421,7 +423,7 @@ export default function DashboardClient() {
                             <div>
                                 <h3 className="text-base font-bold text-white">Progress Penilaian per Mata Pelajaran</h3>
                                 <p className="text-sm text-white/80 mt-0.5">
-                                    {dashboard.jenis_penilaian_aktif 
+                                    {dashboard.jenis_penilaian_aktif
                                         ? `Periode ${dashboard.jenis_penilaian_aktif} • ${dashboard.total_komponen} komponen`
                                         : 'Status input nilai siswa'}
                                 </p>
@@ -527,13 +529,13 @@ export default function DashboardClient() {
                             </h3>
                         </div>
                         <p className="text-sm text-gray-600 mb-8 leading-relaxed">
-                            {isPeriodLocked 
+                            {isPeriodLocked
                                 ? 'Baik PTS maupun PAS telah selesai. Data nilai sudah dikunci dan tidak dapat diubah.'
                                 : 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data dashboard, tetapi belum dapat menginput nilai siswa.'}
                         </p>
-                        <button 
-                            onClick={() => setShowPeriodModal(false)} 
-                            className="w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-lg" 
+                        <button
+                            onClick={() => setShowPeriodModal(false)}
+                            className="w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-lg"
                             style={{ background: THEME.gradients.primary }}
                         >
                             OK, Mengerti
@@ -662,8 +664,8 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
             <button
                 onClick={() => setShowDetail(!showDetail)}
                 className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all"
-                style={{ 
-                    background: isComplete ? '#dcfce7' : '#fef9c3', 
+                style={{
+                    background: isComplete ? '#dcfce7' : '#fef9c3',
                     color: isComplete ? '#15803d' : '#92400e',
                     border: `1.5px solid ${isComplete ? '#86efac' : '#fcd34d'}`
                 }}
@@ -702,7 +704,7 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                         </div>
                     </div>
 
-                    {/* Daftar Siswa - KOMPONEN PENILAIAN DIPERBESAR */}
+                    {/* Daftar Siswa */}
                     <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-thin">
                         {Object.entries(groupedByKelas).map(([kelasName, siswaList]) => (
                             <div key={kelasName}>
@@ -715,7 +717,7 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                 </div>
                                 <div className="space-y-3 ml-3">
                                     {siswaList.map(siswa => (
-                                        <div key={siswa.id_siswa} className="p-4 rounded-xl border-2" style={{ background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#f0fdf4' : '#fef2f2', borderColor: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#86efac' : '#fca5a5' }}>
+                                        <div key={siswa.id_siswa} className="p-4 rounded-xl border-2" style={{ background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#f0fdf4' : '#fff', borderColor: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#86efac' : '#fca5a5' }}>
                                             <div className="flex items-start justify-between mb-3">
                                                 <div>
                                                     <p className="text-base font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{siswa.nama}</p>
@@ -727,9 +729,9 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                                     <span className="text-xs font-bold text-red-700 px-3 py-1.5 rounded-lg bg-red-100">BELUM</span>
                                                 )}
                                             </div>
-                                            
-                                            {/* KOMPONEN DETAIL - FONT DIPERBESAR */}
-                                            {siswa.komponen_detail && siswa.komponen_detail.length > 0 ? (
+
+                                            {/* ✅ KOMPONEN DETAIL - HANYA MUNCUL SAAT PAS AKTIF */}
+                                            {jenisAktif === 'PAS' && siswa.komponen_detail && siswa.komponen_detail.length > 0 ? (
                                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                                     {siswa.komponen_detail.map((komp, idx) => (
                                                         <div key={idx} className="flex items-center gap-2 text-sm">
@@ -742,12 +744,20 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                             ) : (
                                                 <div className="mb-3">
                                                     <div className="h-2 rounded-full overflow-hidden bg-gray-200">
-                                                        <div className="h-full rounded-full" style={{ width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`, background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444' }} />
+                                                        <div className="h-full rounded-full" style={{ 
+                                                            width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`, 
+                                                            background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444' 
+                                                        }} />
                                                     </div>
-                                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>{siswa.jumlah_komponen_terisi}/{siswa.total_komponen} komponen terisi</p>
+                                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>
+                                                        {jenisAktif === 'PTS' 
+                                                            ? `${siswa.jumlah_komponen_terisi > 0 ? '✓' : '✗'} ${siswa.jumlah_komponen_terisi > 0 ? 'Sudah' : 'Belum'} input PTS`
+                                                            : `${siswa.jumlah_komponen_terisi}/${siswa.total_komponen} komponen terisi`
+                                                        }
+                                                    </p>
                                                 </div>
                                             )}
-                                            
+
                                             {/* NILAI RAPOR - DIPERBESAR */}
                                             {siswa.nilai_rapor !== null && (
                                                 <div className="flex items-center justify-between pt-3 border-t-2" style={{ borderTop: `2px solid ${THEME.colors.border}` }}>

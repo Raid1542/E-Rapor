@@ -1147,11 +1147,37 @@ export default function AturPenilaianGBSClient() {
                                                             <span className="font-semibold text-sm" style={{ color: '#7a3a0a' }}>{komponen?.nama_komponen || 'Komponen'}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <input type="number" min="0" max="100" step="0.01" value={displayBobot}
-                                                                onChange={(e) => { if (isEditable) handleBobotChange(bobot.komponen_id, e.target.value); }}
+                                                            <input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                pattern="[0-9]*"
+                                                                value={displayBobot}
+                                                                onChange={(e) => {
+                                                                    if (isEditable) {
+                                                                        const val = e.target.value;
+                                                                        // ✅ Hanya izinkan angka dan titik desimal
+                                                                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                                            handleBobotChange(bobot.komponen_id, val);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                onBlur={(e) => {
+                                                                    // ✅ Validasi range saat lose focus
+                                                                    const val = parseFloat(e.target.value);
+                                                                    if (!isNaN(val)) {
+                                                                        if (val < 0) {
+                                                                            handleBobotChange(bobot.komponen_id, '0');
+                                                                        } else if (val > 100) {
+                                                                            handleBobotChange(bobot.komponen_id, '100');
+                                                                        }
+                                                                    }
+                                                                }}
                                                                 disabled={!isEditable}
+                                                                maxLength={5}
                                                                 className={`w-24 h-11 px-3 text-center font-bold rounded-xl border-2 outline-none transition-all ${isEditable ? 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400' : 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'}`}
-                                                                readOnly={!isEditable} />
+                                                                readOnly={!isEditable}
+                                                                placeholder="0"
+                                                            />
                                                             <span className="text-base font-bold" style={{ color: '#7a3a0a' }}>%</span>
                                                         </div>
                                                     </div>
@@ -1193,11 +1219,6 @@ export default function AturPenilaianGBSClient() {
                                     <TrendingUp size={64} className="mx-auto mb-4" style={{ color: THEME.colors.secondary }} />
                                     <p className="text-lg font-bold" style={{ color: THEME.colors.primary }}>
                                         {!selectedMapelBobot ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
-                                    </p>
-                                    <p className="text-sm mt-2" style={{ color: THEME.colors.text.muted }}>
-                                        {!selectedMapelBobot
-                                            ? 'Silakan pilih mata pelajaran terlebih dahulu'
-                                            : 'Silakan pilih kelas untuk mengatur bobot'}
                                     </p>
                                 </div>
                             )}
