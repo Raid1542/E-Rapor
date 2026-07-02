@@ -663,15 +663,19 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
 
             <button
                 onClick={() => setShowDetail(!showDetail)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all"
+                className="w-full flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all"
                 style={{
                     background: isComplete ? '#dcfce7' : '#fef9c3',
                     color: isComplete ? '#15803d' : '#92400e',
                     border: `1.5px solid ${isComplete ? '#86efac' : '#fcd34d'}`
                 }}
             >
-                <span>{isComplete ? '✓ Semua siswa sudah lengkap' : `⚠️ ${incompleteCount} siswa belum lengkap`}</span>
-                <span>{showDetail ? 'Sembunyikan Detail ▲' : 'Lihat Detail ▼'}</span>
+                <span className="text-center sm:text-left">
+                    {isComplete ? '✓ Semua siswa sudah lengkap' : `⚠️ ${incompleteCount} siswa belum lengkap`}
+                </span>
+                <span className="flex-shrink-0">
+                    {showDetail ? 'Sembunyikan Detail ▲' : 'Lihat Detail ▼'}
+                </span>
             </button>
 
             {showDetail && (
@@ -744,13 +748,13 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                             ) : (
                                                 <div className="mb-3">
                                                     <div className="h-2 rounded-full overflow-hidden bg-gray-200">
-                                                        <div className="h-full rounded-full" style={{ 
-                                                            width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`, 
-                                                            background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444' 
+                                                        <div className="h-full rounded-full" style={{
+                                                            width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`,
+                                                            background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444'
                                                         }} />
                                                     </div>
                                                     <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>
-                                                        {jenisAktif === 'PTS' 
+                                                        {jenisAktif === 'PTS'
                                                             ? `${siswa.jumlah_komponen_terisi > 0 ? '✓' : '✗'} ${siswa.jumlah_komponen_terisi > 0 ? 'Sudah' : 'Belum'} input PTS`
                                                             : `${siswa.jumlah_komponen_terisi}/${siswa.total_komponen} komponen terisi`
                                                         }
