@@ -1416,21 +1416,34 @@ export default function InputNilaiGBSClient() {
                                                 </div>
 
                                                 <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    step="1"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
                                                     value={nilai ?? ''}
                                                     onChange={e => {
                                                         const val = e.target.value;
-                                                        const num = parseFloat(val);
-                                                        setEditingNilai(prev => ({
-                                                            ...prev,
-                                                            [ptsKomponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
-                                                        }));
+                                                        // ✅ Hanya izinkan angka
+                                                        if (val === '' || /^\d+$/.test(val)) {
+                                                            setEditingNilai(prev => ({
+                                                                ...prev,
+                                                                [ptsKomponen.id_komponen]: val === '' ? null : parseInt(val)
+                                                            }));
+                                                        }
+                                                    }}
+                                                    onBlur={e => {
+                                                        // ✅ Validasi range saat lose focus
+                                                        const val = parseInt(e.target.value);
+                                                        if (!isNaN(val)) {
+                                                            if (val < 0) {
+                                                                setEditingNilai(prev => ({ ...prev, [ptsKomponen.id_komponen]: 0 }));
+                                                            } else if (val > 100) {
+                                                                setEditingNilai(prev => ({ ...prev, [ptsKomponen.id_komponen]: 100 }));
+                                                            }
+                                                        }
                                                     }}
                                                     disabled={isDisabled}
                                                     placeholder="0"
+                                                    maxLength={3}
                                                     className={`w-full h-16 px-4 text-3xl font-bold text-center rounded-xl border-2 outline-none transition-all ${isDisabled
                                                         ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                                         : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
@@ -1478,21 +1491,34 @@ export default function InputNilaiGBSClient() {
                                                 </div>
 
                                                 <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    step="1"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
                                                     value={nilai ?? ''}
                                                     onChange={e => {
                                                         const val = e.target.value;
-                                                        const num = parseFloat(val);
-                                                        setEditingNilai(prev => ({
-                                                            ...prev,
-                                                            [pasKomponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
-                                                        }));
+                                                        // ✅ Hanya izinkan angka
+                                                        if (val === '' || /^\d+$/.test(val)) {
+                                                            setEditingNilai(prev => ({
+                                                                ...prev,
+                                                                [pasKomponen.id_komponen]: val === '' ? null : parseInt(val)
+                                                            }));
+                                                        }
+                                                    }}
+                                                    onBlur={e => {
+                                                        // ✅ Validasi range saat lose focus
+                                                        const val = parseInt(e.target.value);
+                                                        if (!isNaN(val)) {
+                                                            if (val < 0) {
+                                                                setEditingNilai(prev => ({ ...prev, [pasKomponen.id_komponen]: 0 }));
+                                                            } else if (val > 100) {
+                                                                setEditingNilai(prev => ({ ...prev, [pasKomponen.id_komponen]: 100 }));
+                                                            }
+                                                        }
                                                     }}
                                                     disabled={isDisabled}
                                                     placeholder="0"
+                                                    maxLength={3}
                                                     className={`w-full h-16 px-4 text-3xl font-bold text-center rounded-xl border-2 outline-none transition-all ${isDisabled
                                                         ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                                         : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
@@ -1534,21 +1560,34 @@ export default function InputNilaiGBSClient() {
                                                         </div>
                                                     </div>
                                                     <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        step="1"
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
                                                         value={nilai ?? ''}
                                                         onChange={e => {
                                                             const val = e.target.value;
-                                                            const num = parseFloat(val);
-                                                            setEditingNilai(prev => ({
-                                                                ...prev,
-                                                                [komponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
-                                                            }));
+                                                            // ✅ Hanya izinkan angka
+                                                            if (val === '' || /^\d+$/.test(val)) {
+                                                                setEditingNilai(prev => ({
+                                                                    ...prev,
+                                                                    [komponen.id_komponen]: val === '' ? null : parseInt(val)
+                                                                }));
+                                                            }
+                                                        }}
+                                                        onBlur={e => {
+                                                            // ✅ Validasi range saat lose focus
+                                                            const val = parseInt(e.target.value);
+                                                            if (!isNaN(val)) {
+                                                                if (val < 0) {
+                                                                    setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 0 }));
+                                                                } else if (val > 100) {
+                                                                    setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 100 }));
+                                                                }
+                                                            }
                                                         }}
                                                         disabled={isDisabled}
                                                         placeholder="-"
+                                                        maxLength={3}
                                                         className={`w-24 h-12 px-3 text-center text-lg font-bold rounded-lg border-2 outline-none transition-all ${isDisabled
                                                             ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                                             : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'

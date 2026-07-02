@@ -1,6 +1,7 @@
 /**
  * Nama File: dashboard_client.tsx
- * FINAL FIX: Perbesar teks komponen, seragamkan warna icon, perbaiki icon
+ * UPDATE: Detail komponen hanya muncul saat PAS aktif
+ *         Saat PTS aktif: hanya tampilkan status input PTS (sudah/belum)
  */
 
 "use client";
@@ -114,7 +115,6 @@ const THEME = {
             nonaktif: { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
         },
     },
-    // ✅ TAMBAHKAN INI - Soft pastel backgrounds seperti dashboard admin
     statCards: [
         { iconBg: '#e8690a', cardBg: '#fff5ee', cardBorder: '#fdd9b5' },
         { iconBg: '#c95b08', cardBg: '#fff2ea', cardBorder: '#fcc9a0' },
@@ -379,14 +379,14 @@ export default function DashboardClient() {
                         desc: `${dashboard.total_penilaian_ada} dari ${dashboard.total_penilaian_dibutuhkan} penilaian`,
                     },
                 ].map((stat, index) => {
-                    const cardStyle = THEME.statCards[index] || THEME.statCards[0];  // ✅ TAMBAHKAN INI
+                    const cardStyle = THEME.statCards[index] || THEME.statCards[0];
                     return (
                         <div
                             key={stat.label}
-                            className="rounded-2xl p-6 animate-fade-in-up"  // ✅ HAPUS bg-white
+                            className="rounded-2xl p-6 animate-fade-in-up"
                             style={{
-                                background: cardStyle.cardBg,  // ✅ GUNAKAN cardBg
-                                border: `1.5px solid ${cardStyle.cardBorder}`,  // ✅ GUNAKAN cardBorder
+                                background: cardStyle.cardBg,
+                                border: `1.5px solid ${cardStyle.cardBorder}`,
                                 boxShadow: THEME.shadows.md,
                                 animationDelay: `${index * 0.1}s`
                             }}
@@ -704,7 +704,7 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                         </div>
                     </div>
 
-                    {/* Daftar Siswa - KOMPONEN PENILAIAN DIPERBESAR */}
+                    {/* Daftar Siswa */}
                     <div className="space-y-4 max-h-[600px] overflow-y-auto scrollbar-thin">
                         {Object.entries(groupedByKelas).map(([kelasName, siswaList]) => (
                             <div key={kelasName}>
@@ -717,7 +717,7 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                 </div>
                                 <div className="space-y-3 ml-3">
                                     {siswaList.map(siswa => (
-                                        <div key={siswa.id_siswa} className="p-4 rounded-xl border-2" style={{ background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#f0fdf4' : '#fef2f2', borderColor: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#86efac' : '#fca5a5' }}>
+                                        <div key={siswa.id_siswa} className="p-4 rounded-xl border-2" style={{ background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#f0fdf4' : '#fff', borderColor: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#86efac' : '#fca5a5' }}>
                                             <div className="flex items-start justify-between mb-3">
                                                 <div>
                                                     <p className="text-base font-bold mb-1" style={{ color: THEME.colors.text.primary }}>{siswa.nama}</p>
@@ -730,8 +730,8 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                                 )}
                                             </div>
 
-                                            {/* KOMPONEN DETAIL - FONT DIPERBESAR */}
-                                            {siswa.komponen_detail && siswa.komponen_detail.length > 0 ? (
+                                            {/* ✅ KOMPONEN DETAIL - HANYA MUNCUL SAAT PAS AKTIF */}
+                                            {jenisAktif === 'PAS' && siswa.komponen_detail && siswa.komponen_detail.length > 0 ? (
                                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                                     {siswa.komponen_detail.map((komp, idx) => (
                                                         <div key={idx} className="flex items-center gap-2 text-sm">
@@ -744,9 +744,17 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                             ) : (
                                                 <div className="mb-3">
                                                     <div className="h-2 rounded-full overflow-hidden bg-gray-200">
-                                                        <div className="h-full rounded-full" style={{ width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`, background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444' }} />
+                                                        <div className="h-full rounded-full" style={{ 
+                                                            width: `${(siswa.jumlah_komponen_terisi / siswa.total_komponen) * 100}%`, 
+                                                            background: siswa.jumlah_komponen_terisi === siswa.total_komponen ? '#16a34a' : '#ef4444' 
+                                                        }} />
                                                     </div>
-                                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>{siswa.jumlah_komponen_terisi}/{siswa.total_komponen} komponen terisi</p>
+                                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>
+                                                        {jenisAktif === 'PTS' 
+                                                            ? `${siswa.jumlah_komponen_terisi > 0 ? '✓' : '✗'} ${siswa.jumlah_komponen_terisi > 0 ? 'Sudah' : 'Belum'} input PTS`
+                                                            : `${siswa.jumlah_komponen_terisi}/${siswa.total_komponen} komponen terisi`
+                                                        }
+                                                    </p>
                                                 </div>
                                             )}
 

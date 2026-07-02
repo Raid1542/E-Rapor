@@ -132,12 +132,33 @@ exports.getKategoriAkademik = async (mapelId, tahunAjaranId, kelasId, jenis = 'P
 
 // Buat kategori akademik baru dengan kelas_id + jenis_penilaian
 exports.createKategoriAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, deskripsi, jenis = 'PTS') => {
-    const [result] = await db.execute(`
-        INSERT INTO konfigurasi_nilai_rapor (mapel_id, kelas_id, tahun_ajaran_id, jenis_penilaian, min_nilai, max_nilai, deskripsi, urutan)
-        VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT IFNULL(MAX(urutan), 0) + 1 FROM (SELECT urutan FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ?) AS tmp))
-    `, [mapelId, kelasId, tahunAjaranId, jenis, minNilai, maxNilai, deskripsi, mapelId, kelasId, tahunAjaranId, jenis]);
-    return result.insertId;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        // ✅ AMBIL URUTAN TERLEBIH DAHULU (dengan FOR UPDATE)
+        const [maxUrutan] = await connection.execute(
+            'SELECT COALESCE(MAX(urutan), 0) + 1 AS next_urutan FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ? FOR UPDATE',
+            [mapelId, kelasId, tahunAjaranId, jenis]
+        );
+        const nextUrutan = maxUrutan[0].next_urutan;
+        
+        // ✅ BARU INSERT (tanpa subquery)
+        const [result] = await connection.execute(
+            'INSERT INTO konfigurasi_nilai_rapor (mapel_id, kelas_id, tahun_ajaran_id, jenis_penilaian, min_nilai, max_nilai, deskripsi, urutan) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [mapelId, kelasId, tahunAjaranId, jenis, minNilai, maxNilai, deskripsi, nextUrutan]
+        );
+        
+        await connection.commit();
+        return result.insertId;
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
 };
+
 
 // Update kategori akademik
 exports.updateKategoriAkademik = async (id, minNilai, maxNilai, deskripsi) => {
@@ -175,12 +196,33 @@ exports.getKategoriKokurikuler = async (tahunAjaranId, semester, kelasId, jenis 
 
 // Buat kategori kokurikuler baru dengan kelas_id + jenis_penilaian
 exports.createKategoriKokurikuler = async (idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi, jenis = 'PTS') => {
-    const [result] = await db.execute(`
-        INSERT INTO kategori_grade_kokurikuler (id_aspek_kokurikuler, tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, grade, deskripsi, urutan, jenis_penilaian)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT IFNULL(MAX(urutan), 0) + 1 FROM (SELECT urutan FROM kategori_grade_kokurikuler WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?) AS tmp), ?)
-    `, [idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi, idAspek, kelasId, tahunAjaranId, semester, jenis, jenis]);
-    return result.insertId;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        // ✅ AMBIL URUTAN TERLEBIH DAHULU (dengan FOR UPDATE)
+        const [maxUrutan] = await connection.execute(
+            'SELECT COALESCE(MAX(urutan), 0) + 1 AS next_urutan FROM kategori_grade_kokurikuler WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ? FOR UPDATE',
+            [idAspek, kelasId, tahunAjaranId, semester, jenis]
+        );
+        const nextUrutan = maxUrutan[0].next_urutan;
+        
+        // ✅ BARU INSERT (tanpa subquery)
+        const [result] = await connection.execute(
+            'INSERT INTO kategori_grade_kokurikuler (id_aspek_kokurikuler, tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, grade, deskripsi, urutan, jenis_penilaian) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [idAspek, tahunAjaranId, semester, kelasId, minNilai, maxNilai, grade, deskripsi, nextUrutan, jenis]
+        );
+        
+        await connection.commit();
+        return result.insertId;
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
 };
+
 
 // Update kategori kokurikuler
 exports.updateKategoriKokurikuler = async (id, minNilai, maxNilai, grade, deskripsi) => {
@@ -341,11 +383,31 @@ exports.getKategoriDeskripsiRataRata = async (tahunAjaranId, semester, kelasId) 
 
 // Buat kategori deskripsi rata-rata baru
 exports.createKategoriDeskripsiRataRata = async (tahunAjaranId, semester, kelasId, minNilai, maxNilai, deskripsi) => {
-    const [result] = await db.execute(`
-        INSERT INTO kategori_deskripsi_rata_rata (tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, deskripsi, urutan)
-        VALUES (?, ?, ?, ?, ?, ?, (SELECT IFNULL(MAX(urutan), 0) + 1 FROM (SELECT urutan FROM kategori_deskripsi_rata_rata WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ?) AS tmp))
-    `, [tahunAjaranId, semester, kelasId, minNilai, maxNilai, deskripsi, kelasId, tahunAjaranId, semester]);
-    return result.insertId;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        // ✅ AMBIL URUTAN TERLEBIH DAHULU (dengan FOR UPDATE)
+        const [maxUrutan] = await connection.execute(
+            'SELECT COALESCE(MAX(urutan), 0) + 1 AS next_urutan FROM kategori_deskripsi_rata_rata WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? FOR UPDATE',
+            [kelasId, tahunAjaranId, semester]
+        );
+        const nextUrutan = maxUrutan[0].next_urutan;
+        
+        // ✅ BARU INSERT (tanpa subquery)
+        const [result] = await connection.execute(
+            'INSERT INTO kategori_deskripsi_rata_rata (tahun_ajaran_id, semester, kelas_id, rentang_min, rentang_max, deskripsi, urutan) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [tahunAjaranId, semester, kelasId, minNilai, maxNilai, deskripsi, nextUrutan]
+        );
+        
+        await connection.commit();
+        return result.insertId;
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
 };
 
 // Update kategori deskripsi rata-rata
