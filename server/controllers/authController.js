@@ -28,14 +28,13 @@ const login = async (req, res) => {
             [email_sekolah]
         );
 
-        // ✅ UPDATED: Bedakan error email tidak ditemukan vs password salah
         if (userRows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Email tidak ditemukan',
-                code: 'EMAIL_NOT_FOUND'
-            });
-        }
+    return res.status(401).json({ 
+        success: false, 
+        message: 'Email atau password salah',
+        code: 'INVALID_CREDENTIALS'
+    });
+}
 
         const user = userRows[0];
 

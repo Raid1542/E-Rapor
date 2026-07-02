@@ -168,15 +168,34 @@ export default function LoginClient() {
 
             if (!res.ok) {
                 setLoading(false);
-                const msg = data.message || "Login gagal";
-                const isWrongPass = msg.toLowerCase().includes('password') || msg.toLowerCase().includes('sandi') || res.status === 401;
-                const isNotFound = msg.toLowerCase().includes('tidak ditemukan') || msg.toLowerCase().includes('not found') || res.status === 404;
-                const isRoleErr = msg.toLowerCase().includes('role') || msg.toLowerCase().includes('akses');
+
+                // ✅ UPDATED: Handle error berdasarkan code dari backend
+                const errorCode = data.code;
+                const userRole = formData.role;
+                const roleLabel = userRole === 'admin' ? 'Admin' :
+                    userRole === 'guru_kelas' ? 'Guru Kelas' :
+                        'Guru Bidang Studi';
+
+                let title = 'Login Gagal';
+                let message = 'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
+
+                if (errorCode === 'INVALID_CREDENTIALS') {
+                    // Generic error untuk email/password salah
+                    title = 'Login Gagal';
+                    message = 'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
+                } else if (errorCode === 'ROLE_NOT_ALLOWED') {
+                    // Specific error untuk role salah
+                    title = 'Role Tidak Sesuai';
+                    message = `Anda tidak memiliki akses sebagai ${roleLabel}. Silakan pilih role yang sesuai atau hubungi administrator.`;
+                } else if (errorCode === 'ACCOUNT_INACTIVE') {
+                    title = 'Akun Tidak Aktif';
+                    message = 'Akun Anda tidak aktif. Silakan hubungi administrator untuk mengaktifkan akun.';
+                }
 
                 showPopup({
                     type: 'error',
-                    title: isWrongPass ? 'Password Salah' : isNotFound ? 'Akun Tidak Ditemukan' : isRoleErr ? 'Role Tidak Sesuai' : 'Login Gagal',
-                    message: isWrongPass ? 'Password yang Anda masukkan tidak sesuai. Periksa kembali dan coba lagi.' : isNotFound ? 'Email yang Anda masukkan tidak terdaftar. Periksa kembali.' : isRoleErr ? 'Anda tidak memiliki akses untuk role yang dipilih.' : msg,
+                    title,
+                    message,
                 });
                 return;
             }
