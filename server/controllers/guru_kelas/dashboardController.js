@@ -1,14 +1,39 @@
 /**
  * Nama File: dashboardController.js
- * Fungsi: Controller dashboard guru kelas (statistik, progress, detail komponen)
- * UPDATE: ✅ Support logika PTS (hanya cek PTS) vs PAS (cek semua komponen)
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * UPDATE: ✅ Progress Kokurikuler (semua aspek saat PAS)
+ *         ✅ Status Konfigurasi detail dengan validasi range gap
+ *         ✅ Deskripsi Rata-rata hanya saat PTS
+ *         ✅ Bobot hanya saat PAS
+ *         ✅ Query sudah sesuai struktur tabel asli
  */
 
 const db = require('../../config/db');
 
-// GET: Ambil data dashboard lengkap untuk guru kelas
+// ✅ Helper function untuk cek gap dalam range
+function checkRangeGaps(rows, minExpected = 0, maxExpected = 100, minField = 'rentang_min', maxField = 'rentang_max') {
+    const gaps = [];
+    if (rows.length === 0) return gaps;
+    
+    let currentEnd = minExpected;
+    
+    rows.forEach((row) => {
+        const rowMin = parseFloat(row[minField]);
+        const rowMax = parseFloat(row[maxField]);
+        
+        if (rowMin > currentEnd) {
+            gaps.push(`${currentEnd}-${rowMin}`);
+        }
+        
+        currentEnd = Math.max(currentEnd, rowMax);
+    });
+    
+    if (currentEnd < maxExpected) {
+        gaps.push(`${currentEnd}-${maxExpected}`);
+    }
+    
+    return gaps;
+}
+
 exports.getDashboardData = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -39,7 +64,7 @@ exports.getDashboardData = async (req, res) => {
         if (ta.status_pts === 'aktif') jenis_penilaian_aktif = 'PTS';
         else if (ta.status_pas === 'aktif') jenis_penilaian_aktif = 'PAS';
         
-        // ✅ Ambil data kelas guru (gunakan gk.tahun_ajaran_id)
+        // ✅ Ambil data kelas guru
         const [kelasRows] = await db.execute(`
             SELECT k.id_kelas, k.nama_kelas
             FROM kelas k
@@ -67,6 +92,81 @@ exports.getDashboardData = async (req, res) => {
         
         const totalSiswa = siswaRows[0]?.total || 0;
         
+        // ✅ HITUNG PROGRESS ABSENSI
+        let absensiSudah = 0;
+        if (jenis_penilaian_aktif === 'PTS') {
+            const [absensiPtsResult] = await db.execute(`
+                SELECT COUNT(DISTINCT siswa_id) as sudah
+                FROM absensi
+                WHERE kelas_id = ? AND id_tahun_ajaran = ?
+                AND (sakit_pts > 0 OR izin_pts > 0 OR alpha_pts > 0)
+            `, [kelasInfo.id_kelas, semesterId]);
+            absensiSudah = absensiPtsResult[0]?.sudah || 0;
+        } else if (jenis_penilaian_aktif === 'PAS') {
+            const [absensiPasResult] = await db.execute(`
+                SELECT COUNT(DISTINCT siswa_id) as sudah
+                FROM absensi
+                WHERE kelas_id = ? AND id_tahun_ajaran = ?
+                AND (sakit_total > 0 OR izin_total > 0 OR alpha_total > 0)
+            `, [kelasInfo.id_kelas, semesterId]);
+            absensiSudah = absensiPasResult[0]?.sudah || 0;
+        }
+        
+        // ✅ HITUNG PROGRESS KOKURIKULER
+        let kokurikulerSudah = 0;
+        if (jenis_penilaian_aktif === 'PTS') {
+            const [mutabaahResult] = await db.execute(`
+                SELECT COUNT(DISTINCT id_siswa) as sudah
+                FROM nilai_kokurikuler
+                WHERE id_kelas = ? AND id_tahun_ajaran = ? 
+                AND id_aspek_kokurikuler = 5
+                AND jenis_penilaian = 'PTS'
+                AND nilai IS NOT NULL
+            `, [kelasInfo.id_kelas, semesterId]);
+            kokurikulerSudah = mutabaahResult[0]?.sudah || 0;
+        } else if (jenis_penilaian_aktif === 'PAS') {
+            const [totalAspekResult] = await db.execute(`
+                SELECT COUNT(*) as total_aspek FROM aspek_kokurikuler
+            `);
+            const totalAspek = totalAspekResult[0]?.total_aspek || 5;
+            
+            const [allAspekResult] = await db.execute(`
+                SELECT COUNT(*) as sudah FROM (
+                    SELECT nk.id_siswa, COUNT(DISTINCT nk.id_aspek_kokurikuler) as jumlah_aspek
+                    FROM nilai_kokurikuler nk
+                    WHERE nk.id_kelas = ? AND nk.id_tahun_ajaran = ?
+                    AND nk.jenis_penilaian = 'PAS'
+                    AND nk.nilai IS NOT NULL
+                    GROUP BY nk.id_siswa
+                    HAVING COUNT(DISTINCT nk.id_aspek_kokurikuler) = ?
+                ) AS siswa_lengkap
+            `, [kelasInfo.id_kelas, semesterId, totalAspek]);
+            
+            kokurikulerSudah = allAspekResult[0]?.sudah || 0;
+        }
+        
+        // ✅ HITUNG PROGRESS CATATAN WALI KELAS
+        const [catatanResult] = await db.execute(`
+            SELECT COUNT(DISTINCT siswa_id) as sudah
+            FROM catatan_wali_kelas
+            WHERE kelas_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ?
+            AND catatan_wali_kelas IS NOT NULL AND catatan_wali_kelas != ''
+        `, [kelasInfo.id_kelas, semesterId, jenis_penilaian_aktif || 'PTS']);
+        const catatanSudah = catatanResult[0]?.sudah || 0;
+        
+        // ✅ HITUNG PROGRESS EKSKUL (HANYA SAAT PAS AKTIF)
+        let ekskulSudah = 0;
+        if (jenis_penilaian_aktif === 'PAS') {
+            const [ekskulResult] = await db.execute(`
+                SELECT COUNT(DISTINCT pe.siswa_id) as sudah
+                FROM peserta_ekstrakurikuler pe
+                INNER JOIN siswa_kelas sk ON pe.siswa_id = sk.siswa_id
+                WHERE sk.kelas_id = ? AND pe.tahun_ajaran_id = ?
+                AND sk.id_tahun_ajaran_induk = ?
+            `, [kelasInfo.id_kelas, semesterId, indukId]);
+            ekskulSudah = ekskulResult[0]?.sudah || 0;
+        }
+        
         // ✅ Ambil mata pelajaran wajib yang diajar
         const [mapelRows] = await db.execute(`
             SELECT mp.id_mata_pelajaran, mp.nama_mapel, mp.kode_mapel, mp.jenis
@@ -92,15 +192,11 @@ exports.getDashboardData = async (req, res) => {
         let totalPenilaianDibutuhkan = 0;
         let totalPenilaianAda = 0;
         const mataPelajaranList = [];
-        const warnings = [];
         
         for (const mapel of mapelRows) {
             let sudahDinilai = 0;
             
-            // ✅ LOGIKA PTS vs PAS
             if (jenis_penilaian_aktif === 'PTS' && ptsKomponen) {
-                // Saat PTS aktif: hanya cek komponen PTS
-                // Nilai PTS = Nilai Rapor PTS
                 const [ptsResult] = await db.execute(`
                     SELECT COUNT(DISTINCT nd.siswa_id) as total
                     FROM nilai_detail nd
@@ -116,7 +212,6 @@ exports.getDashboardData = async (req, res) => {
                 
                 sudahDinilai = ptsResult[0]?.total || 0;
             } else if (jenis_penilaian_aktif === 'PAS') {
-                // Saat PAS aktif: cek semua komponen harus lengkap
                 const [lengkapResult] = await db.execute(`
                     SELECT COUNT(*) as total FROM (
                         SELECT nd.siswa_id, COUNT(DISTINCT nd.komponen_id) as jumlah_komponen
@@ -139,7 +234,7 @@ exports.getDashboardData = async (req, res) => {
             totalPenilaianDibutuhkan += totalSiswa;
             totalPenilaianAda += sudahDinilai;
             
-            // ✅ Ambil detail nilai rapor per siswa
+            // Ambil detail nilai rapor per siswa
             const nilaiRaporList = [];
             
             if (jenis_penilaian_aktif) {
@@ -168,7 +263,6 @@ exports.getDashboardData = async (req, res) => {
                     kelasInfo.id_kelas, indukId
                 ]);
                 
-                // Ambil detail komponen untuk setiap siswa
                 for (const row of raporRows) {
                     const [komponenDetailRows] = await db.execute(`
                         SELECT kp.nama_komponen, nd.nilai,
@@ -203,22 +297,6 @@ exports.getDashboardData = async (req, res) => {
                 }
             }
             
-            // Cek konfigurasi bobot & kategori
-            let bobotTerconfig = jenis_penilaian_aktif === 'PTS' ? true : false;
-            if (jenis_penilaian_aktif !== 'PTS') {
-                const [bobotResult] = await db.execute(
-                    'SELECT COUNT(*) AS total FROM konfigurasi_mapel_komponen WHERE mapel_id = ? AND kelas_id = ? AND is_active = 1 AND bobot > 0',
-                    [mapel.id_mata_pelajaran, kelasInfo.id_kelas]
-                );
-                bobotTerconfig = (bobotResult[0]?.total || 0) > 0;
-            }
-            
-            const [kategoriResult] = await db.execute(
-                'SELECT COUNT(*) AS total FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ? AND kelas_id = ?',
-                [mapel.id_mata_pelajaran, semesterId, kelasInfo.id_kelas]
-            );
-            const kategoriTerconfig = (kategoriResult[0]?.total || 0) > 0;
-            
             mataPelajaranList.push({
                 id: mapel.id_mata_pelajaran,
                 nama: mapel.nama_mapel,
@@ -226,33 +304,211 @@ exports.getDashboardData = async (req, res) => {
                 total_siswa: totalSiswa,
                 sudah_dinilai: sudahDinilai,
                 belum_dinilai: totalSiswa - sudahDinilai,
-                nilai_rapor_list: nilaiRaporList,
-                konfigurasi: { 
-                    bobot: bobotTerconfig, 
-                    kategori: kategoriTerconfig, 
-                    lengkap: bobotTerconfig && kategoriTerconfig 
-                }
+                nilai_rapor_list: nilaiRaporList
             });
-            
-            // Generate warnings jika konfigurasi belum lengkap
-            if (!bobotTerconfig || !kategoriTerconfig) {
-                const masalah = [];
-                if (!bobotTerconfig && jenis_penilaian_aktif !== 'PTS') masalah.push('bobot belum diatur');
-                if (!kategoriTerconfig) masalah.push('kategori nilai belum lengkap');
-                if (masalah.length > 0) {
-                    warnings.push({ 
-                        mapel: mapel.nama_mapel, 
-                        masalah: masalah.join(' dan ') 
-                    });
-                }
-            }
         }
         
         const overallProgress = totalPenilaianDibutuhkan > 0 
             ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100) 
             : 0;
         
-        // Format jadwal
+        // ✅ CEK KONFIGURASI LENGKAP DENGAN VALIDASI RANGE GAP
+        let konfigurasiLengkap = true;
+        const konfigurasiDetail = {
+            kokurikuler: { lengkap: true, missing: [], gaps: [] },
+            akademik: { lengkap: true, missing: [], gaps: [] },
+            deskripsi_rata_rata: { lengkap: true, missing: [], gaps: [] },
+            bobot: { lengkap: true, missing: [] },
+            summary: []
+        };
+        
+        // 1. Cek Kokurikuler - Validasi range 0-100
+        if (jenis_penilaian_aktif === 'PTS') {
+            // Untuk PTS: hanya cek Mutaba'ah (id_aspek_kokurikuler = 5)
+            const [kokurikulerRows] = await db.execute(`
+                SELECT rentang_min, rentang_max, grade, deskripsi
+                FROM kategori_grade_kokurikuler
+                WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? 
+                AND jenis_penilaian = 'PTS' AND id_aspek_kokurikuler = 5
+                ORDER BY rentang_min
+            `, [kelasInfo.id_kelas, semesterId, ta.semester]);
+            
+            if (kokurikulerRows.length === 0) {
+                konfigurasiDetail.kokurikuler.lengkap = false;
+                konfigurasiDetail.kokurikuler.missing.push('Mutaba\'ah Yaumiyah');
+                konfigurasiLengkap = false;
+            } else {
+                const gaps = checkRangeGaps(kokurikulerRows, 0, 100);
+                if (gaps.length > 0) {
+                    konfigurasiDetail.kokurikuler.lengkap = false;
+                    konfigurasiDetail.kokurikuler.gaps.push({ aspek: 'Mutaba\'ah Yaumiyah', gaps });
+                    konfigurasiLengkap = false;
+                }
+            }
+        } else if (jenis_penilaian_aktif === 'PAS') {
+            // Untuk PAS: cek semua aspek kokurikuler
+            const [aspekRows] = await db.execute(`
+                SELECT id_aspek_kokurikuler, nama FROM aspek_kokurikuler
+            `);
+            
+            for (const aspek of aspekRows) {
+                const [kokurikulerRows] = await db.execute(`
+                    SELECT rentang_min, rentang_max, grade, deskripsi
+                    FROM kategori_grade_kokurikuler
+                    WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? 
+                    AND jenis_penilaian = 'PAS' AND id_aspek_kokurikuler = ?
+                    ORDER BY rentang_min
+                `, [kelasInfo.id_kelas, semesterId, ta.semester, aspek.id_aspek_kokurikuler]);
+                
+                if (kokurikulerRows.length === 0) {
+                    konfigurasiDetail.kokurikuler.lengkap = false;
+                    konfigurasiDetail.kokurikuler.missing.push(aspek.nama);
+                    konfigurasiLengkap = false;
+                } else {
+                    const gaps = checkRangeGaps(kokurikulerRows, 0, 100);
+                    if (gaps.length > 0) {
+                        konfigurasiDetail.kokurikuler.lengkap = false;
+                        konfigurasiDetail.kokurikuler.gaps.push({ aspek: aspek.nama, gaps });
+                        konfigurasiLengkap = false;
+                    }
+                }
+            }
+        }
+        
+        // 2. Cek Akademik - Validasi range 0-100 per mapel
+        for (const mapel of mapelRows) {
+            const [akademikRows] = await db.execute(`
+                SELECT min_nilai, max_nilai, deskripsi
+                FROM konfigurasi_nilai_rapor
+                WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ? 
+                AND jenis_penilaian = ?
+                ORDER BY min_nilai
+            `, [mapel.id_mata_pelajaran, kelasInfo.id_kelas, semesterId, jenis_penilaian_aktif || 'PTS']);
+            
+            if (akademikRows.length === 0) {
+                konfigurasiDetail.akademik.lengkap = false;
+                konfigurasiDetail.akademik.missing.push(mapel.nama_mapel);
+                konfigurasiLengkap = false;
+            } else {
+                const gaps = checkRangeGaps(akademikRows, 0, 100, 'min_nilai', 'max_nilai');
+                if (gaps.length > 0) {
+                    konfigurasiDetail.akademik.lengkap = false;
+                    konfigurasiDetail.akademik.gaps.push({ mapel: mapel.nama_mapel, gaps });
+                    konfigurasiLengkap = false;
+                }
+            }
+        }
+        
+        // 3. Cek Deskripsi Rata-rata - Validasi range 0-100 (HANYA PTS)
+        if (jenis_penilaian_aktif === 'PTS') {
+            const [deskripsiRows] = await db.execute(`
+                SELECT rentang_min, rentang_max, deskripsi
+                FROM kategori_deskripsi_rata_rata
+                WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ?
+                ORDER BY rentang_min
+            `, [kelasInfo.id_kelas, semesterId, ta.semester]);
+            
+            if (deskripsiRows.length === 0) {
+                konfigurasiDetail.deskripsi_rata_rata.lengkap = false;
+                konfigurasiDetail.deskripsi_rata_rata.missing.push('Deskripsi Rata-rata');
+                konfigurasiLengkap = false;
+            } else {
+                const gaps = checkRangeGaps(deskripsiRows, 0, 100);
+                if (gaps.length > 0) {
+                    konfigurasiDetail.deskripsi_rata_rata.lengkap = false;
+                    konfigurasiDetail.deskripsi_rata_rata.gaps = gaps;
+                    konfigurasiLengkap = false;
+                }
+            }
+        } else if (jenis_penilaian_aktif === 'PAS') {
+            konfigurasiDetail.deskripsi_rata_rata.lengkap = true;
+        }
+        
+        // 4. Cek Bobot (HANYA PAS)
+        if (jenis_penilaian_aktif === 'PAS') {
+            for (const mapel of mapelRows) {
+                const [bobotResult] = await db.execute(
+                    `SELECT COUNT(*) AS total FROM konfigurasi_mapel_komponen 
+                     WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ? 
+                     AND jenis_penilaian = 'PAS' AND is_active = 1 AND bobot > 0`,
+                    [mapel.id_mata_pelajaran, kelasInfo.id_kelas, semesterId]
+                );
+                if ((bobotResult[0]?.total || 0) === 0) {
+                    konfigurasiDetail.bobot.lengkap = false;
+                    konfigurasiDetail.bobot.missing.push(mapel.nama_mapel);
+                    konfigurasiLengkap = false;
+                }
+            }
+        } else if (jenis_penilaian_aktif === 'PTS') {
+            konfigurasiDetail.bobot.lengkap = true;
+        }
+        
+        // Generate summary untuk ditampilkan
+        if (!konfigurasiDetail.kokurikuler.lengkap) {
+            if (konfigurasiDetail.kokurikuler.missing.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'missing',
+                    title: 'Kategori Kokurikuler',
+                    message: `Aspek ${konfigurasiDetail.kokurikuler.missing.join(', ')} belum diatur kategorinya`
+                });
+            }
+            if (konfigurasiDetail.kokurikuler.gaps.length > 0) {
+                konfigurasiDetail.kokurikuler.gaps.forEach(gap => {
+                    konfigurasiDetail.summary.push({
+                        type: 'gap',
+                        title: 'Kategori Kokurikuler',
+                        message: `Aspek ${gap.aspek} ada gap di rentang ${gap.gaps.join(', ')}`
+                    });
+                });
+            }
+        }
+        
+        if (!konfigurasiDetail.akademik.lengkap) {
+            if (konfigurasiDetail.akademik.missing.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'missing',
+                    title: 'Kategori Akademik',
+                    message: `Mapel ${konfigurasiDetail.akademik.missing.join(', ')} belum diatur kategorinya`
+                });
+            }
+            if (konfigurasiDetail.akademik.gaps.length > 0) {
+                konfigurasiDetail.akademik.gaps.forEach(gap => {
+                    konfigurasiDetail.summary.push({
+                        type: 'gap',
+                        title: 'Kategori Akademik',
+                        message: `Mapel ${gap.mapel} ada gap di rentang ${gap.gaps.join(', ')}`
+                    });
+                });
+            }
+        }
+        
+        if (!konfigurasiDetail.deskripsi_rata_rata.lengkap) {
+            if (konfigurasiDetail.deskripsi_rata_rata.missing.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'missing',
+                    title: 'Deskripsi Rata-rata',
+                    message: 'Deskripsi rata-rata untuk rapor PTS belum diatur'
+                });
+            }
+            if (konfigurasiDetail.deskripsi_rata_rata.gaps.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'gap',
+                    title: 'Deskripsi Rata-rata',
+                    message: `Ada gap di rentang ${konfigurasiDetail.deskripsi_rata_rata.gaps.join(', ')}`
+                });
+            }
+        }
+        
+        if (!konfigurasiDetail.bobot.lengkap) {
+            if (konfigurasiDetail.bobot.missing.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'missing',
+                    title: 'Bobot Penilaian',
+                    message: `Mapel ${konfigurasiDetail.bobot.missing.join(', ')} belum diatur bobotnya`
+                });
+            }
+        }
+        
         const jadwal = {
             pts: ta.tanggal_pembagian_pts ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : null,
             pas: ta.tanggal_pembagian_pas ? new Date(ta.tanggal_pembagian_pas).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : null
@@ -274,8 +530,33 @@ exports.getDashboardData = async (req, res) => {
                 total_penilaian_ada: totalPenilaianAda,
                 overall_progress: overallProgress,
                 mata_pelajaran_list: mataPelajaranList,
-                warnings,
-                total_komponen: totalKomponen
+                total_komponen: totalKomponen,
+                konfigurasi_lengkap: konfigurasiLengkap,
+                konfigurasi_detail: konfigurasiDetail,
+                progress_lainnya: {
+                    absensi: {
+                        sudah: absensiSudah,
+                        total: totalSiswa,
+                        persentase: totalSiswa > 0 ? Math.round((absensiSudah / totalSiswa) * 100) : 0
+                    },
+                    kokurikuler: {
+                        sudah: kokurikulerSudah,
+                        total: totalSiswa,
+                        persentase: totalSiswa > 0 ? Math.round((kokurikulerSudah / totalSiswa) * 100) : 0,
+                        subtitle: jenis_penilaian_aktif === 'PTS' ? 'Mutaba\'ah Yaumiyah' : 'Semua Aspek'
+                    },
+                    catatan_wali_kelas: {
+                        sudah: catatanSudah,
+                        total: totalSiswa,
+                        persentase: totalSiswa > 0 ? Math.round((catatanSudah / totalSiswa) * 100) : 0
+                    },
+                    ekskul: {
+                        sudah: ekskulSudah,
+                        total: totalSiswa,
+                        persentase: totalSiswa > 0 ? Math.round((ekskulSudah / totalSiswa) * 100) : 0,
+                        tersedia: jenis_penilaian_aktif === 'PAS'
+                    }
+                }
             }
         });
         
