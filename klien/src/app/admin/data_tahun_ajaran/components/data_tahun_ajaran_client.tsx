@@ -21,7 +21,7 @@ interface TahunAjaran {
     pas_ganjil: string | null;
     pts_genap: string | null;
     pas_genap: string | null;
-    semester_aktif: 'Ganjil' | 'Genap' | null;
+    semester_aktif: string; // ✅ UBAH: string (bukan enum) karena backend kirim lowercase
     status: 'AKTIF' | 'NONAKTIF';
 }
 
@@ -35,7 +35,7 @@ interface FormDataType {
 }
 
 /* ==========================================================================
-   NOTIFICATION MODAL - Template dari data_admin_client
+   NOTIFICATION MODAL
    ========================================================================== */
 
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
@@ -172,7 +172,7 @@ const formatTanggalSingkat = (dateStr?: string | null): string => {
 };
 
 /* ==========================================================================
-   SEMESTER BLOCK — sub-komponen untuk satu blok Ganjil/Genap di dalam card
+   SEMESTER BLOCK
    ========================================================================== */
 
 const SemesterBlock = ({
@@ -231,10 +231,6 @@ const SemesterBlock = ({
    ========================================================================== */
 
 export default function DataTahunAjaranClient() {
-    /* --------------------------------------------------------------------
-       STATE MANAGEMENT (tidak diubah dari versi asli)
-    -------------------------------------------------------------------- */
-
     const { showSessionExpired, handleLogout } = useSession();
 
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
@@ -275,10 +271,6 @@ export default function DataTahunAjaranClient() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showRiwayat, setShowRiwayat] = useState(false);
 
-    /* --------------------------------------------------------------------
-       DATA FETCHING (tidak diubah dari versi asli)
-    -------------------------------------------------------------------- */
-
     const fetchTahunAjaran = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
@@ -308,10 +300,6 @@ export default function DataTahunAjaranClient() {
     useEffect(() => {
         fetchTahunAjaran();
     }, [fetchTahunAjaran]);
-
-    /* --------------------------------------------------------------------
-       FORM HANDLERS (tidak diubah dari versi asli)
-    -------------------------------------------------------------------- */
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -491,6 +479,7 @@ export default function DataTahunAjaranClient() {
         setShowAlasanLainnya(false);
     };
 
+    // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
     const executeGantiSemester = async () => {
         if (!selectedItemForSemester) return;
 
@@ -505,7 +494,10 @@ export default function DataTahunAjaranClient() {
         }
 
         const item = selectedItemForSemester;
-        const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
+        
+        // ✅ PERBAIKAN: Gunakan toLowerCase() untuk case-insensitive comparison
+        const semesterAktifLower = item.semester_aktif?.toLowerCase();
+        const semesterBaru = semesterAktifLower === 'ganjil' ? 'Genap' : 'Ganjil';
 
         const token = localStorage.getItem('token');
         if (!token) {
@@ -563,13 +555,6 @@ export default function DataTahunAjaranClient() {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         }
     };
-
-    /* --------------------------------------------------------------------
-       FILTER & PAGINATION
-       Data dipisah jadi 2 kelompok: tahun ajaran AKTIF (maksimal 1, tampil
-       sebagai hero card) dan riwayat NONAKTIF (collapsible, dengan
-       pagination sendiri karena bisa jadi banyak seiring waktu).
-    -------------------------------------------------------------------- */
 
     const filteredData = tahunAjaranList.filter((item) => {
         const query = searchQuery.toLowerCase().trim();
@@ -645,10 +630,6 @@ export default function DataTahunAjaranClient() {
         return pages;
     };
 
-    /* --------------------------------------------------------------------
-       FORM PAGE RENDER
-    -------------------------------------------------------------------- */
-
     const renderForm = (isEdit: boolean) => (
         <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
             <GlobalStyles />
@@ -674,7 +655,6 @@ export default function DataTahunAjaranClient() {
             </div>
 
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Card header gradient — konsisten dengan pola Data Admin */}
                 <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
                     <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                         <CalendarRange size={20} className="text-white" />
@@ -797,7 +777,6 @@ export default function DataTahunAjaranClient() {
                     </div>
 
                     <div className="flex justify-end gap-3 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
-                        {/* Batal — merah, konsisten dengan Data Admin */}
                         <button
                             onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}
                             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
@@ -808,7 +787,6 @@ export default function DataTahunAjaranClient() {
                             Batal
                         </button>
 
-                        {/* Reset — biru, konsisten dengan Data Admin */}
                         <button
                             onClick={resetForm}
                             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
@@ -832,7 +810,6 @@ export default function DataTahunAjaranClient() {
                 </div>
             </div>
 
-            {/* Confirmation Modal - Tambah */}
             {showConfirmTambah && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
@@ -877,7 +854,6 @@ export default function DataTahunAjaranClient() {
                 </div>
             )}
 
-            {/* Confirmation Modal - Edit */}
             {showConfirmEdit && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
@@ -932,10 +908,6 @@ export default function DataTahunAjaranClient() {
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
 
-    /* --------------------------------------------------------------------
-       MAIN LIST RENDER — hero aktif + riwayat collapsible
-    -------------------------------------------------------------------- */
-
     return (
         <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -949,7 +921,6 @@ export default function DataTahunAjaranClient() {
                 </p>
             </div>
 
-            {/* Toolbar: tambah + search + items per page */}
             <div
                 className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3"
                 style={CARD_STYLE}
@@ -1018,11 +989,6 @@ export default function DataTahunAjaranClient() {
                 </div>
             ) : (
                 <>
-                    {/* ============================================================
-                        HERO: Tahun Ajaran Aktif
-                        Cuma 1 tahun ajaran yang bisa aktif sekaligus, jadi
-                        ditampilkan besar dan menonjol, terpisah dari riwayat.
-                    ============================================================ */}
                     {tahunAktif && (
                         <div
                             className="da-cardIn bg-white rounded-2xl overflow-hidden mb-5"
@@ -1055,7 +1021,8 @@ export default function DataTahunAjaranClient() {
                                 <div className="flex flex-col sm:flex-row gap-4 mb-5">
                                     <SemesterBlock
                                         label="Ganjil"
-                                        aktif={tahunAktif.semester_aktif === 'Ganjil'}
+                                        // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
+                                        aktif={tahunAktif.semester_aktif?.toLowerCase() === 'ganjil'}
                                         pts={tahunAktif.pts_ganjil}
                                         pas={tahunAktif.pas_ganjil}
                                         accentColor="#c2410c"
@@ -1063,7 +1030,8 @@ export default function DataTahunAjaranClient() {
                                     />
                                     <SemesterBlock
                                         label="Genap"
-                                        aktif={tahunAktif.semester_aktif === 'Genap'}
+                                        // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
+                                        aktif={tahunAktif.semester_aktif?.toLowerCase() === 'genap'}
                                         pts={tahunAktif.pts_genap}
                                         pas={tahunAktif.pas_genap}
                                         accentColor="#15803d"
@@ -1084,7 +1052,9 @@ export default function DataTahunAjaranClient() {
                                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-orange-100"
                                         style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
                                     >
-                                        <RotateCw size={14} /> Ganti ke Semester {tahunAktif.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
+                                        <RotateCw size={14} /> 
+                                        {/* ✅ PERBAIKAN: Gunakan toLowerCase() */}
+                                        Ganti ke Semester {tahunAktif.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
                                     </button>
                                 </div>
                             </div>
@@ -1099,9 +1069,6 @@ export default function DataTahunAjaranClient() {
                         </div>
                     )}
 
-                    {/* ============================================================
-                        RIWAYAT: Tahun Ajaran Nonaktif (collapsible)
-                    ============================================================ */}
                     {riwayatNonaktif.length > 0 && (
                         <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
                             <button
@@ -1176,7 +1143,6 @@ export default function DataTahunAjaranClient() {
                 </>
             )}
 
-            {/* Confirmation Modal - Ganti Semester */}
             {showConfirmGantiSemester && selectedItemForSemester && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
@@ -1196,11 +1162,16 @@ export default function DataTahunAjaranClient() {
                         <div className="text-sm text-gray-600 mb-4">
                             <div className="flex items-center justify-center gap-3 py-2 mb-3">
                                 <span className="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100">
-                                    {selectedItemForSemester.semester_aktif}
+                                    {/* ✅ PERBAIKAN: Capitalize dengan aman */}
+                                    {selectedItemForSemester.semester_aktif 
+                                        ? selectedItemForSemester.semester_aktif.charAt(0).toUpperCase() + 
+                                          selectedItemForSemester.semester_aktif.slice(1).toLowerCase()
+                                        : '-'}
                                 </span>
                                 <span className="text-orange-600">→</span>
                                 <span className="px-3 py-1 rounded-lg text-sm font-semibold" style={{ background: '#fff0e5', color: '#c95b08' }}>
-                                    {selectedItemForSemester.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
+                                    {/* ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison */}
+                                    {selectedItemForSemester.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
                                 </span>
                             </div>
 
