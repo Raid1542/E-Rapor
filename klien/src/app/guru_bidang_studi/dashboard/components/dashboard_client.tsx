@@ -1,7 +1,7 @@
 /**
- * Nama File: dashboard_client.tsx
- * UPDATE: Detail komponen hanya muncul saat PAS aktif
- *         Saat PTS aktif: hanya tampilkan status input PTS (sudah/belum)
+ * Nama File: dashboard_client.tsx (GURU BIDANG STUDI)
+ * UPDATE: ✅ Status Konfigurasi dengan validasi range gap
+ *         ✅ Tombol "Atur Sekarang" seperti dashboard guru kelas
  */
 
 "use client";
@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     ChevronRight, Users, Book, TrendingUp,
-    Calendar, CheckCircle2, AlertCircle,
+    Calendar, CheckCircle2, AlertCircle, AlertTriangle,
     MapPin, Check, X as XIcon,
     BookOpen, Settings, Target, School, Star
 } from 'lucide-react';
@@ -67,9 +67,18 @@ interface Jadwal {
     pas: string | null;
 }
 
-interface Warning {
-    mapel: string;
-    masalah: string;
+// ✅ INTERFACE BARU: Summary Item
+interface SummaryItem {
+    type: 'missing' | 'gap';
+    title: string;
+    message: string;
+}
+
+// ✅ INTERFACE BARU: Konfigurasi Detail
+interface KonfigurasiDetail {
+    akademik: { lengkap: boolean; missing: string[]; gaps: Array<{ mapel: string; gaps: string[] }> };
+    bobot: { lengkap: boolean; missing: string[] };
+    summary: SummaryItem[];
 }
 
 interface DashboardData {
@@ -86,8 +95,10 @@ interface DashboardData {
     total_penilaian_ada: number;
     overall_progress: number;
     mata_pelajaran_list: MapelItem[];
-    warnings: Warning[];
     total_komponen: number;
+    // ✅ TAMBAHKAN INI
+    konfigurasi_lengkap?: boolean;
+    konfigurasi_detail?: KonfigurasiDetail;
 }
 
 /* ==========================================================================
@@ -161,25 +172,6 @@ const GlobalStyles = () => (
 /* ==========================================================================
    REUSABLE COMPONENTS
    ========================================================================== */
-
-const StatusBadge = ({ status }: { status: 'aktif' | 'nonaktif' | 'selesai' }) => {
-    const config = {
-        aktif: { ...THEME.colors.status.aktif, label: 'Aktif' },
-        selesai: { ...THEME.colors.status.selesai, label: 'Selesai' },
-        nonaktif: { ...THEME.colors.status.nonaktif, label: 'Belum Aktif' },
-    };
-    const c = config[status];
-
-    return (
-        <span
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
-            style={{ background: c.bg, color: c.text, border: `1.5px solid ${c.border}` }}
-        >
-            <span className="w-2 h-2 rounded-full" style={{ background: c.dot }} />
-            {c.label}
-        </span>
-    );
-};
 
 const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
     <div
@@ -351,33 +343,13 @@ export default function DashboardClient() {
                 </p>
             </div>
 
-            {/* STATISTICS CARDS - SOFT PASTEL BACKGROUNDS (SEPERTI ADMIN) */}
+            {/* STATISTICS CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
                 {[
-                    {
-                        label: 'Mata Pelajaran',
-                        value: dashboard.total_mapel,
-                        icon: <Book className="w-6 h-6" />,
-                        desc: 'Total mapel yang Anda ajar',
-                    },
-                    {
-                        label: 'Total Kelas',
-                        value: dashboard.total_kelas,
-                        icon: <School className="w-6 h-6" />,
-                        desc: 'Kelas yang Anda ajar',
-                    },
-                    {
-                        label: 'Total Siswa',
-                        value: dashboard.total_siswa,
-                        icon: <Users className="w-6 h-6" />,
-                        desc: `${dashboard.total_penilaian_ada} sudah dinilai`,
-                    },
-                    {
-                        label: 'Progress Penilaian',
-                        value: `${dashboard.overall_progress}%`,
-                        icon: <Target className="w-6 h-6" />,
-                        desc: `${dashboard.total_penilaian_ada} dari ${dashboard.total_penilaian_dibutuhkan} penilaian`,
-                    },
+                    { label: 'Mata Pelajaran', value: dashboard.total_mapel, icon: <Book className="w-6 h-6" />, desc: 'Total mapel yang Anda ajar' },
+                    { label: 'Total Kelas', value: dashboard.total_kelas, icon: <School className="w-6 h-6" />, desc: 'Kelas yang Anda ajar' },
+                    { label: 'Total Siswa', value: dashboard.total_siswa, icon: <Users className="w-6 h-6" />, desc: `${dashboard.total_penilaian_ada} sudah dinilai` },
+                    { label: 'Progress Penilaian', value: `${dashboard.overall_progress}%`, icon: <Target className="w-6 h-6" />, desc: `${dashboard.total_penilaian_ada} dari ${dashboard.total_penilaian_dibutuhkan} penilaian` },
                 ].map((stat, index) => {
                     const cardStyle = THEME.statCards[index] || THEME.statCards[0];
                     return (
@@ -392,13 +364,7 @@ export default function DashboardClient() {
                             }}
                         >
                             <div className="flex items-start justify-between mb-4">
-                                <div
-                                    className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
-                                    style={{
-                                        background: cardStyle.iconBg,
-                                        color: '#ffffff'
-                                    }}
-                                >
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg" style={{ background: cardStyle.iconBg, color: '#ffffff' }}>
                                     {stat.icon}
                                 </div>
                             </div>
@@ -479,7 +445,7 @@ export default function DashboardClient() {
                     </div>
                 </Card>
 
-                {/* Konfigurasi */}
+                {/* ✅ Status Konfigurasi - UPDATED (sama seperti dashboard guru kelas) */}
                 <Card>
                     <div className="p-6">
                         <div className="flex items-center gap-3 mb-6 pb-4" style={{ borderBottom: `2px solid ${THEME.colors.border}` }}>
@@ -491,22 +457,49 @@ export default function DashboardClient() {
                                 <p className="text-xs" style={{ color: THEME.colors.text.muted }}>Kelengkapan bobot & kategori</p>
                             </div>
                         </div>
-                        {dashboard.warnings.length === 0 ? (
+
+                        {dashboard.konfigurasi_lengkap ? (
                             <div className="flex items-center gap-4 p-5 rounded-xl" style={{ background: '#dcfce7', border: '2px solid #86efac' }}>
                                 <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-white">
                                     <CheckCircle2 size={20} className="text-green-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-green-800">Semua Mapel Sudah Dikonfigurasi</p>
-                                    <p className="text-xs text-green-700 mt-0.5">Bobot dan kategori nilai sudah lengkap</p>
+                                    <p className="text-sm font-bold text-green-800">Semua Konfigurasi Sudah Lengkap</p>
+                                    <p className="text-xs text-green-700 mt-0.5">Semua pengaturan penilaian sudah siap digunakan</p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-3">
-                                {dashboard.warnings.map((w, i) => (
-                                    <div key={i} className="p-4 rounded-xl" style={{ background: '#fef2f2', border: '2px solid #fca5a5' }}>
-                                        <p className="text-sm font-bold text-red-700 mb-1">{w.mapel}</p>
-                                        <p className="text-xs text-red-600">{w.masalah}</p>
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-thin pr-2">
+                                {dashboard.konfigurasi_detail?.summary.map((item, index) => (
+                                    <div key={index} className="p-4 rounded-xl border-2" style={{
+                                        background: item.type === 'gap' ? '#fff7ed' : '#fef2f2',
+                                        border: item.type === 'gap' ? '2px solid #fdba74' : '2px solid #fca5a5'
+                                    }}>
+                                        <div className="flex items-start gap-3">
+                                            {item.type === 'gap' ? (
+                                                <AlertTriangle size={18} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+                                            ) : (
+                                                <XIcon size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`text-sm font-bold mb-1 ${item.type === 'gap' ? 'text-yellow-800' : 'text-red-800'}`}>
+                                                    {item.type === 'gap' ? 'Range Belum Lengkap' : 'Belum Diatur'}
+                                                </p>
+                                                <p className="text-xs font-semibold mb-1" style={{ color: item.type === 'gap' ? '#92400e' : '#991b1b' }}>
+                                                    {item.title}
+                                                </p>
+                                                <p className={`text-xs ${item.type === 'gap' ? 'text-yellow-700' : 'text-red-700'} break-words`}>
+                                                    {item.message}
+                                                </p>
+                                                <button
+                                                    onClick={() => router.push('/guru_bidang_studi/atur_penilaian')}
+                                                    className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                                    style={{ background: THEME.colors.primary, color: '#ffffff' }}
+                                                >
+                                                    Atur Sekarang <ChevronRight size={12} />
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -525,7 +518,7 @@ export default function DashboardClient() {
                                 <AlertCircle size={28} className="text-orange-500" />
                             </div>
                             <h3 className="text-lg font-bold text-gray-900">
-                                {isPeriodLocked ? '🔒 Periode Selesai' : '⏳ Periode Belum Aktif'}
+                                {isPeriodLocked ? 'Periode Selesai' : 'Periode Belum Aktif'}
                             </h3>
                         </div>
                         <p className="text-sm text-gray-600 mb-8 leading-relaxed">
@@ -594,7 +587,7 @@ const JadwalItem = ({ label, status, tanggal }: { label: string; status: string;
                 <div>
                     <p className="text-sm font-bold mb-0.5" style={{ color: THEME.colors.text.primary }}>{label}</p>
                     <p className="text-xs" style={{ color: THEME.colors.text.muted }}>
-                        {status === 'aktif' ? '● Aktif' : status === 'selesai' ? '🔒 Selesai' : '⏳ Menunggu'}
+                        {status === 'aktif' ? '● Aktif' : status === 'selesai' ? 'Selesai' : 'Menunggu'}
                     </p>
                 </div>
             </div>
@@ -671,10 +664,10 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                 }}
             >
                 <span className="text-center sm:text-left">
-                    {isComplete ? '✓ Semua siswa sudah lengkap' : `⚠️ ${incompleteCount} siswa belum lengkap`}
+                    {isComplete ? 'Semua siswa sudah lengkap' : `${incompleteCount} siswa belum lengkap`}
                 </span>
                 <span className="flex-shrink-0">
-                    {showDetail ? 'Sembunyikan Detail ▲' : 'Lihat Detail ▼'}
+                    {showDetail ? 'Sembunyikan Detail' : 'Lihat Detail'}
                 </span>
             </button>
 
@@ -728,7 +721,7 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                                     <p className="text-xs" style={{ color: THEME.colors.text.muted }}>NIS: {siswa.nis}</p>
                                                 </div>
                                                 {siswa.jumlah_komponen_terisi === siswa.total_komponen ? (
-                                                    <span className="text-xs font-bold text-green-700 px-3 py-1.5 rounded-lg bg-green-100">LENGKAP ✓</span>
+                                                    <span className="text-xs font-bold text-green-700 px-3 py-1.5 rounded-lg bg-green-100">LENGKAP</span>
                                                 ) : (
                                                     <span className="text-xs font-bold text-red-700 px-3 py-1.5 rounded-lg bg-red-100">BELUM</span>
                                                 )}
@@ -755,14 +748,14 @@ const MapelCard = ({ mapel, jenisAktif }: { mapel: MapelItem; jenisAktif: string
                                                     </div>
                                                     <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>
                                                         {jenisAktif === 'PTS'
-                                                            ? `${siswa.jumlah_komponen_terisi > 0 ? '✓' : '✗'} ${siswa.jumlah_komponen_terisi > 0 ? 'Sudah' : 'Belum'} input PTS`
+                                                            ? `${siswa.jumlah_komponen_terisi > 0 ? 'Sudah' : 'Belum'} input PTS`
                                                             : `${siswa.jumlah_komponen_terisi}/${siswa.total_komponen} komponen terisi`
                                                         }
                                                     </p>
                                                 </div>
                                             )}
 
-                                            {/* NILAI RAPOR - DIPERBESAR */}
+                                            {/* NILAI RAPOR */}
                                             {siswa.nilai_rapor !== null && (
                                                 <div className="flex items-center justify-between pt-3 border-t-2" style={{ borderTop: `2px solid ${THEME.colors.border}` }}>
                                                     <span className="text-sm font-bold" style={{ color: THEME.colors.text.secondary }}>Nilai Rapor:</span>
