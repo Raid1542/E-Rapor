@@ -1,21 +1,14 @@
 /**
- * Nama File: atur_penilaian_client.tsx
- * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian
- *         oleh guru kelas, mencakup kategori kokurikuler, akademik, deskripsi rata-rata, dan bobot.
- * 
- * ✅ UPDATED: 
- *   - ✅ UI Akademik & Deskripsi Rata-rata sekarang konsisten dengan Kokurikuler
- *   - ✅ Menggunakan card dengan header, tabel di dalam, dan tombol "Edit Semua"
- *   - ✅ Modal batch edit untuk semua kategori
- *   - ✅ Semua API call mengirim parameter `jenis` (PTS/PAS)
- *   - ✅ Semua save payload mengirim field `jenis`
- *   - ✅ Banner periode aktif yang jelas
- *   - ✅ Kategori Kokurikuler: PTS → hanya Mutaba'ah, PAS → semua aspek
- *   - ✅ Tab Deskripsi Rata-rata: HANYA PTS
- *   - ✅ Bobot: PTS = auto 100%, PAS = editable
- *   - ✅ DESKRIPSI RATA-RATA: Support nilai desimal (2 digit di belakang koma)
- */
-
+* Nama File: atur_penilaian_client.tsx
+* Fungsi: Komponen klien untuk mengatur konfigurasi penilaian oleh guru kelas
+* UPDATE: ✅ Redesign UI - Modern, Simple, Clean dengan tema Oranye
+*         ✅ 4 Tab: Kokurikuler, Akademik, Deskripsi Rata-rata, Bobot
+*         ✅ Batch Edit Modal dengan validasi
+*         ✅ Coverage Warning untuk gap nilai
+*         ✅ Responsive & User-friendly
+*         ✅ Dropdown konsisten dengan Arsip Rapor
+*         ✅ FIX: Handle 403 NOT_ASSIGNED dari backend
+*/
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -200,42 +193,40 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     );
 };
 
-// ====== SHARED STYLE CONSTANTS ======
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
-const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
+// ====== STYLE CONSTANTS (UPDATED - Konsisten dengan Arsip Rapor) ======
+const PAGE_BG = { background: '#faf8f5' };
+const CARD_STYLE = { border: '1px solid #fed7aa', boxShadow: '0 4px 20px rgba(234, 88, 12, 0.08)', background: '#ffffff' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%)' };
+const TH_GRAD = { background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 60%, #f97316 100%)' };
 
-const PAGE_BG = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+// ✅ UPDATED: Konsisten dengan Arsip Rapor
+const inputCls = "w-full border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200";
+
+// ✅ UPDATED: Konsisten dengan Arsip Rapor
+const selectCls = "border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]";
 
 const btnPrimary = {
-  base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
-  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)', border: '1.5px solid #c95b08' } as React.CSSProperties,
-  hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-  leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+    base: "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-sm hover:shadow-md active:scale-95",
+    style: { background: 'linear-gradient(135deg, #ea580c, #f97316)', boxShadow: '0 4px 12px rgba(234, 88, 12, 0.25)' } as React.CSSProperties,
 };
 
-const labelCls = "block text-sm font-semibold mb-1.5";
-const labelColor = { color: '#7a3a0a' };
-
-const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
-  <button onClick={onClick} disabled={disabled}
-    className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-    style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
-    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; } }}
-    onMouseLeave={e => { if (!disabled) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; } }}
-  >{children}</button>
+const BtnBatal = ({ onClick, children = 'Batal', disabled }: { onClick: () => void; children?: React.ReactNode; disabled?: boolean }) => (
+    <button onClick={onClick} disabled={disabled}
+        className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed border-2 border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700"
+    >{children}</button>
 );
 
-const BtnReset = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
-  <button onClick={onClick} disabled={disabled}
-    className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-    style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
-    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; } }}
-    onMouseLeave={e => { if (!disabled) { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; } }}
-  >{children}</button>
+const BtnEdit = ({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) => (
+    <button onClick={onClick} disabled={disabled}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+            background: disabled ? '#f3f4f6' : '#fff7ed',
+            border: disabled ? '1px solid #e5e7eb' : '1.5px solid #fb923c',
+            color: disabled ? '#9ca3af' : '#c2410c'
+        }}
+        onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#ffedd5'; }}
+        onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = '#fff7ed'; }}
+    >{children}</button>
 );
 
 // ====== MAIN COMPONENT ======
@@ -1886,5 +1877,3 @@ export default function AturPenilaianGuruKelasClient() {
         </div>
     );
 }
-
-
