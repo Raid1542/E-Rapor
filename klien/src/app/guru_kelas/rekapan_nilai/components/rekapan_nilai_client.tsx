@@ -1,6 +1,8 @@
 /**
  * Nama File: rekapan_nilai_client.tsx
  * UPDATE:
+ *   - ✅ FIX: Tambahkan pengecekan NOT_ASSIGNED di fetchData
+ *   - ✅ FIX: Tambahkan modal "Akses Ditolak"
  *   - Auto-sort by ranking
  *   - Detail modal dengan tema konsisten
  *   - Auto-update tanpa refresh
@@ -12,7 +14,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Eye, X, Search, Download, Award, BookOpen } from 'lucide-react';
+import { Eye, X, Search, Download, Award, BookOpen, AlertCircle, LogOut } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -83,6 +85,9 @@ export default function RekapanNilaiClient() {
     const [searchQuery, setSearchQuery] = useState('');
     const [exporting, setExporting] = useState(false);
 
+    // ✅ TAMBAHKAN: State untuk kondisi akses
+    const [isNotAssigned, setIsNotAssigned] = useState(false);
+
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
@@ -91,7 +96,7 @@ export default function RekapanNilaiClient() {
     const [selectedSiswa, setSelectedSiswa] = useState<SiswaRekapan | null>(null);
 
     // ── FETCH DATA ─────────────────────────────────────────────────────────────
-
+    // ✅ PERBAIKAN: Tambahkan pengecekan NOT_ASSIGNED di fetchData
     const fetchData = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
@@ -116,7 +121,15 @@ export default function RekapanNilaiClient() {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (!res.ok) throw new Error('Gagal memuat data');
+            // ✅ PERBAIKAN: Cek NOT_ASSIGNED di sini (endpoint /rekapan-nilai menggunakan middleware cekGuruKelasDitugaskan)
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                if (res.status === 403 && errData.code === 'NOT_ASSIGNED') {
+                    setIsNotAssigned(true);
+                    return;
+                }
+                throw new Error(errData.message || 'Gagal memuat data');
+            }
 
             const data = await res.json();
 
@@ -143,6 +156,9 @@ export default function RekapanNilaiClient() {
                 setFilteredSiswa(sortedSiswa);
                 setMapelList(data.mapel_list);
                 if (data.jenis_penilaian) setJenisPenilaian(data.jenis_penilaian);
+                
+                // ✅ Reset isNotAssigned jika fetch berhasil
+                setIsNotAssigned(false);
             }
         } catch (err: any) {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
@@ -247,9 +263,47 @@ export default function RekapanNilaiClient() {
     if (loading) {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: '#fdf6f0' }}>
+                <GlobalStyles />
                 <div className="text-center">
                     <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
                     <p className="text-sm font-medium text-orange-700">Memuat data...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // ✅ KONDISI 1: Belum Ditugaskan → Blokir Total
+    if (isNotAssigned) {
+        return (
+            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: '#fdf6f0' }}>
+                <GlobalStyles />
+                {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+                
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100">
+                            <AlertCircle size={48} className="text-red-500" />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                                Anda belum ditugaskan sebagai guru kelas di semester ini.
+                                <br />
+                                Silakan hubungi Administrator untuk penugasan kelas.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
+                            style={{
+                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
+                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
+                            }}
+                        >
+                            <LogOut size={18} /> Logout
+                        </button>
+                    </div>
                 </div>
             </div>
         );

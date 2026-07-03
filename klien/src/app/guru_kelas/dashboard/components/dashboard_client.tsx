@@ -4,6 +4,7 @@
  *         ✅ Perbaiki layout card agar tidak stretch
  *         ✅ Progress Kelengkapan Rapor (Absensi, Kokurikuler, Catatan, Ekskul)
  *         ✅ Status Konfigurasi detail dengan validasi range gap
+ *         ✅ FIX: Hapus pengecekan total_mapel === 0 yang salah
  */
 
 "use client";
@@ -338,9 +339,10 @@ export default function DashboardClient() {
                         const result = await res.json();
                         if (result.success && result.data) {
                             setDashboard(result.data);
-                            if (result.data.total_mapel === 0) {
-                                setIsNotAssigned(true);
-                            }
+                            // ✅ PERBAIKAN: HAPUS pengecekan total_mapel === 0
+                            // Guru kelas yang sudah ditugaskan di tabel guru_kelas
+                            // harus tetap bisa akses dashboard meskipun total_mapel = 0
+                            // (belum ada pembelajaran yang di-assign)
                         }
                     }
                 } catch (err) {

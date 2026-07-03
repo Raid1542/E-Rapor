@@ -3,6 +3,7 @@
  * Fungsi: Cetak rapor siswa untuk guru kelas menggunakan template Word
  * UPDATE: 
  *   - ✅ HAPUS: Fitur "Unduh Semua" (hanya unduh per siswa)
+ *   - ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetchTahunAjaranAktif
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif
  *   - Banner warning status periode
@@ -155,6 +156,8 @@ const RaporGuruKelasClient = () => {
     const closeModal = useCallback(() => setModal(null), []);
 
     // === Fetch tahun ajaran aktif ===
+    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED di sini karena endpoint 
+    // /tahun-ajaran/aktif TIDAK menggunakan middleware cekGuruKelasDitugaskan
     const fetchTahunAjaranAktif = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -208,25 +211,18 @@ const RaporGuruKelasClient = () => {
                     }, 500);
                 }
             } else {
-                const errCode = data.code;
-                if (errCode === 'NOT_ASSIGNED') {
-                    setIsNotAssigned(true);
-                } else {
-                    showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal mengambil tahun ajaran aktif.' });
-                }
+                // ✅ PERBAIKAN: Hanya tampilkan error umum, TIDAK cek NOT_ASSIGNED
+                showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal mengambil tahun ajaran aktif.' });
             }
         } catch (err: any) {
-            if (err.message?.includes('belum ditugaskan')) {
-                setIsNotAssigned(true);
-            } else {
-                showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-            }
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
             setLoading(false);
         }
     };
 
     // === Fetch daftar siswa ===
+    // ✅ PERBAIKAN: Cek NOT_ASSIGNED di sini (endpoint /siswa menggunakan middleware cekGuruKelasDitugaskan)
     const fetchSiswaList = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -240,6 +236,8 @@ const RaporGuruKelasClient = () => {
 
             if (res.ok && data.success) {
                 setSiswaList(data.data || []);
+                // ✅ Reset isNotAssigned jika fetch berhasil
+                setIsNotAssigned(false);
             } else {
                 const errCode = data.code;
                 if (errCode === 'NOT_ASSIGNED') {

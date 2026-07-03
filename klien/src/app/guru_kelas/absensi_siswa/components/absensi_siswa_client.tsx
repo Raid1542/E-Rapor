@@ -2,6 +2,9 @@
  * Nama File: absensi_client.tsx
  * Fungsi: Komponen klien untuk mengelola absensi siswa (PTS & PAS)
  * UPDATE: 
+ *   ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetchTahunAjaran
+ *   ✅ FIX: Perbaiki operator precedence di useEffect refetch
+ *   ✅ FIX: Handle setLoading(false) di semua case fetchAbsensi
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
  *   - Tab PTS/PAS menunjukkan status (Aktif/Menunggu/Selesai)
@@ -116,7 +119,7 @@ export default function AbsensiClient() {
     const [editedData, setEditedData] = useState<Record<number, { sakit: number; izin: number; alpha: number }>>({});
     const [savingRows, setSavingRows] = useState<Set<number>>(new Set());
 
-    // ✅ STATE BARU: Kondisi akses
+    // ✅ STATE: Kondisi akses
     const [isNotAssigned, setIsNotAssigned] = useState(false);
     const [isReadOnly, setIsReadOnly] = useState(false);
     const [readOnlyReason, setReadOnlyReason] = useState<'not_open' | 'locked' | null>(null);
@@ -132,76 +135,84 @@ export default function AbsensiClient() {
     const [confirmData, setConfirmData] = useState<{ siswaId: number; data: any } | null>(null);
 
     // ── Fetch Tahun Ajaran Aktif ───────────────────────────────────────────
-const fetchTahunAjaran = useCallback(async (token: string) => {
-    try {
-        const res = await fetch(`${API_BASE}/tahun-ajaran/aktif`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED karena endpoint /tahun-ajaran/aktif 
+    // TIDAK menggunakan middleware cekGuruKelasDitugaskan
+    const fetchTahunAjaran = useCallback(async (token: string): Promise<boolean> => {
+        try {
+            const res = await fetch(`${API_BASE}/tahun-ajaran/aktif`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        if (!res.ok) {
-            const errData = await res.json().catch(() => ({ code: 'UNKNOWN' }));
-            if (errData.code === 'NOT_ASSIGNED') {
-                setIsNotAssigned(true);
+            // ✅ Jika 401, token expired
+            if (res.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('currentUser');
+                window.location.href = '/login';
                 return false;
             }
-            return false;
-        }
 
-        const result = await res.json();
-        if (result.success && result.data) {
-            const ta = result.data;
-            const ptsStatus = ta.status_pts || 'nonaktif';
-            const pasStatus = ta.status_pas || 'nonaktif';
-
-            setStatusPTS(ptsStatus);
-            setStatusPAS(pasStatus);
-            setSemesterAktif(ta.semester || 'Ganjil');
-
-            // ✅ PERBAIKAN: Tentukan jenis penilaian default & status read-only
-            if (ptsStatus === 'aktif') {
-                setJenisPenilaian('PTS');
-                setIsReadOnly(false);
-                setReadOnlyReason(null);
-            } else if (pasStatus === 'aktif') {
-                setJenisPenilaian('PAS');
-                setIsReadOnly(false);
-                setReadOnlyReason(null);
-            } else {
-                // ✅ KEDUA PERIODE BELUM AKTIF - SET READ ONLY
-                setJenisPenilaian('PTS'); // Default ke PTS
-                setIsReadOnly(true);  // ✅ READ ONLY MODE
-                setReadOnlyReason('not_open');  // ✅ ALASAN: BELUM DIBUKA
-                
-                // Tampilkan modal notifikasi
-                setTimeout(() => {
-                    showModal({
-                        type: 'warning',
-                        title: '⏳ Periode Penilaian Belum Aktif',
-                        message: 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data dashboard, tetapi belum dapat menginput nilai siswa.\n\n💡 Tip: Silakan hubungi Administrator untuk membuka periode penilaian.'
-                    });
-                }, 500);
+            if (!res.ok) {
+                console.error('❌ fetchTahunAjaran gagal:', res.status);
+                return false;
             }
 
-            return true;
+            const result = await res.json();
+            if (result.success && result.data) {
+                const ta = result.data;
+                const ptsStatus = ta.status_pts || 'nonaktif';
+                const pasStatus = ta.status_pas || 'nonaktif';
+
+                setStatusPTS(ptsStatus);
+                setStatusPAS(pasStatus);
+                setSemesterAktif(ta.semester || 'Ganjil');
+
+                // ✅ Tentukan jenis penilaian default & status read-only
+                if (ptsStatus === 'aktif') {
+                    setJenisPenilaian('PTS');
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else if (pasStatus === 'aktif') {
+                    setJenisPenilaian('PAS');
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else {
+                    // ✅ KEDUA PERIODE BELUM AKTIF - SET READ ONLY
+                    setJenisPenilaian('PTS'); // Default ke PTS
+                    setIsReadOnly(true);
+                    setReadOnlyReason('not_open');
+                    
+                    // Tampilkan modal notifikasi
+                    setTimeout(() => {
+                        showModal({
+                            type: 'warning',
+                            title: '⏳ Periode Penilaian Belum Aktif',
+                            message: 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data absensi, tetapi belum dapat mengedit.\n\n💡 Tip: Silakan hubungi Administrator untuk membuka periode penilaian.'
+                        });
+                    }, 500);
+                }
+
+                return true;
+            }
+            return false;
+        } catch (err) {
+            console.error('Error fetch tahun ajaran:', err);
+            return false;
         }
-        return false;
-    } catch (err) {
-        console.error('Error fetch tahun ajaran:', err);
-        return false;
-    }
-}, [showModal]);
+    }, [showModal]);
 
     // ── Fetch Data Absensi ─────────────────────────────────────────────────
+    // ✅ PERBAIKAN: Handle NOT_ASSIGNED di sini (karena endpoint ini menggunakan middleware cekGuruKelasDitugaskan)
+    // ✅ PERBAIKAN: Handle setLoading(false) di SEMUA case
     const fetchAbsensi = useCallback(async () => {
         try {
             setLoading(true);
             const token = localStorage.getItem('token');
             if (!token) {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+                setLoading(false);
                 return;
             }
 
-            // ✅ Ambil semester dari tahun ajaran aktif (bukan hardcoded)
             const semester = semesterAktif;
             const res = await fetch(`${API_BASE}/absensi/${jenisPenilaian}/${semester}`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -210,19 +221,22 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({ code: 'UNKNOWN', message: 'Gagal memuat data' }));
 
+                // ✅ NOT_ASSIGNED hanya di-handle di sini
                 if (errData.code === 'NOT_ASSIGNED') {
                     setIsNotAssigned(true);
+                    setLoading(false);
                     return;
                 } else if (errData.code === 'PERIOD_NOT_OPEN') {
                     setIsReadOnly(true);
                     setReadOnlyReason('not_open');
-                    // Tetap tampilkan data kosong
                     setAbsensiData(null);
+                    setLoading(false);
                     return;
                 } else if (errData.code === 'PERIOD_LOCKED') {
                     setIsReadOnly(true);
                     setReadOnlyReason('locked');
                     setAbsensiData(null);
+                    setLoading(false);
                     return;
                 }
 
@@ -231,6 +245,7 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
                     title: 'Gagal Memuat Data',
                     message: errData.message || 'Terjadi kesalahan saat memuat data absensi.'
                 });
+                setLoading(false);
                 return;
             }
 
@@ -238,6 +253,7 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
 
             if (result.success) {
                 setAbsensiData(result.data);
+                setIsNotAssigned(false); // ✅ Reset jika berhasil
             } else {
                 showModal({
                     type: 'error',
@@ -258,6 +274,7 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
     }, [jenisPenilaian, semesterAktif, showModal]);
 
     // ── Initial Load ───────────────────────────────────────────────────────
+    // ✅ PERBAIKAN: Selalu panggil fetchAbsensi setelah fetchTahunAjaran berhasil
     useEffect(() => {
         const init = async () => {
             const token = localStorage.getItem('token');
@@ -267,21 +284,35 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
                 return;
             }
 
+            // ✅ Step 1: Fetch tahun ajaran
             const success = await fetchTahunAjaran(token);
-            if (success && !isNotAssigned) {
+            
+            // ✅ Step 2: Jika berhasil, fetch absensi
+            if (success) {
                 await fetchAbsensi();
             } else {
                 setLoading(false);
+                showModal({
+                    type: 'network',
+                    title: 'Gagal Memuat Data',
+                    message: 'Tidak dapat memuat data tahun ajaran. Silakan refresh halaman.'
+                });
             }
         };
         init();
     }, []);
 
     // ── Refetch saat jenis penilaian berubah ───────────────────────────────
+    // ✅ PERBAIKAN: Logika yang benar dengan parentheses
     useEffect(() => {
-        if (!isNotAssigned && statusPTS !== 'nonaktif' || statusPAS !== 'nonaktif') {
-            fetchAbsensi();
-        }
+        // ✅ Skip jika belum diinisialisasi atau not assigned
+        if (isNotAssigned) return;
+        
+        // ✅ Skip jika loading awal masih berjalan
+        if (loading && !absensiData) return;
+        
+        // ✅ Refetch saat jenisPenilaian berubah
+        fetchAbsensi();
     }, [jenisPenilaian]);
 
     // ── Warning sebelum unload jika ada perubahan ──────────────────────────
@@ -301,7 +332,6 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
 
     // ── Handlers ───────────────────────────────────────────────────────────
     const handleEdit = (siswaId: number) => {
-        // ✅ CEK READ-ONLY
         if (isReadOnly) {
             if (readOnlyReason === 'locked') {
                 showModal({
@@ -455,8 +485,8 @@ const fetchTahunAjaran = useCallback(async (token: string) => {
                     sakit: data.sakit,
                     izin: data.izin,
                     alpha: data.alpha,
-                    jenis: jenisPenilaian,  // ✅ TAMBAH
-                    semester: semesterAktif  // ✅ TAMBAH
+                    jenis: jenisPenilaian,
+                    semester: semesterAktif
                 })
             });
 
