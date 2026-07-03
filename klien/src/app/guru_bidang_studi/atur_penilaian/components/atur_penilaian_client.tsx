@@ -2,17 +2,20 @@
  * Nama File: atur_penilaian_gbs_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian guru bidang studi
  * UPDATE: 
- *   - Sorting kategori dari nilai terbesar ke terkecil
- *   - Perbaiki border radius modal
+ *   - ✅ Hapus kolom Aksi (Edit & Hapus per baris)
+ *   - ✅ Ubah tombol "Tambah Kategori" jadi "Edit Semua"
+ *   - ✅ Batch Edit Kategori (tambah/edit banyak sekaligus)
+ *   - ✅ Validasi overlap & range 0-100
+ *   - ✅ Sorting kategori dari nilai terbesar ke terkecil
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
-    WifiOff, ShieldAlert, LogOut, Lock, BookOpen,
-    Users, GraduationCap, Trash2, Plus, FileText, TrendingUp
+    Pencil, X, CheckCircle2, AlertCircle,
+    WifiOff, ShieldAlert, LogOut, Lock, Trash2, Plus, FileText, TrendingUp,
+    Save, AlertTriangle, Info
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -32,11 +35,6 @@ const THEME = {
             primary: '#15110d',
             secondary: '#5c5048',
             muted: '#a89a8c',
-        },
-        status: {
-            aktif: { bg: '#dcfce7', text: '#166534', border: '#86efac', dot: '#22c55e' },
-            selesai: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d', dot: '#f59e0b' },
-            nonaktif: { bg: '#f3f0ed', text: '#766b62', border: '#e2d9d0', dot: '#a89a8c' },
         },
     },
     gradients: {
@@ -111,6 +109,15 @@ interface CoverageInfo {
     covered: boolean;
     gap?: string;
     gaps?: Array<{ aspek: string; gap: string }>;
+}
+
+// ✅ BARU: Tipe untuk batch edit
+interface BatchKategoriItem {
+    id?: number;
+    min_nilai: number;
+    max_nilai: number;
+    deskripsi: string;
+    isNew?: boolean;
 }
 
 // ====== GLOBAL STYLES ======
@@ -192,10 +199,10 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
         <div className="mb-5 p-4 rounded-xl flex items-start gap-3 animate-fade-in-up"
             style={{ background: '#fef3c7', border: '2px solid #fcd34d' }}>
             <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fde68a' }}>
-                <AlertCircle size={20} className="text-yellow-700" />
+                <AlertTriangle size={20} className="text-yellow-700" />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-bold mb-2" style={{ color: '#78350f' }}>Range Nilai 0-100 Belum Lengkap</p>
+                <p className="text-sm font-bold mb-2" style={{ color: '#78350f' }}>⚠️ Range Nilai 0-100 Belum Lengkap</p>
                 {gaps.length === 1 ? (
                     <p className="text-xs" style={{ color: '#92400e' }}>
                         Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <strong className="px-2 py-0.5 rounded bg-yellow-200">{gaps[0].gap}</strong>.
@@ -244,14 +251,12 @@ export default function AturPenilaianGBSClient() {
     const [kategoriLoading, setKategoriLoading] = useState(false);
     const [coverageInfo, setCoverageInfo] = useState<CoverageInfo | null>(null);
 
-    const [showEditKategori, setShowEditKategori] = useState(false);
-    const [editKategoriId, setEditKategoriId] = useState<number | null>(null);
-    const [editKategoriClosing, setEditKategoriClosing] = useState(false);
-    const [editKategoriData, setEditKategoriData] = useState<{
-        min_nilai: number; max_nilai: number; deskripsi: string;
-    }>({ min_nilai: 0, max_nilai: 100, deskripsi: '' });
-    const [errors, setErrors] = useState<Record<string, string>>({});
-    const initialEditKategoriDataRef = useRef<typeof editKategoriData | null>(null);
+    // ✅ BARU: State untuk Batch Edit
+    const [showBatchEdit, setShowBatchEdit] = useState(false);
+    const [batchEditClosing, setBatchEditClosing] = useState(false);
+    const [batchKategori, setBatchKategori] = useState<BatchKategoriItem[]>([]);
+    const [originalBatchKategori, setOriginalBatchKategori] = useState<BatchKategoriItem[]>([]);
+    const [isSavingBatch, setIsSavingBatch] = useState(false);
 
     const [selectedMapelAkademik, setSelectedMapelAkademik] = useState<number | null>(null);
     const [selectedMapelBobot, setSelectedMapelBobot] = useState<number | null>(null);
@@ -261,10 +266,9 @@ export default function AturPenilaianGBSClient() {
     const initialBobotListRef = useRef<BobotItem[]>([]);
 
     const [isSavingBobot, setIsSavingBobot] = useState(false);
-    const [isSavingKategori, setIsSavingKategori] = useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<'save-bobot' | 'save-kategori' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'save-bobot' | 'save-batch-kategori' | null>(null);
 
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
@@ -530,124 +534,190 @@ export default function AturPenilaianGBSClient() {
         setActiveTab(tab);
     };
 
-    // ====== MODAL KATEGORI ======
-    const openEditKategori = (kategori: KategoriAkademik | null = null) => {
-        setErrors({});
-        if (kategori) {
-            setEditKategoriId(kategori.id);
-            const d = {
-                min_nilai: Math.floor(kategori.min_nilai),
-                max_nilai: Math.floor(kategori.max_nilai),
-                deskripsi: kategori.deskripsi,
-            };
-            setEditKategoriData(d);
-            initialEditKategoriDataRef.current = d;
-        } else {
-            setEditKategoriId(null);
-            setEditKategoriData({ min_nilai: 0, max_nilai: 100, deskripsi: '' });
-            initialEditKategoriDataRef.current = null;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ✅ BARU: BATCH EDIT KATEGORI HANDLERS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const openBatchEdit = () => {
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: 'Mode Baca Saja',
+                message: 'Periode penilaian belum aktif atau sudah selesai.\n\nAnda tidak dapat mengedit kategori.'
+            });
+            return;
         }
-        setShowEditKategori(true);
+
+        // Load existing kategori ke batch
+        const existing = kategoriList
+            .map(k => ({
+                id: k.id,
+                min_nilai: Math.floor(k.min_nilai),
+                max_nilai: Math.floor(k.max_nilai),
+                deskripsi: k.deskripsi,
+                isNew: false
+            }))
+            .sort((a, b) => b.max_nilai - a.max_nilai);
+
+        if (existing.length > 0) {
+            setBatchKategori(existing);
+            setOriginalBatchKategori([...existing]);
+        } else {
+            // Default: 5 kategori standar (A, B, C, D, E)
+            const defaults: BatchKategoriItem[] = [
+                { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
+                { min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
+                { min_nilai: 70, max_nilai: 79, deskripsi: 'Cukup', isNew: true },
+                { min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
+                { min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
+            ];
+            setBatchKategori(defaults);
+            setOriginalBatchKategori([]);
+        }
+
+        setShowBatchEdit(true);
     };
 
-    const closeEditKategori = () => {
-        setEditKategoriClosing(true);
+    const closeBatchEdit = () => {
+        setBatchEditClosing(true);
         setTimeout(() => {
-            setShowEditKategori(false);
-            setEditKategoriClosing(false);
-            setEditKategoriId(null);
-            setErrors({});
+            setShowBatchEdit(false);
+            setBatchEditClosing(false);
+            setBatchKategori([]);
+            setOriginalBatchKategori([]);
         }, 200);
     };
 
-    const validateKategori = (): boolean => {
-        const ne: Record<string, string> = {};
-
-        if (isNaN(editKategoriData.min_nilai) || isNaN(editKategoriData.max_nilai)) {
-            ne.form = 'Nilai min dan max harus berupa angka.';
-        } else {
-            if (editKategoriData.min_nilai < 0 || editKategoriData.max_nilai > 100) {
-                ne.form = 'Nilai harus antara 0 dan 100.';
-            }
-            if (editKategoriData.min_nilai >= editKategoriData.max_nilai) {
-                ne.form = `Nilai minimum (${editKategoriData.min_nilai}) harus lebih kecil dari nilai maksimum (${editKategoriData.max_nilai}).`;
-            }
-            const range = editKategoriData.max_nilai - editKategoriData.min_nilai;
-            if (range < 3) {
-                ne.form = `Range nilai minimal 3 poin. Saat ini: ${range} poin.`;
-            }
-        }
-
-        if (!editKategoriData.deskripsi || editKategoriData.deskripsi.trim().length < 3) {
-            ne.deskripsi = 'Deskripsi minimal 3 karakter.';
-        }
-
-        if (Object.keys(ne).length > 0) {
-            setErrors(ne);
-            showModal({ type: 'warning', title: 'Form Belum Lengkap', message: Object.values(ne).join('\n') });
-            return false;
-        }
-
-        const initial = initialEditKategoriDataRef.current;
-        const isUnchanged = initial &&
-            editKategoriData.min_nilai === initial.min_nilai &&
-            editKategoriData.max_nilai === initial.max_nilai &&
-            editKategoriData.deskripsi.trim() === initial.deskripsi.trim();
-
-        if (isUnchanged) {
-            showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
-            return false;
-        }
-
-        return true;
+    const addBatchRow = () => {
+        setBatchKategori(prev => [...prev, { min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
     };
 
-    const openConfirmSaveKategori = () => {
-        if (!validateKategori()) return;
-        setConfirmAction('save-kategori');
+    const removeBatchRow = (index: number) => {
+        setBatchKategori(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const updateBatchRow = (index: number, field: keyof BatchKategoriItem, value: any) => {
+        setBatchKategori(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+    };
+
+    // ✅ Validasi batch: cek overlap, range 0-100, deskripsi
+    const validateBatchKategori = (): { valid: boolean; errors: string[] } => {
+        const errors: string[] = [];
+
+        if (batchKategori.length === 0) {
+            errors.push('Minimal harus ada 1 kategori.');
+            return { valid: false, errors };
+        }
+
+        batchKategori.forEach((k, i) => {
+            // Validasi nilai
+            if (isNaN(k.min_nilai) || isNaN(k.max_nilai)) {
+                errors.push(`Baris ${i + 1}: Nilai min/max harus angka.`);
+            } else {
+                if (k.min_nilai < 0 || k.max_nilai > 100) {
+                    errors.push(`Baris ${i + 1}: Nilai harus antara 0-100.`);
+                }
+                if (k.min_nilai >= k.max_nilai) {
+                    errors.push(`Baris ${i + 1}: Min (${k.min_nilai}) harus < Max (${k.max_nilai}).`);
+                }
+            }
+
+            // Validasi deskripsi
+            if (!k.deskripsi || k.deskripsi.trim().length < 3) {
+                errors.push(`Baris ${i + 1}: Deskripsi minimal 3 karakter.`);
+            }
+        });
+
+        // Cek overlap
+        const sorted = [...batchKategori].sort((a, b) => a.min_nilai - b.min_nilai);
+        let covered = new Set<number>();
+        let hasOverlap = false;
+        sorted.forEach(k => {
+            for (let i = k.min_nilai; i <= k.max_nilai; i++) {
+                if (covered.has(i)) hasOverlap = true;
+                covered.add(i);
+            }
+        });
+        if (hasOverlap) errors.push('Ada overlap pada range nilai.');
+
+        return { valid: errors.length === 0, errors };
+    };
+
+    // ✅ Cek apakah ada perubahan
+    const hasBatchChanges = (): boolean => {
+        if (originalBatchKategori.length === 0) return true;
+        if (batchKategori.length !== originalBatchKategori.length) return true;
+
+        const sc = [...batchKategori].sort((a, b) => a.min_nilai - b.min_nilai);
+        const so = [...originalBatchKategori].sort((a, b) => a.min_nilai - b.min_nilai);
+
+        for (let i = 0; i < sc.length; i++) {
+            if (Number(sc[i].min_nilai) !== Number(so[i].min_nilai)) return true;
+            if (Number(sc[i].max_nilai) !== Number(so[i].max_nilai)) return true;
+            if (sc[i].deskripsi.trim() !== so[i].deskripsi.trim()) return true;
+        }
+        return false;
+    };
+
+    const openConfirmSaveBatch = () => {
+        const v = validateBatchKategori();
+        if (!v.valid) {
+            showModal({ type: 'warning', title: 'Validasi Gagal', message: v.errors.join('\n') });
+            return;
+        }
+        if (!hasBatchChanges()) {
+            showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Data yang Anda masukkan sama dengan data yang sudah ada.' });
+            return;
+        }
+        setConfirmAction('save-batch-kategori');
         setShowConfirmModal(true);
     };
 
-    const executeSaveKategori = async () => {
-        setIsSavingKategori(true);
+    const executeSaveBatchKategori = async () => {
+        setIsSavingBatch(true);
         try {
             const token = localStorage.getItem('token');
-            const endpoint = `${API}/atur-penilaian/kategori`;
+            if (!token) throw new Error('Sesi berakhir');
 
-            const payload = {
-                min_nilai: Math.floor(editKategoriData.min_nilai),
-                max_nilai: Math.floor(editKategoriData.max_nilai),
-                deskripsi: editKategoriData.deskripsi.trim(),
-                urutan: 0,
-                mapel_id: selectedMapelAkademik,
-                kelas_id: selectedKelasAkademik,
-            };
+            // ✅ Strategi: Delete semua existing, lalu insert semua baru
+            const deletePromises = originalBatchKategori
+                .filter(k => k.id)
+                .map(k => fetch(`${API}/atur-penilaian/kategori/${k.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                }));
+            await Promise.all(deletePromises);
 
-            const url = editKategoriId ? `${endpoint}/${editKategoriId}` : endpoint;
-            const method = editKategoriId ? 'PUT' : 'POST';
+            // Insert semua kategori baru
+            const insertPromises = batchKategori.map(k => fetch(`${API}/atur-penilaian/kategori`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    min_nilai: Math.floor(k.min_nilai),
+                    max_nilai: Math.floor(k.max_nilai),
+                    deskripsi: k.deskripsi.trim(),
+                    urutan: 0,
+                    mapel_id: selectedMapelAkademik,
+                    kelas_id: selectedKelasAkademik,
+                })
+            }));
 
-            const res = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(payload),
-            });
+            const results = await Promise.all(insertPromises);
+            const allSuccess = results.every(r => r.ok);
 
-            const result = await res.json();
+            if (allSuccess) {
+                setShowConfirmModal(false);
+                closeBatchEdit();
+                showModal({
+                    type: 'success',
+                    title: 'Berhasil Disimpan!',
+                    message: `${batchKategori.length} kategori berhasil disimpan.`
+                });
 
-            if (res.ok) {
-                setShowEditKategori(false);
-                setEditKategoriClosing(false);
-                setEditKategoriId(null);
-                setErrors({});
-
-                setTimeout(() => {
-                    showModal({
-                        type: 'success',
-                        title: editKategoriId ? 'Kategori Diperbarui!' : 'Kategori Ditambahkan!',
-                        message: result.message || 'Berhasil!',
-                    });
-                }, 50);
-
+                // Reload data
                 const reloadRes = await fetch(
                     `${API}/atur-penilaian/kategori?mapel_id=${selectedMapelAkademik}&kelas_id=${selectedKelasAkademik}`,
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -659,60 +729,15 @@ export default function AturPenilaianGBSClient() {
                     setCoverageInfo(reloadData.coverage || null);
                 }
             } else {
-                const errorCode = result.code;
-                let errorMessage = result.message || 'Terjadi kesalahan.';
-                let errorTitle = editKategoriId ? 'Gagal Memperbarui' : 'Gagal Menambahkan';
-
-                if (errorCode === 'RANGE_OVERLAP') {
-                    errorTitle = 'Range Nilai Bertabrakan';
-                    errorMessage = `${result.message}\n\nSilakan sesuaikan nilai min/max.`;
-                }
-
-                showModal({ type: 'error', title: errorTitle, message: errorMessage });
+                setShowConfirmModal(false);
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
             }
         } catch (err: any) {
+            setShowConfirmModal(false);
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
         } finally {
-            setIsSavingKategori(false);
+            setIsSavingBatch(false);
         }
-    };
-
-    const handleDeleteKategori = (id: number, deskripsi: string) => {
-        showModal({
-            type: 'confirm',
-            title: 'Hapus Kategori',
-            message: `Apakah Anda yakin ingin menghapus kategori "${deskripsi}"?`,
-            onConfirm: async () => {
-                try {
-                    const token = localStorage.getItem('token');
-                    const res = await fetch(`${API}/atur-penilaian/kategori/${id}`, {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-
-                    const result = await res.json();
-
-                    if (res.ok) {
-                        const reloadRes = await fetch(
-                            `${API}/atur-penilaian/kategori?mapel_id=${selectedMapelAkademik}&kelas_id=${selectedKelasAkademik}`,
-                            { headers: { Authorization: `Bearer ${token}` } }
-                        );
-
-                        if (reloadRes.ok) {
-                            const reloadData = await reloadRes.json();
-                            setKategoriList(reloadData.data || []);
-                            setCoverageInfo(reloadData.coverage || null);
-                        }
-
-                        showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Kategori berhasil dihapus.' });
-                    } else {
-                        showModal({ type: 'error', title: 'Gagal Menghapus', message: result.message || 'Gagal menghapus kategori.' });
-                    }
-                } catch (err) {
-                    showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menghubungi server.' });
-                }
-            },
-        });
     };
 
     // ====== BOBOT HANDLERS ======
@@ -895,7 +920,6 @@ export default function AturPenilaianGBSClient() {
                             onClick={() => handleTabChange('akademik')}
                         >
                             <div className="flex items-center gap-2">
-                                <FileText size={16} />
                                 Kategori Akademik
                             </div>
                         </button>
@@ -907,7 +931,6 @@ export default function AturPenilaianGBSClient() {
                             onClick={() => handleTabChange('bobot')}
                         >
                             <div className="flex items-center gap-2">
-                                <TrendingUp size={16} />
                                 Bobot Penilaian
                             </div>
                         </button>
@@ -963,47 +986,69 @@ export default function AturPenilaianGBSClient() {
                                 <>
                                     <CoverageWarning coverage={coverageInfo} />
 
+                                    {/* ✅ PERBAIKAN: Toolbar dengan tombol "Edit Semua" */}
                                     <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                        <p className="text-xs" style={{ color: THEME.colors.primary }}>Menampilkan {kategoriList.length} kategori (urut dari nilai tertinggi)</p>
+                                        <p className="text-xs" style={{ color: THEME.colors.primary }}>
+                                            Menampilkan <strong>{kategoriList.length}</strong> kategori (urut dari nilai tertinggi)
+                                        </p>
                                         <button
-                                            onClick={() => openEditKategori()}
+                                            onClick={openBatchEdit}
                                             disabled={isReadOnly}
                                             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                            style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
+                                            style={{
+                                                background: isReadOnly ? '#d1d5db' : THEME.gradients.secondary,
+                                                boxShadow: isReadOnly ? 'none' : THEME.shadows.sm
+                                            }}
                                             onMouseEnter={(e) => { if (!isReadOnly) e.currentTarget.style.background = THEME.gradients.primary; }}
                                             onMouseLeave={(e) => { if (!isReadOnly) e.currentTarget.style.background = THEME.gradients.secondary; }}
                                         >
-                                            {isReadOnly ? <Lock size={16} /> : <Plus size={16} />}
-                                            {isReadOnly ? 'Terkunci' : 'Tambah Kategori'}
+                                            {isReadOnly ? (
+                                                <>
+                                                    <Lock size={16} />
+                                                    Terkunci
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Pencil size={16} />
+                                                    Edit kategori
+                                                </>
+                                            )}
                                         </button>
                                     </div>
 
-                                    {/* Table */}
+                                    {/* ✅ PERBAIKAN: Table tanpa kolom Aksi */}
                                     <div className="overflow-x-auto scrollbar-thin rounded-xl" style={{ border: `1px solid ${THEME.colors.border}` }}>
                                         <div className="min-w-[640px]">
                                             <table className="w-full text-sm border-collapse">
                                                 <thead>
-                                                    <tr style={{ background: THEME.gradients.primary }}>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">No.</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Range Nilai</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Deskripsi</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Aksi</th>
+                                                    <tr style={{ background: THEME.gradients.header }}>
+                                                        <th className="px-4 py-3.5 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap w-16">No.</th>
+                                                        <th className="px-4 py-3.5 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Range Nilai</th>
+                                                        <th className="px-4 py-3.5 text-center text-xs font-bold text-white tracking-wide">Deskripsi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {kategoriLoading ? (
                                                         <tr>
-                                                            <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
-                                                                <div className="flex flex-col items-center gap-2">
-                                                                    <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                                                    Memuat data...
+                                                            <td colSpan={3} className="py-16 text-center text-gray-400 text-sm">
+                                                                <div className="flex flex-col items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                                                                    <p className="font-medium">Memuat data...</p>
                                                                 </div>
                                                             </td>
                                                         </tr>
                                                     ) : kategoriList.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">
-                                                                Belum ada kategori
+                                                            <td colSpan={3} className="py-16 text-center">
+                                                                <div className="flex flex-col items-center gap-3">
+                                                                    <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: '#fff0e5' }}>
+                                                                        <FileText size={32} style={{ color: THEME.colors.secondary }} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-bold text-gray-800 mb-1">Belum ada kategori</p>
+                                                                        <p className="text-sm text-gray-500">Klik tombol "Edit Semua" untuk menambahkan kategori</p>
+                                                                    </div>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ) : (
@@ -1016,42 +1061,14 @@ export default function AturPenilaianGBSClient() {
                                                                     style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
                                                                     onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                                                                     onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
-                                                                    <td className="px-4 py-3 text-center text-gray-500 font-medium">{index + 1}</td>
-                                                                    <td className="px-4 py-3 text-center">
-                                                                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold"
+                                                                    <td className="px-4 py-3.5 text-center text-gray-500 font-medium">{index + 1}</td>
+                                                                    <td className="px-4 py-3.5 text-center">
+                                                                        <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold"
                                                                             style={{ background: '#fff0e5', color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}` }}>
                                                                             {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-gray-700">{kategori.deskripsi}</td>
-                                                                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                                        <div className="flex justify-center gap-2">
-                                                                            <button onClick={() => openEditKategori(kategori)} disabled={isReadOnly}
-                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                                style={{
-                                                                                    background: isReadOnly ? '#e5e7eb' : '#fff0e5',
-                                                                                    border: isReadOnly ? '1px solid #d1d5db' : `1px solid ${THEME.colors.tertiary}`,
-                                                                                    color: isReadOnly ? '#6b7280' : '#b35a08'
-                                                                                }}
-                                                                                onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#ffe4c8'; }}
-                                                                                onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fff0e5'; }}>
-                                                                                <Pencil size={13} />
-                                                                                {isReadOnly ? 'Terkunci' : 'Edit'}
-                                                                            </button>
-                                                                            <button onClick={() => handleDeleteKategori(kategori.id, kategori.deskripsi)} disabled={isReadOnly}
-                                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                                style={{
-                                                                                    background: isReadOnly ? '#e5e7eb' : '#fef2f2',
-                                                                                    border: isReadOnly ? '1px solid #d1d5db' : '1px solid #fca5a5',
-                                                                                    color: isReadOnly ? '#6b7280' : '#dc2626'
-                                                                                }}
-                                                                                onMouseEnter={e => { if (!isReadOnly) e.currentTarget.style.background = '#fee2e2'; }}
-                                                                                onMouseLeave={e => { if (!isReadOnly) e.currentTarget.style.background = '#fef2f2'; }}>
-                                                                                <Trash2 size={13} />
-                                                                                {isReadOnly ? 'Terkunci' : 'Hapus'}
-                                                                            </button>
-                                                                        </div>
-                                                                    </td>
+                                                                    <td className="px-4 py-3.5 text-gray-700">{kategori.deskripsi}</td>
                                                                 </tr>
                                                             ))
                                                     )}
@@ -1155,14 +1172,12 @@ export default function AturPenilaianGBSClient() {
                                                                 onChange={(e) => {
                                                                     if (isEditable) {
                                                                         const val = e.target.value;
-                                                                        // ✅ Hanya izinkan angka dan titik desimal
                                                                         if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                                                             handleBobotChange(bobot.komponen_id, val);
                                                                         }
                                                                     }
                                                                 }}
                                                                 onBlur={(e) => {
-                                                                    // ✅ Validasi range saat lose focus
                                                                     const val = parseFloat(e.target.value);
                                                                     if (!isNaN(val)) {
                                                                         if (val < 0) {
@@ -1227,67 +1242,185 @@ export default function AturPenilaianGBSClient() {
                 </div>
             </div>
 
-            {/* ====== MODAL EDIT KATEGORI ====== */}
-            {showEditKategori && (
-                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${editKategoriClosing ? 'opacity-0' : 'opacity-100'}`}
-                    onClick={(e) => { if (e.target === e.currentTarget) closeEditKategori(); }}>
+            {/* ═══════════════════════════════════════════════════════════════════════════ */}
+            {/* ✅ BARU: MODAL BATCH EDIT KATEGORI */}
+            {/* ═══════════════════════════════════════════════════════════════════════════ */}
+            {showBatchEdit && (
+                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditClosing ? 'opacity-0' : 'opacity-100'}`}
+                    onClick={(e) => { if (e.target === e.currentTarget) closeBatchEdit(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    {/* ✅ PERBAIKAN: rounded-2xl + overflow-hidden untuk border radius konsisten */}
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden ${editKategoriClosing ? 'scale-95' : 'scale-100'} transition-all`}
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${batchEditClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={{ border: `1px solid ${THEME.colors.border}` }}>
-                        <div className="flex items-center justify-between px-6 py-4" style={{ background: THEME.gradients.primary }}>
-                            <h2 className="text-base font-bold text-white">{editKategoriId ? 'Edit Kategori' : 'Tambah Kategori'}</h2>
-                            <button onClick={closeEditKategori} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4" style={{ background: THEME.gradients.header }}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <FileText size={20} className="text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Edit Kategori Akademik</h2>
+                                    <p className="text-xs text-orange-100 mt-0.5">Kelola semua kategori sekaligus</p>
+                                </div>
+                            </div>
+                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                                style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Nilai Minimum <span className="text-red-500">*</span></label>
-                                    <input type="number" min="0" max="100" step="1" value={editKategoriData.min_nilai}
-                                        onChange={(e) => setEditKategoriData({ ...editKategoriData, min_nilai: parseInt(e.target.value) || 0 })}
-                                        className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200" />
+                        {/* Content */}
+                        <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
+                            <div className="p-6 space-y-4">
+                                {/* Info Box */}
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                                    <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs" style={{ color: '#7a3a0a' }}>
+                                        <strong>💡 Tips:</strong> Isi semua kategori sekaligus. Sistem akan menyimpan semua kategori dalam 1 aksi.
+                                        Pastikan range nilai 0-100 lengkap tanpa overlap.
+                                    </p>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Nilai Maksimum <span className="text-red-500">*</span></label>
-                                    <input type="number" min="0" max="100" step="1" value={editKategoriData.max_nilai}
-                                        onChange={(e) => setEditKategoriData({ ...editKategoriData, max_nilai: parseInt(e.target.value) || 0 })}
-                                        className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200" />
-                                </div>
-                            </div>
 
-                            <div>
-                                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Deskripsi <span className="text-red-500">*</span></label>
-                                <textarea value={editKategoriData.deskripsi}
-                                    onChange={(e) => setEditKategoriData({ ...editKategoriData, deskripsi: e.target.value })}
-                                    className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
-                                    rows={3} placeholder="Contoh: Sangat Baik" />
+                                {/* Header List */}
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>
+                                        Kategori ({batchKategori.length})
+                                    </h3>
+                                    <button onClick={addBatchRow}
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                        style={{ background: '#fff7ed', border: '1.5px solid #fb923c', color: '#c2410c' }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = '#ffedd5')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = '#fff7ed')}>
+                                        <Plus size={14} /> Tambah Baris
+                                    </button>
+                                </div>
+
+                                {/* List Kategori */}
+                                <div className="space-y-3">
+                                    {batchKategori.map((kategori, index) => {
+                                        // Validasi real-time per baris
+                                        const errors: string[] = [];
+                                        if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
+                                        else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
+                                        if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
+
+                                        return (
+                                            <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
+                                                <div className="flex items-start gap-3">
+                                                    {/* Nomor */}
+                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
+                                                        style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}>
+                                                        {index + 1}
+                                                    </div>
+
+                                                    {/* Inputs */}
+                                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>
+                                                                Min <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                value={kategori.min_nilai}
+                                                                onChange={(e) => updateBatchRow(index, 'min_nilai', parseInt(e.target.value) || 0)}
+                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>
+                                                                Max <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                value={kategori.max_nilai}
+                                                                onChange={(e) => updateBatchRow(index, 'max_nilai', parseInt(e.target.value) || 0)}
+                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>
+                                                                Deskripsi <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={kategori.deskripsi}
+                                                                onChange={(e) => updateBatchRow(index, 'deskripsi', e.target.value)}
+                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200"
+                                                                placeholder="Sangat Baik"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Tombol Hapus */}
+                                                    {batchKategori.length > 1 && (
+                                                        <button onClick={() => removeBatchRow(index)}
+                                                            className="mt-7 p-2 rounded-lg transition-all"
+                                                            style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
+                                                            onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                                            onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}>
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Error per baris */}
+                                                {errors.length > 0 && (
+                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2"
+                                                        style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                                                        <AlertCircle size={12} /> {errors.join(' | ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Status Validasi */}
+                                {(() => {
+                                    const validation = validateBatchKategori();
+                                    return (
+                                        <div className="p-3 rounded-xl flex items-center gap-2" style={{
+                                            background: validation.valid ? '#f0fdf4' : '#fff7ed',
+                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#fdba74'}`,
+                                            color: validation.valid ? '#166534' : '#7a3a0a'
+                                        }}>
+                                            {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                                            <strong>Status:</strong> {validation.valid
+                                                ? 'Semua kategori valid dan siap disimpan'
+                                                : `Ada ${validation.errors.length} error yang perlu diperbaiki`}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
-                        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: `1px solid ${THEME.colors.border}`, background: '#fffaf6' }}>
-                            <button onClick={closeEditKategori} disabled={isSavingKategori}
+                        {/* Footer */}
+                        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
+                            <button onClick={closeBatchEdit} disabled={isSavingBatch}
                                 className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ borderColor: THEME.colors.border, color: '#7a3a0a', background: '#fff' }}
-                                onMouseEnter={e => { if (!isSavingKategori) e.currentTarget.style.background = '#fff0e5'; }}
-                                onMouseLeave={e => { if (!isSavingKategori) e.currentTarget.style.background = '#fff'; }}>
+                                onMouseEnter={e => { if (!isSavingBatch) e.currentTarget.style.background = '#fff0e5'; }}
+                                onMouseLeave={e => { if (!isSavingBatch) e.currentTarget.style.background = '#fff'; }}>
                                 Batal
                             </button>
-                            <button onClick={openConfirmSaveKategori} disabled={isSavingKategori}
+                            <button onClick={openConfirmSaveBatch} disabled={isSavingBatch}
                                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                 style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
-                                onMouseEnter={e => { if (!isSavingKategori) e.currentTarget.style.background = THEME.gradients.primary; }}
-                                onMouseLeave={e => { if (!isSavingKategori) e.currentTarget.style.background = THEME.gradients.secondary; }}>
-                                {isSavingKategori ? (
+                                onMouseEnter={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.gradients.primary; }}
+                                onMouseLeave={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.gradients.secondary; }}>
+                                {isSavingBatch ? (
                                     <>
                                         <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                                         Menyimpan...
                                     </>
                                 ) : (
                                     <>
-                                        Simpan
+                                        <Save size={16} />
+                                        Simpan {batchKategori.length} Kategori
                                     </>
                                 )}
                             </button>
@@ -1309,7 +1442,9 @@ export default function AturPenilaianGBSClient() {
                             <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
                         </div>
                         <p className="text-sm text-gray-600 mb-6">
-                            {confirmAction === 'save-bobot' ? 'Apakah Anda yakin ingin menyimpan bobot ini?' : 'Apakah Anda yakin ingin menyimpan kategori ini?'}
+                            {confirmAction === 'save-bobot' ? 'Apakah Anda yakin ingin menyimpan bobot ini?' :
+                                confirmAction === 'save-batch-kategori' ? `Apakah Anda yakin ingin menyimpan ${batchKategori.length} kategori ini?\n\nSemua kategori lama akan dihapus dan diganti dengan yang baru.` :
+                                    'Apakah Anda yakin ingin menyimpan?'}
                         </p>
                         <div className="flex gap-3">
                             <button onClick={() => setShowConfirmModal(false)}
@@ -1319,7 +1454,11 @@ export default function AturPenilaianGBSClient() {
                                 onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                 Batal
                             </button>
-                            <button onClick={() => { setShowConfirmModal(false); confirmAction === 'save-bobot' ? executeSaveBobot() : executeSaveKategori(); }}
+                            <button onClick={() => {
+                                setShowConfirmModal(false);
+                                if (confirmAction === 'save-bobot') executeSaveBobot();
+                                else if (confirmAction === 'save-batch-kategori') executeSaveBatchKategori();
+                            }}
                                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
                                 style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
                                 onMouseEnter={e => (e.currentTarget.style.background = THEME.gradients.primary)}

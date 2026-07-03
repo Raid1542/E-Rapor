@@ -1,20 +1,22 @@
 /**
- * Nama File: kokurikuler_client.tsx
- * Fungsi: Input nilai kokurikuler siswa untuk guru kelas
- * 
- * RULES:
- * - PTS Aktif: Hanya Mutaba'ah yang bisa diinput
- * - PAS Aktif: Semua aspek bisa diinput + Judul Proyek bisa diatur
- * - Belum Aktif: Tidak ada yang bisa diinput
- * 
- * VALIDASI:
- * - Nilai 0-100 (real-time)
- * - Nilai harus integer
- * - Semua aspek wajib terisi
- * - Judul proyek max 255 karakter
- * - Session expired handling
- * - Network timeout handling
- */
+* Nama File: kokurikuler_client.tsx
+* Fungsi: Input nilai kokurikuler siswa untuk guru kelas
+* 
+* RULES:
+* - PTS Aktif: Hanya Mutaba'ah yang bisa diinput
+* - PAS Aktif: Semua aspek bisa diinput + Judul Proyek bisa diatur
+* - Belum Aktif: Tidak ada yang bisa diinput
+* 
+* VALIDASI:
+* - Nilai 0-100 (real-time)
+* - Nilai harus integer
+* - Semua aspek wajib terisi
+* - Judul proyek max 255 karakter
+* - Session expired handling
+* - Network timeout handling
+* 
+* ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetch tahun ajaran
+*/
 
 'use client';
 
@@ -229,12 +231,9 @@ export default function KokurikulerClient() {
           return;
         }
 
+        // ✅ PERBAIKAN: Hanya cek error umum, TIDAK cek NOT_ASSIGNED
+        // karena endpoint /tahun-ajaran/aktif TIDAK menggunakan middleware cekGuruKelasDitugaskan
         if (!taRes.ok) {
-          const errData = await taRes.json().catch(() => ({ code: 'UNKNOWN' }));
-          if (errData.code === 'NOT_ASSIGNED') {
-            setIsNotAssigned(true);
-            return;
-          }
           throw new Error('Gagal memuat tahun ajaran');
         }
 
@@ -328,6 +327,7 @@ export default function KokurikulerClient() {
           return;
         }
 
+        // ✅ PERBAIKAN: Cek NOT_ASSIGNED di sini (endpoint /kokurikuler menggunakan middleware cekGuruKelasDitugaskan)
         if (!res.ok) {
           const err = await res.json().catch(() => ({ message: 'Gagal memuat' }));
           if (res.status === 403 && err.code === 'NOT_ASSIGNED') {
@@ -464,7 +464,6 @@ export default function KokurikulerClient() {
     }, 200);
   };
 
-  // ✅ PERBAIKAN: handleEdit dengan validasi aspek & auto-scroll
   const handleEdit = (siswa: SiswaKokurikuler) => {
     if (isReadOnly) {
       if (readOnlyReason === 'locked') {
@@ -508,8 +507,6 @@ export default function KokurikulerClient() {
 
     setSelectedSiswa(siswa);
 
-    // ✅ PERBAIKAN: Initialize editingNilai dengan semua aspek (termasuk yang kosong)
-    // Ini memastikan Object.keys(editingNilai) berisi semua aspek
     const initialEditingNilai: Record<number, NilaiAspek> = {};
     DAFTAR_ASPEK.forEach(aspek => {
       initialEditingNilai[aspek.id] = siswa.nilai[aspek.id] || {
@@ -522,7 +519,6 @@ export default function KokurikulerClient() {
 
     setShowEdit(true);
 
-    // Auto-scroll ke aspek pertama yang bisa diedit
     setTimeout(() => {
       const firstEditableAspek = editableAspek[0];
       const element = document.getElementById(`aspek-${firstEditableAspek.id}`);
@@ -545,7 +541,6 @@ export default function KokurikulerClient() {
     }, 200);
   };
 
-  // ✅ PERBAIKAN: Validasi nilai real-time
   const handleNilaiChange = (aspekId: number, nilai: number | null) => {
     if (nilai !== null) {
       if (nilai < 0 || nilai > 100) {
@@ -580,11 +575,9 @@ export default function KokurikulerClient() {
     });
   };
 
-  // ✅ PERBAIKAN: Validasi semua aspek terisi + cek perubahan
   const openConfirmSimpan = () => {
     if (!selectedSiswa) return;
 
-    // Validasi semua aspek yang bisa diedit sudah terisi
     const aspekBelumTerisi = DAFTAR_ASPEK.filter(aspek => {
       if (!canEditAspek(aspek.id)) return false;
       const nilaiData = editingNilai[aspek.id];
@@ -600,25 +593,19 @@ export default function KokurikulerClient() {
       return;
     }
 
-    // ✅ PERBAIKAN: Cek perubahan dengan logika yang lebih robust
-    // Gunakan DAFTAR_ASPEK instead of Object.keys(editingNilai)
     const hasChanges = DAFTAR_ASPEK.some(aspek => {
-      // Skip aspek yang tidak bisa diedit (terkunci)
       if (!canEditAspek(aspek.id)) return false;
 
       const newNilai = editingNilai[aspek.id]?.nilai;
       const oldNilai = selectedSiswa.nilai[aspek.id]?.nilai;
 
-      // ✅ Konversi ke number untuk perbandingan yang konsisten
       const newNum = (newNilai === null || newNilai === undefined) ? null : Number(newNilai);
       const oldNum = (oldNilai === null || oldNilai === undefined) ? null : Number(oldNilai);
 
-      // ✅ Handle kasus null/undefined
-      if (newNum === null && oldNum === null) return false; // Keduanya kosong = tidak ada perubahan
-      if (newNum === null || oldNum === null) return true;  // Salah satu kosong = ada perubahan
-      if (isNaN(newNum) || isNaN(oldNum)) return false;     // Invalid number = skip
+      if (newNum === null && oldNum === null) return false;
+      if (newNum === null || oldNum === null) return true;
+      if (isNaN(newNum) || isNaN(oldNum)) return false;
 
-      // ✅ Bandingkan nilai number
       return newNum !== oldNum;
     });
 
@@ -752,15 +739,12 @@ export default function KokurikulerClient() {
         throw new Error('Sesi berakhir');
       }
 
-      // ✅ Ambil hanya aspek yang bisa diedit sesuai periode
       const aspekYangDisimpan = DAFTAR_ASPEK.filter(aspek => canEditAspek(aspek.id));
 
-      // ✅ Simpan satu per satu aspek
       const promises = aspekYangDisimpan.map(async (aspek) => {
         const nilaiData = editingNilai[aspek.id];
         const nilai = nilaiData?.nilai ?? null;
 
-        // Skip jika nilai null
         if (nilai === null) return;
 
         const { grade, deskripsi } = getGradeByNilai(nilai, aspek.id);
@@ -798,7 +782,6 @@ export default function KokurikulerClient() {
       await Promise.all(promises);
       clearTimeout(timeoutId);
 
-      // ✅ Update local state dengan nilai baru
       const updatedSiswa: SiswaKokurikuler = {
         ...selectedSiswa,
         nilai: { ...editingNilai },
@@ -807,7 +790,6 @@ export default function KokurikulerClient() {
       setSiswaList(prev => prev.map(s => s.id === updatedSiswa.id ? updatedSiswa : s));
       setFilteredSiswa(prev => prev.map(s => s.id === updatedSiswa.id ? updatedSiswa : s));
 
-      // ✅ Tutup modal dan tampilkan success message
       setShowConfirmModal(false);
       setShowEdit(false);
       setSelectedSiswa(null);
@@ -923,9 +905,6 @@ export default function KokurikulerClient() {
   const isPasActive = jenisPenilaianAktif === 'PAS';
   const isPtsActive = jenisPenilaianAktif === 'PTS';
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ✅ BANNER INFO
-  // ═══════════════════════════════════════════════════════════════════════════
   const renderBannerInfo = () => {
     if (isReadOnly) {
       return (
@@ -1210,9 +1189,7 @@ export default function KokurikulerClient() {
         )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL DETAIL */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {showDetail && selectedSiswa && (
         <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
           onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
@@ -1324,9 +1301,7 @@ export default function KokurikulerClient() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* ✅ MODAL EDIT - DENGAN PERBAIKAN */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* MODAL EDIT */}
       {showEdit && selectedSiswa && (
         <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
           onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
@@ -1346,7 +1321,6 @@ export default function KokurikulerClient() {
             </div>
 
             <div className="p-6 space-y-5">
-              {/* Info Periode Aktif */}
               {jenisPenilaianAktif && (
                 <div className="rounded-xl px-4 py-3 flex items-center gap-3"
                   style={{ background: isPtsActive ? '#fff7ed' : '#ecfdf5', border: `1px solid ${isPtsActive ? '#fdba74' : '#86efac'}` }}>
@@ -1359,7 +1333,6 @@ export default function KokurikulerClient() {
                 </div>
               )}
 
-              {/* ✅ Render aspek dengan layout baru + perbaikan */}
               {DAFTAR_ASPEK.map(aspek => {
                 const nilaiData = editingNilai[aspek.id];
                 const nilai = nilaiData?.nilai;
@@ -1371,15 +1344,14 @@ export default function KokurikulerClient() {
                 return (
                   <div
                     key={aspek.id}
-                    id={`aspek-${aspek.id}`}  // ✅ Tambah ID untuk scroll
+                    id={`aspek-${aspek.id}`}
                     className="rounded-xl overflow-hidden border-2 transition-all"
                     style={{
                       borderColor: isAspekEditable ? '#fdba74' : '#d1d5db',
-                      opacity: isAspekEditable ? 1 : 0.6,  // ✅ Lebih redup untuk terkunci
+                      opacity: isAspekEditable ? 1 : 0.6,
                       background: isAspekEditable ? '#fff' : '#f9fafb'
                     }}>
 
-                    {/* Header Aspek */}
                     <div className="px-4 py-2.5 flex items-center justify-between"
                       style={{ background: isAspekEditable ? '#fff7ed' : '#f3f4f6' }}>
                       <h3 className="text-sm font-bold flex items-center gap-2"
@@ -1400,9 +1372,7 @@ export default function KokurikulerClient() {
                       ) : null}
                     </div>
 
-                    {/* Content */}
                     <div className="p-4" style={{ background: isAspekEditable ? '#fffaf6' : '#f9fafb' }}>
-                      {/* ✅ Banner info untuk aspek terkunci */}
                       {!isAspekEditable && (
                         <div className="mb-3 p-3 rounded-lg flex items-start gap-2" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
                           <Lock size={16} className="text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -1415,7 +1385,6 @@ export default function KokurikulerClient() {
                         </div>
                       )}
 
-                      {/* Input Nilai & Grade Preview */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="block text-xs font-semibold mb-1.5" style={{ color: isAspekEditable ? '#7a3a0a' : '#9ca3af' }}>
@@ -1459,7 +1428,6 @@ export default function KokurikulerClient() {
                         </div>
                       </div>
 
-                      {/* ✅ DESKRIPSI */}
                       {deskripsi && (
                         <div>
                           <label className="block text-xs font-semibold mb-1.5" style={{ color: isAspekEditable ? '#7a3a0a' : '#9ca3af' }}>
@@ -1505,9 +1473,7 @@ export default function KokurikulerClient() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL JUDUL PROYEK */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {showProyekModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4 dg-fadeIn"
           onClick={e => { if (e.target === e.currentTarget) closeProyekModal(); }}>
@@ -1574,9 +1540,7 @@ export default function KokurikulerClient() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {/* MODAL KONFIRMASI */}
-      {/* ═══════════════════════════════════════════════════════════════════════ */}
       {showConfirmModal && (
         <div
           className="fixed inset-0 z-[110] flex items-center justify-center p-4 dg-fadeIn"

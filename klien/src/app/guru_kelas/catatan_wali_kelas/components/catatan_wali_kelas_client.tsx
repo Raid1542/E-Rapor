@@ -2,6 +2,7 @@
  * Nama File: catatan_wali_client.tsx
  * Fungsi: Komponen klien untuk mengelola catatan wali kelas
  * UPDATE: 
+ *   ✅ FIX: Hapus pengecekan NOT_ASSIGNED di loadData (endpoint tidak pakai middleware)
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
  */
@@ -162,6 +163,8 @@ export default function CatatanWaliClient() {
     };
 
     // ====== FETCH DATA ======
+    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED di sini karena endpoint /tahun-ajaran/aktif 
+    // TIDAK menggunakan middleware cekGuruKelasDitugaskan
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
@@ -169,6 +172,7 @@ export default function CatatanWaliClient() {
                 const token = localStorage.getItem('token');
                 if (!token) {
                     showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+                    setLoading(false);
                     return;
                 }
 
@@ -176,19 +180,18 @@ export default function CatatanWaliClient() {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
+                // ✅ PERBAIKAN: Hanya cek error umum, TIDAK cek NOT_ASSIGNED
                 if (!taRes.ok) {
                     const errData = await parseBackendError(taRes);
-                    if (taRes.status === 403 || errData.code === 'NOT_ASSIGNED') {
-                        setIsNotAssigned(true);
-                        return;
-                    }
                     showModal({ type: 'error', title: 'Gagal Memuat', message: errData.message });
+                    setLoading(false);
                     return;
                 }
 
                 const taData = await taRes.json();
                 if (!taData.success) {
                     showModal({ type: 'error', title: 'Gagal Memuat', message: taData.message });
+                    setLoading(false);
                     return;
                 }
 
@@ -253,6 +256,7 @@ export default function CatatanWaliClient() {
         loadData();
     }, [showModal]);
 
+    // ✅ PERBAIKAN: fetchCatatan sudah benar handle NOT_ASSIGNED
     const fetchCatatan = async (sem: string, jenis: string, token: string) => {
         try {
             const res = await fetch(`${API}/catatan-wali-kelas/${jenis}/${sem}`, {
@@ -265,6 +269,8 @@ export default function CatatanWaliClient() {
                     setSiswaList(data.data || []);
                     setFilteredSiswa(data.data || []);
                     setKelasNama(data.kelas || 'Kelas Anda');
+                    // ✅ Reset isNotAssigned jika fetch berhasil
+                    setIsNotAssigned(false);
                 } else {
                     showModal({ type: 'error', title: 'Gagal Memuat', message: data.message });
                 }

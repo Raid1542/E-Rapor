@@ -1,26 +1,20 @@
 /**
- * Nama File: input_nilai_client.tsx
- * Fungsi: Input nilai siswa per mata pelajaran untuk guru kelas
- * UPDATE: 
- *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
- *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif/selesai
- *   - ✅ BARU: Banner warning jika bobot belum diatur saat periode PAS aktif
- *   - ✅ BARU: Konfirmasi tambahan saat simpan nilai jika bobot belum diatur
- *   - Banner warning status periode
- *   - Tombol Edit disabled dengan icon  jika read only
- *   - Modal warning saat klik tombol di mode read only
- *   - Semester otomatis dari tahun ajaran aktif
- */
-
+* Nama File: input_nilai_client.tsx
+* Fungsi: Input nilai siswa per mata pelajaran untuk guru kelas
+* UPDATE:
+*   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
+*   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif/selesai
+*   - ✅ BARU: Banner warning jika bobot belum diatur saat periode PAS aktif
+*   - ✅ BARU: Konfirmasi tambahan saat simpan nilai jika bobot belum diatur
+*   - ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetch tahun ajaran
+*/
 'use client';
-
 import { useState, useEffect, useCallback, ReactNode } from 'react';
 import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
-
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
 
@@ -50,20 +44,18 @@ interface SiswaNilai {
 }
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
-
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .dg-fadeIn  { animation: dg-fadeIn  0.2s ease; }
-    .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .dg-pulse   { animation: dg-pulse   0.6s ease 0.15s; }
-  `}</style>
+        @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .dg-fadeIn  { animation: dg-fadeIn  0.2s ease; }
+        .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .dg-pulse   { animation: dg-pulse   0.6s ease 0.15s; }
+    `}</style>
 );
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
-
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
@@ -90,10 +82,8 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 };
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
-
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-400 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
-
 const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
@@ -119,19 +109,18 @@ const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; ch
 );
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-
 export default function InputNilaiClient() {
     const { showSessionExpired, handleLogout } = useSession();
 
-    // ✅ STATE BARU: Kondisi akses
+    // ✅ STATE: Kondisi akses
     const [isNotAssigned, setIsNotAssigned] = useState(false);
     const [isReadOnly, setIsReadOnly] = useState(false);
     const [readOnlyReason, setReadOnlyReason] = useState<'not_open' | 'locked' | null>(null);
     const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [semesterAktif, setSemesterAktif] = useState<string>('Ganjil');
-
     const [jenisPenilaianAktif, setJenisPenilaianAktif] = useState<'PTS' | 'PAS' | null>(null);
+
     const [loading, setLoading] = useState(true);
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
     const [komponenList, setKomponenList] = useState<KomponenPenilaian[]>([]);
@@ -145,7 +134,7 @@ export default function InputNilaiClient() {
     const [currentPage, setCurrentPage] = useState(1);
     const [dataLoading, setDataLoading] = useState(false);
 
-    // ✅ STATE BARU: Bobot belum diatur (untuk warning PAS)
+    // ✅ STATE: Bobot belum diatur (untuk warning PAS)
     const [bobotSudahDiatur, setBobotSudahDiatur] = useState<boolean>(true);
     const [showBobotWarning, setShowBobotWarning] = useState(false);
 
@@ -167,7 +156,8 @@ export default function InputNilaiClient() {
     const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
 
     // ── FETCH TAHUN AJARAN AKTIF ──────────────────────────────────────────────
-
+    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED di sini karena endpoint 
+    // /tahun-ajaran/aktif TIDAK menggunakan middleware cekGuruKelasDitugaskan
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -175,19 +165,15 @@ export default function InputNilaiClient() {
                 const token = localStorage.getItem('token');
                 if (!token) {
                     showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+                    setLoading(false);
                     return;
                 }
+
                 const headers = { Authorization: `Bearer ${token}` };
 
-                // 1. Fetch tahun ajaran aktif dulu
+                // 1. Fetch tahun ajaran aktif (TIDAK perlu cek NOT_ASSIGNED di sini)
                 const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
-
                 if (!taRes.ok) {
-                    const errData = await taRes.json().catch(() => ({ code: 'UNKNOWN' }));
-                    if (errData.code === 'NOT_ASSIGNED') {
-                        setIsNotAssigned(true);
-                        return;
-                    }
                     throw new Error('Gagal memuat tahun ajaran');
                 }
 
@@ -197,7 +183,6 @@ export default function InputNilaiClient() {
                 }
 
                 const { status_pts, status_pas, semester } = taData.data;
-
                 setStatusPTS(status_pts || 'nonaktif');
                 setStatusPAS(status_pas || 'nonaktif');
                 setSemesterAktif(semester || 'Ganjil');
@@ -236,6 +221,7 @@ export default function InputNilaiClient() {
                 }
 
                 // 2. Fetch mapel & komponen
+                // ✅ PERBAIKAN: NOT_ASSIGNED akan di-handle di sini (karena /mapel menggunakan middleware cekGuruKelasDitugaskan)
                 const [mapelRes, komponenRes] = await Promise.all([
                     fetch('http://localhost:5000/api/guru-kelas/mapel', { headers }),
                     fetch('http://localhost:5000/api/guru-kelas/atur-penilaian/komponen', { headers }),
@@ -243,8 +229,10 @@ export default function InputNilaiClient() {
 
                 if (!mapelRes.ok) {
                     const errData = await mapelRes.json().catch(() => ({}));
+                    // ✅ Cek NOT_ASSIGNED di sini (endpoint /mapel menggunakan middleware cekGuruKelasDitugaskan)
                     if (mapelRes.status === 403 && errData.code === 'NOT_ASSIGNED') {
                         setIsNotAssigned(true);
+                        setLoading(false);
                         return;
                     }
                     if (mapelRes.status !== 403) {
@@ -265,6 +253,7 @@ export default function InputNilaiClient() {
                 const pilihan = mapelData.data?.pilihan || [];
                 setMapelList([...wajib, ...pilihan]);
                 setKomponenList(komponenData.data || []);
+
             } catch (err: any) {
                 showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
             } finally {
@@ -275,7 +264,6 @@ export default function InputNilaiClient() {
     }, [showModal]);
 
     // ── FETCH NILAI SAAT MAPEL DIPILIH ──────────────────────────────────────────
-
     useEffect(() => {
         if (mapelList.length === 0 || selectedMapelId === null) {
             setSiswaList([]);
@@ -292,6 +280,7 @@ export default function InputNilaiClient() {
             try {
                 const token = localStorage.getItem('token');
                 if (!token) return;
+
                 const headers = { Authorization: `Bearer ${token}` };
                 const res = await fetch(`http://localhost:5000/api/guru-kelas/nilai/${selectedMapelId}`, { headers });
 
@@ -331,7 +320,7 @@ export default function InputNilaiClient() {
                 setCurrentMapel(mapelList.find(m => m.mata_pelajaran_id === selectedMapelId) || null);
                 setCurrentPage(1);
 
-                // ✅ PERHATIKAN: Cek status bobot dari backend
+                // ✅ Cek status bobot dari backend
                 const bobotStatus = data.bobot_sudah_diatur ?? true;
                 setBobotSudahDiatur(bobotStatus);
 
@@ -341,6 +330,7 @@ export default function InputNilaiClient() {
                 } else {
                     setShowBobotWarning(false);
                 }
+
             } catch (err: any) {
                 showModal({ type: 'error', title: 'Gagal Memuat', message: err.message || 'Gagal memuat data nilai.' });
             } finally {
@@ -351,7 +341,6 @@ export default function InputNilaiClient() {
     }, [selectedMapelId, mapelList, showModal, jenisPenilaianAktif, isReadOnly]);
 
     // ── FILTER & PAGINATION ─────────────────────────────────────────────────────
-
     useEffect(() => {
         if (!searchQuery.trim()) {
             setFilteredSiswa(siswaList);
@@ -379,6 +368,7 @@ export default function InputNilaiClient() {
             <button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                 className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>
         );
+
         const range: number[] = [];
         if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) range.push(i); }
         else {
@@ -388,6 +378,7 @@ export default function InputNilaiClient() {
             if (currentPage < totalPages - 2) range.push(-2);
             range.push(totalPages);
         }
+
         range.forEach((p) => {
             if (p < 0) { pages.push(<span key={p} className="px-1 text-gray-400 text-sm">…</span>); }
             else {
@@ -399,6 +390,7 @@ export default function InputNilaiClient() {
                 );
             }
         });
+
         pages.push(
             <button key="next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
                 className={`${btnBase} ${btnInactive} disabled:opacity-40`}>»</button>
@@ -407,13 +399,11 @@ export default function InputNilaiClient() {
     };
 
     // ── HANDLERS ────────────────────────────────────────────────────────────────
-
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
-    // ✅ PERBAIKAN: Cek read only sebelum buka modal edit
+    // ✅ Cek read only sebelum buka modal edit
     const handleEdit = (siswa: SiswaNilai) => {
-        // Cek 1: Read only mode (periode belum aktif/selesai)
         if (isReadOnly) {
             if (readOnlyReason === 'locked') {
                 showModal({
@@ -431,7 +421,6 @@ export default function InputNilaiClient() {
             return;
         }
 
-        // Cek 2: Mapel tidak bisa input
         if (!currentMapel?.bisa_input) {
             showModal({
                 type: 'warning',
@@ -445,6 +434,7 @@ export default function InputNilaiClient() {
         setEditingNilai({ ...siswa.nilai });
         setShowEdit(true);
     };
+
     const closeEdit = () => { setEditClosing(true); setTimeout(() => { setShowEdit(false); setEditClosing(false); setEditingSiswa(null); }, 200); };
 
     const openConfirmSimpan = () => {
@@ -480,14 +470,13 @@ export default function InputNilaiClient() {
             return;
         }
 
-        // ✅ BARU: Konfirmasi tambahan jika PAS aktif & bobot belum diatur
+        // ✅ Konfirmasi tambahan jika PAS aktif & bobot belum diatur
         if (jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur) {
             showModal({
                 type: 'warning',
                 title: '⚠️ Bobot Penilaian Belum Diatur',
                 message: `Bobot penilaian untuk mata pelajaran "${currentMapel?.nama_mapel}" belum diatur.\n\nNilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata).\n\n💡 Tip: Atur bobot terlebih dahulu di menu "Atur Penilaian" untuk hasil yang akurat.\n\nApakah Anda tetap ingin melanjutkan menyimpan nilai?`
             });
-            // User tetap bisa lanjut dengan klik OK
             setConfirmSiswaNama(editingSiswa.nama);
             setShowConfirmModal(true);
             return;
@@ -499,7 +488,6 @@ export default function InputNilaiClient() {
 
     const executeSimpanNilai = async () => {
         if (!editingSiswa || !selectedMapelId) return;
-
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
@@ -526,7 +514,6 @@ export default function InputNilaiClient() {
 
             setSiswaList(prev => prev.map(s => s.id === editingSiswa.id ? updated : s));
             setFilteredSiswa(prev => prev.map(s => s.id === editingSiswa.id ? updated : s));
-
             setShowConfirmModal(false);
             setShowEdit(false);
             setEditingSiswa(null);
@@ -539,12 +526,12 @@ export default function InputNilaiClient() {
                     message: `Nilai ${updated.nama} berhasil disimpan.`
                 });
             }, 250);
+
         } catch (err: any) {
             setShowConfirmModal(false);
             setShowEdit(false);
             setEditingSiswa(null);
             setConfirmSiswaNama('');
-
             setTimeout(() => {
                 showModal({
                     type: 'error',
@@ -558,18 +545,11 @@ export default function InputNilaiClient() {
     };
 
     // ── BADGE NILAI ─────────────────────────────────────────────────────────────
-
     const NilaiBadge = ({ nilai, jenis }: { nilai: number; jenis: 'PTS' | 'PAS' }) => {
         if (nilai === null || nilai === undefined) {
             return <span className="text-gray-700 text-xs">—</span>;
         }
-
-        const color = {
-            bg: '#fff0e5',
-            text: '#c95b08',
-            border: '#fde0c8'
-        };
-
+        const color = { bg: '#fff0e5', text: '#c95b08', border: '#fde0c8' };
         return (
             <span className="inline-block px-2 py-0.5 rounded-lg text-xs font-bold"
                 style={{ background: color.bg, color: color.text, border: `1px solid ${color.border}` }}>
@@ -579,7 +559,6 @@ export default function InputNilaiClient() {
     };
 
     // ── LOADING STATE ───────────────────────────────────────────────────────────
-
     if (loading) {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
@@ -598,7 +577,6 @@ export default function InputNilaiClient() {
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
@@ -630,10 +608,7 @@ export default function InputNilaiClient() {
     }
 
     // ── RENDER UTAMA ────────────────────────────────────────────────────────────
-
     const minTableWidth = 400 + (komponenList.length * 100) + 240;
-
-    // ✅ Helper: Apakah tombol Edit harus aktif?
     const canEditNilai = currentMapel?.bisa_input && !isReadOnly;
 
     return (
@@ -870,7 +845,6 @@ export default function InputNilaiClient() {
                                                             onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}>
                                                             <Eye size={13} /> Detail
                                                         </button>
-                                                        {/* ✅ TOMBOL EDIT: Disabled jika read-only atau mapel tidak bisa input */}
                                                         <button
                                                             onClick={() => handleEdit(siswa)}
                                                             disabled={!canEditNilai}
@@ -920,14 +894,13 @@ export default function InputNilaiClient() {
                 )}
             </div>
 
+            {/* ── MODAL DETAIL ─────────────────────────────────────────────── */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
-
-                        {/* Header */}
                         <div className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
                             <div>
                                 <h2 className="text-lg font-bold text-white">Detail Nilai Siswa</h2>
@@ -938,9 +911,7 @@ export default function InputNilaiClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="p-6 space-y-6">
-                            {/* Info Siswa */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
                                     <p className="text-xs text-gray-500 mb-1">NIS</p>
@@ -952,14 +923,12 @@ export default function InputNilaiClient() {
                                 </div>
                             </div>
 
-                            {/* Rapor PTS & PAS */}
                             <div>
                                 <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
                                     <span className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></span>
                                     Nilai Rapor
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    {/* PTS */}
                                     <div className="rounded-xl p-5 border-2" style={{
                                         background: '#fff7ed',
                                         borderColor: '#fdba74',
@@ -993,7 +962,6 @@ export default function InputNilaiClient() {
                                         </div>
                                     </div>
 
-                                    {/* PAS */}
                                     <div className="rounded-xl p-5 border-2" style={{
                                         background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f9fafb',
                                         borderColor: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb'
@@ -1030,14 +998,11 @@ export default function InputNilaiClient() {
                                 </div>
                             </div>
 
-                            {/* Nilai Komponen */}
                             <div>
                                 <h3 className="text-sm font-bold mb-4 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
                                     <span className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></span>
                                     Nilai Komponen Penilaian
                                 </h3>
-
-                                {/* Ulangan Harian */}
                                 <div className="mb-5">
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-1 h-4 rounded-full" style={{ background: '#fbbf24' }}></div>
@@ -1055,9 +1020,7 @@ export default function InputNilaiClient() {
                                                     }}>
                                                     <div className="text-xs font-bold mb-2" style={{ color: '#7a3a0a' }}>{k.nama_komponen}</div>
                                                     <div className="text-2xl font-bold"
-                                                        style={{
-                                                            color: nilai !== null && nilai !== undefined ? '#c95b08' : '#d1d5db'
-                                                        }}>
+                                                        style={{ color: nilai !== null && nilai !== undefined ? '#c95b08' : '#d1d5db' }}>
                                                         {nilai !== null && nilai !== undefined ? nilai : '-'}
                                                     </div>
                                                 </div>
@@ -1066,7 +1029,6 @@ export default function InputNilaiClient() {
                                     </div>
                                 </div>
 
-                                {/* PTS & PAS */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-1 h-4 rounded-full" style={{ background: '#e8690a' }}></div>
@@ -1090,9 +1052,7 @@ export default function InputNilaiClient() {
                                                             </span>
                                                         </div>
                                                         <div className="text-3xl font-bold mb-2"
-                                                            style={{
-                                                                color: nilai !== null && nilai !== undefined ? '#c2410c' : '#d1d5db'
-                                                            }}>
+                                                            style={{ color: nilai !== null && nilai !== undefined ? '#c2410c' : '#d1d5db' }}>
                                                             {nilai !== null && nilai !== undefined ? nilai : '-'}
                                                         </div>
                                                     </div>
@@ -1104,7 +1064,6 @@ export default function InputNilaiClient() {
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                             <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
                             {canEditNilai && (
@@ -1119,14 +1078,13 @@ export default function InputNilaiClient() {
                 </div>
             )}
 
+            {/* ── MODAL EDIT ───────────────────────────────────────────────── */}
             {showEdit && editingSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
-
-                        {/* Header */}
                         <div className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
                             <div>
                                 <h2 className="text-lg font-bold text-white">Edit Nilai Siswa</h2>
@@ -1137,9 +1095,7 @@ export default function InputNilaiClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="p-6 space-y-6">
-                            {/* Info Banner */}
                             {jenisPenilaianAktif && (
                                 <div className="rounded-xl px-4 py-3 flex items-center gap-3"
                                     style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
@@ -1153,7 +1109,6 @@ export default function InputNilaiClient() {
                                 </div>
                             )}
 
-                            {/* ✅ Banner Warning Bobot di Modal Edit */}
                             {jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur && (
                                 <div className="rounded-xl px-4 py-3 flex items-start gap-3"
                                     style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
@@ -1164,7 +1119,6 @@ export default function InputNilaiClient() {
                                 </div>
                             )}
 
-                            {/* Ulangan Harian */}
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-1 h-5 rounded-full" style={{ background: '#fbbf24' }}></div>
@@ -1187,7 +1141,6 @@ export default function InputNilaiClient() {
                                                     value={nilai ?? ''}
                                                     onChange={e => {
                                                         const val = e.target.value;
-                                                        // ✅ Hanya izinkan angka
                                                         if (val === '' || /^\d+$/.test(val)) {
                                                             setEditingNilai(prev => ({
                                                                 ...prev,
@@ -1196,7 +1149,6 @@ export default function InputNilaiClient() {
                                                         }
                                                     }}
                                                     onBlur={e => {
-                                                        // ✅ Validasi range saat lose focus
                                                         const val = parseInt(e.target.value);
                                                         if (!isNaN(val)) {
                                                             if (val < 0) {
@@ -1221,7 +1173,6 @@ export default function InputNilaiClient() {
                                 </div>
                             </div>
 
-                            {/* PTS & PAS */}
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></div>
@@ -1233,7 +1184,6 @@ export default function InputNilaiClient() {
                                         const isActive = (jenisPenilaianAktif === 'PTS' && isPTS) || (jenisPenilaianAktif === 'PAS' && !isPTS);
                                         const isDisabled = !isActive;
                                         const nilai = editingNilai[komponen.id_komponen];
-
                                         return (
                                             <div key={komponen.id_komponen}
                                                 className={`rounded-xl p-5 border-2 transition-all relative overflow-hidden ${isActive
@@ -1244,7 +1194,6 @@ export default function InputNilaiClient() {
                                                     <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-10"
                                                         style={{ background: '#e8690a', transform: 'translate(30%, -30%)' }}></div>
                                                 )}
-
                                                 <div className="relative">
                                                     <div className="text-center mb-4">
                                                         <span className="text-base font-bold uppercase tracking-wide"
@@ -1252,7 +1201,6 @@ export default function InputNilaiClient() {
                                                             {komponen.nama_komponen}
                                                         </span>
                                                     </div>
-
                                                     <input
                                                         type="text"
                                                         inputMode="numeric"
@@ -1260,7 +1208,6 @@ export default function InputNilaiClient() {
                                                         value={nilai ?? ''}
                                                         onChange={e => {
                                                             const val = e.target.value;
-                                                            // ✅ Hanya izinkan angka
                                                             if (val === '' || /^\d+$/.test(val)) {
                                                                 setEditingNilai(prev => ({
                                                                     ...prev,
@@ -1269,7 +1216,6 @@ export default function InputNilaiClient() {
                                                             }
                                                         }}
                                                         onBlur={e => {
-                                                            // ✅ Validasi range saat lose focus
                                                             const val = parseInt(e.target.value);
                                                             if (!isNaN(val)) {
                                                                 if (val < 0) {
@@ -1288,7 +1234,6 @@ export default function InputNilaiClient() {
                                                             }`}
                                                         style={isActive ? { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' } : {}}
                                                     />
-
                                                     {isActive && (
                                                         <div className="flex items-center justify-center gap-1.5 mt-3">
                                                             <CheckCircle2 size={12} style={{ color: '#16a34a' }} />
@@ -1309,7 +1254,6 @@ export default function InputNilaiClient() {
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                             <BtnSecondary onClick={closeEdit} disabled={saving}>Batal</BtnSecondary>
                             <button onClick={openConfirmSimpan} disabled={saving}
@@ -1349,11 +1293,9 @@ export default function InputNilaiClient() {
                                 Konfirmasi Penyimpanan Nilai
                             </h3>
                         </div>
-
                         <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
                             Apakah Anda yakin ingin menyimpan nilai {confirmSiswaNama}?
                         </p>
-
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowConfirmModal(false)}
