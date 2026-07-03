@@ -3,6 +3,7 @@
  * Fungsi: Halaman login client-side (form, popup notifikasi, validasi, redirect)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 15 September 2025
+ * Redesign: tampilan modern, panel kiri bertema "kartu nilai", header form di-tengahkan, kolom input berkilau
  */
 
 "use client";
@@ -29,7 +30,7 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
 
     const cfg = {
         success: {
-            bg: 'linear-gradient(135deg, #ea580c 0%, #f97316 55%, #fb923c 100%)',
+            bg: 'linear-gradient(135deg, #c95b08 0%, #e8690a 55%, #f5870a 100%)',
             iconBg: 'rgba(255,255,255,0.18)', iconBorder: 'rgba(255,255,255,0.35)',
             icon: (<svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="22" fill="rgba(255,255,255,0.15)" /><path d="M13 22l7 7 11-14" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>),
             titleColor: '#fff', msgColor: 'rgba(255,237,213,0.92)',
@@ -243,43 +244,131 @@ export default function LoginClient() {
             {popup && <LoginPopup popup={popup} onClose={closePopup} />}
 
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,600;1,700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,600;1,700&display=swap');
                 * { font-family: 'Poppins', sans-serif; box-sizing: border-box; }
+
+                :root {
+                    --ink: #2b1608;
+                    --ink-soft: #7a4a26;
+                    --muted: #b98a5e;
+                    --bg-wash: #fdf6f0;
+                    --border-soft: #fde0c8;
+                    --grad-1: #c95b08;
+                    --grad-2: #e8690a;
+                    --grad-3: #f5870a;
+                }
+
                 .bg-image { background-image: url('/images/bg-logo.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; }
-                .glass-overlay { background: rgba(255,255,255,0.52); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
-                .login-card { display: flex; width: 100%; max-width: 860px; border-radius: 20px; overflow: hidden; box-shadow: 0 12px 48px rgba(234,88,12,0.18); }
-                .left-panel { width: 42%; background: linear-gradient(160deg, #ea580c 0%, #f97316 55%, #fb923c 100%); padding: 48px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; gap: 26px; }
+                .glass-overlay { background: rgba(253,246,240,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+
+                .login-card { display: flex; width: 100%; max-width: 900px; min-height: 560px; border-radius: 24px; overflow: hidden; box-shadow: 0 24px 64px rgba(201,91,8,0.22), 0 0 0 1px rgba(253,224,200,0.6); background: #fff; }
+
+                /* ── PANEL KIRI: identitas sekolah dengan motif "kartu nilai" ── */
+                .left-panel {
+                    width: 42%;
+                    background: linear-gradient(160deg, var(--grad-1) 0%, var(--grad-2) 55%, var(--grad-3) 100%);
+                    padding: 48px 32px;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    position: relative; overflow: hidden; gap: 26px;
+                }
+                .left-panel .ledger-lines {
+                    position: absolute; inset: 0;
+                    background-image: repeating-linear-gradient(to bottom, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 42px);
+                    opacity: 0.7; pointer-events: none;
+                }
                 .left-panel::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,0.1); }
                 .left-panel::after { content: ''; position: absolute; bottom: -40px; left: 20px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.07); }
-                .logo-box { width: 148px; height: 148px; border-radius: 26px; background: rgba(255,255,255,0.22); border: 2.5px solid rgba(255,255,255,0.45); display: flex; align-items: center; justify-content: center; font-size: 60px; font-weight: 700; color: #fff; position: relative; z-index: 1; overflow: hidden; flex-shrink: 0; margin: 0 auto; }
+
+                .panel-shimmer {
+                    position: absolute; top: -20%; left: -70%; width: 45%; height: 160%;
+                    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+                    transform: rotate(10deg);
+                    animation: panel-shimmer-sweep 5.5s ease-in-out infinite;
+                    pointer-events: none; z-index: 3; mix-blend-mode: soft-light;
+                }
+                @keyframes panel-shimmer-sweep {
+                    0% { left: -70%; }
+                    45% { left: 130%; }
+                    100% { left: 130%; }
+                }
+
+                .logo-orbit { position: relative; z-index: 1; width: 152px; height: 152px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 0 auto; }
+                .logo-orbit::before {
+                    content: ''; position: absolute; inset: -8px; border-radius: 50%;
+                    border: 1.5px dashed rgba(255,255,255,0.4);
+                    animation: orbit-spin 18s linear infinite;
+                }
+                .logo-box { width: 132px; height: 132px; border-radius: 26px; background: rgba(255,255,255,0.2); border: 2.5px solid rgba(255,255,255,0.45); display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 700; color: #fff; overflow: hidden; }
                 .logo-box img { width: 100%; height: 100%; object-fit: contain; }
+                @keyframes orbit-spin { to { transform: rotate(360deg); } }
+
                 .left-text { position: relative; z-index: 1; text-align: center; width: 100%; }
-                .brand-erapor { font-size: 22px; font-weight: 600; color: #fff; letter-spacing: -0.3px; margin: 0 0 2px; line-height: 1.2; }
-                .brand-nama { font-size: 20px; font-weight: 700; font-style: italic; color: #c2410c; text-shadow: 0 1px 8px rgba(0,0,0,0.18); line-height: 1.3; margin: 0 0 8px; word-break: break-word; }
-                .brand-sub { font-size: 11.5px; color: rgba(255,255,255,0.7); font-weight: 400; line-height: 1.6; margin: 0; }
-                .right-panel { flex: 1; background: #fff; padding: 44px 38px; display: flex; flex-direction: column; justify-content: center; }
-                .right-label { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; color: #f97316; text-transform: uppercase; margin: 0 0 8px; }
-                .right-title { font-size: 28px; font-weight: 700; color: #1c0f07; margin: 0 0 8px; }
-                .right-divider { width: 36px; height: 3px; background: linear-gradient(90deg,#ea580c,#fb923c); border-radius: 2px; margin: 0 0 24px; }
-                .field-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9a3412; text-transform: uppercase; margin: 0 0 7px; }
-                .field-input { width: 100%; height: 46px; padding: 0 14px; border-radius: 11px; border: 1.5px solid rgba(251,146,60,0.3); background: #fff8f2; font-size: 13.5px; color: #1c0f07; font-family: 'Poppins', sans-serif; outline: none; transition: border-color .18s, box-shadow .18s, background .18s; }
-                .field-input::placeholder { color: #c4a882; }
-                .field-input:focus { border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.13); background: #fff; }
+                .brand-erapor { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.85); margin: 0 0 6px; line-height: 1.2; }
+                .brand-nama { font-size: 22px; font-weight: 800; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.15); line-height: 1.3; margin: 0 0 10px; word-break: break-word; }
+                .brand-sub { font-size: 11.5px; color: rgba(255,255,255,0.75); font-weight: 400; line-height: 1.7; margin: 0; }
+
+                /* ── PANEL KANAN: form login ── */
+                .right-panel { flex: 1; background: #fff; padding: 48px 42px; display: flex; flex-direction: column; justify-content: center; }
+                .right-header { text-align: center; margin: 0 auto 28px; }
+                .right-label { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--grad-3); text-transform: uppercase; margin: 0 0 8px; }
+                .right-title { font-size: 27px; font-weight: 800; color: var(--ink); margin: 0 0 10px; }
+                .right-divider { width: 36px; height: 3px; background: linear-gradient(90deg,var(--grad-1),var(--grad-3)); border-radius: 2px; margin: 0 auto; }
+
+                .field-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-soft); text-transform: uppercase; margin: 0 0 7px; }
+
+                /* Wrapper kilau: bungkus setiap kolom input agar bisa punya sapuan cahaya bergerak tanpa mengganggu ketikan */
+                .shimmer-field { position: relative; border-radius: 12px; overflow: hidden; isolation: isolate; }
+                .shimmer-field::after {
+                    content: ''; position: absolute; top: 0; left: -160%; width: 55%; height: 100%;
+                    background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.85) 50%, transparent 100%);
+                    transform: skewX(-22deg);
+                    animation: shimmer-sweep 3.4s ease-in-out infinite;
+                    pointer-events: none; z-index: 2; mix-blend-mode: soft-light;
+                }
+                .shimmer-field.shimmer-delay-1::after { animation-delay: 0.9s; }
+                .shimmer-field.shimmer-delay-2::after { animation-delay: 1.8s; }
+                @keyframes shimmer-sweep {
+                    0% { left: -160%; }
+                    45% { left: 160%; }
+                    100% { left: 160%; }
+                }
+
+                .field-input { position: relative; z-index: 1; width: 100%; height: 46px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--border-soft); background: var(--bg-wash); font-size: 13.5px; color: var(--ink); font-family: 'Poppins', sans-serif; outline: none; transition: border-color .18s, box-shadow .18s, background .18s; }
+                .field-input::placeholder { color: var(--muted); }
+                .field-input:focus { border-color: var(--grad-3); box-shadow: 0 0 0 3px rgba(245,135,10,0.14); background: #fff; }
                 input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none !important; visibility: hidden; pointer-events: none; }
+
                 .pw-wrap { position: relative; }
                 .pw-wrap .field-input { padding-right: 46px; }
-                .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: #f97316; opacity: 0.6; display: flex; align-items: center; }
+                .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: var(--grad-3); opacity: 0.6; display: flex; align-items: center; transition: opacity .15s; z-index: 3; }
                 .pw-toggle:hover { opacity: 1; }
-                .role-select { width: 100%; height: 46px; padding: 0 44px 0 14px; border-radius: 11px; border: 1.5px solid rgba(251,146,60,0.3); background: #fff8f2; font-size: 13.5px; font-family: 'Poppins', sans-serif; outline: none; cursor: pointer; transition: border-color .18s, box-shadow .18s, background .18s; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23f97316' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; background-color: #fff8f2; }
-                .role-select:focus { border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.13); background-color: #fff; }
-                .role-select option { color: #1c0f07; background: #fff; }
-                .btn-login { width: 100%; height: 50px; border-radius: 13px; border: none; cursor: pointer; background: linear-gradient(135deg,#ea580c,#f97316,#fb923c); color: #fff; font-family: 'Poppins', sans-serif; font-size: 14.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; transition: background .18s, transform .12s, box-shadow .18s; box-shadow: 0 4px 18px rgba(234,88,12,0.32); }
-                .btn-login:hover:not(:disabled) { background: linear-gradient(135deg,#c2410c,#ea580c,#f97316); box-shadow: 0 6px 24px rgba(234,88,12,0.42); }
-                .btn-login:active { transform: scale(0.98); }
+
+                .role-select { position: relative; z-index: 1; width: 100%; height: 46px; padding: 0 44px 0 14px; border-radius: 12px; border: 1.5px solid var(--border-soft); background: var(--bg-wash); font-size: 13.5px; font-family: 'Poppins', sans-serif; outline: none; cursor: pointer; transition: border-color .18s, box-shadow .18s, background .18s; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23f5870a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; }
+                .role-select:focus { border-color: var(--grad-3); box-shadow: 0 0 0 3px rgba(245,135,10,0.14); background-color: #fff; }
+                .role-select option { color: var(--ink); background: #fff; }
+
+                .btn-login { width: 100%; height: 50px; border-radius: 14px; border: none; cursor: pointer; background: linear-gradient(135deg,var(--grad-1),var(--grad-2),var(--grad-3)); color: #fff; font-family: 'Poppins', sans-serif; font-size: 14.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; transition: transform .12s, box-shadow .18s, filter .18s; box-shadow: 0 6px 20px rgba(201,91,8,0.32); }
+                .btn-login:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(201,91,8,0.42); filter: brightness(1.04); }
+                .btn-login:active:not(:disabled) { transform: translateY(0) scale(0.98); }
                 .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
-                .btn-arrow { width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+                .btn-login:focus-visible, .field-input:focus-visible, .role-select:focus-visible, .pw-toggle:focus-visible { outline: 2px solid var(--grad-3); outline-offset: 2px; }
+                .btn-arrow { width: 28px; height: 28px; border-radius: 9px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .18s; }
+                .btn-login:hover:not(:disabled) .btn-arrow { transform: translateX(3px); }
+
                 .fg { margin-bottom: 16px; }
-                .footer-copy { text-align: center; font-size: 11.5px; color: #c2410c; margin-top: 20px; opacity: 0.8; }
+                .footer-copy { text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 22px; }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .logo-orbit::before { animation: none; }
+                    .shimmer-field::after { animation: none; display: none; }
+                    .panel-shimmer { animation: none; display: none; }
+                }
+
+                @media (max-width: 760px) {
+                    .login-card { flex-direction: column; max-width: 420px; }
+                    .left-panel { width: 100%; padding: 36px 28px; }
+                    .right-panel { padding: 36px 28px; }
+                }
             `}</style>
 
             <div className="min-h-screen relative bg-image">
@@ -287,14 +376,18 @@ export default function LoginClient() {
                 <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
                     <div className="login-card">
 
-                        {/* Left Panel: Logo + Brand Info */}
+                        {/* Panel Kiri: Identitas Sekolah */}
                         <div className="left-panel">
-                            <div className="logo-box">
-                                {logoSekolah && !logoError ? (
-                                    <img src={logoSekolah} alt={namaSekolah} onError={() => setLogoError(true)} />
-                                ) : (
-                                    <span>{namaSekolah.charAt(0).toUpperCase()}</span>
-                                )}
+                            <div className="ledger-lines" />
+                            <div className="panel-shimmer" />
+                            <div className="logo-orbit">
+                                <div className="logo-box">
+                                    {logoSekolah && !logoError ? (
+                                        <img src={logoSekolah} alt={namaSekolah} onError={() => setLogoError(true)} />
+                                    ) : (
+                                        <span>{namaSekolah.charAt(0).toUpperCase()}</span>
+                                    )}
+                                </div>
                             </div>
                             <div className="left-text">
                                 <p className="brand-erapor">E-Rapor</p>
@@ -303,11 +396,13 @@ export default function LoginClient() {
                             </div>
                         </div>
 
-                        {/* Right Panel: Login Form */}
+                        {/* Panel Kanan: Form Login */}
                         <div className="right-panel">
-                            <p className="right-label">Masuk ke akun</p>
-                            <p className="right-title">Selamat Datang</p>
-                            <div className="right-divider" />
+                            <div className="right-header">
+                                <p className="right-label">Masuk ke akun</p>
+                                <p className="right-title">Selamat Datang</p>
+                                <div className="right-divider" />
+                            </div>
 
                             <form onSubmit={handleSubmit}>
                                 {/* Email Field */}
@@ -316,7 +411,9 @@ export default function LoginClient() {
                                         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                         Email
                                     </div>
-                                    <input type="email" name="email_sekolah" value={formData.email_sekolah} onChange={handleChange} placeholder="Masukkan email Anda" className="field-input" required />
+                                    <div className="shimmer-field shimmer-delay-1">
+                                        <input type="email" name="email_sekolah" value={formData.email_sekolah} onChange={handleChange} placeholder="Masukkan email Anda" className="field-input" required />
+                                    </div>
                                 </div>
 
                                 {/* Password Field (with toggle visibility) */}
@@ -325,9 +422,9 @@ export default function LoginClient() {
                                         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" strokeWidth={2} /><path strokeWidth={2} d="M8 11V7a4 4 0 018 0v4" /></svg>
                                         Password
                                     </div>
-                                    <div className="pw-wrap">
+                                    <div className="pw-wrap shimmer-field shimmer-delay-2">
                                         <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange} placeholder="Masukkan password Anda" className="field-input" autoComplete="current-password" required />
-                                        <button type="button" className="pw-toggle" onClick={() => setShowPassword(p => !p)} tabIndex={-1}>
+                                        <button type="button" className="pw-toggle" onClick={() => setShowPassword(p => !p)} tabIndex={-1} aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}>
                                             {showPassword ? (
                                                 <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                                             ) : (
@@ -343,12 +440,14 @@ export default function LoginClient() {
                                         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         Role
                                     </div>
-                                    <select name="role" value={formData.role} onChange={handleChange} className="role-select" style={{ color: formData.role ? "#1c0f07" : "#c4a882" }} required>
-                                        <option value="" disabled style={{ color: "#c4a882" }}>Pilih role Anda</option>
-                                        <option value="admin">Admin</option>
-                                        <option value="guru_kelas">Guru Kelas</option>
-                                        <option value="guru_bidang_studi">Guru Bidang Studi</option>
-                                    </select>
+                                    <div className="shimmer-field">
+                                        <select name="role" value={formData.role} onChange={handleChange} className="role-select" style={{ color: formData.role ? "var(--ink)" : "var(--muted)" }} required>
+                                            <option value="" disabled>Pilih role Anda</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="guru_kelas">Guru Kelas</option>
+                                            <option value="guru_bidang_studi">Guru Bidang Studi</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 {/* Submit Button */}

@@ -6,7 +6,7 @@
  *         sedangkan logo diupload via FormData ke endpoint khusus.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
- * Update: Hapus checkbox konfirmasi, ganti dengan popup modal konfirmasi sederhana
+ * Update: Tambah animasi fadeInUp konsisten dengan Dashboard & Data Tahun Ajaran
  */
 
 'use client';
@@ -26,6 +26,50 @@ const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 out
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
+// ─── GLOBAL STYLES — animasi fadeInUp ala Dashboard ──────────────────────────
+
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes ds-fadeIn  { from { opacity:0 } to { opacity:1 } }
+        @keyframes ds-scaleIn { from { opacity:0; transform:scale(0.93) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
+        @keyframes ds-pulse   { 0%{transform:scale(1)} 50%{transform:scale(1.1)} 100%{transform:scale(1)} }
+        .ds-fadeIn  { animation: ds-fadeIn 0.2s ease; }
+        .ds-scaleIn { animation: ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .ds-pulse   { animation: ds-pulse 0.6s ease 0.15s; }
+
+        /* ── Animasi "muncul dari bawah" ala Dashboard ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0);    }
+        }
+        .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.10s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.20s; }
+        .d5 { animation-delay: 0.25s; }
+        .d6 { animation-delay: 0.30s; }
+
+        /* ── Hover lift untuk card, konsisten dengan Dashboard ── */
+        .section-card {
+            transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                        box-shadow 0.25s ease;
+        }
+        .section-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+        }
+        .btn-primary {
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
+        .btn-primary:active { transform: translateY(0); }
+
+        /* ── Logo preview: sedikit pulse pas ganti gambar ── */
+        .logo-pop { animation: ds-scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+    `}</style>
+);
+
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
@@ -41,16 +85,13 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ animation: 'ds-fadeIn 0.2s ease' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ds-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4"
-                style={{ animation: 'ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1)' }}>
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ds-scaleIn">
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
                     <X size={18} />
                 </button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring}`}
-                    style={{ animation: 'ds-pulse 0.6s ease 0.15s' }}>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ds-pulse`}>
                     {s.icon}
                 </div>
                 <div className="text-center">
@@ -61,11 +102,6 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     OK, Mengerti
                 </button>
             </div>
-            <style>{`
-                @keyframes ds-fadeIn  { from { opacity:0 } to { opacity:1 } }
-                @keyframes ds-scaleIn { from { opacity:0; transform:scale(0.93) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
-                @keyframes ds-pulse   { 0%{transform:scale(1)} 50%{transform:scale(1.1)} 100%{transform:scale(1)} }
-            `}</style>
         </div>
     );
 };
@@ -93,7 +129,7 @@ export default function DataSekolahPage() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [modal, setModal] = useState<ModalConfig | null>(null);
 
-    // ✅ TAMBAHAN: State untuk modal konfirmasi
+    // State untuk modal konfirmasi
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
@@ -169,7 +205,7 @@ export default function DataSekolahPage() {
         );
     };
 
-    // ✅ TAMBAHAN: Buka modal konfirmasi
+    // Buka modal konfirmasi
     const openConfirmModal = () => {
         if (!formData.namaSekolah?.trim()) {
             showModal({
@@ -192,7 +228,7 @@ export default function DataSekolahPage() {
         setShowConfirmModal(true);
     };
 
-    // ✅ TAMBAHAN: Eksekusi submit (setelah konfirmasi)
+    // Eksekusi submit (setelah konfirmasi)
     const executeSubmit = async () => {
         setSaving(true);
         try {
@@ -273,6 +309,7 @@ export default function DataSekolahPage() {
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="flex-1 min-h-screen p-6 flex flex-col items-center" style={PAGE_BG}>
+            <GlobalStyles />
 
             {/* Notif modal */}
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
@@ -281,13 +318,13 @@ export default function DataSekolahPage() {
             )}
 
             {/* Page header */}
-            <div className="w-full max-w-3xl mb-6">
+            <div className="w-full max-w-3xl mb-6 anim-in d1">
                 <h1 className="text-2xl font-bold text-gray-900">Data Sekolah</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola informasi dan logo sekolah</p>
             </div>
 
             {/* Card */}
-            <div className="w-full max-w-3xl bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            <div className="section-card w-full max-w-3xl bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
 
                 {/* Card header */}
                 <div className="px-6 py-4" style={HEADER_GRAD}>
@@ -302,7 +339,8 @@ export default function DataSekolahPage() {
 
                         {/* Preview bulat */}
                         <div
-                            className="w-32 h-32 rounded-full flex items-center justify-center overflow-hidden mb-4"
+                            key={logoPreview ?? 'empty'}
+                            className="logo-pop w-32 h-32 rounded-full flex items-center justify-center overflow-hidden mb-4"
                             style={{ border: '3px dashed #fde0c8', background: '#fffaf6' }}
                         >
                             {logoPreview ? (
@@ -392,13 +430,11 @@ export default function DataSekolahPage() {
 
                     {/* ── Simpan ── */}
                     <div className="mt-2 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
-                        {/* ✅ HAPUS checkbox konfirmasi */}
-
                         <div className="flex justify-end">
                             <button
                                 onClick={openConfirmModal}
                                 disabled={isBusy}
-                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="btn-primary flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{
                                     background: 'linear-gradient(135deg,#e8690a,#f5a623)',
                                     boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
@@ -420,16 +456,14 @@ export default function DataSekolahPage() {
                 </div>
             </div>
 
-            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
+            {/* Modal Konfirmasi Sederhana */}
             {showConfirmModal && (
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-                    style={{ animation: 'ds-fadeIn 0.2s ease' }}
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 ds-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
                 >
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
-                        style={{ animation: 'ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1)' }}>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ds-scaleIn">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                                 <ShieldAlert size={24} className="text-orange-500" />

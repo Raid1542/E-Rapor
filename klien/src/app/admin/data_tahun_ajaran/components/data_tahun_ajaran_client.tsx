@@ -21,7 +21,7 @@ interface TahunAjaran {
     pas_ganjil: string | null;
     pts_genap: string | null;
     pas_genap: string | null;
-    semester_aktif: string; // ✅ UBAH: string (bukan enum) karena backend kirim lowercase
+    semester_aktif: 'Ganjil' | 'Genap' | null;
     status: 'AKTIF' | 'NONAKTIF';
 }
 
@@ -47,16 +47,55 @@ interface ModalConfig {
     onConfirm?: () => void;
 }
 
+/* ==========================================================================
+   GLOBAL STYLES — termasuk animasi fadeInUp ala Dashboard
+   ========================================================================== */
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes da-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes da-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes da-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        @keyframes da-cardIn  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .da-fadeIn  { animation: da-fadeIn  0.2s ease; }
         .da-scaleIn { animation: da-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .da-pulse   { animation: da-pulse   0.6s ease 0.15s; }
-        .da-cardIn  { animation: da-cardIn 0.45s cubic-bezier(0.16,1,0.3,1) forwards; opacity: 0; }
+
+        /* ── Animasi "muncul dari bawah" ala Dashboard ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0);    }
+        }
+        .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.10s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.20s; }
+        .d5 { animation-delay: 0.25s; }
+        .d6 { animation-delay: 0.30s; }
+
+        /* ── Hover lift untuk card & row, konsisten dengan Dashboard ── */
+        .section-card {
+            transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                        box-shadow 0.25s ease;
+        }
+        .section-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+        }
+        .item-hover {
+            transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1),
+                        background 0.18s ease, box-shadow 0.18s ease;
+            cursor: default;
+        }
+        .item-hover:hover {
+            transform: translateY(-2px);
+            background: #fff0e5 !important;
+            box-shadow: 0 4px 14px rgba(180,70,10,0.12);
+        }
+        .btn-primary {
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(180,70,10,0.28); }
+        .btn-primary:active { transform: translateY(0); }
     `}</style>
 );
 
@@ -494,10 +533,7 @@ export default function DataTahunAjaranClient() {
         }
 
         const item = selectedItemForSemester;
-        
-        // ✅ PERBAIKAN: Gunakan toLowerCase() untuk case-insensitive comparison
-        const semesterAktifLower = item.semester_aktif?.toLowerCase();
-        const semesterBaru = semesterAktifLower === 'ganjil' ? 'Genap' : 'Ganjil';
+        const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
 
         const token = localStorage.getItem('token');
         if (!token) {
@@ -636,7 +672,7 @@ export default function DataTahunAjaranClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            <div className="mb-6 flex items-center gap-3">
+            <div className="mb-6 flex items-center gap-3 anim-in d1">
                 <button
                     onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
@@ -655,6 +691,7 @@ export default function DataTahunAjaranClient() {
             </div>
 
             <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                {/* Card header gradient — konsisten dengan pola Data Admin */}
                 <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
                     <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                         <CalendarRange size={20} className="text-white" />
@@ -799,7 +836,7 @@ export default function DataTahunAjaranClient() {
 
                         <button
                             onClick={isEdit ? openConfirmEdit : openConfirmTambah}
-                            className={btnPrimary.base}
+                            className={`btn-primary ${btnPrimary.base}`}
                             style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
                             onMouseEnter={btnPrimary.hover}
                             onMouseLeave={btnPrimary.leave}
@@ -914,7 +951,7 @@ export default function DataTahunAjaranClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            <div className="mb-6">
+            <div className="mb-6 anim-in d1">
                 <h1 className="text-2xl font-bold text-gray-900">Data Tahun Ajaran</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
                     Kelola tahun ajaran dan semester aktif
@@ -922,12 +959,12 @@ export default function DataTahunAjaranClient() {
             </div>
 
             <div
-                className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3"
+                className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3 anim-in d2"
                 style={CARD_STYLE}
             >
                 <button
                     onClick={() => setShowTambah(true)}
-                    className={btnPrimary.base}
+                    className={`btn-primary ${btnPrimary.base}`}
                     style={btnPrimary.style}
                     onMouseEnter={btnPrimary.hover}
                     onMouseLeave={btnPrimary.leave}
@@ -977,12 +1014,12 @@ export default function DataTahunAjaranClient() {
             </div>
 
             {loading ? (
-                <div className="bg-white rounded-2xl py-16 flex flex-col items-center gap-3" style={CARD_STYLE}>
+                <div className="bg-white rounded-2xl py-16 flex flex-col items-center gap-3 anim-in d3" style={CARD_STYLE}>
                     <div className="w-7 h-7 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
                     <span className="text-sm text-gray-400">Memuat data...</span>
                 </div>
             ) : filteredData.length === 0 ? (
-                <div className="bg-white rounded-2xl py-16 flex flex-col items-center gap-2" style={CARD_STYLE}>
+                <div className="bg-white rounded-2xl py-16 flex flex-col items-center gap-2 anim-in d3" style={CARD_STYLE}>
                     <CalendarRange size={32} className="text-gray-300" />
                     <p className="text-sm font-medium text-gray-500">Tidak ada data tahun ajaran</p>
                     <p className="text-xs text-gray-400">Coba kata kunci lain atau tambahkan tahun ajaran baru</p>
@@ -991,7 +1028,7 @@ export default function DataTahunAjaranClient() {
                 <>
                     {tahunAktif && (
                         <div
-                            className="da-cardIn bg-white rounded-2xl overflow-hidden mb-5"
+                            className="section-card bg-white rounded-2xl overflow-hidden mb-5 anim-in d3"
                             style={{ boxShadow: '0 6px 24px rgba(232,105,10,0.18)', border: '1.5px solid #f5a623' }}
                         >
                             <div
@@ -1021,8 +1058,7 @@ export default function DataTahunAjaranClient() {
                                 <div className="flex flex-col sm:flex-row gap-4 mb-5">
                                     <SemesterBlock
                                         label="Ganjil"
-                                        // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
-                                        aktif={tahunAktif.semester_aktif?.toLowerCase() === 'ganjil'}
+                                        aktif={tahunAktif.semester_aktif === 'Ganjil'}
                                         pts={tahunAktif.pts_ganjil}
                                         pas={tahunAktif.pas_ganjil}
                                         accentColor="#c2410c"
@@ -1030,8 +1066,7 @@ export default function DataTahunAjaranClient() {
                                     />
                                     <SemesterBlock
                                         label="Genap"
-                                        // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
-                                        aktif={tahunAktif.semester_aktif?.toLowerCase() === 'genap'}
+                                        aktif={tahunAktif.semester_aktif === 'Genap'}
                                         pts={tahunAktif.pts_genap}
                                         pas={tahunAktif.pas_genap}
                                         accentColor="#15803d"
@@ -1052,9 +1087,7 @@ export default function DataTahunAjaranClient() {
                                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-orange-100"
                                         style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
                                     >
-                                        <RotateCw size={14} /> 
-                                        {/* ✅ PERBAIKAN: Gunakan toLowerCase() */}
-                                        Ganti ke Semester {tahunAktif.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
+                                        <RotateCw size={14} /> Ganti ke Semester {tahunAktif.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
                                     </button>
                                 </div>
                             </div>
@@ -1062,7 +1095,7 @@ export default function DataTahunAjaranClient() {
                     )}
 
                     {!tahunAktif && (
-                        <div className="bg-white rounded-2xl py-10 flex flex-col items-center gap-2 mb-5" style={CARD_STYLE}>
+                        <div className="bg-white rounded-2xl py-10 flex flex-col items-center gap-2 mb-5 anim-in d3" style={CARD_STYLE}>
                             <AlertCircle size={28} className="text-gray-300" />
                             <p className="text-sm font-medium text-gray-500">Tidak ada tahun ajaran yang aktif</p>
                             <p className="text-xs text-gray-400">Tambahkan tahun ajaran baru untuk mengaktifkannya</p>
@@ -1070,7 +1103,7 @@ export default function DataTahunAjaranClient() {
                     )}
 
                     {riwayatNonaktif.length > 0 && (
-                        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
                             <button
                                 onClick={() => setShowRiwayat((v) => !v)}
                                 className="w-full px-5 py-4 flex items-center justify-between transition-colors hover:bg-orange-50/40"
@@ -1103,7 +1136,7 @@ export default function DataTahunAjaranClient() {
                                         {currentData.map((item) => (
                                             <div
                                                 key={item.id_induk}
-                                                className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3"
+                                                className="item-hover px-5 py-3.5 flex flex-wrap items-center justify-between gap-3"
                                                 style={{ borderBottom: '1px solid #f3f4f6' }}
                                             >
                                                 <div className="flex items-center gap-3 min-w-0">
@@ -1162,16 +1195,11 @@ export default function DataTahunAjaranClient() {
                         <div className="text-sm text-gray-600 mb-4">
                             <div className="flex items-center justify-center gap-3 py-2 mb-3">
                                 <span className="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100">
-                                    {/* ✅ PERBAIKAN: Capitalize dengan aman */}
-                                    {selectedItemForSemester.semester_aktif 
-                                        ? selectedItemForSemester.semester_aktif.charAt(0).toUpperCase() + 
-                                          selectedItemForSemester.semester_aktif.slice(1).toLowerCase()
-                                        : '-'}
+                                    {selectedItemForSemester.semester_aktif}
                                 </span>
                                 <span className="text-orange-600">→</span>
                                 <span className="px-3 py-1 rounded-lg text-sm font-semibold" style={{ background: '#fff0e5', color: '#c95b08' }}>
-                                    {/* ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison */}
-                                    {selectedItemForSemester.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
+                                    {selectedItemForSemester.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
                                 </span>
                             </div>
 

@@ -6,6 +6,7 @@
  * UPDATE: Menggunakan struktur master data (tanpa tahun ajaran)
  * UPDATE 2: Form tambah/edit pakai pola back-button + header card,
  *           tombol Batal/Reset disamakan dengan Data Admin & Tahun Ajaran.
+ * UPDATE 3: Animasi disamakan dengan data_admin_client.tsx (fadeInUp, section-card, item-hover, btn-primary)
  */
 
 'use client';
@@ -30,6 +31,42 @@ const GlobalStyles = () => (
     .dg-fadeIn  { animation: dg-fadeIn  0.2s ease; }
     .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .dg-pulse   { animation: dg-pulse   0.6s ease 0.15s; }
+
+    /* ── Animasi "muncul dari bawah" ala Dashboard / Data Admin ── */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+    .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+    .d1 { animation-delay: 0.05s; }
+    .d2 { animation-delay: 0.10s; }
+    .d3 { animation-delay: 0.15s; }
+    .d4 { animation-delay: 0.20s; }
+    .d5 { animation-delay: 0.25s; }
+    .d6 { animation-delay: 0.30s; }
+
+    /* ── Hover lift untuk card & row, konsisten dengan Dashboard ── */
+    .section-card {
+        transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 0.25s ease;
+    }
+    .section-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+    }
+    .item-hover {
+        transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1),
+                    box-shadow 0.18s ease;
+    }
+    .item-hover:hover {
+        transform: translateY(-1px) scale(1.002);
+        box-shadow: inset 0 0 0 9999px rgba(232,105,10,0.03);
+    }
+    .btn-primary {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
+    .btn-primary:active { transform: translateY(0); }
   `}</style>
 );
 
@@ -585,7 +622,7 @@ export default function DataSiswaClient() {
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             {/* Page header dengan back-button */}
-            <div className="mb-6 flex items-center gap-3">
+            <div className="mb-6 flex items-center gap-3 anim-in d1">
                 <button
                     onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
@@ -606,7 +643,7 @@ export default function DataSiswaClient() {
             </div>
 
             {/* Form card */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
 
                 {/* Card header gradient — konsisten dengan Data Admin */}
                 <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
@@ -700,7 +737,7 @@ export default function DataSiswaClient() {
                         <BtnReset onClick={handleReset} />
                         <button
                             onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
-                            className={btnPrimary.base}
+                            className={`btn-primary ${btnPrimary.base}`}
                             style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
                             onMouseEnter={btnPrimary.hover}
                             onMouseLeave={btnPrimary.leave}
@@ -769,16 +806,16 @@ export default function DataSiswaClient() {
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             {/* Page header */}
-            <div className="mb-6">
+            <div className="mb-6 anim-in d1">
                 <h1 className="text-2xl font-bold text-gray-900">Data Siswa</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data siswa</p>
             </div>
 
             {/* Toolbar card — terpisah dari tabel */}
-            <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
+            <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3 anim-in d2" style={CARD_STYLE}>
                 {/* Kiri: Tambah */}
                 <button onClick={() => setShowTambah(true)}
-                    className={btnPrimary.base}
+                    className={`btn-primary ${btnPrimary.base}`}
                     style={btnPrimary.style}
                     onMouseEnter={btnPrimary.hover}
                     onMouseLeave={btnPrimary.leave}
@@ -844,7 +881,7 @@ export default function DataSiswaClient() {
             </div>
 
             {/* Table card — terpisah dari toolbar */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
 
                 {/* Info count */}
                 <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
@@ -875,8 +912,12 @@ export default function DataSiswaClient() {
                                 <tr><td colSpan={7} className="py-12 text-center text-gray-400 text-sm">Tidak ada data siswa</td></tr>
                             ) : currentSiswa.map((siswa, index) => (
                                 <tr key={siswa.id_siswa}
-                                    className="transition-colors"
-                                    style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                    className="item-hover transition-colors anim-in"
+                                    style={{
+                                        borderBottom: '1px solid #fde0c8',
+                                        background: index % 2 === 0 ? '#fff' : '#fffaf6',
+                                        animationDelay: `${Math.min(index, 8) * 0.04}s`,
+                                    }}
                                     onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                                     onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
                                 >
@@ -1000,7 +1041,7 @@ export default function DataSiswaClient() {
                             <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
                                 <BtnNetral onClick={closeDetail}>Tutup</BtnNetral>
                                 <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
-                                    className={btnPrimary.base} style={btnPrimary.style}
+                                    className={`btn-primary ${btnPrimary.base}`} style={btnPrimary.style}
                                     onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
                                     <Pencil size={14} /> Edit
                                 </button>

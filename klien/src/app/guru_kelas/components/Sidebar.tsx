@@ -1,7 +1,8 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Komponen sidebar navigasi untuk guru kelas
- * UPDATE: Menggunakan template identik dengan Sidebar Guru Bidang Studi
+ * UPDATE: Tampilan disamakan dengan Sidebar Admin (badge ikon aktif, aksen bar,
+ *         label seksi bergaris, jarak antar menu identik). Tidak ada submenu.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -24,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
-// ─── GLOBAL STYLES (Animasi Playful - SAMA DENGAN ADMIN & GBS) ──────────────
+// ─── GLOBAL STYLES (disamakan dengan Sidebar Admin) ─────────────────────────
 const SidebarStyles = () => (
     <style jsx global>{`
         @keyframes sb_slideDown {
@@ -50,18 +51,73 @@ const SidebarStyles = () => (
         .sb-slideDown { animation: sb_slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .sb-fadeIn { animation: sb_fadeIn 0.25s ease-out; }
         .sb-badgePulse { animation: sb_badgePulse 2s ease-in-out infinite; }
+
         .sb-nav-item {
+            position: relative;
             transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .sb-nav-item:hover:not(:disabled) {
             transform: translateX(3px);
         }
+
+        /* Aksen bar kecil di sisi kiri item yang aktif (sama seperti Admin) */
+        .sb-nav-item.sb-active::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 22px;
+            border-radius: 0 4px 4px 0;
+            background: #fff;
+            box-shadow: 0 0 8px rgba(255,255,255,0.6);
+        }
+
+        /* Wadah ikon: badge bulat/kotak lembut (sama seperti Admin) */
+        .sb-icon-wrap {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.22s ease, box-shadow 0.22s ease;
+        }
+        .sb-icon-wrap.sb-icon-active {
+            background: linear-gradient(135deg, #c95b08, #f5870a);
+            box-shadow: 0 3px 10px rgba(180,70,10,0.28);
+            color: #fff;
+        }
+        .sb-icon-wrap.sb-icon-inactive {
+            background: rgba(255,255,255,0.10);
+            color: rgba(255,255,255,0.9);
+        }
+        .sb-nav-item:hover:not(:disabled) .sb-icon-wrap.sb-icon-inactive {
+            background: rgba(255,255,255,0.18);
+        }
+
         .sb-chevron {
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .sb-chevron-open {
             transform: rotate(180deg);
         }
+
+        /* Label seksi dengan garis pemisah tipis (sama seperti Admin) */
+        .sb-section-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sb-section-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, rgba(255,255,255,0.18), transparent);
+        }
+
         .sb-scrollbar-none::-webkit-scrollbar { display: none; }
         .sb-scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
     `}</style>
@@ -157,12 +213,12 @@ export default function Sidebar({ user }: SidebarProps) {
     const toggleSidebar = () => setIsExpanded(!isExpanded);
     const handleNavigation = (url: string) => router.push(url);
 
-    // ── Reusable nav item styles (SAMA DENGAN ADMIN & GBS) ─────────────────
+    // ── Reusable nav item styles (disamakan dengan Admin) ──────────────────
     const navBase = 'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
-    const navActive = 'bg-white text-orange-600 shadow-sm font-semibold';
-    const navInactive = 'text-white hover:bg-white/15 hover:text-white';
+    const navActive = 'sb-active bg-white text-orange-600 shadow-sm font-semibold';
+    const navInactive = 'text-white hover:bg-white/10 hover:text-white';
 
-    // Helper untuk render menu item dengan icon component
+    // Helper untuk render menu item dengan icon component (badge aktif sama seperti Admin)
     const renderMenuItem = (item: any, isActive: boolean) => {
         const IconComponent = item.icon;
         return (
@@ -171,7 +227,9 @@ export default function Sidebar({ user }: SidebarProps) {
                 onClick={() => handleNavigation(item.url)}
                 className={`${navBase} ${isActive ? navActive : navInactive}`}
             >
-                <IconComponent className="w-5 h-5 flex-shrink-0" />
+                <span className={`sb-icon-wrap ${isActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+                    <IconComponent className="w-[18px] h-[18px]" />
+                </span>
                 {isExpanded && <span>{item.name}</span>}
             </button>
         );
@@ -186,7 +244,7 @@ export default function Sidebar({ user }: SidebarProps) {
         >
             <SidebarStyles />
 
-            {/* ── Header: Logo + Nama Sekolah (SAMA DENGAN ADMIN & GBS) ───── */}
+            {/* ── Header: Logo + Nama Sekolah (sama seperti Admin) ───── */}
             <div
                 className="flex items-center justify-between px-4 py-4"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
@@ -196,7 +254,7 @@ export default function Sidebar({ user }: SidebarProps) {
                         <div className="flex items-center gap-3 min-w-0">
                             <div
                                 className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-110 hover:rotate-6"
-                                style={{ background: 'rgba(255,255,255,0.18)' }}
+                                style={{ background: 'rgba(255,255,255,0.18)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
                             >
                                 <img
                                     src={logoUrl}
@@ -207,7 +265,7 @@ export default function Sidebar({ user }: SidebarProps) {
                             </div>
                             <div className="min-w-0 sb-fadeIn">
                                 <h2 className="text-sm font-bold text-white leading-tight truncate">{schoolName}</h2>
-                                <p className="text-xs text-white/60 leading-tight">E-Rapor</p>
+                                <p className="text-[11px] text-white/60 leading-tight tracking-wide uppercase mt-0.5">E-Rapor</p>
                             </div>
                         </div>
                         <button
@@ -222,7 +280,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     <button
                         onClick={toggleSidebar}
                         className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110"
-                        style={{ background: 'rgba(255,255,255,0.15)' }}
+                        style={{ background: 'rgba(255,255,255,0.15)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
                     >
                         <img
                             src={logoUrl}
@@ -234,7 +292,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 )}
             </div>
 
-            {/* ── Navigation (SAMA DENGAN ADMIN & GBS) ───────────────────── */}
+            {/* ── Navigation (jarak antar menu disamakan dengan Admin) ───────────────────── */}
             <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
 
                 {/* ── MENU UTAMA ── */}
@@ -242,7 +300,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── DATA SISWA ── */}
                 {isExpanded && (
-                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Data Siswa
                     </p>
                 )}
@@ -252,7 +310,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── INPUT NILAI ── */}
                 {isExpanded && (
-                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Input Nilai
                     </p>
                 )}
@@ -262,7 +320,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── KEGIATAN ── */}
                 {isExpanded && (
-                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Kegiatan
                     </p>
                 )}
@@ -272,7 +330,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── LAPORAN ── */}
                 {isExpanded && (
-                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Laporan
                     </p>
                 )}
@@ -282,7 +340,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {/* ── SAYA ── */}
                 {isExpanded && (
-                    <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Saya
                     </p>
                 )}
@@ -292,7 +350,9 @@ export default function Sidebar({ user }: SidebarProps) {
                     onClick={() => handleNavigation('/guru_kelas/profil')}
                     className={`${navBase} ${pathname === '/guru_kelas/profil' ? navActive : navInactive}`}
                 >
-                    <UserCircle className="w-5 h-5 flex-shrink-0" />
+                    <span className={`sb-icon-wrap ${pathname === '/guru_kelas/profil' ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+                        <UserCircle className="w-[18px] h-[18px]" />
+                    </span>
                     {isExpanded && <span>Profil</span>}
                 </button>
 

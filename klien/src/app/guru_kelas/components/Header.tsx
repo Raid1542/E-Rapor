@@ -1,7 +1,8 @@
 /**
  * Nama File: Header.tsx
  * Fungsi: Komponen header untuk layout guru kelas
- * UPDATE: Menggunakan template identik dengan Header Guru Bidang Studi
+ * UPDATE: Tampilan disamakan dengan Header Guru Bidang Studi + efek kilau bergerak
+ *         pada bar header (sama seperti Header Admin)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -54,6 +55,28 @@ const GlobalStyles = () => (
             background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.2) 100%);
             background-size: 200% 100%;
             animation: gk-shimmer 1.5s infinite;
+        }
+
+        /* Kilau bergerak di sepanjang bar header orange (sama seperti Header Admin) */
+        .gk-bar-shimmer {
+            position: absolute;
+            top: -50%;
+            left: -60%;
+            width: 32%;
+            height: 200%;
+            background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+            transform: rotate(9deg);
+            animation: gk-bar-shimmer-sweep 6s ease-in-out infinite;
+            pointer-events: none;
+            mix-blend-mode: soft-light;
+        }
+        @keyframes gk-bar-shimmer-sweep {
+            0%   { left: -60%; }
+            45%  { left: 130%; }
+            100% { left: 130%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .gk-bar-shimmer { animation: none; display: none; }
         }
     `}</style>
 );
@@ -399,11 +422,24 @@ export default function Header({ user: initialUser }: HeaderProps) {
             <header
                 className="border-b sticky top-0 z-40"
                 style={{
-                    background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)',
                     borderColor: 'rgba(255,255,255,0.15)',
+                    position: 'relative',
                 }}
             >
-                <div className="px-4 sm:px-6 py-3">
+                {/* Lapisan background orange + kilau bergerak, terpisah agar dropdown di bawah tidak ikut terpotong */}
+                <div
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'linear-gradient(135deg, #c95b08 0%, #e8690a 60%, #f5870a 100%)',
+                        overflow: 'hidden',
+                        zIndex: 0,
+                    }}
+                >
+                    <div className="gk-bar-shimmer" />
+                </div>
+
+                <div className="relative z-10 px-4 sm:px-6 py-3">
                     {/* ── BARIS 1: Title + Info (Desktop: Inline) ── */}
                     <div className="flex items-center justify-between gap-4">
 

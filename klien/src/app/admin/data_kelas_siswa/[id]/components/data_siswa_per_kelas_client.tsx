@@ -4,8 +4,11 @@
  * Fungsi: Menampilkan daftar siswa dalam kelas tertentu (Master-First Concept)
  * Update: 
  *   - Hapus fitur Detail, fokus hanya Assign & Keluarkan
- *   - ✅ TAMBAHAN: Fitur READ-ONLY saat data kelas dikunci (PTS/PAS diarsipkan)
- *   - ✅ TAMBAHAN: Badge warning yang jelas saat data terkunci
+ *   - Fitur READ-ONLY saat data kelas dikunci (PTS/PAS diarsipkan)
+ *   - Badge warning yang jelas saat data terkunci
+ *   - Selaraskan layout (CARD_STYLE) & animasi fadeInUp dengan halaman lain
+ *   - Layout dipecah jadi 3 card terpisah (Info Kelas / Toolbar / Tabel),
+ *     selaras dengan pola di data_kelas_client.tsx
  */
 
 'use client';
@@ -13,7 +16,7 @@ import { useState, useEffect, useCallback, ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
     X, Search, ArrowLeft, CheckCircle2, AlertCircle, 
-    WifiOff, ShieldAlert, Users, Plus, Trash2, Lock  // ✅ TAMBAH Lock
+    WifiOff, ShieldAlert, Users, Plus, Trash2, Lock, GraduationCap
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -41,7 +44,6 @@ interface Siswa {
     status: string;
 }
 
-// ✅ UPDATED: Tambah field read-only
 interface KelasInfo {
     id_kelas: number;
     nama_kelas: string;
@@ -66,6 +68,41 @@ const GlobalStyles = () => (
         .spk-fadeIn  { animation: spk-fadeIn  0.2s ease; }
         .spk-scaleIn { animation: spk-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .spk-pulse   { animation: spk-pulse   0.6s ease 0.15s; }
+
+        /* ── Animasi "muncul dari bawah" ala Dashboard ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0);    }
+        }
+        .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.10s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.20s; }
+        .d5 { animation-delay: 0.25s; }
+        .d6 { animation-delay: 0.30s; }
+
+        /* ── Hover lift untuk card & row, konsisten dengan halaman lain ── */
+        .section-card {
+            transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                        box-shadow 0.25s ease;
+        }
+        .section-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+        }
+        .item-hover {
+            transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1),
+                        box-shadow 0.18s ease;
+        }
+        .item-hover:hover {
+            transform: translateY(-1px) scale(1.002);
+        }
+        .btn-primary {
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
+        .btn-primary:active { transform: translateY(0); }
     `}</style>
 );
 
@@ -120,11 +157,12 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 };
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+// Disamakan dengan pola Data Admin / Data Tahun Ajaran / Data Kelas
 
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 
 const PAGE_BG = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
 const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
 
@@ -203,7 +241,6 @@ export default function SiswaPerKelasClient() {
 
     // ── FETCH FUNCTIONS ──────────────────────────────────────────────────────
 
-    // ✅ UPDATED: Ambil info read-only dari backend
     const fetchKelasInfo = useCallback(async () => {
     try {
         const token = localStorage.getItem('token');
@@ -221,7 +258,7 @@ export default function SiswaPerKelasClient() {
                 wali_kelas: data.data.wali_kelas || '-',
                 fase: data.data.fase,
                 tahun_ajaran_id: data.data.tahun_ajaran_id,
-                id_tahun_ajaran_induk: data.data.id_tahun_ajaran_induk || null,  // ✅ SIMPAN INI
+                id_tahun_ajaran_induk: data.data.id_tahun_ajaran_induk || null,
                 tahun_ajaran: data.data.tahun_ajaran,
                 is_aktif: data.data.is_aktif || false,
                 is_read_only: data.data.is_read_only || false,
@@ -266,7 +303,6 @@ export default function SiswaPerKelasClient() {
 
         const queryParams = new URLSearchParams();
         
-        // ✅ PERBAIKAN: Gunakan id_tahun_ajaran_induk, bukan tahun_ajaran_id
         if (kelasInfo?.id_tahun_ajaran_induk) {
             queryParams.append('tahun_ajaran_id', String(kelasInfo.id_tahun_ajaran_induk));
         }
@@ -286,7 +322,7 @@ export default function SiswaPerKelasClient() {
     } finally {
         setLoadingAvailable(false);
     }
-}, [kelasInfo?.id_tahun_ajaran_induk]);  // ✅ UBAH dependency
+}, [kelasInfo?.id_tahun_ajaran_induk]);
 
     // ── EFFECTS ──────────────────────────────────────────────────────────────
 
@@ -397,7 +433,6 @@ export default function SiswaPerKelasClient() {
             },
             body: JSON.stringify({
                 siswa_ids: selectedSiswaIds,
-                // ✅ PERBAIKAN: Kirim id_tahun_ajaran_induk
                 tahun_ajaran_id: kelasInfo?.id_tahun_ajaran_induk
             })
         });
@@ -441,7 +476,6 @@ export default function SiswaPerKelasClient() {
 
             try {
                 const queryParams = new URLSearchParams();
-                // ✅ PERBAIKAN: Gunakan id_tahun_ajaran_induk
                 if (kelasInfo?.id_tahun_ajaran_induk) {
                     queryParams.append('tahun_ajaran_id', String(kelasInfo.id_tahun_ajaran_induk));
                 }
@@ -535,7 +569,7 @@ export default function SiswaPerKelasClient() {
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             {/* ── HEADER ────────────────────────────────────────────────── */}
-            <div className="mb-6">
+            <div className="mb-6 anim-in d1">
                 <button
                     onClick={() => router.push(`/admin/data_kelas_siswa${kelasInfo?.tahun_ajaran_id ? `?ta=${kelasInfo.tahun_ajaran_id}` : ''}`)}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold mb-3 transition-all"
@@ -548,120 +582,157 @@ export default function SiswaPerKelasClient() {
                 </button>
 
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">Kelas {kelasInfo?.nama_kelas || '...'}</h1>
-                <p className="text-sm" style={{ color: '#c95b08' }}>
-                    Wali Kelas: <strong>{kelasInfo?.wali_kelas || '-'}</strong> &nbsp;•&nbsp; 
-                    Fase: <strong>{kelasInfo?.fase || '-'}</strong>
-                </p>
             </div>
 
-            {/* ── CARD UTAMA ─────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            {/* ====================================================================
+                CARD 1: Info Kelas — ringkasan wali kelas & fase, plus badge
+                read-only saat data terkunci. Compact, mirip pola card
+                "Pilih Tahun Ajaran" di halaman Data Kelas.
+            ==================================================================== */}
+            <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-3 anim-in d2" style={CARD_STYLE}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+                    <GraduationCap size={16} style={{ color: '#c95b08' }} />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                    <span style={{ color: '#7a3a0a' }}>
+                        Wali Kelas: <strong className="text-gray-800">{kelasInfo?.wali_kelas || '-'}</strong>
+                    </span>
+                    <span style={{ color: '#7a3a0a' }}>
+                        Fase: <strong className="text-gray-800">{kelasInfo?.fase || '-'}</strong>
+                    </span>
+                </div>
 
-                {/* ═══ ✅ BADGE READ-ONLY (BARU) ═══ */}
                 {kelasInfo?.is_read_only && (
-                    <div 
-                        className="mx-5 mt-4 p-4 rounded-xl flex items-start gap-3"
-                        style={{ 
-                            background: 'linear-gradient(135deg, #fef3c7, #fde68a)', 
-                            border: '2px solid #f59e0b'
-                        }}
+                    <span
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ml-auto"
+                        style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
                     >
-                        <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                            <h3 className="text-sm font-bold text-amber-900 mb-1">
-                                🔒 Data Siswa Terkunci (Read-Only)
-                            </h3>
-                            <p className="text-xs text-amber-800 mb-2">
-                                Penilaian <strong>{kelasInfo.locked_by}</strong> semester <strong>{kelasInfo.locked_semester}</strong> telah diarsipkan dan dikunci. 
-                                Siswa tidak dapat ditambah atau dikeluarkan dari kelas sampai tahun ajaran berakhir.
-                            </p>
-                            <p className="text-xs text-amber-700 italic">
-                                💡 Data siswa yang sudah ada tetap dapat dilihat dan dicari.
-                            </p>
-                        </div>
-                    </div>
+                        <Lock size={12} /> Data Terkunci
+                    </span>
                 )}
+            </div>
 
-                {/* ═══ TOOLBAR ═══ */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* ═══ BADGE READ-ONLY DETAIL ═══ */}
+            {kelasInfo?.is_read_only && (
+                <div
+                    className="mb-5 p-4 rounded-xl flex items-start gap-3 anim-in d3"
+                    style={{
+                        background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+                        border: '2px solid #f59e0b'
+                    }}
+                >
+                    <Lock size={24} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                        <h3 className="text-sm font-bold text-amber-900 mb-1">
+                            🔒 Data Siswa Terkunci (Read-Only)
+                        </h3>
+                        <p className="text-xs text-amber-800 mb-2">
+                            Penilaian <strong>{kelasInfo.locked_by}</strong> semester <strong>{kelasInfo.locked_semester}</strong> telah diarsipkan dan dikunci. 
+                            Siswa tidak dapat ditambah atau dikeluarkan dari kelas sampai tahun ajaran berakhir.
+                        </p>
+                        <p className="text-xs text-amber-700 italic">
+                            💡 Data siswa yang sudah ada tetap dapat dilihat dan dicari.
+                        </p>
+                    </div>
+                </div>
+            )}
 
-                        {/* ✅ Kiri: Assign Siswa - DISABLE jika read-only */}
-                        {kelasInfo?.is_aktif && !kelasInfo?.is_read_only && (
+            {/* ====================================================================
+                CARD 2: Toolbar — Tambah Siswa + Tampilkan data + Search + Filter + Sort
+                Terpisah dari card info kelas dan card tabel.
+            ==================================================================== */}
+            <div className={`section-card bg-white rounded-2xl px-5 py-3.5 mb-5 anim-in ${kelasInfo?.is_read_only ? 'd4' : 'd3'}`} style={CARD_STYLE}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+
+                    {/* Kiri: Assign Siswa - disable jika read-only */}
+                    <div>
+                        {kelasInfo?.is_aktif && !kelasInfo?.is_read_only ? (
                             <button
                                 onClick={openAssignModal}
-                                className={btnPrimary.base}
+                                className={`btn-primary ${btnPrimary.base}`}
                                 style={btnPrimary.style}
                                 onMouseEnter={btnPrimary.hover}
                                 onMouseLeave={btnPrimary.leave}
                             >
                                 <Plus size={16} /> Tambah Siswa
                             </button>
+                        ) : (
+                            <span className="text-xs text-gray-400 italic">
+                                {kelasInfo?.is_read_only ? 'Data terkunci, tidak dapat menambah siswa' : 'Kelas ini tidak aktif'}
+                            </span>
                         )}
-
-                        {/* Kanan: Controls */}
-                        <div className="flex flex-wrap items-center gap-2">
-
-                            {/* Tampilkan N data */}
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                <select value={itemsPerPage}
-                                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
-                                >
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                            </div>
-
-                            {/* Search */}
-                            <div className="relative min-w-[200px] sm:min-w-[220px]">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                                </div>
-                                <input type="text" placeholder="Cari siswa..." value={searchQuery}
-                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                                />
-                                {searchQuery && (
-                                    <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                                        className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Filter Gender */}
-                            <select
-                                value={filterGender}
-                                onChange={(e) => { setFilterGender(e.target.value as any); setCurrentPage(1); }}
-                                className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
-                                style={{ color: '#7a3a0a' }}
-                            >
-                                <option value="all">Semua Gender</option>
-                                <option value="Laki-laki">Laki-laki</option>
-                                <option value="Perempuan">Perempuan</option>
-                            </select>
-
-                            {/* Sort */}
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value as any)}
-                                className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
-                                style={{ color: '#7a3a0a' }}
-                            >
-                                <option value="nama-asc">Nama (A-Z)</option>
-                                <option value="nama-desc">Nama (Z-A)</option>
-                                <option value="nis-asc">NIS</option>
-                            </select>
-                        </div>
                     </div>
 
-                    {/* Info count */}
-                    <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
+                    {/* Kanan: Controls */}
+                    <div className="flex flex-wrap items-center gap-2">
+
+                        {/* Tampilkan N data */}
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                            <select value={itemsPerPage}
+                                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                                className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
+                            >
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
+                        </div>
+
+                        {/* Search */}
+                        <div className="relative min-w-[200px] sm:min-w-[220px]">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                            </div>
+                            <input type="text" placeholder="Cari siswa..." value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                            />
+                            {searchQuery && (
+                                <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+                                    className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Filter Gender */}
+                        <select
+                            value={filterGender}
+                            onChange={(e) => { setFilterGender(e.target.value as any); setCurrentPage(1); }}
+                            className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
+                            style={{ color: '#7a3a0a' }}
+                        >
+                            <option value="all">Semua Gender</option>
+                            <option value="Laki-laki">Laki-laki</option>
+                            <option value="Perempuan">Perempuan</option>
+                        </select>
+
+                        {/* Sort */}
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
+                            style={{ color: '#7a3a0a' }}
+                        >
+                            <option value="nama-asc">Nama (A-Z)</option>
+                            <option value="nama-desc">Nama (Z-A)</option>
+                            <option value="nis-asc">NIS</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* ====================================================================
+                CARD 3: Tabel data siswa
+            ==================================================================== */}
+            <div className={`section-card bg-white rounded-2xl overflow-hidden anim-in ${kelasInfo?.is_read_only ? 'd5' : 'd4'}`} style={CARD_STYLE}>
+
+                {/* Info count */}
+                <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                    <p className="text-xs" style={{ color: '#c95b08' }}>
                         Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
                     </p>
                 </div>
@@ -697,8 +768,12 @@ export default function SiswaPerKelasClient() {
                             ) : (
                                 currentSiswa.map((siswa, index) => (
                                     <tr key={siswa.id_siswa}
-                                        className="transition-colors"
-                                        style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                                        className="item-hover transition-colors anim-in"
+                                        style={{
+                                            borderBottom: '1px solid #fde0c8',
+                                            background: index % 2 === 0 ? '#fff' : '#fffaf6',
+                                            animationDelay: `${Math.min(index, 8) * 0.04}s`,
+                                        }}
                                         onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                                         onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
                                         <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{startIndex + index + 1}</td>
@@ -717,7 +792,6 @@ export default function SiswaPerKelasClient() {
                                                 {formatGender(siswa.jenis_kelamin) === 'Laki-laki' ? 'L' : 'P'}
                                             </span>
                                         </td>
-                                        {/* ✅ UPDATED: Kolom Aksi - conditional */}
                                         <td className="px-5 py-3.5 text-center whitespace-nowrap">
                                             {kelasInfo?.is_aktif && !kelasInfo?.is_read_only ? (
                                                 <button onClick={() => handleKeluarkan(siswa)}
@@ -924,7 +998,7 @@ export default function SiswaPerKelasClient() {
                             <button
                                 onClick={executeAssign}
                                 disabled={selectedSiswaIds.length === 0}
-                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${selectedSiswaIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${selectedSiswaIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 style={btnPrimary.style}
                                 onMouseEnter={btnPrimary.hover}
                                 onMouseLeave={btnPrimary.leave}
