@@ -632,15 +632,15 @@ export default function AturPenilaianGuruKelasClient() {
         // ✅ DESKRIPSI RATA-RATA: Gunakan parseFloat untuk support desimal
         const formattedData = activeTab === 'deskripsi-rata-rata'
           ? (data.data || []).map((item: any) => ({
-              ...item,
-              min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
-              max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)),
-            }))
+            ...item,
+            min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+            max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)),
+          }))
           : (data.data || []).map((item: any) => ({
-              ...item,
-              min_nilai: Math.floor(parseFloat(item.min_nilai)),
-              max_nilai: Math.floor(parseFloat(item.max_nilai)),
-            }));
+            ...item,
+            min_nilai: Math.floor(parseFloat(item.min_nilai)),
+            max_nilai: Math.floor(parseFloat(item.max_nilai)),
+          }));
 
         if (activeTab === 'deskripsi-rata-rata') {
           setDeskripsiRataRataList(formattedData);
@@ -1338,7 +1338,7 @@ export default function AturPenilaianGuruKelasClient() {
     for (let i = 0; i < sorted.length - 1; i++) {
       const current = sorted[i];
       const next = sorted[i + 1];
-      
+
       // Cek overlap: max saat ini harus < min berikutnya
       if (current.max_nilai >= next.min_nilai) {
         hasOverlap = true;
@@ -2203,7 +2203,7 @@ export default function AturPenilaianGuruKelasClient() {
                             <Pencil size={13} />
                             <span className="hidden sm:inline">Edit Semua</span>
                           </>
-                          ) : (
+                        ) : (
                           <>
                             <Lock size={13} />
                             <span className="hidden sm:inline">Terkunci</span>
@@ -2312,19 +2312,31 @@ export default function AturPenilaianGuruKelasClient() {
 
                             <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
                               <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
+                                pattern="[0-9]*"
                                 value={displayBobot}
                                 onChange={(e) => {
                                   if (isEditable) {
-                                    handleBobotChange(bobot.komponen_id, e.target.value);
+                                    const value = e.target.value;
+                                    // Hanya izinkan angka dan titik desimal
+                                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                      handleBobotChange(bobot.komponen_id, value);
+                                    }
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  // Validasi saat lose focus
+                                  const value = parseFloat(e.target.value);
+                                  if (isNaN(value) || value < 0) {
+                                    handleBobotChange(bobot.komponen_id, '0');
+                                  } else if (value > 100) {
+                                    handleBobotChange(bobot.komponen_id, '100');
                                   }
                                 }}
                                 disabled={!isEditable}
                                 className={`w-24 h-11 px-3 text-center font-bold text-base rounded-xl border-2 transition-all outline-none
-                        ${isEditable
+    ${isEditable
                                     ? 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                     : 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'
                                   }`}

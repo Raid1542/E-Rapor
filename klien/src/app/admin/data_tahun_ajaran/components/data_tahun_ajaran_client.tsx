@@ -21,7 +21,7 @@ interface TahunAjaran {
     pas_ganjil: string | null;
     pts_genap: string | null;
     pas_genap: string | null;
-    semester_aktif: string; // string (bukan enum) karena backend kirim lowercase
+    semester_aktif: 'Ganjil' | 'Genap' | null;
     status: 'AKTIF' | 'NONAKTIF';
 }
 
@@ -518,6 +518,7 @@ export default function DataTahunAjaranClient() {
         setShowAlasanLainnya(false);
     };
 
+    // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
     const executeGantiSemester = async () => {
         if (!selectedItemForSemester) return;
 
@@ -532,9 +533,7 @@ export default function DataTahunAjaranClient() {
         }
 
         const item = selectedItemForSemester;
-
-        const semesterAktifLower = item.semester_aktif?.toLowerCase();
-        const semesterBaru = semesterAktifLower === 'ganjil' ? 'Genap' : 'Ganjil';
+        const semesterBaru = item.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil';
 
         const token = localStorage.getItem('token');
         if (!token) {
@@ -691,7 +690,8 @@ export default function DataTahunAjaranClient() {
                 </div>
             </div>
 
-            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
+            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+                {/* Card header gradient — konsisten dengan pola Data Admin */}
                 <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
                     <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                         <CalendarRange size={20} className="text-white" />
@@ -1058,7 +1058,7 @@ export default function DataTahunAjaranClient() {
                                 <div className="flex flex-col sm:flex-row gap-4 mb-5">
                                     <SemesterBlock
                                         label="Ganjil"
-                                        aktif={tahunAktif.semester_aktif?.toLowerCase() === 'ganjil'}
+                                        aktif={tahunAktif.semester_aktif === 'Ganjil'}
                                         pts={tahunAktif.pts_ganjil}
                                         pas={tahunAktif.pas_ganjil}
                                         accentColor="#c2410c"
@@ -1066,7 +1066,7 @@ export default function DataTahunAjaranClient() {
                                     />
                                     <SemesterBlock
                                         label="Genap"
-                                        aktif={tahunAktif.semester_aktif?.toLowerCase() === 'genap'}
+                                        aktif={tahunAktif.semester_aktif === 'Genap'}
                                         pts={tahunAktif.pts_genap}
                                         pas={tahunAktif.pas_genap}
                                         accentColor="#15803d"
@@ -1087,8 +1087,7 @@ export default function DataTahunAjaranClient() {
                                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-orange-100"
                                         style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
                                     >
-                                        <RotateCw size={14} /> 
-                                        Ganti ke Semester {tahunAktif.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
+                                        <RotateCw size={14} /> Ganti ke Semester {tahunAktif.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
                                     </button>
                                 </div>
                             </div>
@@ -1196,14 +1195,11 @@ export default function DataTahunAjaranClient() {
                         <div className="text-sm text-gray-600 mb-4">
                             <div className="flex items-center justify-center gap-3 py-2 mb-3">
                                 <span className="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100">
-                                    {selectedItemForSemester.semester_aktif 
-                                        ? selectedItemForSemester.semester_aktif.charAt(0).toUpperCase() + 
-                                          selectedItemForSemester.semester_aktif.slice(1).toLowerCase()
-                                        : '-'}
+                                    {selectedItemForSemester.semester_aktif}
                                 </span>
                                 <span className="text-orange-600">→</span>
                                 <span className="px-3 py-1 rounded-lg text-sm font-semibold" style={{ background: '#fff0e5', color: '#c95b08' }}>
-                                    {selectedItemForSemester.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
+                                    {selectedItemForSemester.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
                                 </span>
                             </div>
 

@@ -1,11 +1,38 @@
 /**
  * Nama File: dashboardController.js
  * Fungsi: Controller dashboard guru bidang studi (statistik, progress, detail komponen)
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * UPDATE: ✅ Tambahkan konfigurasi_detail dengan validasi range gap
+ *         ✅ Generate summary seperti dashboard guru kelas
  */
 
 const db = require('../../config/db');
+
+// ✅ Helper: Cek gap dalam range nilai
+function checkRangeGaps(rows, minExpected = 0, maxExpected = 100, minField = 'min_nilai', maxField = 'max_nilai') {
+    const gaps = [];
+    if (rows.length === 0) return gaps;
+
+    // Sort berdasarkan min_nilai
+    const sorted = [...rows].sort((a, b) => parseFloat(a[minField]) - parseFloat(b[minField]));
+    let currentEnd = minExpected;
+
+    sorted.forEach((row) => {
+        const rowMin = parseFloat(row[minField]);
+        const rowMax = parseFloat(row[maxField]);
+
+        if (rowMin > currentEnd + 0.01) {
+            gaps.push(`${currentEnd}-${rowMin}`);
+        }
+
+        currentEnd = Math.max(currentEnd, rowMax);
+    });
+
+    if (currentEnd < maxExpected - 0.01) {
+        gaps.push(`${currentEnd}-${maxExpected}`);
+    }
+
+    return gaps;
+}
 
 // GET: Ambil data dashboard lengkap untuk guru bidang studi
 exports.getDashboardData = async (req, res) => {
@@ -64,6 +91,14 @@ exports.getDashboardData = async (req, res) => {
         let totalPenilaianAda = 0;
         let totalPenilaianDibutuhkan = 0;
 
+        // ✅ KONFIGURASI DETAIL - untuk validasi range gap
+        let konfigurasiLengkap = true;
+        const konfigurasiDetail = {
+            akademik: { lengkap: true, missing: [], gaps: [] },
+            bobot: { lengkap: true, missing: [] },
+            summary: []
+        };
+
         // Loop setiap mapel
         for (const mapel of mapelDasar) {
             // Hitung total siswa per mapel
@@ -84,7 +119,6 @@ exports.getDashboardData = async (req, res) => {
             let sudahLengkap = 0;
 
             if (jenis_penilaian_aktif === 'PTS' && ptsKomponen) {
-                // Saat PTS aktif: cek siswa yang sudah input komponen PTS
                 const [ptsResult] = await db.execute(`
                     SELECT COUNT(DISTINCT nd.siswa_id) AS total
                     FROM nilai_detail nd
@@ -97,7 +131,6 @@ exports.getDashboardData = async (req, res) => {
                 `, [mapel.id_mata_pelajaran, semesterId, ptsKomponen.id_komponen, userId, mapel.id_mata_pelajaran, semesterId, indukId]);
                 sudahLengkap = ptsResult[0]?.total || 0;
             } else if (jenis_penilaian_aktif === 'PAS') {
-                // Saat PAS aktif: cek siswa yang sudah input SEMUA komponen
                 const [lengkapResult] = await db.execute(`
                     SELECT COUNT(*) AS total FROM (
                         SELECT nd.siswa_id, COUNT(DISTINCT nd.komponen_id) as jumlah_komponen
@@ -143,7 +176,6 @@ exports.getDashboardData = async (req, res) => {
                     userId, mapel.id_mata_pelajaran, semesterId, indukId
                 ]);
                 
-                // Ambil detail komponen untuk setiap siswa
                 for (const row of raporRows) {
                     const [komponenDetailRows] = await db.execute(`
                         SELECT kp.nama_komponen, nd.nilai,
@@ -176,7 +208,30 @@ exports.getDashboardData = async (req, res) => {
                 }
             }
 
-            // Cek konfigurasi bobot & kategori
+            // ✅ CEK KONFIGURASI AKADEMIK (dengan validasi range gap)
+            const [kategoriRows] = await db.execute(
+                `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
+                 WHERE mapel_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ?
+                 ORDER BY min_nilai ASC`,
+                [mapel.id_mata_pelajaran, semesterId, jenis_penilaian_aktif || 'PTS']
+            );
+
+            let kategoriTerconfig = false;
+            if (kategoriRows.length === 0) {
+                konfigurasiDetail.akademik.lengkap = false;
+                konfigurasiDetail.akademik.missing.push(mapel.nama_mapel);
+                konfigurasiLengkap = false;
+            } else {
+                kategoriTerconfig = true;
+                const gaps = checkRangeGaps(kategoriRows, 0, 100, 'min_nilai', 'max_nilai');
+                if (gaps.length > 0) {
+                    konfigurasiDetail.akademik.lengkap = false;
+                    konfigurasiDetail.akademik.gaps.push({ mapel: mapel.nama_mapel, gaps });
+                    konfigurasiLengkap = false;
+                }
+            }
+
+            // ✅ CEK KONFIGURASI BOBOT (HANYA untuk PAS)
             let bobotTerconfig = jenis_penilaian_aktif === 'PTS' ? true : false;
             if (jenis_penilaian_aktif !== 'PTS') {
                 const [bobotResult] = await db.execute(
@@ -184,13 +239,13 @@ exports.getDashboardData = async (req, res) => {
                     [mapel.id_mata_pelajaran]
                 );
                 bobotTerconfig = (bobotResult[0]?.total || 0) > 0;
+                
+                if (!bobotTerconfig) {
+                    konfigurasiDetail.bobot.lengkap = false;
+                    konfigurasiDetail.bobot.missing.push(mapel.nama_mapel);
+                    konfigurasiLengkap = false;
+                }
             }
-
-            const [kategoriResult] = await db.execute(
-                'SELECT COUNT(*) AS total FROM konfigurasi_nilai_rapor WHERE mapel_id = ? AND tahun_ajaran_id = ?',
-                [mapel.id_mata_pelajaran, semesterId]
-            );
-            const kategoriTerconfig = (kategoriResult[0]?.total || 0) > 0;
 
             mataPelajaranList.push({
                 id: mapel.id_mata_pelajaran, 
@@ -204,6 +259,36 @@ exports.getDashboardData = async (req, res) => {
             });
         }
 
+        // ✅ GENERATE SUMMARY (format sama dengan dashboard guru kelas)
+        if (!konfigurasiDetail.akademik.lengkap) {
+            if (konfigurasiDetail.akademik.missing.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'missing',
+                    title: 'Kategori Akademik',
+                    message: `Mapel ${konfigurasiDetail.akademik.missing.join(', ')} belum diatur kategorinya`
+                });
+            }
+            if (konfigurasiDetail.akademik.gaps.length > 0) {
+                konfigurasiDetail.akademik.gaps.forEach(gap => {
+                    konfigurasiDetail.summary.push({
+                        type: 'gap',
+                        title: 'Kategori Akademik',
+                        message: `Mapel ${gap.mapel} ada gap di rentang ${gap.gaps.join(', ')}`
+                    });
+                });
+            }
+        }
+
+        if (!konfigurasiDetail.bobot.lengkap) {
+            if (konfigurasiDetail.bobot.missing.length > 0) {
+                konfigurasiDetail.summary.push({
+                    type: 'missing',
+                    title: 'Bobot Penilaian',
+                    message: `Mapel ${konfigurasiDetail.bobot.missing.join(', ')} belum diatur bobotnya`
+                });
+            }
+        }
+
         // Hitung overall progress
         const overallProgress = totalPenilaianDibutuhkan > 0 ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100) : 0;
 
@@ -212,17 +297,6 @@ exports.getDashboardData = async (req, res) => {
             pts: ta.tanggal_pembagian_pts ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : null,
             pas: ta.tanggal_pembagian_pas ? new Date(ta.tanggal_pembagian_pas).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : null
         };
-
-        // Generate warnings
-        const warnings = mataPelajaranList
-            .filter(m => !m.konfigurasi.lengkap)
-            .map(m => {
-                const masalah = [];
-                if (jenis_penilaian_aktif !== 'PTS' && !m.konfigurasi.bobot) masalah.push('bobot belum diatur');
-                if (!m.konfigurasi.kategori) masalah.push('kategori nilai belum lengkap');
-                return { mapel: m.nama, masalah: masalah.join(' dan ') };
-            })
-            .filter(w => w.masalah !== '');
 
         // Return response
         res.json({
@@ -233,8 +307,11 @@ exports.getDashboardData = async (req, res) => {
                 jenis_penilaian_aktif, jadwal,
                 total_kelas: totalKelasUnik, total_siswa: totalSiswaUnik, total_mapel: mapelDasar.length,
                 total_penilaian_dibutuhkan: totalPenilaianDibutuhkan, total_penilaian_ada: totalPenilaianAda,
-                overall_progress: overallProgress, mata_pelajaran_list: mataPelajaranList, warnings,
-                total_komponen: totalKomponen
+                overall_progress: overallProgress, mata_pelajaran_list: mataPelajaranList,
+                total_komponen: totalKomponen,
+                // ✅ TAMBAHKAN INI
+                konfigurasi_lengkap: konfigurasiLengkap,
+                konfigurasi_detail: konfigurasiDetail
             }
         });
     } catch (err) {

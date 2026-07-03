@@ -676,8 +676,8 @@ export default function InputNilaiClient() {
                             ⚠️ Bobot Penilaian Belum Diatur
                         </p>
                         <p className="text-xs text-yellow-800">
-                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur. 
-                            Nilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata). 
+                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur.
+                            Nilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata).
                             Untuk hasil yang akurat, silakan atur bobot terlebih dahulu di menu <strong>"Atur Penilaian"</strong>.
                         </p>
                         <div className="flex gap-2 mt-2">
@@ -1181,21 +1181,34 @@ export default function InputNilaiClient() {
                                                     {komponen.nama_komponen}
                                                 </label>
                                                 <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    step="1"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
                                                     value={nilai ?? ''}
                                                     onChange={e => {
                                                         const val = e.target.value;
-                                                        const num = parseFloat(val);
-                                                        setEditingNilai(prev => ({
-                                                            ...prev,
-                                                            [komponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
-                                                        }));
+                                                        // ✅ Hanya izinkan angka
+                                                        if (val === '' || /^\d+$/.test(val)) {
+                                                            setEditingNilai(prev => ({
+                                                                ...prev,
+                                                                [komponen.id_komponen]: val === '' ? null : parseInt(val)
+                                                            }));
+                                                        }
+                                                    }}
+                                                    onBlur={e => {
+                                                        // ✅ Validasi range saat lose focus
+                                                        const val = parseInt(e.target.value);
+                                                        if (!isNaN(val)) {
+                                                            if (val < 0) {
+                                                                setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 0 }));
+                                                            } else if (val > 100) {
+                                                                setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 100 }));
+                                                            }
+                                                        }
                                                     }}
                                                     disabled={isDisabled}
                                                     placeholder="-"
+                                                    maxLength={3}
                                                     className={`w-full px-3 py-3 rounded-xl text-center font-bold transition-all border-2 ${isDisabled
                                                         ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
                                                         : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
@@ -1241,21 +1254,34 @@ export default function InputNilaiClient() {
                                                     </div>
 
                                                     <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        step="1"
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
                                                         value={nilai ?? ''}
                                                         onChange={e => {
                                                             const val = e.target.value;
-                                                            const num = parseFloat(val);
-                                                            setEditingNilai(prev => ({
-                                                                ...prev,
-                                                                [komponen.id_komponen]: val === '' ? null : (isNaN(num) ? null : Math.floor(num))
-                                                            }));
+                                                            // ✅ Hanya izinkan angka
+                                                            if (val === '' || /^\d+$/.test(val)) {
+                                                                setEditingNilai(prev => ({
+                                                                    ...prev,
+                                                                    [komponen.id_komponen]: val === '' ? null : parseInt(val)
+                                                                }));
+                                                            }
+                                                        }}
+                                                        onBlur={e => {
+                                                            // ✅ Validasi range saat lose focus
+                                                            const val = parseInt(e.target.value);
+                                                            if (!isNaN(val)) {
+                                                                if (val < 0) {
+                                                                    setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 0 }));
+                                                                } else if (val > 100) {
+                                                                    setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 100 }));
+                                                                }
+                                                            }
                                                         }}
                                                         disabled={isDisabled}
                                                         placeholder="0"
+                                                        maxLength={3}
                                                         className={`w-full px-4 py-4 rounded-xl text-3xl font-bold text-center transition-all border-2 ${isDisabled
                                                             ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                                                             : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
