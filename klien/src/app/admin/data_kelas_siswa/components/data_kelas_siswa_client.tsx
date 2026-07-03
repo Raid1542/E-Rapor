@@ -47,6 +47,8 @@ interface ModalConfig {
 
 /* ==========================================================================
    GLOBAL STYLES
+   Disamakan dengan siswa_per_kelas_client.tsx: fadeInUp stagger animation,
+   section-card hover lift, item-hover untuk baris tabel, btn-primary hover.
    ========================================================================== */
 
 const GlobalStyles = () => (
@@ -57,6 +59,41 @@ const GlobalStyles = () => (
     .dk-fadeIn  { animation: dk-fadeIn  0.2s ease; }
     .dk-scaleIn { animation: dk-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .dk-pulse   { animation: dk-pulse   0.6s ease 0.15s; }
+
+    /* ── Animasi "muncul dari bawah" ala Dashboard / Data Siswa ── */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+    .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+    .d1 { animation-delay: 0.05s; }
+    .d2 { animation-delay: 0.10s; }
+    .d3 { animation-delay: 0.15s; }
+    .d4 { animation-delay: 0.20s; }
+    .d5 { animation-delay: 0.25s; }
+    .d6 { animation-delay: 0.30s; }
+
+    /* ── Hover lift untuk card & row, konsisten dengan halaman lain ── */
+    .section-card {
+        transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 0.25s ease;
+    }
+    .section-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+    }
+    .item-hover {
+        transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1),
+                    box-shadow 0.18s ease;
+    }
+    .item-hover:hover {
+        transform: translateY(-1px) scale(1.002);
+    }
+    .btn-primary {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
+    .btn-primary:active { transform: translateY(0); }
   `}</style>
 );
 
@@ -537,12 +574,12 @@ export default function DataKelasClient() {
       {modal && <NotifModal modal={modal} onClose={closeModal} />}
       {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-      <div className="mb-6">
+      <div className="mb-6 anim-in d1">
         <h1 className="text-2xl font-bold text-gray-900">Data Kelas</h1>
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data kelas dan wali kelas</p>
       </div>
 
-      <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+      <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
         <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
           <h2 className="text-base font-bold text-white">{isEdit ? 'Edit Data Kelas' : 'Tambah Data Kelas'}</h2>
           <button onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
@@ -621,7 +658,7 @@ export default function DataKelasClient() {
           <BtnReset onClick={handleReset} />
           <button
             onClick={() => openConfirmModal(isEdit ? 'edit' : 'add')}
-            className={btnPrimary.base}
+            className={`btn-primary ${btnPrimary.base}`}
             style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
             onMouseEnter={btnPrimary.hover}
             onMouseLeave={btnPrimary.leave}
@@ -696,7 +733,7 @@ export default function DataKelasClient() {
         />
       )}
 
-      <div className="mb-6">
+      <div className="mb-6 anim-in d1">
         <h1 className="text-2xl font-bold text-gray-900">Data Kelas</h1>
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data kelas dan wali kelas</p>
       </div>
@@ -706,7 +743,7 @@ export default function DataKelasClient() {
           Dibuat compact (inline-flex, tidak lebar penuh) supaya terasa
           seperti satu kontrol ringkas, bukan toolbar besar.
       ==================================================================== */}
-      <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 inline-flex items-center gap-3" style={CARD_STYLE}>
+      <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 inline-flex items-center gap-3 anim-in d2" style={CARD_STYLE}>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
           <CalendarRange size={16} style={{ color: '#c95b08' }} />
         </div>
@@ -748,7 +785,7 @@ export default function DataKelasClient() {
       </div>
 
       {selectedTahunAjaranId === null ? (
-        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
           <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
             <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
           </div>
@@ -757,7 +794,7 @@ export default function DataKelasClient() {
         <>
           {isReadOnly && (
             <div
-              className="mb-5 p-4 rounded-xl flex items-start gap-3"
+              className="mb-5 p-4 rounded-xl flex items-start gap-3 anim-in d3"
               style={{
                 background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
                 border: '2px solid #f59e0b'
@@ -783,12 +820,12 @@ export default function DataKelasClient() {
               CARD 2: Toolbar — Tambah Kelas + Tampilkan data + Search.
               Terpisah dari card Tahun Ajaran dan card tabel.
           ==================================================================== */}
-          <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3" style={CARD_STYLE}>
+          <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3 anim-in d4" style={CARD_STYLE}>
             <div>
               {selectedTahunAjaranAktif && !isReadOnly ? (
                 <button
                   onClick={() => setShowTambah(true)}
-                  className={btnPrimary.base}
+                  className={`btn-primary ${btnPrimary.base}`}
                   style={btnPrimary.style}
                   onMouseEnter={btnPrimary.hover}
                   onMouseLeave={btnPrimary.leave}
@@ -846,7 +883,7 @@ export default function DataKelasClient() {
           {/* ====================================================================
               CARD 3: Tabel data kelas
           ==================================================================== */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+          <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d5" style={CARD_STYLE}>
             {/* Info count */}
             <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
               <p className="text-xs" style={{ color: '#c95b08' }}>
@@ -882,8 +919,12 @@ export default function DataKelasClient() {
                   ) : currentKelas.map((kelas, index) => (
                     <tr
                       key={`kelas-${kelas.id}-${index}`}
-                      className="transition-colors"
-                      style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
+                      className="item-hover transition-colors anim-in"
+                      style={{
+                        borderBottom: '1px solid #fde0c8',
+                        background: index % 2 === 0 ? '#fff' : '#fffaf6',
+                        animationDelay: `${Math.min(index, 8) * 0.04}s`,
+                      }}
                       onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                       onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
                     >

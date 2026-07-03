@@ -107,6 +107,8 @@ const GlobalStyles = () => (
 
         /* ── STAT CARD ── */
         .stat-card {
+            position: relative;
+            overflow: hidden;
             transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1),
                         box-shadow 0.28s ease;
             cursor: pointer;
@@ -120,9 +122,37 @@ const GlobalStyles = () => (
         .stat-card:hover .s-value { transform: scale(1.06); transform-origin: left; }
         .stat-card:active { transform: translateY(-2px) scale(0.99); }
 
-        .s-icon  { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
-        .s-arrow { opacity: 0.45; transition: opacity 0.2s ease, transform 0.2s ease; }
-        .s-value { transition: transform 0.2s ease; display: inline-block; }
+        .s-icon  { position: relative; z-index: 1; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+        .s-arrow { position: relative; z-index: 1; opacity: 0.45; transition: opacity 0.2s ease, transform 0.2s ease; }
+        .s-value { position: relative; z-index: 1; transition: transform 0.2s ease; display: inline-block; }
+
+        /* Kilau bergerak khusus 4 stat card di atas (Total Siswa, Guru, Kelas, Mata Pelajaran) */
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -160%;
+            width: 55%;
+            height: 100%;
+            background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.75) 50%, transparent 100%);
+            transform: skewX(-22deg);
+            animation: statShimmerSweep 3.8s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 2;
+            mix-blend-mode: soft-light;
+        }
+        .stat-card:nth-of-type(1)::after { animation-delay: 0s; }
+        .stat-card:nth-of-type(2)::after { animation-delay: 0.7s; }
+        .stat-card:nth-of-type(3)::after { animation-delay: 1.4s; }
+        .stat-card:nth-of-type(4)::after { animation-delay: 2.1s; }
+        @keyframes statShimmerSweep {
+            0%   { left: -160%; }
+            45%  { left: 160%;  }
+            100% { left: 160%;  }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .stat-card::after { animation: none; display: none; }
+        }
 
         /* ── SECTION CARD ── */
         .section-card {
@@ -351,7 +381,7 @@ export default function DashboardClient() {
                 <div className="mt-5 h-px" style={{ background: 'linear-gradient(to right, #fde0c8, transparent)' }} />
             </div>
 
-            {/* ── 4 STAT CARDS: soft pastel ── */}
+            {/* ── 4 STAT CARDS: soft pastel + kilau ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
                 {THEME.statCards.map((card, i) => (
                     <div
@@ -364,7 +394,7 @@ export default function DashboardClient() {
                         }}
                         onClick={() => router.push(card.path)}
                     >
-                        <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start justify-between mb-4" style={{ position: 'relative', zIndex: 1 }}>
                             <div
                                 className="s-icon w-11 h-11 rounded-xl flex items-center justify-center"
                                 style={{ background: card.iconBg }}
@@ -374,7 +404,7 @@ export default function DashboardClient() {
                             <ArrowUpRight className="s-arrow w-4 h-4" style={{ color: card.iconBg }} />
                         </div>
                         <p className="s-value text-3xl font-bold text-gray-900 mb-1">{statValues[i]}</p>
-                        <p className="text-sm font-semibold" style={{ color: card.iconBg }}>{card.label}</p>
+                        <p className="text-sm font-semibold" style={{ position: 'relative', zIndex: 1, color: card.iconBg }}>{card.label}</p>
                     </div>
                 ))}
             </div>

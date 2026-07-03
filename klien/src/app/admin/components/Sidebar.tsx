@@ -1,6 +1,8 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Komponen sidebar navigasi untuk panel admin.
+ * Update: penyegaran visual (ikon aktif berbentuk badge, indikator submenu timeline,
+ *         header & badge lebih rapi) — palet warna orange utama tidak diubah.
  */
 
 'use client';
@@ -51,24 +53,106 @@ const SidebarStyles = () => (
     .sb-slideDown { animation: sb-slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
     .sb-fadeIn { animation: sb-fadeIn 0.25s ease-out; }
     .sb-badgePulse { animation: sb-badgePulse 2s ease-in-out infinite; }
+
     .sb-nav-item {
+      position: relative;
       transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .sb-nav-item:hover:not(:disabled) {
       transform: translateX(3px);
     }
+
+    /* Aksen bar kecil di sisi kiri item yang aktif */
+    .sb-nav-item.sb-active::before {
+      content: '';
+      position: absolute;
+      left: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 22px;
+      border-radius: 0 4px 4px 0;
+      background: #fff;
+      box-shadow: 0 0 8px rgba(255,255,255,0.6);
+    }
+
+    /* Wadah ikon: badge bulat/kotak lembut, beda tampilan saat aktif vs tidak */
+    .sb-icon-wrap {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.22s ease, box-shadow 0.22s ease;
+    }
+    .sb-icon-wrap.sb-icon-active {
+      background: linear-gradient(135deg, #c95b08, #f5870a);
+      box-shadow: 0 3px 10px rgba(180,70,10,0.28);
+      color: #fff;
+    }
+    .sb-icon-wrap.sb-icon-inactive {
+      background: rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.9);
+    }
+    .sb-icon-wrap.sb-icon-disabled {
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.35);
+    }
+    .sb-nav-item:hover:not(:disabled) .sb-icon-wrap.sb-icon-inactive {
+      background: rgba(255,255,255,0.18);
+    }
+
     .sb-sub-item {
+      position: relative;
       transition: all 0.2s ease;
     }
     .sb-sub-item:hover {
       transform: translateX(4px);
     }
+
+    /* Titik penanda timeline pada submenu */
+    .sb-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-right: 9px;
+      transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .sb-dot-active {
+      background: #e8690a;
+      box-shadow: 0 0 0 3px rgba(232,105,10,0.15);
+      transform: scale(1.15);
+    }
+    .sb-dot-inactive {
+      background: rgba(255,255,255,0.4);
+    }
+    .sb-sub-item:hover .sb-dot-inactive {
+      background: rgba(255,255,255,0.75);
+    }
+
     .sb-chevron {
       transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .sb-chevron-open {
       transform: rotate(180deg);
     }
+
+    /* Label seksi dengan garis pemisah tipis */
+    .sb-section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sb-section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, rgba(255,255,255,0.18), transparent);
+    }
+
     .sb-scrollbar-none::-webkit-scrollbar { display: none; }
     .sb-scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
   `}</style>
@@ -261,16 +345,16 @@ export default function Sidebar() {
   const navBase =
     'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
   const navActive =
-    'bg-white text-orange-600 shadow-sm font-semibold';
+    'sb-active bg-white text-orange-600 shadow-sm font-semibold';
   const navInactive =
-    'text-white hover:bg-white/15 hover:text-white';
+    'text-white hover:bg-white/10 hover:text-white';
   const navDisabled =
     'text-white/40 cursor-not-allowed opacity-60';
 
   const subItemBase =
     'sb-sub-item w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center mb-1';
   const subItemActive = 'bg-white text-orange-600 font-semibold shadow-sm';
-  const subItemInactive = 'text-white hover:bg-white/12 hover:text-white';
+  const subItemInactive = 'text-white hover:bg-white/10 hover:text-white';
 
   return (
     <div
@@ -291,7 +375,7 @@ export default function Sidebar() {
             <div className="flex items-center gap-3 min-w-0">
               <div
                 className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-110 hover:rotate-6"
-                style={{ background: 'rgba(255,255,255,0.18)' }}
+                style={{ background: 'rgba(255,255,255,0.18)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
               >
                 <img
                   src={logoUrl}
@@ -302,7 +386,7 @@ export default function Sidebar() {
               </div>
               <div className="min-w-0 sb-fadeIn">
                 <h2 className="text-sm font-bold text-white leading-tight truncate">{schoolName}</h2>
-                <p className="text-xs text-white/60 leading-tight">E-Rapor</p>
+                <p className="text-[11px] text-white/60 leading-tight tracking-wide uppercase mt-0.5">E-Rapor</p>
               </div>
             </div>
             <button
@@ -317,7 +401,7 @@ export default function Sidebar() {
           <button
             onClick={toggleSidebar}
             className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110"
-            style={{ background: 'rgba(255,255,255,0.15)' }}
+            style={{ background: 'rgba(255,255,255,0.15)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
           >
             <img
               src={logoUrl}
@@ -337,13 +421,15 @@ export default function Sidebar() {
           onClick={() => handleNavigation('/admin/dashboard')}
           className={`${navBase} ${isDashboardActive ? navActive : navInactive}`}
         >
-          <Home className="w-5 h-5 flex-shrink-0" />
+          <span className={`sb-icon-wrap ${isDashboardActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+            <Home className="w-[18px] h-[18px]" />
+          </span>
           {isExpanded && <span>Dashboard</span>}
         </button>
 
         {/* ── MASTER DATA label ── */}
         {isExpanded && (
-          <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+          <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
             Master Data
           </p>
         )}
@@ -354,7 +440,9 @@ export default function Sidebar() {
           onClick={() => handleNavigation('/admin/data_tahun_ajaran')}
           className={`${navBase} ${isTahunAjaranActive ? navActive : navInactive}`}
         >
-          <Calendar className="w-5 h-5 flex-shrink-0" />
+          <span className={`sb-icon-wrap ${isTahunAjaranActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+            <Calendar className="w-[18px] h-[18px]" />
+          </span>
           {isExpanded && <span>Tahun Ajaran</span>}
         </button>
 
@@ -365,7 +453,9 @@ export default function Sidebar() {
             className={`${navBase} mb-0 ${isMasterDataActive ? navActive : navInactive} justify-between`}
           >
             <div className="flex items-center gap-3">
-              <Database className="w-5 h-5 flex-shrink-0" />
+              <span className={`sb-icon-wrap ${isMasterDataActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+                <Database className="w-[18px] h-[18px]" />
+              </span>
               {isExpanded && <span>Data Master</span>}
             </div>
             {isExpanded && (
@@ -377,49 +467,54 @@ export default function Sidebar() {
           {isExpanded && openDropdowns.masterData && (
             <div
               className="sb-slideDown ml-4 mt-1.5 pl-3.5 py-1.5"
-              style={{ borderLeft: '2px solid rgba(255,255,255,0.25)' }}
+              style={{ borderLeft: '2px solid rgba(255,255,255,0.2)' }}
             >
-              {masterDataSubmenu.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleNavigation(item.url)}
-                  className={`${subItemBase} ${item.url === pathname ? subItemActive : subItemInactive}`}
-                  style={{ animationDelay: `${idx * 40}ms` }}
-                >
-                  <span>{item.name}</span>
-                </button>
-              ))}
+              {masterDataSubmenu.map((item, idx) => {
+                const active = item.url === pathname;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleNavigation(item.url)}
+                    className={`${subItemBase} ${active ? subItemActive : subItemInactive}`}
+                    style={{ animationDelay: `${idx * 40}ms` }}
+                  >
+                    <span className={`sb-dot ${active ? 'sb-dot-active' : 'sb-dot-inactive'}`} />
+                    <span>{item.name}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
         {/* ── AKADEMIK label (dengan badge TA Aktif) ── */}
         {isExpanded && (
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase">
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2">
+            <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase whitespace-nowrap">
               Akademik
             </p>
             {taLoading ? (
               <div className="w-16 h-5 rounded-full bg-white/20 animate-pulse" />
             ) : taAktif ? (
               <span
-                className="sb-badgePulse px-2 py-0.5 rounded-full text-[9px] font-bold"
+                className="sb-badgePulse px-2.5 py-1 rounded-full text-[9px] font-bold flex items-center gap-1 whitespace-nowrap"
                 style={{
-                  background: 'rgba(255,255,255,0.25)',
+                  background: 'rgba(255,255,255,0.22)',
                   color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.3)'
+                  border: '1px solid rgba(255,255,255,0.32)'
                 }}
                 title={`${taAktif.tahun_ajaran} - Semester ${taAktif.semester}`}
               >
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#4ade80' }} />
                 {taAktif.tahun_ajaran.split('/')[0]?.slice(-2)}/{taAktif.tahun_ajaran.split('/')[1]?.slice(-2)} {taAktif.semester === 'Ganjil' ? 'Gjl' : 'Gnp'}
               </span>
             ) : (
               <span
-                className="px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 animate-pulse"
+                className="px-2.5 py-1 rounded-full text-[9px] font-bold flex items-center gap-1 animate-pulse whitespace-nowrap"
                 style={{
-                  background: 'rgba(239,68,68,0.4)',
+                  background: 'rgba(239,68,68,0.35)',
                   color: '#fff',
-                  border: '1px solid rgba(239,68,68,0.6)'
+                  border: '1px solid rgba(239,68,68,0.55)'
                 }}
                 title="Belum ada Tahun Ajaran aktif"
               >
@@ -444,11 +539,13 @@ export default function Sidebar() {
             title={!taAktif ? 'Aktifkan Tahun Ajaran terlebih dahulu' : ''}
           >
             <div className="flex items-center gap-3">
-              {!taAktif ? (
-                <Lock className="w-5 h-5 flex-shrink-0" />
-              ) : (
-                <FileText className="w-5 h-5 flex-shrink-0" />
-              )}
+              <span className={`sb-icon-wrap ${!taAktif ? 'sb-icon-disabled' : isAkademikActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+                {!taAktif ? (
+                  <Lock className="w-[18px] h-[18px]" />
+                ) : (
+                  <FileText className="w-[18px] h-[18px]" />
+                )}
+              </span>
               {isExpanded && <span>Operasional</span>}
             </div>
             {isExpanded && taAktif && (
@@ -462,32 +559,36 @@ export default function Sidebar() {
           {isExpanded && openDropdowns.akademik && taAktif && (
             <div
               className="sb-slideDown ml-4 mt-1.5 pl-3.5 py-1.5"
-              style={{ borderLeft: '2px solid rgba(255,255,255,0.25)' }}
+              style={{ borderLeft: '2px solid rgba(255,255,255,0.2)' }}
             >
-              {akademikSubmenu.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleAkademikClick(item.url)}
-                  className={`${subItemBase} ${item.url === pathname ? subItemActive : subItemInactive}`}
-                  style={{ animationDelay: `${idx * 40}ms` }}
-                >
-                  <span>{item.name}</span>
-                </button>
-              ))}
+              {akademikSubmenu.map((item, idx) => {
+                const active = item.url === pathname;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleAkademikClick(item.url)}
+                    className={`${subItemBase} ${active ? subItemActive : subItemInactive}`}
+                    style={{ animationDelay: `${idx * 40}ms` }}
+                  >
+                    <span className={`sb-dot ${active ? 'sb-dot-active' : 'sb-dot-inactive'}`} />
+                    <span>{item.name}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
           {/* Pesan jika TA belum aktif */}
           {isExpanded && !taAktif && !taLoading && (
             <div
-              className="sb-fadeIn ml-4 mt-2 px-3 py-2 rounded-lg text-[10px] text-white/80"
-              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}
+              className="sb-fadeIn ml-4 mt-2 px-3 py-2.5 rounded-lg text-[10px] text-white/85"
+              style={{ background: 'rgba(239,68,68,0.16)', border: '1px solid rgba(239,68,68,0.32)' }}
             >
-              <p className="font-semibold mb-1 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
+              <p className="font-semibold mb-1 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 flex-shrink-0" />
                 TA Belum Aktif
               </p>
-              <p className="leading-tight">
+              <p className="leading-relaxed">
                 Aktifkan Tahun Ajaran di menu <strong>Tahun Ajaran</strong> untuk mengakses fitur Akademik.
               </p>
             </div>
@@ -496,7 +597,7 @@ export default function Sidebar() {
 
         {/* ── SISTEM label ── */}
         {isExpanded && (
-          <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+          <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
             Sistem
           </p>
         )}
@@ -507,13 +608,15 @@ export default function Sidebar() {
           onClick={() => handleNavigation('/admin/backup_restore')}
           className={`${navBase} ${isBackupRestoreActive ? navActive : navInactive}`}
         >
-          <Settings className="w-5 h-5 flex-shrink-0" />
-          {isExpanded && <span>Backup & Restore</span>}
+          <span className={`sb-icon-wrap ${isBackupRestoreActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+            <Settings className="w-[18px] h-[18px]" />
+          </span>
+          {isExpanded && <span>Backup &amp; Restore</span>}
         </button>
 
         {/* ── SAYA label ── */}
         {isExpanded && (
-          <p className="sb-fadeIn text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+          <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
             Saya
           </p>
         )}
@@ -524,7 +627,9 @@ export default function Sidebar() {
           onClick={() => handleNavigation('/admin/profil')}
           className={`${navBase} ${isProfilActive ? navActive : navInactive}`}
         >
-          <UserCircle className="w-5 h-5 flex-shrink-0" />
+          <span className={`sb-icon-wrap ${isProfilActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+            <UserCircle className="w-[18px] h-[18px]" />
+          </span>
           {isExpanded && <span>Profil</span>}
         </button>
       </div>

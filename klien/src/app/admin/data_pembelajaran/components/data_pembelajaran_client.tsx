@@ -8,6 +8,8 @@
  *   - Kirim semester_id ke semua endpoint
  *   - Disamakan tampilan halaman utama (Card 1 compact berisi TA+Semester+Kelas,
  *     PAGE_BG putih, tombol Batal/Reset standar) dengan Data Mata Pelajaran / Data Kelas
+ *   - Tambah sistem animasi fadeInUp (anim-in/d1-d6, section-card, item-hover,
+ *     btn-primary) agar selaras dengan Data Kelas & Data Mata Pelajaran
  */
 
 'use client';
@@ -30,6 +32,41 @@ const GlobalStyles = () => (
     .dp-fadeIn  { animation: dp-fadeIn  0.2s ease; }
     .dp-scaleIn { animation: dp-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .dp-pulse   { animation: dp-pulse   0.6s ease 0.15s; }
+
+    /* ── Animasi "muncul dari bawah" ala Dashboard / Data Kelas / Data Mata Pelajaran ── */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+    .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+    .d1 { animation-delay: 0.05s; }
+    .d2 { animation-delay: 0.10s; }
+    .d3 { animation-delay: 0.15s; }
+    .d4 { animation-delay: 0.20s; }
+    .d5 { animation-delay: 0.25s; }
+    .d6 { animation-delay: 0.30s; }
+
+    /* ── Hover lift untuk card & row, konsisten dengan halaman lain ── */
+    .section-card {
+        transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 0.25s ease;
+    }
+    .section-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+    }
+    .item-hover {
+        transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1),
+                    box-shadow 0.18s ease;
+    }
+    .item-hover:hover {
+        transform: translateY(-1px) scale(1.002);
+    }
+    .btn-primary {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
+    .btn-primary:active { transform: translateY(0); }
   `}</style>
 );
 
@@ -797,7 +834,7 @@ export default function DataPembelajaranPage() {
             </button>
             <button
               onClick={() => openConfirmPilihan('edit-pilihan')}
-              className={btnPrimary.base}
+              className={`btn-primary ${btnPrimary.base}`}
               style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
               onMouseEnter={btnPrimary.hover}
               onMouseLeave={btnPrimary.leave}
@@ -956,7 +993,7 @@ export default function DataPembelajaranPage() {
               <button
                 onClick={openConfirmWajib}
                 disabled={selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0}
-                className={`${btnPrimary.base} ${(selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`btn-primary ${btnPrimary.base} ${(selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={btnPrimary.style}
                 onMouseEnter={btnPrimary.hover}
                 onMouseLeave={btnPrimary.leave}
@@ -1056,7 +1093,7 @@ export default function DataPembelajaranPage() {
               <button
                 onClick={() => openConfirmPilihan('add-pilihan')}
                 disabled={dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan}
-                className={`${btnPrimary.base} ${(dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`btn-primary ${btnPrimary.base} ${(dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={btnPrimary.style}
                 onMouseEnter={btnPrimary.hover}
                 onMouseLeave={btnPrimary.leave}
@@ -1128,7 +1165,7 @@ export default function DataPembelajaranPage() {
       )}
 
       {/* ═══ HALAMAN UTAMA ═══ */}
-      <div className="mb-6">
+      <div className="mb-6 anim-in d1">
         <h1 className="text-2xl font-bold text-gray-900">Data Pembelajaran</h1>
         <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
           Kelola penugasan guru mengajar per kelas
@@ -1139,7 +1176,7 @@ export default function DataPembelajaranPage() {
           CARD 1: Tahun Ajaran + Semester + Kelas — compact satu baris,
           sama persis pola Card 1 di Data Mata Pelajaran.
       ==================================================================== */}
-      <div className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-5" style={CARD_STYLE}>
+      <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-5 anim-in d2" style={CARD_STYLE}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
             <CalendarRange size={16} style={{ color: '#c95b08' }} />
@@ -1219,19 +1256,19 @@ export default function DataPembelajaranPage() {
       </div>
 
       {selectedTahunAjaranId === null ? (
-        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
           <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
             <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
           </div>
         </div>
       ) : selectedSemesterId === null ? (
-        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
           <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
             <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
           </div>
         </div>
       ) : selectedKelasId === null ? (
-        <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
           <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
             <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Kelas Terlebih Dahulu</p>
           </div>
@@ -1240,7 +1277,7 @@ export default function DataPembelajaranPage() {
         <>
           {/* ═══ KONTEN DATA ═══ */}
           {loading ? (
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
               <div className="py-12 text-center">
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
@@ -1249,7 +1286,7 @@ export default function DataPembelajaranPage() {
               </div>
             </div>
           ) : !dataPerKelas ? (
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
               <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
                 <p className="text-base font-bold" style={{ color: '#c95b08' }}>Data tidak ditemukan</p>
               </div>
@@ -1257,7 +1294,7 @@ export default function DataPembelajaranPage() {
           ) : (
             <div className="space-y-5">
               {/* CARD: Info Kelas */}
-              <div className="bg-white rounded-2xl px-5 py-4" style={CARD_STYLE}>
+              <div className="section-card bg-white rounded-2xl px-5 py-4 anim-in d3" style={CARD_STYLE}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Kelas {dataPerKelas.kelas.nama_kelas}</h3>
@@ -1273,7 +1310,7 @@ export default function DataPembelajaranPage() {
               </div>
 
               {/* CARD: MAPEL WAJIB */}
-              <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+              <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
                 <div className="px-5 py-3 flex items-center justify-between" style={TH_GRAD}>
                   <div className="flex items-center gap-2">
                     <BookOpen size={16} className="text-white" />
@@ -1285,7 +1322,7 @@ export default function DataPembelajaranPage() {
                         setSelectedMapelWajibIds([]);
                         setShowModalWajib(true);
                       }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                      className="btn-primary inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
                       style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
@@ -1316,7 +1353,12 @@ export default function DataPembelajaranPage() {
                       </thead>
                       <tbody>
                         {dataPerKelas.mapel_wajib.map((mp, idx) => (
-                          <tr key={`wajib-${idx}-${mp.id}`} className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
+                          <tr key={`wajib-${idx}-${mp.id}`}
+                            className="item-hover transition-colors anim-in"
+                            style={{
+                              borderBottom: '1px solid #fde0c8',
+                              animationDelay: `${Math.min(idx, 8) * 0.04}s`,
+                            }}
                             onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                             onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                             <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
@@ -1346,7 +1388,7 @@ export default function DataPembelajaranPage() {
               </div>
 
               {/* CARD: MAPEL PILIHAN */}
-              <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+              <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d5" style={CARD_STYLE}>
                 <div className="px-5 py-3 flex items-center justify-between" style={TH_GRAD}>
                   <div className="flex items-center gap-2">
                     <BookOpen size={16} className="text-white" />
@@ -1359,7 +1401,7 @@ export default function DataPembelajaranPage() {
                         setErrorsPilihan({});
                         setShowModalPilihan(true);
                       }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                      className="btn-primary inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
                       style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
@@ -1390,7 +1432,12 @@ export default function DataPembelajaranPage() {
                       </thead>
                       <tbody>
                         {dataPerKelas.mapel_pilihan.map((mp, idx) => (
-                          <tr key={`pilihan-${idx}-${mp.id}`} className="transition-colors" style={{ borderBottom: '1px solid #fde0c8' }}
+                          <tr key={`pilihan-${idx}-${mp.id}`}
+                            className="item-hover transition-colors anim-in"
+                            style={{
+                              borderBottom: '1px solid #fde0c8',
+                              animationDelay: `${Math.min(idx, 8) * 0.04}s`,
+                            }}
                             onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
                             onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                             <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
