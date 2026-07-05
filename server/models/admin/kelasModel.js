@@ -28,32 +28,35 @@ const kelasModel = {
 
   /** Ambil kelas dengan detail (wali, jumlah siswa, status TA) */
   async getByIdWithDetails(id, tahunAjaranIdInduk) {
-    // ✅ FIXED: Query langsung pakai tahunAjaranIdInduk
     const [rows] = await db.execute(`
-      SELECT 
-          k.id_kelas,
-          k.nama_kelas,
-          k.fase,
-          k.tahun_ajaran_id,
-          COALESCE(u.nama_lengkap, '-') AS wali_kelas,
-          COALESCE(gk.user_id, NULL) AS wali_kelas_id,
-          COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa
-      FROM kelas k
-      LEFT JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-          AND gk.tahun_ajaran_id IN (
-              SELECT id_tahun_ajaran 
-              FROM tahun_ajaran 
-              WHERE id_tahun_ajaran_induk = ?
-          )
-      LEFT JOIN user u ON gk.user_id = u.id_user
-      LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
-          AND sk.id_tahun_ajaran_induk = ?
-      WHERE k.id_kelas = ?
-      GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, u.nama_lengkap, gk.user_id
+        SELECT 
+            k.id_kelas,
+            k.nama_kelas,
+            k.fase,
+            k.tahun_ajaran_id,
+            COALESCE(u.nama_lengkap, '-') AS wali_kelas,
+            COALESCE(gk.user_id, NULL) AS wali_kelas_id,
+            COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa,
+            ta.status AS status_tahun_ajaran,
+            ta.tahun_ajaran
+        FROM kelas k
+        LEFT JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
+            AND gk.tahun_ajaran_id IN (
+                SELECT id_tahun_ajaran 
+                FROM tahun_ajaran 
+                WHERE id_tahun_ajaran_induk = ?
+            )
+        LEFT JOIN user u ON gk.user_id = u.id_user
+        LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
+            AND sk.id_tahun_ajaran_induk = ?
+        LEFT JOIN tahun_ajaran ta ON k.tahun_ajaran_id = ta.id_tahun_ajaran_induk
+        WHERE k.id_kelas = ?
+        GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, 
+                 u.nama_lengkap, gk.user_id, ta.status, ta.tahun_ajaran
     `, [tahunAjaranIdInduk, tahunAjaranIdInduk, id]);
 
     return rows[0] || null;
-},
+  },
 
   /** Tambah kelas baru (validasi fase & duplikasi) */
   async create(data) {

@@ -18,10 +18,17 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 150,        // ← NAIKKAN ke 150 (mendekati max_connections)
+    connectTimeout: 30000,       // ← NAIKKAN ke 30 detik
+    idleTimeout: 60000,          
+    acquireTimeout: 30000,       // ← TAMBAH: Timeout acquire connection
+    timeout: 30000,              // ← TAMBAH: Query timeout
     queueLimit: 0,
     dateStrings: true,
+    enableKeepAlive: true,       // ← TAMBAH: Keep connection alive
+    keepAliveInitialDelay: 0     // ← TAMBAH
 });
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CONNECTION TEST
