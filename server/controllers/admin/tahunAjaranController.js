@@ -65,7 +65,9 @@ const getTahunAjaran = async (req, res) => {
                 id_induk: row.id_tahun_ajaran_induk, tahun_ajaran: row.tahun_ajaran,
                 pts_ganjil: formatDateForCompare(row.pts_ganjil), pas_ganjil: formatDateForCompare(row.pas_ganjil),
                 pts_genap: formatDateForCompare(row.pts_genap), pas_genap: formatDateForCompare(row.pas_genap),
-                status: isAktif ? 'AKTIF' : 'NONAKTIF', semester_aktif: row.semester_aktif?.toLowerCase() || 'ganjil',
+                status: isAktif ? 'AKTIF' : 'NONAKTIF', semester_aktif: row.semester_aktif
+                    ? row.semester_aktif.charAt(0).toUpperCase() + row.semester_aktif.slice(1).toLowerCase()
+                    : 'Ganjil',
                 id_detail_ganjil: row.id_ganjil, id_detail_genap: row.id_genap,
                 status_pts_ganjil: row.status_pts_ganjil || 'nonaktif', status_pas_ganjil: row.status_pas_ganjil || 'nonaktif',
                 status_pts_genap: row.status_pts_genap || 'nonaktif', status_pas_genap: row.status_pas_genap || 'nonaktif',

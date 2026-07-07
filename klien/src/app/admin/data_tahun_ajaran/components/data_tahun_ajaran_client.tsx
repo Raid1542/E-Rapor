@@ -1087,7 +1087,7 @@ export default function DataTahunAjaranClient() {
                                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-orange-100"
                                         style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
                                     >
-                                        <RotateCw size={14} /> Ganti ke Semester {tahunAktif.semester_aktif === 'Ganjil' ? 'Genap' : 'Ganjil'}
+                                        <RotateCw size={14} /> Ganti ke Semester {tahunAktif.semester_aktif?.toLowerCase() === 'ganjil' ? 'Genap' : 'Ganjil'}
                                     </button>
                                 </div>
                             </div>

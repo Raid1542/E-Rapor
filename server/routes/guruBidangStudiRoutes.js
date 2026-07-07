@@ -1,10 +1,10 @@
 /**
  * Nama File: guruBidangStudiRoutes.js
- * Fungsi: Route API guru bidang studi (profil, dashboard, atur penilaian, input nilai)
+ * Fungsi: Route API guru bidang studi (profil, dashboard, atur penilaian, input nilai, IMPORT NILAI)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
+ * Update: 8 Juli 2026 - Tambah fitur import nilai dari Excel
  */
-
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
@@ -15,7 +15,6 @@ const cekAksesMapelGuruBidangStudi = require('../middleware/cekAksesMapelGuruBid
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-
 const controller = require('../controllers/guru_bidang_studi');
 
 // Setup direktori upload + storage foto profil (.png/.jpg/.jpeg/.webp max 5MB)
@@ -23,21 +22,45 @@ const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return cb(new Error('Format file tidak didukung'));
-    cb(null, `profil_${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return cb(new Error('Format file tidak didukung'));
+        cb(null, `profil_${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+    },
 });
 
 const upload = multer({
-  storage, limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) cb(null, true);
-    else cb(new Error('Hanya file .png, .jpg, .jpeg, .webp yang diizinkan'), false);
-  },
+    storage, limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) cb(null, true);
+        else cb(new Error('Hanya file .png, .jpg, .jpeg, .webp yang diizinkan'), false);
+    },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: SETUP UPLOAD EXCEL UNTUK IMPORT NILAI (.xlsx/.xls max 10MB)
+// ═════════════════════════════════════════════════════════════════════════════
+const excelStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+        cb(null, `import_nilai_gbs_${uniqueSuffix}${ext}`);
+    },
+});
+
+const uploadExcelNilai = multer({
+    storage: excelStorage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // Max 10MB
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!['.xlsx', '.xls'].includes(ext)) {
+            return cb(new Error('Hanya file .xlsx atau .xls yang diizinkan'), false);
+        }
+        cb(null, true);
+    },
 });
 
 const guruBidangStudiOnly = authorize(['guru_bidang_studi']);
@@ -66,6 +89,29 @@ router.get('/atur-penilaian/kategori', authenticate, guruBidangStudiOnly, cekPen
 router.post('/atur-penilaian/kategori', authenticate, guruBidangStudiOnly, cekPenilaianStatus, cekAksesMapelGuruBidangStudi, controller.createKategoriAkademik);
 router.put('/atur-penilaian/kategori/:id', authenticate, guruBidangStudiOnly, cekPenilaianStatus, cekAksesMapelGuruBidangStudi, controller.updateKategoriAkademik);
 router.delete('/atur-penilaian/kategori/:id', authenticate, guruBidangStudiOnly, cekPenilaianStatus, cekAksesMapelGuruBidangStudi, controller.deleteKategoriAkademik);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: IMPORT NILAI DARI EXCEL (HARUS SEBELUM /nilai/:mapelId/:kelasId!)
+// ═════════════════════════════════════════════════════════════════════════════
+// ⚠️ PENTING: Route import-template HARUS diletakkan SEBELUM /nilai/:mapelId/:kelasId
+// karena jika tidak, kata "import-template" akan dianggap sebagai parameter :mapelId
+
+// Download template Excel untuk import nilai
+router.get('/nilai/import-template',
+    authenticate,
+    guruBidangStudiOnly,
+    cekPenilaianStatus,
+    controller.downloadTemplateNilaiGBS
+);
+
+// Import nilai dari file Excel (upload file)
+router.post('/nilai/import',
+    authenticate,
+    guruBidangStudiOnly,
+    cekPenilaianStatus,
+    uploadExcelNilai.single('file'),
+    controller.importNilaiExcelGBS
+);
 
 // --- Input Nilai (GET per kelas, POST single, PUT batch) ---
 router.get('/nilai/:mapelId/:kelasId', authenticate, guruBidangStudiOnly, cekPenilaianStatus, cekAksesMapelDanKelas, controller.getNilaiByMapelAndKelas);

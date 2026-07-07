@@ -18,15 +18,13 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 150,        // ← NAIKKAN ke 150 (mendekati max_connections)
-    connectTimeout: 30000,       // ← NAIKKAN ke 30 detik
-    idleTimeout: 60000,          
-    acquireTimeout: 30000,       // ← TAMBAH: Timeout acquire connection
-    timeout: 30000,              // ← TAMBAH: Query timeout
-    queueLimit: 0,
+    connectionLimit: 200,        // ✅ Penting untuk load testing
+    connectTimeout: 30000,       // ✅ Timeout saat connect (pengganti acquireTimeout)
+    idleTimeout: 60000,          // ✅ Timeout koneksi idle (pengganti timeout)
+    queueLimit: 0,               // ✅ Antrian tidak terbatas
     dateStrings: true,
-    enableKeepAlive: true,       // ← TAMBAH: Keep connection alive
-    keepAliveInitialDelay: 0     // ← TAMBAH
+    enableKeepAlive: true,       // ✅ Jaga koneksi tetap hidup
+    keepAliveInitialDelay: 0
 });
 
 

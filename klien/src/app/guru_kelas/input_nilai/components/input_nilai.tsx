@@ -1,16 +1,19 @@
 /**
-* Nama File: input_nilai_client.tsx
-* Fungsi: Input nilai siswa per mata pelajaran untuk guru kelas
-* UPDATE:
-*   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
-*   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif/selesai
-*   - ✅ BARU: Banner warning jika bobot belum diatur saat periode PAS aktif
-*   - ✅ BARU: Konfirmasi tambahan saat simpan nilai jika bobot belum diatur
-*   - ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetch tahun ajaran
-*/
+ * Nama File: input_nilai_client.tsx
+ * Fungsi: Input nilai siswa per mata pelajaran untuk guru kelas
+ * UPDATE:
+ *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
+ *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif/selesai
+ *   - ✅ BARU: Banner warning jika bobot belum diatur saat periode PAS aktif
+ *   - ✅ BARU: Konfirmasi tambahan saat simpan nilai jika bobot belum diatur
+ *   - ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetch tahun ajaran
+ *   - 🆕 BARU: Fitur Import Nilai dari Excel (Download Template + Upload)
+ *   - 🆕 BARU: Auto-download CSV error report jika error > 5
+ *   - 🆕 BARU: Validasi ketat nilai 0-100 dengan error inline (TIDAK auto-correct)
+ */
 'use client';
-import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock } from 'lucide-react';
+import { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock, Upload, Download } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -84,6 +87,8 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-400 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
+// 🆕 BARU: Class untuk input yang error (border merah)
+const inputErrorCls = "w-full border-2 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-red-400 focus:border-red-400 bg-red-50/40 border-red-500 placeholder:text-gray-400";
 const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
@@ -150,14 +155,23 @@ export default function InputNilaiClient() {
     const [editClosing, setEditClosing] = useState(false);
     const [editingSiswa, setEditingSiswa] = useState<SiswaNilai | null>(null);
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
+    
+    // 🆕 BARU: State untuk tracking error per komponen saat edit nilai
+    const [editingErrors, setEditingErrors] = useState<Record<number, string>>({});
+    
     const [saving, setSaving] = useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
 
+    // 🆕 BARU: STATE untuk Import Nilai dari Excel
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
+
     // ── FETCH TAHUN AJARAN AKTIF ──────────────────────────────────────────────
-    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED di sini karena endpoint 
-    // /tahun-ajaran/aktif TIDAK menggunakan middleware cekGuruKelasDitugaskan
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -171,7 +185,6 @@ export default function InputNilaiClient() {
 
                 const headers = { Authorization: `Bearer ${token}` };
 
-                // 1. Fetch tahun ajaran aktif (TIDAK perlu cek NOT_ASSIGNED di sini)
                 const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', { headers });
                 if (!taRes.ok) {
                     throw new Error('Gagal memuat tahun ajaran');
@@ -187,7 +200,6 @@ export default function InputNilaiClient() {
                 setStatusPAS(status_pas || 'nonaktif');
                 setSemesterAktif(semester || 'Ganjil');
 
-                // Tentukan jenis penilaian aktif & status read only
                 if (status_pts === 'aktif') {
                     setJenisPenilaianAktif('PTS');
                     setIsReadOnly(false);
@@ -220,8 +232,6 @@ export default function InputNilaiClient() {
                     }, 500);
                 }
 
-                // 2. Fetch mapel & komponen
-                // ✅ PERBAIKAN: NOT_ASSIGNED akan di-handle di sini (karena /mapel menggunakan middleware cekGuruKelasDitugaskan)
                 const [mapelRes, komponenRes] = await Promise.all([
                     fetch('http://localhost:5000/api/guru-kelas/mapel', { headers }),
                     fetch('http://localhost:5000/api/guru-kelas/atur-penilaian/komponen', { headers }),
@@ -229,7 +239,6 @@ export default function InputNilaiClient() {
 
                 if (!mapelRes.ok) {
                     const errData = await mapelRes.json().catch(() => ({}));
-                    // ✅ Cek NOT_ASSIGNED di sini (endpoint /mapel menggunakan middleware cekGuruKelasDitugaskan)
                     if (mapelRes.status === 403 && errData.code === 'NOT_ASSIGNED') {
                         setIsNotAssigned(true);
                         setLoading(false);
@@ -320,11 +329,9 @@ export default function InputNilaiClient() {
                 setCurrentMapel(mapelList.find(m => m.mata_pelajaran_id === selectedMapelId) || null);
                 setCurrentPage(1);
 
-                // ✅ Cek status bobot dari backend
                 const bobotStatus = data.bobot_sudah_diatur ?? true;
                 setBobotSudahDiatur(bobotStatus);
 
-                // ✅ Tampilkan warning jika PAS aktif DAN bobot belum diatur
                 if (!bobotStatus && jenisPenilaianAktif === 'PAS' && !isReadOnly) {
                     setShowBobotWarning(true);
                 } else {
@@ -402,7 +409,6 @@ export default function InputNilaiClient() {
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
-    // ✅ Cek read only sebelum buka modal edit
     const handleEdit = (siswa: SiswaNilai) => {
         if (isReadOnly) {
             if (readOnlyReason === 'locked') {
@@ -432,26 +438,111 @@ export default function InputNilaiClient() {
 
         setEditingSiswa(siswa);
         setEditingNilai({ ...siswa.nilai });
+        // 🆕 BARU: Reset error saat buka modal edit
+        setEditingErrors({});
         setShowEdit(true);
     };
 
-    const closeEdit = () => { setEditClosing(true); setTimeout(() => { setShowEdit(false); setEditClosing(false); setEditingSiswa(null); }, 200); };
+    const closeEdit = () => { setEditClosing(true); setTimeout(() => { setShowEdit(false); setEditClosing(false); setEditingSiswa(null); setEditingErrors({}); }, 200); };
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: FUNGSI VALIDASI NILAI (0-100)
+    // Dipanggil saat user selesai input (onBlur) untuk validasi real-time
+    // ═════════════════════════════════════════════════════════════════════════════
+    const validateNilai = (komponenId: number, nilai: number | null): string | null => {
+        if (nilai === null) return null; // Kosong = OK
+        if (typeof nilai !== 'number' || isNaN(nilai)) {
+            return 'Nilai harus berupa angka';
+        }
+        if (nilai < 0) {
+            return 'Nilai tidak boleh negatif (< 0)';
+        }
+        if (nilai > 100) {
+            return 'Nilai tidak boleh lebih dari 100';
+        }
+        return null; // Valid
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: HANDLER INPUT NILAI DENGAN VALIDASI
+    // Jika nilai invalid, tampilkan error inline dan reset nilai ke null
+    // ═════════════════════════════════════════════════════════════════════════════
+    const handleNilaiChange = (komponenId: number, value: string) => {
+        // Hanya izinkan angka atau kosong
+        if (value === '' || /^\d+$/.test(value)) {
+            const newValue = value === '' ? null : parseInt(value);
+            setEditingNilai(prev => ({
+                ...prev,
+                [komponenId]: newValue
+            }));
+
+            // Clear error saat user mulai mengetik
+            if (editingErrors[komponenId]) {
+                setEditingErrors(prev => {
+                    const newErrors = { ...prev };
+                    delete newErrors[komponenId];
+                    return newErrors;
+                });
+            }
+        }
+    };
+
+    const handleNilaiBlur = (komponenId: number) => {
+        const nilai = editingNilai[komponenId];
+        const error = validateNilai(komponenId, nilai);
+
+        if (error) {
+            // Tampilkan error inline
+            setEditingErrors(prev => ({
+                ...prev,
+                [komponenId]: error
+            }));
+            // 🆕 BARU: Reset nilai ke null (TIDAK auto-correct ke 0 atau 100)
+            // User harus input ulang nilai yang valid
+            setEditingNilai(prev => ({
+                ...prev,
+                [komponenId]: null
+            }));
+        } else {
+            // Clear error jika valid
+            setEditingErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[komponenId];
+                return newErrors;
+            });
+        }
+    };
 
     const openConfirmSimpan = () => {
         if (!editingSiswa || !selectedMapelId) return;
 
+        // 🆕 BARU: Validasi SEMUA nilai sebelum simpan
+        const validationErrors: string[] = [];
         for (const [idStr, nilai] of Object.entries(editingNilai)) {
             if (nilai !== null) {
-                const nama = komponenList.find(k => k.id_komponen === Number(idStr))?.nama_komponen || idStr;
-                if (typeof nilai !== 'number' || isNaN(nilai) || nilai < 0 || nilai > 100) {
-                    showModal({
-                        type: 'warning',
-                        title: 'Nilai Tidak Valid',
-                        message: `Nilai untuk "${nama}" harus angka 0-100.`
-                    });
-                    return;
+                const komponenId = Number(idStr);
+                const error = validateNilai(komponenId, nilai);
+                if (error) {
+                    const nama = komponenList.find(k => k.id_komponen === komponenId)?.nama_komponen || idStr;
+                    validationErrors.push(`• ${nama}: ${error}`);
+                    
+                    // Tampilkan error inline
+                    setEditingErrors(prev => ({
+                        ...prev,
+                        [komponenId]: error
+                    }));
                 }
             }
+        }
+
+        // Jika ada error validasi, tampilkan pesan error dan batal simpan
+        if (validationErrors.length > 0) {
+            showModal({
+                type: 'error',
+                title: 'Nilai Tidak Valid',
+                message: `Terdapat ${validationErrors.length} nilai yang tidak valid:\n\n${validationErrors.join('\n')}\n\nSilakan perbaiki nilai yang ditandai merah.`
+            });
+            return;
         }
 
         const hasChanged = Object.entries(editingNilai).some(([idStr, nilaiBaru]) => {
@@ -470,7 +561,6 @@ export default function InputNilaiClient() {
             return;
         }
 
-        // ✅ Konfirmasi tambahan jika PAS aktif & bobot belum diatur
         if (jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur) {
             showModal({
                 type: 'warning',
@@ -517,6 +607,7 @@ export default function InputNilaiClient() {
             setShowConfirmModal(false);
             setShowEdit(false);
             setEditingSiswa(null);
+            setEditingErrors({});
             setConfirmSiswaNama('');
 
             setTimeout(() => {
@@ -531,6 +622,7 @@ export default function InputNilaiClient() {
             setShowConfirmModal(false);
             setShowEdit(false);
             setEditingSiswa(null);
+            setEditingErrors({});
             setConfirmSiswaNama('');
             setTimeout(() => {
                 showModal({
@@ -541,6 +633,323 @@ export default function InputNilaiClient() {
             }, 250);
         } finally {
             setSaving(false);
+        }
+    };
+
+    // 🆕 BARU: Handler untuk Download Template Excel
+    const handleDownloadTemplate = async () => {
+        if (!selectedMapelId) {
+            showModal({
+                type: 'warning',
+                title: 'Pilih Mata Pelajaran',
+                message: 'Silakan pilih mata pelajaran terlebih dahulu sebelum download template.'
+            });
+            return;
+        }
+
+        setDownloadingTemplate(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(
+                `http://localhost:5000/api/guru-kelas/nilai/import-template?mapel_id=${selectedMapelId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ message: 'Gagal download template' }));
+                throw new Error(err.message || 'Gagal download template');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Template_Import_Nilai_${currentMapel?.nama_mapel || 'Mapel'}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showModal({
+                type: 'success',
+                title: 'Template Berhasil Diunduh',
+                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Nilai"'
+            });
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh Template',
+                message: err.message || 'Terjadi kesalahan saat mengunduh template.'
+            });
+        } finally {
+            setDownloadingTemplate(false);
+        }
+    };
+
+    // 🆕 BARU: Handler untuk pilih file Excel
+    const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const validTypes = [
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
+            showModal({
+                type: 'warning',
+                title: 'Format File Tidak Valid',
+                message: 'Silakan upload file Excel (.xlsx atau .xls)'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            showModal({
+                type: 'warning',
+                title: 'File Terlalu Besar',
+                message: 'Ukuran file maksimal 10MB'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        setImportFile(file);
+    };
+
+    // 🆕 BARU: Handler untuk buka modal import
+    const openImportModal = () => {
+        if (!selectedMapelId) {
+            showModal({
+                type: 'warning',
+                title: 'Pilih Mata Pelajaran',
+                message: 'Silakan pilih mata pelajaran terlebih dahulu sebelum import nilai.'
+            });
+            return;
+        }
+
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: 'Mode Baca Saja',
+                message: readOnlyReason === 'locked'
+                    ? 'Periode penilaian sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengimport nilai.'
+                    : 'Periode penilaian belum aktif.\n\nAnda tidak dapat mengimport nilai.'
+            });
+            return;
+        }
+
+        if (!currentMapel?.bisa_input) {
+            showModal({
+                type: 'warning',
+                title: 'Tidak Dapat Input',
+                message: 'Mata pelajaran ini tidak dapat diinput nilainya oleh Anda.'
+            });
+            return;
+        }
+
+        setImportFile(null);
+        if (importFileInputRef.current) importFileInputRef.current.value = '';
+        setShowImportModal(true);
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: FUNGSI DOWNLOAD ERROR REPORT CSV
+    // Generate file CSV berisi detail error import untuk dianalisis guru
+    // Format: No, Baris, Kolom, Alasan Error
+    // ═════════════════════════════════════════════════════════════════════════════
+    const downloadErrorReport = (errors: any[], mapelName: string, kelasName: string) => {
+        // Header CSV
+        const headers = ['No', 'Baris', 'Kolom', 'Alasan Error'];
+
+        // Parse error message untuk extract info
+        const rows = errors.map((err, index) => {
+            const message = err.message || '';
+
+            // Extract baris dari message (format: "Baris X: ..." atau "Baris X, Kolom ...")
+            const rowMatch = message.match(/Baris\s+(\d+)/i);
+            const rowNumber = rowMatch ? rowMatch[1] : '-';
+
+            // Extract kolom dari message (format: "Kolom "X"")
+            const colMatch = message.match(/Kolom\s+"([^"]+)"/i);
+            const column = colMatch ? colMatch[1] : '-';
+
+            // Escape quotes untuk CSV (double quote menjadi "")
+            const escapedMessage = message.replace(/"/g, '""');
+
+            return [
+                index + 1,
+                rowNumber,
+                column,
+                `"${escapedMessage}"`
+            ].join(',');
+        });
+
+        // Build CSV content dengan BOM untuk UTF-8 (agar Excel baca dengan benar)
+        const BOM = '\uFEFF';
+        const csvContent = BOM + [
+            headers.join(','),
+            ...rows
+        ].join('\n');
+
+        // Generate blob dan download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        // Generate filename dengan timestamp dan info mapel
+        const timestamp = new Date().toISOString().split('T')[0];
+        const safeMapelName = (mapelName || 'Mapel').replace(/[^a-z0-9]/gi, '_');
+        const safeKelasName = (kelasName || 'Kelas').replace(/[^a-z0-9]/gi, '_');
+        const filename = `error_import_nilai_${safeMapelName}_${safeKelasName}_${timestamp}.csv`;
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    // 🆕 BARU: Handler untuk eksekusi import (DENGAN AUTO-DOWNLOAD CSV)
+    const executeImportNilai = async () => {
+        if (!importFile || !selectedMapelId) {
+            showModal({
+                type: 'warning',
+                title: 'File Belum Dipilih',
+                message: 'Silakan pilih file Excel yang akan diimport.'
+            });
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', importFile);
+            formData.append('mapel_id', String(selectedMapelId));
+
+            const response = await fetch('http://localhost:5000/api/guru-kelas/nilai/import', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Gagal mengimport nilai');
+            }
+
+            // Refresh data nilai
+            const refreshRes = await fetch(`http://localhost:5000/api/guru-kelas/nilai/${selectedMapelId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                const mapped: SiswaNilai[] = (refreshData.siswaList || []).map((s: any) => ({
+                    id: s.id,
+                    nama: s.nama,
+                    nis: s.nis || '-',
+                    nisn: s.nisn || '-',
+                    nilai_rapor_pts: s.nilai_rapor_pts || 0,
+                    deskripsi_pts: s.deskripsi_pts || '',
+                    nilai_rapor_pas: s.nilai_rapor_pas || 0,
+                    deskripsi_pas: s.deskripsi_pas || '',
+                    nilai: s.nilai || {},
+                }));
+                setSiswaList(mapped);
+                setFilteredSiswa(mapped);
+            }
+
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 🆕 BARU: LOGIKA AUTO-DOWNLOAD CSV ERROR REPORT
+            // Jika error > 5, auto-download CSV agar guru bisa analisis
+            // ═══════════════════════════════════════════════════════════════════
+            const errors = data.data?.errors || [];
+            const warnings = data.data?.warnings || [];
+            const totalErrors = errors.length;
+            const totalWarnings = warnings.length;
+
+            // ✅ AUTO-DOWNLOAD CSV JIKA ERROR > 5
+            if (totalErrors > 5) {
+                downloadErrorReport(errors, currentMapel?.nama_mapel || '', kelasNama);
+            }
+
+            // Build summary message
+            const summaryLines: string[] = [];
+
+            // Header summary
+            summaryLines.push(`✅ Berhasil: ${data.data?.berhasil || 0} siswa`);
+            summaryLines.push(`❌ Gagal: ${totalErrors} siswa`);
+            if (totalWarnings > 0) {
+                summaryLines.push(`⚠️ Peringatan: ${totalWarnings} siswa`);
+            }
+            summaryLines.push('');
+
+            // Detail errors
+            if (totalErrors > 0) {
+                if (totalErrors <= 5) {
+                    // Jika error <= 5, tampilkan semua di modal
+                    summaryLines.push('📋 Detail Error:');
+                    errors.slice(0, 5).forEach((e: any, i: number) => {
+                        summaryLines.push(`${i + 1}. ${e.message}`);
+                    });
+                } else {
+                    // Jika error > 5, tampilkan 3 contoh + info CSV
+                    summaryLines.push(`📋 Contoh Error (3 dari ${totalErrors}):`);
+                    errors.slice(0, 3).forEach((e: any, i: number) => {
+                        summaryLines.push(`${i + 1}. ${e.message}`);
+                    });
+                    summaryLines.push('');
+                    summaryLines.push(`📥 File CSV error telah diunduh otomatis!`);
+                    summaryLines.push(`   (error_import_nilai_*.csv)`);
+                }
+            }
+
+            // Detail warnings
+            if (totalWarnings > 0) {
+                summaryLines.push('');
+                summaryLines.push('ℹ️ Peringatan:');
+                warnings.slice(0, 3).forEach((w: any, i: number) => {
+                    summaryLines.push(`${i + 1}. ${w.message}`);
+                });
+                if (totalWarnings > 3) {
+                    summaryLines.push(`   ... dan ${totalWarnings - 3} peringatan lainnya`);
+                }
+            }
+
+            // Info periode
+            summaryLines.push('');
+            summaryLines.push(`📊 Periode: ${data.data?.periode_aktif || '-'}`);
+            summaryLines.push(`📚 Komponen: ${(data.data?.komponen_diimport || []).join(', ')}`);
+
+            setTimeout(() => {
+                showModal({
+                    type: totalErrors > 0 ? 'warning' : 'success',
+                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    message: summaryLines.join('\n')
+                });
+            }, 250);
+
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Import',
+                message: err.message || 'Terjadi kesalahan saat mengimport nilai.'
+            });
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -726,6 +1135,24 @@ export default function InputNilaiClient() {
                                     </option>
                                 ))}
                             </select>
+
+                            {/* 🆕 BARU: Tombol Import Nilai */}
+                            {selectedMapelId && canEditNilai && (
+                                <button
+                                    onClick={openImportModal}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+                                    style={{
+                                        background: 'linear-gradient(135deg,#10b981,#059669)',
+                                        color: 'white',
+                                        boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
+                                    }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#059669,#047857)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#10b981,#059669)'; }}
+                                >
+                                    <Upload size={16} />
+                                    Import Nilai
+                                </button>
+                            )}
                         </div>
 
                         {selectedMapelId && (
@@ -1109,6 +1536,16 @@ export default function InputNilaiClient() {
                                 </div>
                             )}
 
+                            {/* 🆕 BARU: Info validasi nilai */}
+                            <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+                                style={{ background: '#eff6ff', border: '1px solid #93c5fd' }}>
+                                <AlertCircle size={18} style={{ color: '#1d4ed8', flexShrink: 0 }} className="mt-0.5" />
+                                <p className="text-xs" style={{ color: '#1e40af' }}>
+                                    <strong>ℹ️ Validasi Nilai:</strong> Nilai harus berupa angka antara <strong>0-100</strong>. 
+                                    Jika Anda input nilai di luar rentang, sistem akan menampilkan pesan error dan nilai akan direset.
+                                </p>
+                            </div>
+
                             {jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur && (
                                 <div className="rounded-xl px-4 py-3 flex items-start gap-3"
                                     style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
@@ -1128,6 +1565,7 @@ export default function InputNilaiClient() {
                                     {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(komponen => {
                                         const isDisabled = jenisPenilaianAktif === 'PTS';
                                         const nilai = editingNilai[komponen.id_komponen];
+                                        const error = editingErrors[komponen.id_komponen];
                                         return (
                                             <div key={komponen.id_komponen}>
                                                 <label className="block text-xs font-bold mb-2 text-center"
@@ -1139,34 +1577,25 @@ export default function InputNilaiClient() {
                                                     inputMode="numeric"
                                                     pattern="[0-9]*"
                                                     value={nilai ?? ''}
-                                                    onChange={e => {
-                                                        const val = e.target.value;
-                                                        if (val === '' || /^\d+$/.test(val)) {
-                                                            setEditingNilai(prev => ({
-                                                                ...prev,
-                                                                [komponen.id_komponen]: val === '' ? null : parseInt(val)
-                                                            }));
-                                                        }
-                                                    }}
-                                                    onBlur={e => {
-                                                        const val = parseInt(e.target.value);
-                                                        if (!isNaN(val)) {
-                                                            if (val < 0) {
-                                                                setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 0 }));
-                                                            } else if (val > 100) {
-                                                                setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 100 }));
-                                                            }
-                                                        }
-                                                    }}
+                                                    onChange={e => handleNilaiChange(komponen.id_komponen, e.target.value)}
+                                                    onBlur={() => handleNilaiBlur(komponen.id_komponen)}
                                                     disabled={isDisabled}
                                                     placeholder="-"
                                                     maxLength={3}
                                                     className={`w-full px-3 py-3 rounded-xl text-center font-bold transition-all border-2 ${isDisabled
                                                         ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                        : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                        : error
+                                                            ? 'bg-red-50 border-red-500 text-gray-800 focus:ring-2 focus:ring-red-400 focus:border-red-400'
+                                                            : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                                         }`}
-                                                    style={isDisabled ? {} : { boxShadow: '0 2px 8px rgba(232,105,10,0.08)' }}
+                                                    style={isDisabled ? {} : error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 2px 8px rgba(232,105,10,0.08)' }}
                                                 />
+                                                {/* 🆕 BARU: Tampilkan error inline */}
+                                                {error && (
+                                                    <p className="text-xs text-red-600 mt-1 text-center font-semibold">
+                                                        {error}
+                                                    </p>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1184,20 +1613,23 @@ export default function InputNilaiClient() {
                                         const isActive = (jenisPenilaianAktif === 'PTS' && isPTS) || (jenisPenilaianAktif === 'PAS' && !isPTS);
                                         const isDisabled = !isActive;
                                         const nilai = editingNilai[komponen.id_komponen];
+                                        const error = editingErrors[komponen.id_komponen];
                                         return (
                                             <div key={komponen.id_komponen}
                                                 className={`rounded-xl p-5 border-2 transition-all relative overflow-hidden ${isActive
-                                                    ? 'border-orange-400 shadow-lg'
+                                                    ? error
+                                                        ? 'border-red-500 bg-red-50'
+                                                        : 'border-orange-400 shadow-lg'
                                                     : 'border-gray-200 bg-gray-50'
                                                     }`}>
-                                                {isActive && (
+                                                {isActive && !error && (
                                                     <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-10"
                                                         style={{ background: '#e8690a', transform: 'translate(30%, -30%)' }}></div>
                                                 )}
                                                 <div className="relative">
                                                     <div className="text-center mb-4">
                                                         <span className="text-base font-bold uppercase tracking-wide"
-                                                            style={{ color: isActive ? '#c2410c' : '#9ca3af' }}>
+                                                            style={{ color: isActive ? (error ? '#dc2626' : '#c2410c') : '#9ca3af' }}>
                                                             {komponen.nama_komponen}
                                                         </span>
                                                     </div>
@@ -1206,35 +1638,26 @@ export default function InputNilaiClient() {
                                                         inputMode="numeric"
                                                         pattern="[0-9]*"
                                                         value={nilai ?? ''}
-                                                        onChange={e => {
-                                                            const val = e.target.value;
-                                                            if (val === '' || /^\d+$/.test(val)) {
-                                                                setEditingNilai(prev => ({
-                                                                    ...prev,
-                                                                    [komponen.id_komponen]: val === '' ? null : parseInt(val)
-                                                                }));
-                                                            }
-                                                        }}
-                                                        onBlur={e => {
-                                                            const val = parseInt(e.target.value);
-                                                            if (!isNaN(val)) {
-                                                                if (val < 0) {
-                                                                    setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 0 }));
-                                                                } else if (val > 100) {
-                                                                    setEditingNilai(prev => ({ ...prev, [komponen.id_komponen]: 100 }));
-                                                                }
-                                                            }
-                                                        }}
+                                                        onChange={e => handleNilaiChange(komponen.id_komponen, e.target.value)}
+                                                        onBlur={() => handleNilaiBlur(komponen.id_komponen)}
                                                         disabled={isDisabled}
                                                         placeholder="0"
                                                         maxLength={3}
                                                         className={`w-full px-4 py-4 rounded-xl text-3xl font-bold text-center transition-all border-2 ${isDisabled
                                                             ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                            : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                            : error
+                                                                ? 'bg-red-50 border-red-500 text-gray-800 focus:ring-2 focus:ring-red-400 focus:border-red-400'
+                                                                : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                                             }`}
-                                                        style={isActive ? { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' } : {}}
+                                                        style={isActive ? error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' } : {}}
                                                     />
-                                                    {isActive && (
+                                                    {/* 🆕 BARU: Tampilkan error inline */}
+                                                    {error && (
+                                                        <p className="text-xs text-red-600 mt-2 text-center font-semibold">
+                                                            {error}
+                                                        </p>
+                                                    )}
+                                                    {isActive && !error && (
                                                         <div className="flex items-center justify-center gap-1.5 mt-3">
                                                             <CheckCircle2 size={12} style={{ color: '#16a34a' }} />
                                                             <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>Dapat diubah</span>
@@ -1318,6 +1741,162 @@ export default function InputNilaiClient() {
                                     </>
                                 ) : (
                                     <>Simpan</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🆕 BARU: MODAL IMPORT NILAI DARI EXCEL */}
+            {showImportModal && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 dg-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={24} className="text-green-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Import Nilai dari Excel</h3>
+                                    <p className="text-xs text-gray-500">
+                                        {currentMapel?.nama_mapel} - {kelasNama}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { if (!importing) setShowImportModal(false); }}
+                                disabled={importing}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100"
+                            >
+                                <X size={18} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Info Box */}
+                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                <AlertCircle size={16} className="text-blue-600" />
+                                Langkah-langkah Import:
+                            </p>
+                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                <li>Isi nilai pada kolom komponen (UH1-5, PTS, PAS)</li>
+                                <li>Simpan file Excel</li>
+                                <li>Upload file Excel yang sudah diisi</li>
+                                <li>Klik "Import Nilai" untuk memproses</li>
+                            </ol>
+                        </div>
+
+                        {/* Info Periode */}
+                        {jenisPenilaianAktif && (
+                            <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
+                                <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-orange-800">
+                                    <strong>Periode {jenisPenilaianAktif} Aktif:</strong>{' '}
+                                    {jenisPenilaianAktif === 'PTS'
+                                        ? 'Hanya kolom PTS yang akan diimport. Kolom UH dan PAS akan diabaikan.'
+                                        : 'Kolom UH dan PAS akan diimport. Kolom PTS akan diabaikan (terkunci).'}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Tombol Download Template */}
+                        <div className="mb-5">
+                            <button
+                                onClick={handleDownloadTemplate}
+                                disabled={downloadingTemplate}
+                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', boxShadow: '0 3px 10px rgba(245,158,11,0.3)' }}
+                                onMouseEnter={e => { if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)'; }}
+                                onMouseLeave={e => { if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)'; }}
+                            >
+                                {downloadingTemplate ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengunduh Template...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        📥 Download Template Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Upload Area */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                                Upload File Excel <span className="text-red-500">*</span>
+                            </label>
+                            <div
+                                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
+                                    ? 'border-green-400 bg-green-50'
+                                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                                    }`}
+                                onClick={() => importFileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={importFileInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleImportFileChange}
+                                    className="hidden"
+                                />
+                                {importFile ? (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <CheckCircle2 size={24} className="text-green-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                        <p className="text-xs text-green-700">
+                                            {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Upload size={32} className="text-orange-400" />
+                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                        <p className="text-xs text-orange-700">
+                                            Format: .xlsx atau .xls (Maks 10MB)
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowImportModal(false); setImportFile(null); }}
+                                disabled={importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={executeImportNilai}
+                                disabled={!importFile || importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{ background: 'linear-gradient(135deg,#10b981,#059669)', boxShadow: '0 3px 10px rgba(16,185,129,0.3)' }}
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengimport...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={16} />
+                                        Import Nilai
+                                    </>
                                 )}
                             </button>
                         </div>

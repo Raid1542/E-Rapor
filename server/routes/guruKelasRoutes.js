@@ -3,6 +3,7 @@
  * Fungsi: Route API untuk role guru kelas (profil, absensi, catatan, ekskul, kokurikuler, akademik, rapor)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
+ * Update: 7 Juli 2026 - Tambah fitur import nilai dari Excel
  */
 
 const express = require('express');
@@ -41,6 +42,31 @@ const uploadFoto = multer({
     fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
         if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) return cb(new Error('Hanya file .png, .jpg, .jpeg, .webp yang diizinkan'), false);
+        cb(null, true);
+    },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: SETUP UPLOAD EXCEL UNTUK IMPORT NILAI (.xlsx/.xls max 10MB)
+// ═════════════════════════════════════════════════════════════════════════════
+
+const excelStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+        cb(null, `import_nilai_${uniqueSuffix}${ext}`);
+    },
+});
+
+const uploadExcelNilai = multer({
+    storage: excelStorage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // Max 10MB
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!['.xlsx', '.xls'].includes(ext)) {
+            return cb(new Error('Hanya file .xlsx atau .xls yang diizinkan'), false);
+        }
         cb(null, true);
     },
 });
@@ -171,6 +197,33 @@ router.put('/kokurikuler/:siswaId', authenticate, guruKelasOnly, validateIdParam
 // ═════════════════════════════════════════════════════════════════════════════
 
 router.get('/mapel', authenticate, guruKelasOnly, cekTahunAjaranAktif, safeHandler(guruKelasControllers.getMapelForGuruKelas));
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: 7.1 IMPORT NILAI DARI EXCEL (HARUS SEBELUM /nilai/:mapelId!)
+// ═════════════════════════════════════════════════════════════════════════════
+// ⚠️ PENTING: Route import-template HARUS diletakkan SEBELUM /nilai/:mapelId
+// karena jika tidak, kata "import-template" akan dianggap sebagai parameter :mapelId
+
+// Download template Excel untuk import nilai
+router.get('/nilai/import-template', 
+    authenticate, 
+    guruKelasOnly, 
+    cekTahunAjaranAktif, 
+    safeHandler(guruKelasControllers.downloadTemplateNilai)
+);
+
+// Import nilai dari file Excel (upload file)
+router.post('/nilai/import', 
+    authenticate, 
+    guruKelasOnly, 
+    cekTahunAjaranAktif,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    uploadExcelNilai.single('file'),
+    safeHandler(guruKelasControllers.importNilaiExcel)
+);
+
+// Route existing (tetap sama, JANGAN DIUBAH)
 router.get('/nilai/:mapelId', authenticate, guruKelasOnly, validateIdParam('mapelId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getNilaiByMapel));
 router.put('/nilai-komponen/:mapelId/:siswaId', authenticate, guruKelasOnly, validateIdParam('mapelId'), validateIdParam('siswaId'),
     (req, res, next) => { req.validatedMapelId = req.params.mapelId; req.validatedSiswaId = req.params.siswaId; next(); },

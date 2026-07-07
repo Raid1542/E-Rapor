@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
     Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, LogOut, Lock, BookOpen,
-    Users, GraduationCap
+    Users, GraduationCap,
+    Upload, Download  // 🆕 BARU: Icon untuk Import
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -250,6 +251,13 @@ export default function InputNilaiGBSClient() {
     const [saving, setSaving] = useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    // 🆕 BARU: STATE untuk Import Nilai dari Excel
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
 
     const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
     const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
@@ -674,6 +682,226 @@ export default function InputNilaiGBSClient() {
         }
     };
 
+    // ═════════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: HANDLER IMPORT NILAI
+    // ═════════════════════════════════════════════════════════════════════════════
+
+    // Handler untuk buka modal import
+    const openImportModal = () => {
+        if (!selectedMapelId || !selectedKelasId) {
+            showModal({
+                type: 'warning',
+                title: 'Pilih Mapel dan Kelas',
+                message: 'Silakan pilih mata pelajaran dan kelas terlebih dahulu sebelum import nilai.'
+            });
+            return;
+        }
+
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: 'Mode Baca Saja',
+                message: readOnlyReason === 'locked'
+                    ? 'Periode penilaian sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengimport nilai.'
+                    : 'Periode penilaian belum aktif.\n\nAnda tidak dapat mengimport nilai.'
+            });
+            return;
+        }
+
+        setImportFile(null);
+        if (importFileInputRef.current) importFileInputRef.current.value = '';
+        setShowImportModal(true);
+    };
+
+    // Handler untuk download template
+    const handleDownloadTemplate = async () => {
+        if (!selectedMapelId || !selectedKelasId) {
+            showModal({
+                type: 'warning',
+                title: 'Pilih Mapel dan Kelas',
+                message: 'Silakan pilih mata pelajaran dan kelas terlebih dahulu.'
+            });
+            return;
+        }
+
+        setDownloadingTemplate(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(
+                `${API}/nilai/import-template?mapel_id=${selectedMapelId}&kelas_id=${selectedKelasId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ message: 'Gagal download template' }));
+                throw new Error(err.message || 'Gagal download template');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Template_Nilai_${currentMapel?.nama_mapel || 'Mapel'}_${currentKelas?.nama_kelas || 'Kelas'}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            // ✅ TUTUP MODAL IMPORT SEBELUM TAMPILKAN NOTIFIKASI
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // Tampilkan notifikasi sukses setelah modal ditutup
+            setTimeout(() => {
+                showModal({
+                    type: 'success',
+                    title: 'Template Berhasil Diunduh',
+                    message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Nilai"'
+                });
+            }, 300); // Delay sedikit agar animasi tutup modal smooth
+
+        } catch (err: any) {
+            // Untuk error, tetap tutup modal
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            setTimeout(() => {
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Mengunduh Template',
+                    message: err.message || 'Terjadi kesalahan saat mengunduh template.'
+                });
+            }, 300);
+        } finally {
+            setDownloadingTemplate(false);
+        }
+    };
+
+    // Handler untuk pilih file Excel
+    const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const validTypes = [
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
+            showModal({
+                type: 'warning',
+                title: 'Format File Tidak Valid',
+                message: 'Silakan upload file Excel (.xlsx atau .xls)'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            showModal({
+                type: 'warning',
+                title: 'File Terlalu Besar',
+                message: 'Ukuran file maksimal 10MB'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        setImportFile(file);
+    };
+
+    // Handler untuk eksekusi import
+    const executeImportNilai = async () => {
+        if (!importFile || !selectedMapelId || !selectedKelasId) {
+            showModal({
+                type: 'warning',
+                title: 'Data Belum Lengkap',
+                message: 'Silakan pilih file Excel dan pastikan mapel + kelas sudah dipilih.'
+            });
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', importFile);
+            formData.append('mapel_id', String(selectedMapelId));
+            formData.append('kelas_id', String(selectedKelasId));
+
+            const response = await fetch(`${API}/nilai/import`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Gagal mengimport nilai');
+            }
+
+            // Refresh data nilai
+            const refreshRes = await fetch(
+                `${API}/nilai/${selectedMapelId}/${selectedKelasId}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                if (refreshData.siswaList && Array.isArray(refreshData.siswaList)) {
+                    const mapped: SiswaNilai[] = refreshData.siswaList.map((s: any) => ({
+                        id: s.id,
+                        nama: s.nama,
+                        nis: s.nis || '-',
+                        nisn: s.nisn || '-',
+                        nilai_rapor_pts: s.nilai_rapor_pts ?? 0,
+                        deskripsi_pts: s.deskripsi_pts ?? '',
+                        nilai_rapor_pas: s.nilai_rapor_pas ?? 0,
+                        deskripsi_pas: s.deskripsi_pas ?? '',
+                        nilai: s.nilai || {},
+                    }));
+                    setSiswaList(mapped);
+                    setFilteredSiswa(mapped);
+                }
+            }
+
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // Build success message
+            let successMessage = data.message;
+            if (data.data?.errors && data.data.errors.length > 0) {
+                successMessage += `\n\n⚠️ Detail Error (maks 20):\n${data.data.errors.slice(0, 20).map((e: any) => `• ${e.message}`).join('\n')}`;
+            }
+            if (data.data?.warnings && data.data.warnings.length > 0) {
+                successMessage += `\n\nℹ️ Peringatan:\n${data.data.warnings.slice(0, 10).map((w: any) => `• ${w.message}`).join('\n')}`;
+            }
+
+            setTimeout(() => {
+                showModal({
+                    type: data.data?.errors?.length > 0 ? 'warning' : 'success',
+                    title: data.data?.errors?.length > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    message: successMessage
+                });
+            }, 250);
+
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Import',
+                message: err.message || 'Terjadi kesalahan saat mengimport nilai.'
+            });
+        } finally {
+            setImporting(false);
+        }
+    };
+
     const NilaiBadge = ({ nilai }: { nilai: number }) => {
         if (nilai === null || nilai === undefined) {
             return <span className="text-gray-700 text-xs">—</span>;
@@ -892,6 +1120,24 @@ export default function InputNilaiGBSClient() {
 
                                 {/* Controls */}
                                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                                    {/* 🆕 BARU: Tombol Import Nilai */}
+                                    {canEditNilai && (
+                                        <button
+                                            onClick={openImportModal}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+                                            style={{
+                                                background: 'linear-gradient(135deg,#10b981,#059669)',
+                                                color: 'white',
+                                                boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
+                                            }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#059669,#047857)'; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#10b981,#059669)'; }}
+                                        >
+                                            <Upload size={16} />
+                                            Import Nilai
+                                        </button>
+                                    )}
+
                                     <div className="flex items-center rounded-xl px-4 py-2" style={{ background: '#fff7ed', border: '1.5px solid #fde0c8' }}>
                                         <span className="text-sm font-semibold mr-2" style={{ color: '#7a3a0a' }}>Tampilkan</span>
                                         <select
@@ -1671,6 +1917,162 @@ export default function InputNilaiGBSClient() {
                                     </>
                                 ) : (
                                     <>Simpan</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🆕 BARU: MODAL IMPORT NILAI DARI EXCEL */}
+            {showImportModal && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 fade-in"
+                    onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 scale-in">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={24} className="text-green-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Import Nilai dari Excel</h3>
+                                    <p className="text-xs text-gray-500">
+                                        {currentMapel?.nama_mapel} • {currentKelas?.nama_kelas}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { if (!importing) setShowImportModal(false); }}
+                                disabled={importing}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100"
+                            >
+                                <X size={18} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Info Box */}
+                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                <AlertCircle size={16} className="text-blue-600" />
+                                Langkah-langkah Import:
+                            </p>
+                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                <li>Isi nilai pada kolom komponen (UH1-5, PTS, PAS)</li>
+                                <li>Simpan file Excel</li>
+                                <li>Upload file Excel yang sudah diisi</li>
+                                <li>Klik "Import Nilai" untuk memproses</li>
+                            </ol>
+                        </div>
+
+                        {/* Info Periode */}
+                        {jenisPenilaianAktif && (
+                            <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
+                                <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-orange-800">
+                                    <strong>Periode {jenisPenilaianAktif} Aktif:</strong>{' '}
+                                    {jenisPenilaianAktif === 'PTS'
+                                        ? 'Hanya kolom PTS yang akan diimport. Kolom UH dan PAS akan diabaikan.'
+                                        : 'Kolom UH dan PAS akan diimport. Kolom PTS akan diabaikan (terkunci).'}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Tombol Download Template */}
+                        <div className="mb-5">
+                            <button
+                                onClick={handleDownloadTemplate}
+                                disabled={downloadingTemplate}
+                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', boxShadow: '0 3px 10px rgba(245,158,11,0.3)' }}
+                                onMouseEnter={e => { if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)'; }}
+                                onMouseLeave={e => { if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)'; }}
+                            >
+                                {downloadingTemplate ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengunduh Template...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        📥 Download Template Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Upload Area */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                                Upload File Excel <span className="text-red-500">*</span>
+                            </label>
+                            <div
+                                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
+                                    ? 'border-green-400 bg-green-50'
+                                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                                    }`}
+                                onClick={() => importFileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={importFileInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleImportFileChange}
+                                    className="hidden"
+                                />
+                                {importFile ? (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <CheckCircle2 size={24} className="text-green-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                        <p className="text-xs text-green-700">
+                                            {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Upload size={32} className="text-orange-400" />
+                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                        <p className="text-xs text-orange-700">
+                                            Format: .xlsx atau .xls (Maks 10MB)
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowImportModal(false); setImportFile(null); }}
+                                disabled={importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={executeImportNilai}
+                                disabled={!importFile || importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{ background: 'linear-gradient(135deg,#10b981,#059669)', boxShadow: '0 3px 10px rgba(16,185,129,0.3)' }}
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengimport...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={16} />
+                                        Import Nilai
+                                    </>
                                 )}
                             </button>
                         </div>
