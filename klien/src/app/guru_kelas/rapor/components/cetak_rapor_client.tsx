@@ -2,14 +2,10 @@
  * Nama File: RaporGuruKelasClient.tsx
  * Fungsi: Cetak rapor siswa untuk guru kelas menggunakan template Word
  * UPDATE: 
- *   - ✅ HAPUS: Fitur "Unduh Semua" (hanya unduh per siswa)
+ *   - ✅ TAMBAH: Fitur "Unduh Semua Rapor" (download ZIP)
  *   - ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetchTahunAjaranAktif
- *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
- *   - Kondisi 2: Read-Only mode jika periode penilaian belum aktif
- *   - Banner warning status periode
- *   - Tombol Download disabled jika periode belum aktif
- *   - Modal warning saat klik tombol di mode read-only
- *   - Auto-detect semester, tab toggle PTS/PAS, tema oranye
+ *   - ✅ FIX: Format nama file ZIP dengan nama kelas yang benar
+ *   - ✅ FIX: Hapus semua console.log debugging
  */
 
 'use client';
@@ -131,6 +127,22 @@ const StatusBadge = ({ status }: { status: StatusPenilaian | null }) => {
     );
 };
 
+// ─── HELPER: Sanitasi Nama File ───────────────────────────────────────────────
+
+/**
+ * Sanitasi string untuk nama file
+ * - Ganti "/" dengan "-" (untuk tahun ajaran)
+ * - Pertahankan spasi (untuk nama kelas)
+ * - Hanya hapus karakter yang benar-benar ilegal di file system
+ */
+const sanitizeFileName = (str: string): string => {
+    if (!str) return '';
+    return str
+        .replace(/\//g, '-')           // Ganti "/" dengan "-"
+        .replace(/[\\:*?"<>|]/g, '_')  // Hanya hapus karakter ilegal
+        .trim();
+};
+
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 const RaporGuruKelasClient = () => {
@@ -145,6 +157,9 @@ const RaporGuruKelasClient = () => {
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
+    // 🆕 BARU: State untuk download semua rapor
+    const [downloadingAll, setDownloadingAll] = useState<boolean>(false);
+
     // ✅ KONDISI 1: Belum ditugaskan
     const [isNotAssigned, setIsNotAssigned] = useState(false);
 
@@ -155,9 +170,10 @@ const RaporGuruKelasClient = () => {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
+    // ✅ PERBAIKAN: State untuk nama kelas
+    const [namaKelas, setNamaKelas] = useState<string>('');
+
     // === Fetch tahun ajaran aktif ===
-    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED di sini karena endpoint 
-    // /tahun-ajaran/aktif TIDAK menggunakan middleware cekGuruKelasDitugaskan
     const fetchTahunAjaranAktif = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -182,7 +198,6 @@ const RaporGuruKelasClient = () => {
                     status_pas: ta.status_pas as StatusPenilaian,
                 });
 
-                // ✅ CEK STATUS PERIODE
                 const statusPts = ta.status_pts as StatusPenilaian;
                 const statusPas = ta.status_pas as StatusPenilaian;
 
@@ -211,7 +226,6 @@ const RaporGuruKelasClient = () => {
                     }, 500);
                 }
             } else {
-                // ✅ PERBAIKAN: Hanya tampilkan error umum, TIDAK cek NOT_ASSIGNED
                 showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal mengambil tahun ajaran aktif.' });
             }
         } catch (err: any) {
@@ -222,7 +236,6 @@ const RaporGuruKelasClient = () => {
     };
 
     // === Fetch daftar siswa ===
-    // ✅ PERBAIKAN: Cek NOT_ASSIGNED di sini (endpoint /siswa menggunakan middleware cekGuruKelasDitugaskan)
     const fetchSiswaList = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -236,7 +249,17 @@ const RaporGuruKelasClient = () => {
 
             if (res.ok && data.success) {
                 setSiswaList(data.data || []);
-                // ✅ Reset isNotAssigned jika fetch berhasil
+
+                // ✅ PERBAIKAN: Tambahkan data.kelas_nama (dari kelasController.js)
+                const namaKelasDariResponse =
+                    data.kelas_nama ||           // ← TAMBAHKAN INI! (dari /siswa endpoint)
+                    data.kelas ||                // (dari /absensi endpoint)
+                    data.nama_kelas ||
+                    data.data?.kelas ||
+                    data.data?.nama_kelas ||
+                    'Kelas';
+
+                setNamaKelas(namaKelasDariResponse);
                 setIsNotAssigned(false);
             } else {
                 const errCode = data.code;
@@ -247,7 +270,7 @@ const RaporGuruKelasClient = () => {
                     showModal({ type: 'error', title: 'Gagal Memuat', message: data.message || 'Gagal memuat data siswa.' });
                 }
             }
-        } catch {
+        } catch (err) {
             setSiswaList([]);
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
@@ -275,7 +298,6 @@ const RaporGuruKelasClient = () => {
 
     // === Unduh rapor (per siswa) ===
     const handleDownloadRapor = async (siswaId: number, namaSiswa: string, nisn: string) => {
-        // ✅ CEK READ-ONLY
         if (isReadOnly && readOnlyReason === 'not_open') {
             showModal({
                 type: 'warning',
@@ -306,8 +328,11 @@ const RaporGuruKelasClient = () => {
 
             const blob = await res.blob();
 
+            // ✅ Format nama file: Rapor_PTS_Ganjil_2024-2025_NamaSiswa_NISN.docx
+            const cleanTahunAjaran = sanitizeFileName(tahunAjaranInfo.tahun_ajaran || '');
             const cleanNisn = (nisn || String(siswaId)).replace(/[^0-9]/g, '');
-            const fileName = `rapor_${selectedJenis.toLowerCase()}_${semester}_${cleanNisn}.docx`;
+            const cleanNama = namaSiswa.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
+            const fileName = `Rapor_${selectedJenis}_${tahunAjaranInfo.semester}_${cleanTahunAjaran}_${cleanNama}_${cleanNisn}.docx`;
 
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -334,9 +359,90 @@ const RaporGuruKelasClient = () => {
         }
     };
 
+    // 🆕 BARU: Unduh semua rapor sekaligus (ZIP)
+    const handleDownloadAllRapor = async () => {
+        if (isReadOnly && readOnlyReason === 'not_open') {
+            showModal({
+                type: 'warning',
+                title: '⏳ Mode Baca-Saja',
+                message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengunduh rapor siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
+            });
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        if (!token || !selectedJenis || !tahunAjaranInfo || siswaList.length === 0) {
+            showModal({
+                type: 'warning',
+                title: 'Data Tidak Lengkap',
+                message: 'Tidak ada data siswa untuk diunduh.'
+            });
+            return;
+        }
+
+        setDownloadingAll(true);
+        try {
+            // ✅ PERBAIKAN: Ambil data kelas terbaru dari API
+            const resKelas = await fetch(`${API_BASE}/guru-kelas/siswa`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const dataKelas = await resKelas.json();
+
+            // ✅ PERBAIKAN: Tambahkan dataKelas.kelas_nama
+            const namaKelasAktual =
+                dataKelas.kelas_nama ||        // ← TAMBAHKAN INI!
+                dataKelas.kelas ||
+                dataKelas.nama_kelas ||
+                dataKelas.data?.kelas ||
+                dataKelas.data?.nama_kelas ||
+                'Kelas';
+
+            const semester = tahunAjaranInfo.semester.toLowerCase();
+            const res = await fetch(
+                `${API_BASE}/guru-kelas/generate-rapor-bulk/${selectedJenis}/${semester}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.message || `Gagal mengunduh rapor (HTTP ${res.status})`);
+            }
+
+            const blob = await res.blob();
+
+            // ✅ PERBAIKAN: Format nama file ZIP dengan nama kelas yang benar
+            const cleanTahunAjaran = sanitizeFileName(tahunAjaranInfo.tahun_ajaran || '');
+            const cleanKelas = sanitizeFileName(namaKelasAktual);
+
+            const fileName = `Rapor_${selectedJenis}_${tahunAjaranInfo.semester}_${cleanTahunAjaran}_${cleanKelas}.zip`;
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showModal({
+                type: 'success',
+                title: 'Berhasil Diunduh',
+                message: `Semua rapor ${selectedJenis} (${siswaList.length} siswa) berhasil diunduh dalam satu file ZIP.\n\nFile: ${fileName}\n\nSilakan extract file ZIP untuk membuka rapor masing-masing siswa.`
+            });
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh',
+                message: err.message || 'Terjadi kesalahan saat mengunduh semua rapor.'
+            });
+        } finally {
+            setDownloadingAll(false);
+        }
+    };
+
     // === Derived state ===
     const currentStatus = getCurrentStatus();
-    // ✅ UPDATE: Download allowed jika aktif ATAU selesai (bukan nonaktif)
     const isDownloadAllowed = currentStatus === 'aktif' || currentStatus === 'selesai';
 
     // ── Loading state ──────────────────────────────────────────────────────────
@@ -487,7 +593,35 @@ const RaporGuruKelasClient = () => {
                                     Total: {siswaList.length} siswa
                                 </span>
                             </div>
-                            {/* ✅ HAPUS: Tombol "Unduh Semua" sudah dihapus */}
+
+                            {/* 🆕 BARU: Tombol Download Semua Rapor */}
+                            {isDownloadAllowed && siswaList.length > 0 && (
+                                <button
+                                    onClick={handleDownloadAllRapor}
+                                    disabled={downloadingAll}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-60"
+                                    style={{
+                                        background: downloadingAll
+                                            ? '#9ca3af'
+                                            : 'linear-gradient(135deg,#10b981,#059669)',
+                                        boxShadow: downloadingAll
+                                            ? 'none'
+                                            : '0 3px 12px rgba(16,185,129,0.3)'
+                                    }}
+                                >
+                                    {downloadingAll ? (
+                                        <>
+                                            <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                            Membuat ZIP...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Download size={16} />
+                                            Download Semua ({siswaList.length})
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -594,6 +728,7 @@ const RaporGuruKelasClient = () => {
                                 <li>Rapor diunduh dalam format <strong>.docx</strong> (Microsoft Word)</li>
                                 <li>Buka dengan Microsoft Word untuk tampilan terbaik</li>
                                 <li>Unduh rapor satu per satu dengan klik tombol <strong>Unduh</strong> pada kolom Aksi</li>
+                                <li>Atau unduh semua rapor sekaligus dengan tombol <strong>Download Semua</strong> (format ZIP)</li>
                                 {selectedJenis === 'PAS' && tahunAjaranInfo?.semester === 'Genap' && (
                                     <li className="font-semibold">✓ PAS Genap mencantumkan status kenaikan kelas</li>
                                 )}
