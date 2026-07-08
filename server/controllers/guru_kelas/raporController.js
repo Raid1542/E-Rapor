@@ -389,3 +389,290 @@ exports.generateRaporPDF = async (req, res) => {
         res.status(500).json({ success: false, message: 'Gagal membuat rapor' });
     }
 };
+
+const archiver = require('archiver');
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: GENERATE SEMUA RAPOR SEKALIGUS (ZIP)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /generate-rapor-bulk/:jenis/:semester
+ * Generate semua rapor siswa dalam satu file ZIP
+ */
+exports.generateRaporBulk = async (req, res) => {
+    try {
+        const { jenis, semester } = req.penilaianContext || {};
+        const userId = req.user.id;
+        const tahunAjaranIndukId = req.idTahunAjaranInduk;
+        const semesterId = req.idSemesterAktif;
+
+        if (!jenis || !semester || !tahunAjaranIndukId || !semesterId) {
+            return res.status(400).json({ success: false, message: 'Parameter tidak lengkap' });
+        }
+
+        // Normalisasi input
+        const jenisNorm = jenis.trim().toUpperCase();
+        if (!['PTS', 'PAS'].includes(jenisNorm)) {
+            return res.status(400).json({ success: false, message: 'Jenis harus PTS atau PAS' });
+        }
+
+        const semesterNorm = semester.trim().toLowerCase() === 'ganjil' ? 'Ganjil' : 'Genap';
+
+        // Ambil data kelas guru
+        const [kelasRows] = await db.execute(
+            `SELECT gk.kelas_id, k.nama_kelas 
+             FROM guru_kelas gk 
+             JOIN kelas k ON gk.kelas_id = k.id_kelas 
+             WHERE gk.user_id = ? AND gk.tahun_ajaran_id = ?`,
+            [userId, semesterId]
+        );
+
+        if (kelasRows.length === 0) {
+            return res.status(403).json({ success: false, message: 'Anda belum ditugaskan sebagai wali kelas' });
+        }
+
+        const kelasId = kelasRows[0].kelas_id;
+        const namaKelas = kelasRows[0].nama_kelas;
+
+        // Ambil semua siswa aktif di kelas
+        const [siswaRows] = await db.execute(
+            `SELECT s.id_siswa, s.nama_lengkap, s.nis, s.nisn 
+             FROM siswa s 
+             JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+             ORDER BY s.nama_lengkap`,
+            [kelasId, tahunAjaranIndukId]
+        );
+
+        if (siswaRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Tidak ada siswa di kelas ini' });
+        }
+
+        // Set response headers untuk ZIP file
+        const fileName = `Rapor_${jenisNorm}_${semesterNorm}_${namaKelas.replace(/[^a-z0-9]/gi, '_')}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+        // Create archive
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // Maximum compression
+        });
+
+        // Handle errors
+        archive.on('error', (err) => {
+            console.error('Error creating ZIP:', err);
+            throw err;
+        });
+
+        // Pipe archive to response
+        archive.pipe(res);
+
+        // Generate rapor untuk setiap siswa
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const siswa of siswaRows) {
+            try {
+                // Reuse logic dari generateRaporPDF
+                const raporData = await generateRaporData(
+                    siswa.id_siswa,
+                    jenisNorm,
+                    semesterNorm,
+                    semesterId,
+                    tahunAjaranIndukId,
+                    kelasId
+                );
+
+                // Generate DOCX
+                const templateFile = jenisNorm === 'PTS'
+                    ? (semesterNorm === 'Ganjil' ? 'template_pts_ganjil.docx' : 'template_pts_genap.docx')
+                    : (semesterNorm === 'Ganjil' ? 'template_pas_ganjil.docx' : 'template_pas_genap.docx');
+
+                const templatePath = path.join(__dirname, '..', '..', 'templates', 'rapor', templateFile);
+
+                if (!fs.existsSync(templatePath)) {
+                    console.error(`Template ${templateFile} tidak ditemukan`);
+                    errorCount++;
+                    continue;
+                }
+
+                const content = fs.readFileSync(templatePath, 'binary');
+                const zip = new PizZip(content);
+                const doc = new Docxtemplater(zip, {
+                    paragraphLoop: true,
+                    linebreaks: true,
+                    delimiters: { start: '<<', end: '>>' },
+                    nullGetter: () => '–'
+                });
+
+                doc.render(raporData);
+                const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+                // Add to ZIP archive
+                const cleanNisn = (siswa.nisn || String(siswa.id_siswa)).replace(/[^0-9]/g, '');
+                const studentFileName = `Rapor_${jenisNorm}_${semesterNorm}_${cleanNisn}_${siswa.nama_lengkap.replace(/[^a-z0-9]/gi, '_')}.docx`;
+
+                archive.append(buf, { name: studentFileName });
+                successCount++;
+
+            } catch (err) {
+                console.error(`Error generating rapor for student ${siswa.nama_lengkap}:`, err);
+                errorCount++;
+            }
+        }
+
+        // Finalize archive
+        await archive.finalize();
+
+        console.log(`Bulk rapor generation complete: ${successCount} success, ${errorCount} errors`);
+
+    } catch (error) {
+        console.error('Error generateRaporBulk:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, message: 'Gagal membuat rapor bulk: ' + error.message });
+        }
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: HELPER FUNCTION - Generate Data Rapor (Reusable)
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function generateRaporData(siswaId, jenisNorm, semesterNorm, semesterId, tahunAjaranIndukId, kelasId) {
+    // Ambil data tahun ajaran
+    const [taRows] = await db.execute(
+        `SELECT tai.tahun_ajaran, ta.tanggal_pembagian_pts, ta.tanggal_pembagian_pas
+         FROM tahun_ajaran ta
+         JOIN tahun_ajaran_induk tai ON ta.id_tahun_ajaran_induk = tai.id_tahun_ajaran_induk
+         WHERE ta.id_tahun_ajaran = ?`,
+        [semesterId]
+    );
+
+    const tahunAjaran = taRows[0]?.tahun_ajaran || '';
+    const tanggalPembagianPTS = taRows[0]?.tanggal_pembagian_pts;
+    const tanggalPembagianPAS = taRows[0]?.tanggal_pembagian_pas;
+
+    // Data siswa
+    const [siswaRows] = await db.execute(
+        `SELECT nama_lengkap, nis, nisn FROM siswa WHERE id_siswa = ?`,
+        [siswaId]
+    );
+    const siswa = siswaRows[0];
+
+    // Data guru kelas
+    const [guruRows] = await db.execute(
+        `SELECT u.nama_lengkap FROM user u 
+         JOIN guru_kelas gk ON u.id_user = gk.user_id 
+         WHERE gk.kelas_id = ? AND gk.tahun_ajaran_id = ? LIMIT 1`,
+        [kelasId, semesterId]
+    );
+    const namaGuruKelas = guruRows[0]?.nama_lengkap || 'Nama Guru Kelas';
+
+    // Data fase
+    const [faseRows] = await db.execute(`SELECT fase FROM kelas WHERE id_kelas = ?`, [kelasId]);
+    const fase = faseRows[0]?.fase || '–';
+
+    // Nilai akademik
+    const [mapelRows] = await db.execute(`
+        SELECT DISTINCT mp.id_mata_pelajaran, mp.nama_mapel, mp.urutan_rapor
+        FROM mata_pelajaran mp
+        WHERE mp.id_mata_pelajaran IN (
+            SELECT DISTINCT mapel_id FROM nilai_rapor 
+            WHERE siswa_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
+        )
+        ORDER BY mp.urutan_rapor IS NULL, mp.urutan_rapor ASC
+    `, [siswaId, semesterId, semesterNorm, jenisNorm]);
+
+    const [nilaiRaporRows] = await db.execute(`
+        SELECT mapel_id, nilai_rapor FROM nilai_rapor
+        WHERE siswa_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
+    `, [siswaId, semesterId, semesterNorm, jenisNorm]);
+
+    const [kategoriRows] = await db.execute(`
+        SELECT knr.mapel_id, knr.min_nilai, knr.max_nilai, knr.deskripsi
+        FROM konfigurasi_nilai_rapor knr
+        WHERE knr.tahun_ajaran_id = ? 
+        AND knr.jenis_penilaian = ? 
+        AND knr.is_active = 1
+        AND (knr.kelas_id IS NULL OR knr.kelas_id = ?)
+        ORDER BY knr.mapel_id, knr.min_nilai DESC
+    `, [semesterId, jenisNorm, kelasId]);
+
+    const getDeskripsiOtomatis = (mapelId, nilai) => {
+        if (nilai === null || nilai === undefined) return '–';
+        const configMapel = kategoriRows.filter(k => k.mapelId === mapelId);
+        for (const config of configMapel) {
+            if (nilai >= config.min_nilai && nilai <= config.max_nilai) {
+                return config.deskripsi;
+            }
+        }
+        return '–';
+    };
+
+    const nilaiRaporMap = new Map();
+    nilaiRaporRows.forEach(row => {
+        nilaiRaporMap.set(row.mapel_id, {
+            nilai_rapor: row.nilai_rapor,
+            deskripsi: getDeskripsiOtomatis(row.mapel_id, row.nilai_rapor)
+        });
+    });
+
+    const semuaMapel = mapelRows.map((mp, index) => {
+        const nilai = nilaiRaporMap.get(mp.id_mata_pelajaran) || { nilai_rapor: '-', deskripsi: '-' };
+        return {
+            no: index + 1,
+            nama_mapel: mp.nama_mapel || '–',
+            nilai_mapel: typeof nilai.nilai_rapor === 'number' ? Math.floor(nilai.nilai_rapor) : nilai.nilai_rapor,
+            deskripsi_mapel: nilai.deskripsi || '–'
+        };
+    });
+
+    const daftarMapel1 = semuaMapel.slice(0, 7);
+    const daftarMapel2 = semuaMapel.slice(7);
+
+    // Rata-rata
+    const nilaiList = semuaMapel.map(m => m.nilai_mapel).filter(v => typeof v === 'number' && v >= 0);
+    const rataRata = nilaiList.length > 0 ? parseFloat((nilaiList.reduce((a, b) => a + b, 0) / nilaiList.length).toFixed(2)) : 0;
+
+    // Format tanggal
+    const formatTanggalIndonesia = (dateString) => {
+        if (!dateString) return '';
+        return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateString));
+    };
+
+    const tanggalSah = jenisNorm === 'PTS'
+        ? (tanggalPembagianPTS ? formatTanggalIndonesia(tanggalPembagianPTS) : '–')
+        : (tanggalPembagianPAS ? formatTanggalIndonesia(tanggalPembagianPAS) : '–');
+
+    // Return data template
+    return {
+        nama: siswa.nama_lengkap || '–',
+        kelas: 'Kelas ' + kelasId, // Simplified
+        nis: siswa.nis || '–',
+        nisn: siswa.nisn || '–',
+        fase: fase,
+        semester: semesterNorm === 'Ganjil' ? '1 (Ganjil)' : '2 (Genap)',
+        ta: tahunAjaran,
+        namagurukelas: namaGuruKelas,
+        tanggalraporpts: tanggalSah,
+        tanggalraporpas: tanggalSah,
+        semuaMapel,
+        daftarMapel1,
+        daftarMapel2,
+        ratarata: rataRata.toFixed(2),
+        ckratarata: '–', // Simplified
+        my: 0, gmy: '–', dmy: '–',
+        bpi: 0, gbpi: '–', dbpi: '–',
+        li: 0, gli: '–', dli: '–',
+        proyek: 0, gproyek: '–', dproyek: '–', namaproyek: '–',
+        s: 0, i: 0, a: 0,
+        ekskul1: '–', dekskul1: '–',
+        ekskul2: '–', dekskul2: '–',
+        ekskul3: '–', dekskul3: '–',
+        ekskul4: '–', dekskul4: '–',
+        cttwalikelas: '–',
+        tingkat: '–',
+        naikkelas: '–'
+    };
+}

@@ -5,11 +5,12 @@
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika PAS belum aktif atau sudah selesai
  *   - Tambah: Popup konfirmasi dengan template yang sama seperti kokurikuler
+ *   - 🆕 BARU: Fitur Import Ekstrakurikuler dari Excel
  */
 
 'use client';
-import { useState, useEffect, ReactNode, useCallback } from 'react';
-import { Eye, Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Award, Lock } from 'lucide-react';
+import { useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { Eye, Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Award, Lock, Upload, Download } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -160,6 +161,13 @@ export default function EkskulClient() {
     // ✅ STATE KONFIRMASI (sama seperti kokurikuler)
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
+
+    // 🆕 BARU: STATE untuk Import Ekstrakurikuler
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
 
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
@@ -434,6 +442,228 @@ export default function EkskulClient() {
         }
     };
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: IMPORT EKSTRAKURIKULER HANDLERS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    const openImportModal = () => {
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: 'Mode Baca Saja',
+                message: readOnlyReason === 'locked'
+                    ? 'PAS sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengimport data ekstrakurikuler.'
+                    : 'PAS belum aktif.\n\nAnda tidak dapat mengimport data ekstrakurikuler.'
+            });
+            return;
+        }
+
+        setImportFile(null);
+        if (importFileInputRef.current) importFileInputRef.current.value = '';
+        setShowImportModal(true);
+    };
+
+    const handleDownloadTemplate = async () => {
+        setDownloadingTemplate(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API}/ekskul/import-template`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ message: 'Gagal download template' }));
+                throw new Error(err.message || 'Gagal download template');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Template_Ekskul_${kelasNama.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showModal({
+                type: 'success',
+                title: 'Template Berhasil Diunduh',
+                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file\n5. Upload kembali melalui tombol "Import Ekskul"'
+            });
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh Template',
+                message: err.message || 'Terjadi kesalahan saat mengunduh template.'
+            });
+        } finally {
+            setDownloadingTemplate(false);
+        }
+    };
+
+    const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const validTypes = [
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
+            showModal({
+                type: 'warning',
+                title: 'Format File Tidak Valid',
+                message: 'Silakan upload file Excel (.xlsx atau .xls)'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            showModal({
+                type: 'warning',
+                title: 'File Terlalu Besar',
+                message: 'Ukuran file maksimal 10MB'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        setImportFile(file);
+    };
+
+    const downloadErrorReportEkskul = (errors: any[]) => {
+        const headers = ['No', 'Baris', 'Nama Siswa', 'Alasan Error'];
+
+        const rows = errors.map((err, index) => {
+            const message = err.message || '';
+            const rowMatch = message.match(/Baris\s+(\d+)/i);
+            const rowNumber = rowMatch ? rowMatch[1] : '-';
+
+            const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
+            const namaSiswa = namaMatch ? namaMatch[1] : '-';
+
+            const escapedMessage = message.replace(/"/g, '""');
+
+            return [
+                index + 1,
+                rowNumber,
+                namaSiswa,
+                `"${escapedMessage}"`
+            ].join(',');
+        });
+
+        const BOM = '\uFEFF';
+        const csvContent = BOM + [
+            headers.join(','),
+            ...rows
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `error_import_ekskul_${kelasNama.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.csv`;
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const executeImport = async () => {
+        if (!importFile) {
+            showModal({
+                type: 'warning',
+                title: 'File Belum Dipilih',
+                message: 'Silakan pilih file Excel yang akan diimport.'
+            });
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', importFile);
+
+            const response = await fetch(`${API}/ekskul/import`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Gagal mengimport ekstrakurikuler');
+            }
+
+            // Refresh data
+            const refreshRes = await fetch(`${API}/ekskul`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                if (refreshData.success) {
+                    setSiswaList(refreshData.data || []);
+                    setFilteredSiswa(refreshData.data || []);
+                    setDaftarEkskul(refreshData.daftar_ekskul || []);
+                }
+            }
+
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // 🆕 AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            const errors = data.data?.errors || [];
+            const totalErrors = errors.length;
+
+            if (totalErrors > 4) {
+                downloadErrorReportEkskul(errors);
+            }
+
+            // Build success message
+            let successMessage = data.message;
+
+            if (totalErrors > 0) {
+                if (totalErrors <= 4) {
+                    successMessage += `\n\n📋 Detail Error:\n${errors.slice(0, 4).map((e: any) => `• ${e.message}`).join('\n')}`;
+                } else {
+                    successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
+                    successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_ekskul_*.csv)`;
+                }
+            }
+
+            setTimeout(() => {
+                showModal({
+                    type: totalErrors > 0 ? 'warning' : 'success',
+                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    message: successMessage
+                });
+            }, 250);
+
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Import',
+                message: err.message || 'Terjadi kesalahan saat mengimport ekstrakurikuler.'
+            });
+        } finally {
+            setImporting(false);
+        }
+    };
+
     // ====== PAGINATION LOGIC ======
     const totalPages = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -562,6 +792,23 @@ export default function EkskulClient() {
                             Kelas: <span style={{ color: '#e8690a' }}>{kelasNama}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            {/* 🆕 BARU: Tombol Import Ekskul */}
+                            {!isReadOnly && (
+                                <button
+                                    onClick={openImportModal}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{
+                                        background: 'linear-gradient(135deg,#10b981,#059669)',
+                                        boxShadow: '0 3px 12px rgba(16,185,129,0.3)'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#059669,#047857)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#10b981,#059669)')}
+                                >
+                                    <Upload size={16} />
+                                    Import Ekskul
+                                </button>
+                            )}
+
                             <div className="flex items-center gap-2 whitespace-nowrap">
                                 <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
                                 <select value={itemsPerPage}
@@ -917,6 +1164,169 @@ export default function EkskulClient() {
                                     </>
                                 ) : (
                                     <>Simpan</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🆕 BARU: MODAL IMPORT EKSTRAKURIKULER */}
+            {showImportModal && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 ap-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ap-scaleIn">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={24} className="text-green-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Import Ekstrakurikuler</h3>
+                                    <p className="text-xs text-gray-500">
+                                        Kelas {kelasNama}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { if (!importing) setShowImportModal(false); }}
+                                disabled={importing}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100"
+                            >
+                                <X size={18} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Info Box */}
+                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                <AlertCircle size={16} className="text-blue-600" />
+                                Langkah-langkah Import:
+                            </p>
+                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                <li>Pilih ekskul dari dropdown (maks 3 per siswa)</li>
+                                <li>Isi deskripsi aktivitas</li>
+                                <li>Simpan file Excel</li>
+                                <li>Upload file Excel yang sudah diisi</li>
+                                <li>Klik "Import Ekskul" untuk memproses</li>
+                            </ol>
+                        </div>
+
+                        {/* Info Periode */}
+                        <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
+                            <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-orange-800">
+                                <strong>Info:</strong>{' '}
+                                Setiap siswa dapat mengikuti maksimal 3 ekstrakurikuler. Setiap ekskul wajib memiliki deskripsi aktivitas.
+                            </p>
+                        </div>
+
+                        {/* Tombol Download Template */}
+                        <div className="mb-5">
+                            <button
+                                onClick={handleDownloadTemplate}
+                                disabled={downloadingTemplate}
+                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    background: 'linear-gradient(135deg,#f59e0b,#d97706)',
+                                    boxShadow: '0 3px 10px rgba(245,158,11,0.3)'
+                                }}
+                                onMouseEnter={e => {
+                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)';
+                                }}
+                                onMouseLeave={e => {
+                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+                                }}
+                            >
+                                {downloadingTemplate ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengunduh Template...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        📥 Download Template Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Upload Area */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                                Upload File Excel <span className="text-red-500">*</span>
+                            </label>
+                            <div
+                                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
+                                    ? 'border-green-400 bg-green-50'
+                                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                                    }`}
+                                onClick={() => importFileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={importFileInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleImportFileChange}
+                                    className="hidden"
+                                />
+                                {importFile ? (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <CheckCircle2 size={24} className="text-green-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                        <p className="text-xs text-green-700">
+                                            {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Upload size={32} className="text-orange-400" />
+                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                        <p className="text-xs text-orange-700">
+                                            Format: .xlsx atau .xls (Maks 10MB)
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowImportModal(false); setImportFile(null); }}
+                                disabled={importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={executeImport}
+                                disabled={!importFile || importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{
+                                    background: 'linear-gradient(135deg,#10b981,#059669)',
+                                    boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
+                                }}
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengimport...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={16} />
+                                        Import Ekskul
+                                    </>
                                 )}
                             </button>
                         </div>

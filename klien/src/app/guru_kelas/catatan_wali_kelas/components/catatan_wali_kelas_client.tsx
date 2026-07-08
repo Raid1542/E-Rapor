@@ -3,13 +3,14 @@
  * Fungsi: Komponen klien untuk mengelola catatan wali kelas
  * UPDATE: 
  *   ✅ FIX: Hapus pengecekan NOT_ASSIGNED di loadData (endpoint tidak pakai middleware)
+ *   🆕 BARU: Fitur Import Catatan Wali Kelas dari Excel
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
  */
 
 'use client';
-import { useState, useEffect, ChangeEvent, ReactNode, useCallback } from 'react';
-import { Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Save, School, GraduationCap, Lock, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, ChangeEvent, ReactNode, useCallback, useRef } from 'react';
+import { Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Save, School, GraduationCap, Lock, AlertTriangle, Upload, Download } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -148,6 +149,13 @@ export default function CatatanWaliClient() {
     const [originalData, setOriginalData] = useState<typeof editData | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
+    // 🆕 BARU: STATE untuk Import Catatan Wali Kelas
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
+
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -163,8 +171,6 @@ export default function CatatanWaliClient() {
     };
 
     // ====== FETCH DATA ======
-    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED di sini karena endpoint /tahun-ajaran/aktif 
-    // TIDAK menggunakan middleware cekGuruKelasDitugaskan
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
@@ -180,7 +186,6 @@ export default function CatatanWaliClient() {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
-                // ✅ PERBAIKAN: Hanya cek error umum, TIDAK cek NOT_ASSIGNED
                 if (!taRes.ok) {
                     const errData = await parseBackendError(taRes);
                     showModal({ type: 'error', title: 'Gagal Memuat', message: errData.message });
@@ -197,7 +202,6 @@ export default function CatatanWaliClient() {
 
                 const { semester: sem, status_pts, status_pas } = taData.data;
 
-                // ✅ TENTUKAN JENIS PENILAIAN AKTIF & STATUS READ-ONLY
                 const ptsAktif = status_pts === 'aktif';
                 const pasAktif = status_pas === 'aktif';
                 const ptsSelesai = status_pts === 'selesai';
@@ -214,12 +218,10 @@ export default function CatatanWaliClient() {
                     setIsReadOnly(false);
                     setReadOnlyReason(null);
                 } else if (ptsSelesai || pasSelesai) {
-                    // ✅ KONDISI 2b: Periode sudah selesai (terkunci)
                     setIsReadOnly(true);
                     setReadOnlyReason('locked');
                     jenisAktif = ptsSelesai ? 'PTS' : 'PAS';
 
-                    // Tampilkan modal warning sekali saat load
                     setTimeout(() => {
                         showModal({
                             type: 'warning',
@@ -228,12 +230,10 @@ export default function CatatanWaliClient() {
                         });
                     }, 500);
                 } else {
-                    // ✅ KONDISI 2a: Tidak ada periode yang aktif
                     setIsReadOnly(true);
                     setReadOnlyReason('not_open');
-                    jenisAktif = 'PTS'; // default untuk fetch data
+                    jenisAktif = 'PTS';
 
-                    // Tampilkan modal warning sekali saat load
                     setTimeout(() => {
                         showModal({
                             type: 'warning',
@@ -256,7 +256,6 @@ export default function CatatanWaliClient() {
         loadData();
     }, [showModal]);
 
-    // ✅ PERBAIKAN: fetchCatatan sudah benar handle NOT_ASSIGNED
     const fetchCatatan = async (sem: string, jenis: string, token: string) => {
         try {
             const res = await fetch(`${API}/catatan-wali-kelas/${jenis}/${sem}`, {
@@ -269,7 +268,6 @@ export default function CatatanWaliClient() {
                     setSiswaList(data.data || []);
                     setFilteredSiswa(data.data || []);
                     setKelasNama(data.kelas || 'Kelas Anda');
-                    // ✅ Reset isNotAssigned jika fetch berhasil
                     setIsNotAssigned(false);
                 } else {
                     showModal({ type: 'error', title: 'Gagal Memuat', message: data.message });
@@ -277,19 +275,16 @@ export default function CatatanWaliClient() {
             } else {
                 const errData = await parseBackendError(res);
 
-                // ✅ HANDLE ERROR CODES YANG BERBEDA
                 if (errData.code === 'NOT_ASSIGNED') {
                     setIsNotAssigned(true);
                 } else if (errData.code === 'PERIOD_NOT_OPEN') {
                     setIsReadOnly(true);
                     setReadOnlyReason('not_open');
-                    // Tampilkan data kosong, tapi dalam mode read-only
                     setSiswaList([]);
                     setFilteredSiswa([]);
                 } else if (errData.code === 'PERIOD_LOCKED') {
                     setIsReadOnly(true);
                     setReadOnlyReason('locked');
-                    // Tampilkan data kosong, tapi dalam mode read-only
                     setSiswaList([]);
                     setFilteredSiswa([]);
                 } else {
@@ -330,7 +325,6 @@ export default function CatatanWaliClient() {
 
     // ====== HANDLERS ======
     const handleEdit = (siswa: SiswaCatatan) => {
-        // ✅ CEK READ-ONLY: Tampilkan warning jika periode tidak aktif
         if (isReadOnly) {
             if (readOnlyReason === 'locked') {
                 showModal({
@@ -461,6 +455,225 @@ export default function CatatanWaliClient() {
         }
     };
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: IMPORT CATATAN WALI KELAS HANDLERS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    const openImportModal = () => {
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: 'Mode Baca Saja',
+                message: readOnlyReason === 'locked'
+                    ? 'Periode penilaian sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengimport catatan wali kelas.'
+                    : 'Periode penilaian belum aktif.\n\nAnda tidak dapat mengimport catatan wali kelas.'
+            });
+            return;
+        }
+
+        setImportFile(null);
+        if (importFileInputRef.current) importFileInputRef.current.value = '';
+        setShowImportModal(true);
+    };
+
+    const handleDownloadTemplate = async () => {
+        setDownloadingTemplate(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(
+                `${API}/catatan-wali-kelas/import-template?jenis=${jenisPenilaian}&semester=${semester}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ message: 'Gagal download template' }));
+                throw new Error(err.message || 'Gagal download template');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Template_Catatan_Wali_${kelasNama.replace(/[^a-z0-9]/gi, '_')}_${jenisPenilaian}_${semester}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showModal({
+                type: 'success',
+                title: 'Template Berhasil Diunduh',
+                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi catatan wali kelas (min 20 karakter)\n3. Isi keputusan naik tingkat (khusus PAS Genap)\n4. Simpan file\n5. Upload kembali melalui tombol "Import Catatan"'
+            });
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh Template',
+                message: err.message || 'Terjadi kesalahan saat mengunduh template.'
+            });
+        } finally {
+            setDownloadingTemplate(false);
+        }
+    };
+
+    const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const validTypes = [
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
+            showModal({
+                type: 'warning',
+                title: 'Format File Tidak Valid',
+                message: 'Silakan upload file Excel (.xlsx atau .xls)'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            showModal({
+                type: 'warning',
+                title: 'File Terlalu Besar',
+                message: 'Ukuran file maksimal 10MB'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        setImportFile(file);
+    };
+
+    const downloadErrorReportCatatan = (errors: any[]) => {
+        const headers = ['No', 'Baris', 'Nama Siswa', 'Catatan', 'Alasan Error'];
+
+        const rows = errors.map((err, index) => {
+            const message = err.message || '';
+            const rowMatch = message.match(/Baris\s+(\d+)/i);
+            const rowNumber = rowMatch ? rowMatch[1] : '-';
+
+            const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
+            const namaSiswa = namaMatch ? namaMatch[1] : '-';
+
+            const catatanMatch = message.match(/catatan\s+(\d+)/i);
+            const catatan = catatanMatch ? catatanMatch[1] : '-';
+
+            const escapedMessage = message.replace(/"/g, '""');
+
+            return [
+                index + 1,
+                rowNumber,
+                namaSiswa,
+                catatan,
+                `"${escapedMessage}"`
+            ].join(',');
+        });
+
+        const BOM = '\uFEFF';
+        const csvContent = BOM + [
+            headers.join(','),
+            ...rows
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `error_import_catatan_wali_${kelasNama.replace(/[^a-z0-9]/gi, '_')}_${jenisPenilaian}_${timestamp}.csv`;
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const executeImport = async () => {
+        if (!importFile) {
+            showModal({
+                type: 'warning',
+                title: 'File Belum Dipilih',
+                message: 'Silakan pilih file Excel yang akan diimport.'
+            });
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', importFile);
+
+            const response = await fetch(
+                `${API}/catatan-wali-kelas/import?jenis=${jenisPenilaian}&semester=${semester}`,
+                {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: formData
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Gagal mengimport catatan wali kelas');
+            }
+
+            // Refresh data
+            await fetchCatatan(semester, jenisPenilaian, token);
+
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // 🆕 AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            const errors = data.data?.errors || [];
+            const totalErrors = errors.length;
+
+            if (totalErrors > 4) {
+                downloadErrorReportCatatan(errors);
+            }
+
+            // Build success message
+            let successMessage = data.message;
+
+            if (totalErrors > 0) {
+                if (totalErrors <= 4) {
+                    successMessage += `\n\n📋 Detail Error:\n${errors.slice(0, 4).map((e: any) => `• ${e.message}`).join('\n')}`;
+                } else {
+                    successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
+                    successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_catatan_wali_*.csv)`;
+                }
+            }
+
+            setTimeout(() => {
+                showModal({
+                    type: totalErrors > 0 ? 'warning' : 'success',
+                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    message: successMessage
+                });
+            }, 250);
+
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Import',
+                message: err.message || 'Terjadi kesalahan saat mengimport catatan wali kelas.'
+            });
+        } finally {
+            setImporting(false);
+        }
+    };
+
     // ====== PAGINATION LOGIC ======
     const isPASGenap = jenisPenilaian === 'PAS' && semester === 'Genap';
     const totalPages = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
@@ -545,7 +758,6 @@ export default function CatatanWaliClient() {
 
     // ====== RENDER UTAMA ======
 
-    // ✅ KONDISI 1: Belum Ditugaskan → Blokir Total
     if (isNotAssigned) {
         return (
             <div className="flex-1 min-h-screen p-6 flex items-center justify-center" style={PAGE_BG}>
@@ -660,6 +872,23 @@ export default function CatatanWaliClient() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                            {/* 🆕 BARU: Tombol Import Catatan */}
+                            {!isReadOnly && (
+                                <button
+                                    onClick={openImportModal}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{
+                                        background: 'linear-gradient(135deg,#10b981,#059669)',
+                                        boxShadow: '0 3px 12px rgba(16,185,129,0.3)'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#059669,#047857)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#10b981,#059669)')}
+                                >
+                                    <Upload size={16} />
+                                    Import Catatan
+                                </button>
+                            )}
+
                             <div className="flex items-center gap-2 whitespace-nowrap">
                                 <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
                                 <select value={itemsPerPage}
@@ -762,7 +991,6 @@ export default function CatatanWaliClient() {
                                         <NaikTingkatBadge value={siswa.naik_tingkat} />
                                     </td>
                                     <td className="px-4 py-3.5 text-center">
-                                        {/* ✅ TOMBOL EDIT: Disabled jika read-only */}
                                         <button
                                             onClick={() => handleEdit(siswa)}
                                             disabled={isReadOnly}
@@ -972,6 +1200,173 @@ export default function CatatanWaliClient() {
                                 onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
                             >
                                 Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🆕 BARU: MODAL IMPORT CATATAN WALI KELAS */}
+            {showImportModal && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 ap-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ap-scaleIn">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={24} className="text-green-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Import Catatan Wali Kelas</h3>
+                                    <p className="text-xs text-gray-500">
+                                        Kelas {kelasNama} • {jenisPenilaian} {semester}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { if (!importing) setShowImportModal(false); }}
+                                disabled={importing}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100"
+                            >
+                                <X size={18} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Info Box */}
+                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                <AlertCircle size={16} className="text-blue-600" />
+                                Langkah-langkah Import:
+                            </p>
+                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                <li>Isi catatan wali kelas (minimal 20 karakter)</li>
+                                {jenisPenilaian === 'PAS' && semester === 'Genap' && (
+                                    <li>Isi keputusan naik tingkat (Ya/Tidak)</li>
+                                )}
+                                <li>Simpan file Excel</li>
+                                <li>Upload file Excel yang sudah diisi</li>
+                                <li>Klik "Import Catatan" untuk memproses</li>
+                            </ol>
+                        </div>
+
+                        {/* Info Periode */}
+                        <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
+                            <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-orange-800">
+                                <strong>Periode {jenisPenilaian} {semester}:</strong>{' '}
+                                {jenisPenilaian === 'PAS' && semester === 'Genap'
+                                    ? 'Catatan dan keputusan naik tingkat wajib diisi.'
+                                    : 'Hanya catatan yang wajib diisi. Keputusan naik tingkat tidak perlu.'}
+                            </p>
+                        </div>
+
+                        {/* Tombol Download Template */}
+                        <div className="mb-5">
+                            <button
+                                onClick={handleDownloadTemplate}
+                                disabled={downloadingTemplate}
+                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    background: 'linear-gradient(135deg,#f59e0b,#d97706)',
+                                    boxShadow: '0 3px 10px rgba(245,158,11,0.3)'
+                                }}
+                                onMouseEnter={e => {
+                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)';
+                                }}
+                                onMouseLeave={e => {
+                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+                                }}
+                            >
+                                {downloadingTemplate ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengunduh Template...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        📥 Download Template Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Upload Area */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                                Upload File Excel <span className="text-red-500">*</span>
+                            </label>
+                            <div
+                                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
+                                    ? 'border-green-400 bg-green-50'
+                                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                                    }`}
+                                onClick={() => importFileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={importFileInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleImportFileChange}
+                                    className="hidden"
+                                />
+                                {importFile ? (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <CheckCircle2 size={24} className="text-green-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                        <p className="text-xs text-green-700">
+                                            {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Upload size={32} className="text-orange-400" />
+                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                        <p className="text-xs text-orange-700">
+                                            Format: .xlsx atau .xls (Maks 10MB)
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowImportModal(false); setImportFile(null); }}
+                                disabled={importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={executeImport}
+                                disabled={!importFile || importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{
+                                    background: 'linear-gradient(135deg,#10b981,#059669)',
+                                    boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
+                                }}
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengimport...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={16} />
+                                        Import Catatan
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>
