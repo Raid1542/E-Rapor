@@ -1,10 +1,10 @@
 /**
- * Nama File: guruBidangStudiRoutes.js
- * Fungsi: Route API guru bidang studi (profil, dashboard, atur penilaian, input nilai, IMPORT NILAI)
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
- * Update: 8 Juli 2026 - Tambah fitur import nilai dari Excel
- */
+* Nama File: guruBidangStudiRoutes.js
+* Fungsi: Route API guru bidang studi (profil, dashboard, atur penilaian, input nilai, IMPORT NILAI)
+* Pembuat: Raid Aqil Athallah - NIM: 3312401022
+* Tanggal: 1 Oktober 2025
+* Update: 8 Juli 2026 - Tambah fitur import nilai dari Excel
+*/
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
