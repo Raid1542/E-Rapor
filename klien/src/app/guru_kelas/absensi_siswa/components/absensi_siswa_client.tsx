@@ -5,6 +5,8 @@
  *   ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetchTahunAjaran
  *   ✅ FIX: Perbaiki operator precedence di useEffect refetch
  *   ✅ FIX: Handle setLoading(false) di semua case fetchAbsensi
+ *   🆕 BARU: Fitur Import Absensi dari Excel
+ *   🆕 BARU: Auto-download CSV error report jika error > 4
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
  *   - Tab PTS/PAS menunjukkan status (Aktif/Menunggu/Selesai)
@@ -13,11 +15,12 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
     X, Search, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, Users,
-    Info, Edit3, Check, School, Lock, LogOut
+    Info, Edit3, Check, School, Lock, LogOut,
+    Upload, Download
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -127,6 +130,13 @@ export default function AbsensiClient() {
     const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [semesterAktif, setSemesterAktif] = useState<string>('Ganjil');
 
+    // 🆕 BARU: STATE untuk Import Absensi
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
+
     // ── Modal state ────────────────────────────────────────────────────────
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
@@ -135,15 +145,12 @@ export default function AbsensiClient() {
     const [confirmData, setConfirmData] = useState<{ siswaId: number; data: any } | null>(null);
 
     // ── Fetch Tahun Ajaran Aktif ───────────────────────────────────────────
-    // ✅ PERBAIKAN: Hapus pengecekan NOT_ASSIGNED karena endpoint /tahun-ajaran/aktif 
-    // TIDAK menggunakan middleware cekGuruKelasDitugaskan
     const fetchTahunAjaran = useCallback(async (token: string): Promise<boolean> => {
         try {
             const res = await fetch(`${API_BASE}/tahun-ajaran/aktif`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // ✅ Jika 401, token expired
             if (res.status === 401) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('currentUser');
@@ -166,7 +173,6 @@ export default function AbsensiClient() {
                 setStatusPAS(pasStatus);
                 setSemesterAktif(ta.semester || 'Ganjil');
 
-                // ✅ Tentukan jenis penilaian default & status read-only
                 if (ptsStatus === 'aktif') {
                     setJenisPenilaian('PTS');
                     setIsReadOnly(false);
@@ -176,12 +182,10 @@ export default function AbsensiClient() {
                     setIsReadOnly(false);
                     setReadOnlyReason(null);
                 } else {
-                    // ✅ KEDUA PERIODE BELUM AKTIF - SET READ ONLY
-                    setJenisPenilaian('PTS'); // Default ke PTS
+                    setJenisPenilaian('PTS');
                     setIsReadOnly(true);
                     setReadOnlyReason('not_open');
                     
-                    // Tampilkan modal notifikasi
                     setTimeout(() => {
                         showModal({
                             type: 'warning',
@@ -201,8 +205,6 @@ export default function AbsensiClient() {
     }, [showModal]);
 
     // ── Fetch Data Absensi ─────────────────────────────────────────────────
-    // ✅ PERBAIKAN: Handle NOT_ASSIGNED di sini (karena endpoint ini menggunakan middleware cekGuruKelasDitugaskan)
-    // ✅ PERBAIKAN: Handle setLoading(false) di SEMUA case
     const fetchAbsensi = useCallback(async () => {
         try {
             setLoading(true);
@@ -221,7 +223,6 @@ export default function AbsensiClient() {
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({ code: 'UNKNOWN', message: 'Gagal memuat data' }));
 
-                // ✅ NOT_ASSIGNED hanya di-handle di sini
                 if (errData.code === 'NOT_ASSIGNED') {
                     setIsNotAssigned(true);
                     setLoading(false);
@@ -253,7 +254,7 @@ export default function AbsensiClient() {
 
             if (result.success) {
                 setAbsensiData(result.data);
-                setIsNotAssigned(false); // ✅ Reset jika berhasil
+                setIsNotAssigned(false);
             } else {
                 showModal({
                     type: 'error',
@@ -274,7 +275,6 @@ export default function AbsensiClient() {
     }, [jenisPenilaian, semesterAktif, showModal]);
 
     // ── Initial Load ───────────────────────────────────────────────────────
-    // ✅ PERBAIKAN: Selalu panggil fetchAbsensi setelah fetchTahunAjaran berhasil
     useEffect(() => {
         const init = async () => {
             const token = localStorage.getItem('token');
@@ -284,10 +284,8 @@ export default function AbsensiClient() {
                 return;
             }
 
-            // ✅ Step 1: Fetch tahun ajaran
             const success = await fetchTahunAjaran(token);
             
-            // ✅ Step 2: Jika berhasil, fetch absensi
             if (success) {
                 await fetchAbsensi();
             } else {
@@ -303,15 +301,9 @@ export default function AbsensiClient() {
     }, []);
 
     // ── Refetch saat jenis penilaian berubah ───────────────────────────────
-    // ✅ PERBAIKAN: Logika yang benar dengan parentheses
     useEffect(() => {
-        // ✅ Skip jika belum diinisialisasi atau not assigned
         if (isNotAssigned) return;
-        
-        // ✅ Skip jika loading awal masih berjalan
         if (loading && !absensiData) return;
-        
-        // ✅ Refetch saat jenisPenilaian berubah
         fetchAbsensi();
     }, [jenisPenilaian]);
 
@@ -535,6 +527,247 @@ export default function AbsensiClient() {
         }
     };
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: IMPORT ABSENSI HANDLERS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    const openImportModal = () => {
+        if (isReadOnly) {
+            showModal({
+                type: 'warning',
+                title: 'Mode Baca Saja',
+                message: readOnlyReason === 'locked'
+                    ? 'Periode penilaian sudah selesai dan data sudah dikunci.\n\nAnda tidak dapat mengimport data absensi.'
+                    : 'Periode penilaian belum aktif.\n\nAnda tidak dapat mengimport data absensi.'
+            });
+            return;
+        }
+
+        setImportFile(null);
+        if (importFileInputRef.current) importFileInputRef.current.value = '';
+        setShowImportModal(true);
+    };
+
+    const handleDownloadTemplate = async () => {
+        setDownloadingTemplate(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE}/absensi/import-template?jenis=${jenisPenilaian}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ message: 'Gagal download template' }));
+                throw new Error(err.message || 'Gagal download template');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Template_Absensi_${absensiData?.kelas.replace(/[^a-z0-9]/gi, '_') || 'Kelas'}_${jenisPenilaian}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showModal({
+                type: 'success',
+                title: 'Template Berhasil Diunduh',
+                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi data absensi (Sakit, Izin, Alpha)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Absensi"'
+            });
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Mengunduh Template',
+                message: err.message || 'Terjadi kesalahan saat mengunduh template.'
+            });
+        } finally {
+            setDownloadingTemplate(false);
+        }
+    };
+
+    const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const validTypes = [
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+
+        if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
+            showModal({
+                type: 'warning',
+                title: 'Format File Tidak Valid',
+                message: 'Silakan upload file Excel (.xlsx atau .xls)'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            showModal({
+                type: 'warning',
+                title: 'File Terlalu Besar',
+                message: 'Ukuran file maksimal 10MB'
+            });
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+            return;
+        }
+
+        setImportFile(file);
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: FUNGSI DOWNLOAD ERROR REPORT ABSENSI (CSV)
+    // Generate file CSV berisi detail error import absensi
+    // Format: No, Baris, Sakit, Izin, Alpha, Alasan Error
+    // ═════════════════════════════════════════════════════════════════════════
+
+    const downloadErrorReportAbsensi = (errors: any[]) => {
+        // Header CSV
+        const headers = ['No', 'Baris', 'Sakit', 'Izin', 'Alpha', 'Alasan Error'];
+
+        // Parse error message untuk extract data
+        const rows = errors.map((err, index) => {
+            const message = err.message || '';
+
+            // Extract baris dari message (format: "Baris X: ..." atau "Baris X, ...")
+            const rowMatch = message.match(/Baris\s+(\d+)/i);
+            const rowNumber = rowMatch ? rowMatch[1] : '-';
+
+            // Extract nilai sakit (format: "Sakit: X" atau "Total sakit (X)")
+            const sakitMatch = message.match(/(?:Sakit|Total sakit)\s*[\(:]\s*(\d+)/i);
+            const sakit = sakitMatch ? sakitMatch[1] : '-';
+
+            // Extract nilai izin (format: "Izin: X" atau "Total izin (X)")
+            const izinMatch = message.match(/(?:Izin|Total izin)\s*[\(:]\s*(\d+)/i);
+            const izin = izinMatch ? izinMatch[1] : '-';
+
+            // Extract nilai alpha (format: "Alpha: X" atau "Total alpha (X)")
+            const alphaMatch = message.match(/(?:Alpha|Total alpha)\s*[\(:]\s*(\d+)/i);
+            const alpha = alphaMatch ? alphaMatch[1] : '-';
+
+            // Escape quotes untuk CSV (double quote menjadi "")
+            const escapedMessage = message.replace(/"/g, '""');
+
+            return [
+                index + 1,
+                rowNumber,
+                sakit,
+                izin,
+                alpha,
+                `"${escapedMessage}"`
+            ].join(',');
+        });
+
+        // Build CSV content dengan BOM untuk UTF-8 (agar Excel baca dengan benar)
+        const BOM = '\uFEFF';
+        const csvContent = BOM + [
+            headers.join(','),
+            ...rows
+        ].join('\n');
+
+        // Generate blob dan download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        // Generate filename dengan timestamp
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `error_import_absensi_${jenisPenilaian}_${timestamp}.csv`;
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const executeImport = async () => {
+        if (!importFile) {
+            showModal({
+                type: 'warning',
+                title: 'File Belum Dipilih',
+                message: 'Silakan pilih file Excel yang akan diimport.'
+            });
+            return;
+        }
+
+        setImporting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            formData.append('file', importFile);
+
+            const response = await fetch(`${API_BASE}/absensi/import?jenis=${jenisPenilaian}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Gagal mengimport absensi');
+            }
+
+            // Refresh data absensi
+            await fetchAbsensi();
+
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // ═════════════════════════════════════════════════════════════════
+            // 🆕 BARU: AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            // ═════════════════════════════════════════════════════════════════
+            const errors = data.data?.errors || [];
+            const totalErrors = errors.length;
+
+            // Auto-download CSV jika error > 4
+            if (totalErrors > 4) {
+                downloadErrorReportAbsensi(errors);
+            }
+
+            // Build success message
+            let successMessage = data.message;
+            
+            if (totalErrors > 0) {
+                if (totalErrors <= 4) {
+                    // Jika error <= 4, tampilkan semua di modal
+                    successMessage += `\n\n📋 Detail Error:\n${errors.map((e: any) => `• ${e.message}`).join('\n')}`;
+                } else {
+                    // Jika error > 4, tampilkan 3 contoh + info CSV
+                    successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
+                    successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_absensi_${jenisPenilaian}_*.csv)`;
+                }
+            }
+
+            setTimeout(() => {
+                showModal({
+                    type: totalErrors > 0 ? 'warning' : 'success',
+                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    message: successMessage
+                });
+            }, 250);
+
+        } catch (err: any) {
+            showModal({
+                type: 'error',
+                title: 'Gagal Import',
+                message: err.message || 'Terjadi kesalahan saat mengimport absensi.'
+            });
+        } finally {
+            setImporting(false);
+        }
+    };
+
     // ── Filter ─────────────────────────────────────────────────────────────
     const filteredAbsensi = (absensiData?.absensi ?? []).filter(siswa => {
         const query = searchQuery.toLowerCase();
@@ -555,14 +788,12 @@ export default function AbsensiClient() {
 
         console.log(`🔄 [Tab Change] Pindah ke ${jenis}, status: ${status}`);
 
-        // ✅ CLEAR editing rows sebelum pindah tab
         if (editingRows.size > 0) {
             setEditingRows(new Set());
             setEditedData({});
             console.log('🗑️ [Tab Change] Clear editing rows');
         }
 
-        // Cek apakah periode ini bisa diakses
         if (status === 'nonaktif') {
             showModal({
                 type: 'warning',
@@ -572,7 +803,6 @@ export default function AbsensiClient() {
             return;
         }
 
-        // Jika selesai, tetap bisa lihat tapi tidak bisa edit
         if (status === 'selesai') {
             setJenisPenilaian(jenis);
             setIsReadOnly(true);
@@ -585,7 +815,6 @@ export default function AbsensiClient() {
             return;
         }
 
-        // Jika aktif, bisa edit
         console.log(`✅ [Tab Change] ${jenis} aktif, enable edit mode`);
         setJenisPenilaian(jenis);
         setIsReadOnly(false);
@@ -778,28 +1007,47 @@ export default function AbsensiClient() {
                             </span>
                         </div>
 
-                        {/* Search */}
-                        <div className="relative min-w-[200px] sm:min-w-[250px]">
-                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Cari nama atau NIS..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
-                            />
-                            {searchQuery && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* 🆕 BARU: Tombol Import Absensi */}
+                            {!isReadOnly && (
                                 <button
-                                    type="button"
-                                    onClick={() => setSearchQuery('')}
-                                    className="absolute inset-y-0 right-2 flex items-center"
-                                    style={{ color: '#c95b08' }}
+                                    onClick={openImportModal}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all"
+                                    style={{
+                                        background: 'linear-gradient(135deg,#10b981,#059669)',
+                                        boxShadow: '0 3px 12px rgba(16,185,129,0.3)'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#059669,#047857)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#10b981,#059669)')}
                                 >
-                                    <X className="w-4 h-4" />
+                                    <Upload size={16} />
+                                    Import Absensi
                                 </button>
                             )}
+
+                            {/* Search */}
+                            <div className="relative min-w-[200px] sm:min-w-[250px]">
+                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Cari nama atau NIS..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute inset-y-0 right-2 flex items-center"
+                                        style={{ color: '#c95b08' }}
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1067,6 +1315,170 @@ export default function AbsensiClient() {
                                 onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
                             >
                                 Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🆕 BARU: Modal Import Absensi */}
+            {showImportModal && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 ab-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ab-scaleIn">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={24} className="text-green-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Import Absensi {jenisPenilaian}</h3>
+                                    <p className="text-xs text-gray-500">
+                                        Kelas {absensiData?.kelas} • Semester {semesterAktif}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { if (!importing) setShowImportModal(false); }}
+                                disabled={importing}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100"
+                            >
+                                <X size={18} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* Info Box */}
+                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                <AlertCircle size={16} className="text-blue-600" />
+                                Langkah-langkah Import:
+                            </p>
+                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                <li>Isi data absensi (Sakit, Izin, Alpha)</li>
+                                <li>Simpan file Excel</li>
+                                <li>Upload file Excel yang sudah diisi</li>
+                                <li>Klik "Import Absensi" untuk memproses</li>
+                            </ol>
+                        </div>
+
+                        {/* Info Periode */}
+                        <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
+                            <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-orange-800">
+                                <strong>Periode {jenisPenilaian}:</strong>{' '}
+                                {jenisPenilaian === 'PTS'
+                                    ? 'Input absensi untuk periode PTS saja.'
+                                    : 'Input total absensi semester (harus ≥ data PTS yang sudah diinput).'}
+                            </p>
+                        </div>
+
+                        {/* Tombol Download Template */}
+                        <div className="mb-5">
+                            <button
+                                onClick={handleDownloadTemplate}
+                                disabled={downloadingTemplate}
+                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    background: 'linear-gradient(135deg,#f59e0b,#d97706)',
+                                    boxShadow: '0 3px 10px rgba(245,158,11,0.3)'
+                                }}
+                                onMouseEnter={e => {
+                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)';
+                                }}
+                                onMouseLeave={e => {
+                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+                                }}
+                            >
+                                {downloadingTemplate ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengunduh Template...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={16} />
+                                        📥 Download Template Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Upload Area */}
+                        <div className="mb-5">
+                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
+                                Upload File Excel <span className="text-red-500">*</span>
+                            </label>
+                            <div
+                                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
+                                    ? 'border-green-400 bg-green-50'
+                                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                                    }`}
+                                onClick={() => importFileInputRef.current?.click()}
+                            >
+                                <input
+                                    ref={importFileInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleImportFileChange}
+                                    className="hidden"
+                                />
+                                {importFile ? (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <CheckCircle2 size={24} className="text-green-600" />
+                                        </div>
+                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                        <p className="text-xs text-green-700">
+                                            {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Upload size={32} className="text-orange-400" />
+                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                        <p className="text-xs text-orange-700">
+                                            Format: .xlsx atau .xls (Maks 10MB)
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setShowImportModal(false); setImportFile(null); }}
+                                disabled={importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={executeImport}
+                                disabled={!importFile || importing}
+                                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                style={{
+                                    background: 'linear-gradient(135deg,#10b981,#059669)',
+                                    boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
+                                }}
+                            >
+                                {importing ? (
+                                    <>
+                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                        Mengimport...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={16} />
+                                        Import Absensi
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>
