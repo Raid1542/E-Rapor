@@ -4,6 +4,8 @@
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  * Update: 8 Juli 2026 - Tambah fitur import Excel (absensi, catatan, ekskul, kokurikuler, nilai) + download rapor bulk
+ * Fix: 9 Juli 2026 - Ganti uploadExcel ke memoryStorage untuk import Excel (req.file.buffer tersedia)
+ * Fix: 9 Juli 2026 - Tambah middleware setPenilaianContextAktif untuk semua route import template
  */
 
 const express = require('express');
@@ -46,17 +48,11 @@ const uploadFoto = multer({
 });
 
 // ─── SETUP UPLOAD EXCEL ──────────────────────────────────────────────────────
-const excelStorage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-        cb(null, `import_${uniqueSuffix}${ext}`);
-    },
-});
+// ✅ PERBAIKAN: Gunakan memoryStorage agar req.file.buffer tersedia
+const excelMemoryStorage = multer.memoryStorage();
 
 const uploadExcel = multer({
-    storage: excelStorage,
+    storage: excelMemoryStorage,
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
@@ -100,6 +96,49 @@ const cekTahunAjaranAktif = async (req, res, next) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: MIDDLEWARE UNTUK SET PENILAIAN CONTEXT AKTIF
+// Digunakan untuk route import template yang tidak punya parameter :jenis/:semester
+// ═════════════════════════════════════════════════════════════════════════════
+const setPenilaianContextAktif = async (req, res, next) => {
+    try {
+        const [taRows] = await db.execute(
+            'SELECT status_pts, status_pas, semester FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1'
+        );
+        
+        if (taRows.length === 0) {
+            return next(); // Lanjut meskipun tidak ada tahun ajaran aktif
+        }
+        
+        const { status_pts, status_pas, semester } = taRows[0];
+        let jenisAktif = null;
+        
+        // Prioritas: PTS aktif > PAS aktif > PTS selesai > PAS selesai
+        if (status_pts === 'aktif') {
+            jenisAktif = 'PTS';
+        } else if (status_pas === 'aktif') {
+            jenisAktif = 'PAS';
+        } else if (status_pts === 'selesai') {
+            jenisAktif = 'PTS';
+        } else if (status_pas === 'selesai') {
+            jenisAktif = 'PAS';
+        }
+        
+        // Set req.penilaianContext agar bisa dibaca di controller
+        req.penilaianContext = {
+            jenis: jenisAktif,
+            semester: semester,
+            status_pts: status_pts,
+            status_pas: status_pas
+        };
+        
+        next();
+    } catch (err) {
+        console.error('Error setPenilaianContextAktif:', err);
+        next(); // Tetap lanjut meskipun error
+    }
+};
+
 const validateAbsensiJenis = (req, res, next) => {
     if (req.method === 'POST') {
         const { jenis } = req.body;
@@ -135,7 +174,6 @@ const safeHandler = (fn) => {
 // 🆕 BARU: MIDDLEWARE UNTUK RAPOR (Admin atau Guru Kelas yang ditugaskan)
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Validasi parameter rapor (siswaId, jenis, semester)
 const validateRaporParams = (req, res, next) => {
     const siswaId = parseInt(req.params.siswaId, 10);
     if (isNaN(siswaId) || siswaId <= 0) return res.status(400).json({ success: false, message: 'ID siswa tidak valid' });
@@ -153,7 +191,6 @@ const validateRaporParams = (req, res, next) => {
     next();
 };
 
-// Validasi parameter rapor + tahunAjaranId
 const validateRaporParamsWithTA = (req, res, next) => {
     const siswaId = parseInt(req.params.siswaId, 10);
     if (isNaN(siswaId) || siswaId <= 0) return res.status(400).json({ success: false, message: 'ID siswa tidak valid' });
@@ -174,7 +211,6 @@ const validateRaporParamsWithTA = (req, res, next) => {
     next();
 };
 
-// Middleware: Admin atau Guru Kelas yang ditugaskan
 const adminOrGuruKelasDitugaskan = [
     authenticate,
     authorize(['admin', 'guru_kelas']),
@@ -223,8 +259,24 @@ router.put('/upload_foto', authenticate, guruKelasOnly, uploadFoto.single('foto'
 // ═════════════════════════════════════════════════════════════════════════════
 
 // 🆕 BARU: Import Absensi (HARUS SEBELUM route dengan parameter!)
-router.get('/absensi/import-template', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateAbsensi));
-router.post('/absensi/import', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importAbsensiExcel));
+// ✅ PERBAIKAN: Tambah setPenilaianContextAktif agar req.penilaianContext ter-set
+router.get('/absensi/import-template', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    safeHandler(guruKelasControllers.downloadTemplateAbsensi)
+);
+router.post('/absensi/import', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    uploadExcel.single('file'), 
+    safeHandler(guruKelasControllers.importAbsensiExcel)
+);
 
 // Route existing
 router.get('/absensi/:jenis/:semester', authenticate, guruKelasOnly, validateJenisSemester, cekStatusAbsensi, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getAbsensiSiswa));
@@ -235,8 +287,24 @@ router.post('/absensi', authenticate, guruKelasOnly, validateAbsensiJenis, cekSt
 // ═════════════════════════════════════════════════════════════════════════════
 
 // 🆕 BARU: Import Catatan Wali Kelas (HARUS SEBELUM route dengan parameter!)
-router.get('/catatan-wali-kelas/import-template', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateCatatanWali));
-router.post('/catatan-wali-kelas/import', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importCatatanWaliExcel));
+// ✅ PERBAIKAN: Tambah setPenilaianContextAktif agar req.penilaianContext ter-set
+router.get('/catatan-wali-kelas/import-template', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    safeHandler(guruKelasControllers.downloadTemplateCatatanWali)
+);
+router.post('/catatan-wali-kelas/import', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    uploadExcel.single('file'), 
+    safeHandler(guruKelasControllers.importCatatanWaliExcel)
+);
 
 // Route existing
 router.get('/catatan-wali-kelas/:jenis/:semester', authenticate, guruKelasOnly, validateJenisSemester, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getCatatanWaliKelas));
@@ -247,8 +315,24 @@ router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester', authenticate, guruK
 // ═════════════════════════════════════════════════════════════════════════════
 
 // 🆕 BARU: Import Ekstrakurikuler (HARUS SEBELUM /ekskul/:siswaId!)
-router.get('/ekskul/import-template', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateEkskul));
-router.post('/ekskul/import', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importEkskulExcel));
+// ✅ PERBAIKAN: Tambah setPenilaianContextAktif agar req.penilaianContext ter-set
+router.get('/ekskul/import-template', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    safeHandler(guruKelasControllers.downloadTemplateEkskul)
+);
+router.post('/ekskul/import', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    uploadExcel.single('file'), 
+    safeHandler(guruKelasControllers.importEkskulExcel)
+);
 
 // Route existing
 router.get('/ekskul', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getEkskulSiswa));
@@ -261,8 +345,24 @@ router.get('/kokurikuler/judul-proyek', authenticate, guruKelasOnly, cekPenilaia
 router.post('/kokurikuler/judul-proyek', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.saveJudulProyek));
 
 // 🆕 BARU: Import Kokurikuler (HARUS SEBELUM /kokurikuler/:siswaId!)
-router.get('/kokurikuler/import-template', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateKokurikuler));
-router.post('/kokurikuler/import', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importNilaiKokurikuler));
+// ✅ PERBAIKAN: Tambah setPenilaianContextAktif agar req.penilaianContext ter-set
+router.get('/kokurikuler/import-template', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    safeHandler(guruKelasControllers.downloadTemplateKokurikuler)
+);
+router.post('/kokurikuler/import', 
+    authenticate, 
+    guruKelasOnly, 
+    cekPenilaianStatus, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekGuruKelasDitugaskan, 
+    uploadExcel.single('file'), 
+    safeHandler(guruKelasControllers.importNilaiKokurikuler)
+);
 
 // Route existing
 router.get('/kokurikuler', authenticate, guruKelasOnly, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getNilaiKokurikuler));
@@ -275,8 +375,24 @@ router.put('/kokurikuler/:siswaId', authenticate, guruKelasOnly, validateIdParam
 router.get('/mapel', authenticate, guruKelasOnly, cekTahunAjaranAktif, safeHandler(guruKelasControllers.getMapelForGuruKelas));
 
 // 🆕 BARU: Import Nilai Akademik (HARUS SEBELUM /nilai/:mapelId!)
-router.get('/nilai/import-template', authenticate, guruKelasOnly, cekTahunAjaranAktif, safeHandler(guruKelasControllers.downloadTemplateNilai));
-router.post('/nilai/import', authenticate, guruKelasOnly, cekTahunAjaranAktif, cekPenilaianStatus, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importNilaiExcel));
+// ✅ PERBAIKAN: Tambah setPenilaianContextAktif agar req.penilaianContext ter-set
+router.get('/nilai/import-template', 
+    authenticate, 
+    guruKelasOnly, 
+    cekTahunAjaranAktif,
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    safeHandler(guruKelasControllers.downloadTemplateNilai)
+);
+router.post('/nilai/import', 
+    authenticate, 
+    guruKelasOnly, 
+    cekTahunAjaranAktif, 
+    setPenilaianContextAktif,  // ← TAMBAHKAN INI
+    cekPenilaianStatus, 
+    cekGuruKelasDitugaskan, 
+    uploadExcel.single('file'), 
+    safeHandler(guruKelasControllers.importNilaiExcel)
+);
 
 // Route existing
 router.get('/nilai/:mapelId', authenticate, guruKelasOnly, validateIdParam('mapelId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getNilaiByMapel));

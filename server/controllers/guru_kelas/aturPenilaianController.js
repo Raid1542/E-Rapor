@@ -142,28 +142,90 @@ exports.createAspekKokurikuler = async (req, res) => {
 // GET: Ambil kategori nilai akademik untuk mapel, kelas, dan jenis penilaian
 exports.getKategoriNilaiAkademik = async (req, res) => {
     try {
-        const mapelId = req.validatedMapelId;
-        const kelasId = getKelasId(req);
+        // ✅ PERBAIKAN: Baca mapelId dari query parameter
+        const mapelId = req.query?.mapel_id || req.query?.mapelId || null;
+        let kelasId = getKelasId(req);
         const jenis = getJenisPenilaian(req);
         const taAktif = await model.getTahunAjaranAktif();
 
-        if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        console.log(`[Akademik] Request params:`, {
+            mapelId,
+            kelasId,
+            jenis,
+            query: req.query,
+            infoKelasWali: req.infoKelasWali
+        });
 
-        console.log(`[Akademik] Fetch kategori untuk jenis: ${jenis}`);
+        if (!taAktif) {
+            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        }
 
-        // Ambil kategori dengan filter jenis
-        const kategori = await model.getKategoriAkademik(mapelId, taAktif.id_tahun_ajaran, kelasId, jenis);
+        // ✅ FALLBACK: Jika kelasId undefined, query langsung ke database
+        if (!kelasId) {
+            const [rows] = await db.execute(
+                `SELECT gk.kelas_id, k.nama_kelas
+                 FROM guru_kelas gk
+                 JOIN kelas k ON gk.kelas_id = k.id_kelas
+                 JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+                 WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+                 LIMIT 1`,
+                [req.user.id, taAktif.id_tahun_ajaran_induk]
+            );
+            
+            if (rows.length > 0) {
+                kelasId = rows[0].kelas_id;
+                req.infoKelasWali = { 
+                    kelas_id: kelasId, 
+                    nama_kelas: rows[0].nama_kelas 
+                };
+            } else {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Anda belum ditugaskan sebagai guru kelas.' 
+                });
+            }
+        }
+
+        // ✅ PERBAIKAN: Handle case ketika mapelId null
+        let kategori, coverage;
+        
+        if (!mapelId) {
+            // Jika tidak ada mapelId, ambil semua kategori untuk kelas ini
+            const [allKategori] = await db.execute(
+                `SELECT id_config AS id, mapel_id, min_nilai, max_nilai, deskripsi, urutan 
+                 FROM konfigurasi_nilai_rapor 
+                 WHERE tahun_ajaran_id = ? AND kelas_id = ? AND jenis_penilaian = ?
+                 ORDER BY mapel_id, urutan ASC, min_nilai ASC`,
+                [taAktif.id_tahun_ajaran, kelasId, jenis]
+            );
+            
+            kategori = allKategori;
+            coverage = { covered: false, gap: 'Pilih mapel terlebih dahulu' };
+        } else {
+            // Ambil kategori dengan filter mapel
+            kategori = await model.getKategoriAkademik(mapelId, taAktif.id_tahun_ajaran, kelasId, jenis);
+            coverage = await model.cekCoverage0to100(mapelId, taAktif.id_tahun_ajaran, kelasId, jenis);
+        }
+        
         const kategoriParsed = kategori.map(k => ({
-            ...k, min_nilai: Math.floor(parseFloat(k.min_nilai)), max_nilai: Math.floor(parseFloat(k.max_nilai))
+            ...k, 
+            min_nilai: Math.floor(parseFloat(k.min_nilai)), 
+            max_nilai: Math.floor(parseFloat(k.max_nilai))
         }));
 
-        // Hitung coverage
-        const coverage = await model.cekCoverage0to100(mapelId, taAktif.id_tahun_ajaran, kelasId, jenis);
-
-        res.json({ success: true, data: kategoriParsed, coverage, jenis_penilaian: jenis });
+        res.json({ 
+            success: true, 
+            data: kategoriParsed, 
+            coverage, 
+            jenis_penilaian: jenis,
+            mapel_id: mapelId 
+        });
     } catch (err) {
-        console.error('Error getKategoriNilaiAkademik:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil kategori akademik' });
+        console.error('❌ Error getKategoriNilaiAkademik:', err);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Gagal mengambil kategori akademik: ' + err.message 
+        });
     }
 };
 

@@ -24,18 +24,18 @@ const { isMapelWajibGuruKelas, updateAllNilaiRaporForMapel, getDeskripsiFromKate
 const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
-    
+
     const len1 = str1.length;
     const len2 = str2.length;
     const matrix = [];
-    
+
     for (let i = 0; i <= len1; i++) {
         matrix[i] = [i];
     }
     for (let j = 0; j <= len2; j++) {
         matrix[0][j] = j;
     }
-    
+
     for (let i = 1; i <= len1; i++) {
         for (let j = 1; j <= len2; j++) {
             const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
@@ -46,7 +46,7 @@ const calculateSimilarity = (str1, str2) => {
             );
         }
     }
-    
+
     const maxLen = Math.max(len1, len2);
     return 1 - (matrix[len1][len2] / maxLen);
 };
@@ -915,9 +915,11 @@ exports.downloadTemplateNilai = async (req, res) => {
             { text: '3. Kosongkan sel jika nilai belum ada/belum diinput' },
             { text: '' },
             { text: `CATATAN: Saat ini periode ${jenis_penilaian || 'PTS'} sedang aktif.`, bold: true, size: 11, color: colors.primaryDark },
-            { text: jenis_penilaian === 'PTS' 
-                ? '→ Hanya kolom PTS yang akan diimport (UH dan PAS diabaikan)' 
-                : '→ Hanya kolom UH dan PAS yang akan diimport (PTS diabaikan)' },
+            {
+                text: jenis_penilaian === 'PTS'
+                    ? '→ Hanya kolom PTS yang akan diimport (UH dan PAS diabaikan)'
+                    : '→ Hanya kolom UH dan PAS yang akan diimport (PTS diabaikan)'
+            },
             { text: '' },
             { text: 'CARA IMPORT:', bold: true, size: 11 },
             { text: '1. Isi template ini dengan nilai siswa' },
@@ -961,7 +963,7 @@ exports.downloadTemplateNilai = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 8. IMPORT NILAI DARI EXCEL (DENGAN VALIDASI NISN & NAMA)
+// 🆕 8. IMPORT NILAI DARI EXCEL (DENGAN VALIDASI KETAT & NOTIFIKASI JELAS)
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.importNilaiExcel = async (req, res) => {
@@ -1026,7 +1028,7 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // ─── Cari Header Row (cari baris dengan "NIS" dan "Nama Siswa") ──
+        // ─── Cari Header Row ─────────────────────────────────────────────
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(10, data.length); i++) {
             const row = data[i].map(c => String(c).trim().toLowerCase());
@@ -1048,7 +1050,7 @@ exports.importNilaiExcel = async (req, res) => {
 
         // ─── Validasi Kolom Wajib ────────────────────────────────────────
         const requiredColumns = ['NIS', 'Nama Siswa'];
-        const missingColumns = requiredColumns.filter(col => 
+        const missingColumns = requiredColumns.filter(col =>
             !headers.some(h => h.toLowerCase() === col.toLowerCase())
         );
 
@@ -1059,7 +1061,6 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // Cari index kolom (case-insensitive)
         const findColIndex = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
         const idxNIS = findColIndex('NIS');
         const idxNISN = findColIndex('NISN');
@@ -1077,10 +1078,13 @@ exports.importNilaiExcel = async (req, res) => {
         });
 
         const komponenValid = [];
+        const komponenInvalid = []; // 🆕 BARU: Track kolom yang tidak dikenali
         komponenHeaders.forEach(header => {
             const headerUpper = header.toUpperCase().trim();
             if (komponenMap[headerUpper]) {
                 komponenValid.push({ header, id: komponenMap[headerUpper] });
+            } else {
+                komponenInvalid.push(header); // 🆕 BARU
             }
         });
 
@@ -1121,6 +1125,11 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
+        // 🆕 BARU: Identifikasi kolom yang akan diabaikan karena periode
+        const komponenDiabaikan = komponenValid.filter(kv =>
+            !komponenBolehUpdate.find(kbu => kbu.id === kv.id)
+        );
+
         // ─── Ambil Data Siswa ────────────────────────────────────────────
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
@@ -1143,6 +1152,22 @@ exports.importNilaiExcel = async (req, res) => {
         let successCount = 0;
         let skippedCount = 0;
         let totalNilaiDisimpan = 0;
+
+        // 🆕 BARU: Warning untuk kolom yang diabaikan karena periode
+        if (komponenDiabaikan.length > 0) {
+            warnings.push({
+                row: 0,
+                message: `⚠️ Kolom [${komponenDiabaikan.map(kv => kv.header).join(', ')}] diabaikan karena periode ${jenis_penilaian} sedang aktif. Hanya kolom [${komponenBolehUpdate.map(kv => kv.header).join(', ')}] yang akan diimport.`
+            });
+        }
+
+        // 🆕 BARU: Warning untuk kolom yang tidak dikenali
+        if (komponenInvalid.length > 0) {
+            warnings.push({
+                row: 0,
+                message: `⚠️ Kolom [${komponenInvalid.join(', ')}] tidak dikenali sebagai komponen penilaian dan akan diabaikan.`
+            });
+        }
 
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -1207,7 +1232,40 @@ exports.importNilaiExcel = async (req, res) => {
 
             const siswaId = siswa.id_siswa;
             let rowSavedCount = 0;
+            let rowHasError = false;
 
+            // 🆕 BARU: Validasi SEMUA kolom komponen (termasuk yang diabaikan)
+            for (const kv of komponenValid) {
+                const headerIdx = headers.indexOf(kv.header);
+                if (headerIdx < 0) continue;
+
+                const nilaiStr = String(row[headerIdx] || '').trim();
+                if (nilaiStr === '' || nilaiStr === '-') continue;
+
+                const nilai = parseFloat(nilaiStr);
+
+                // Validasi angka
+                if (isNaN(nilai)) {
+                    errors.push({
+                        row: i + 1,
+                        message: `Baris ${i + 1}, Kolom "${kv.header}": "${nilaiStr}" bukan angka yang valid`
+                    });
+                    rowHasError = true;
+                    continue;
+                }
+
+                // Validasi range 0-100
+                if (nilai < 0 || nilai > 100) {
+                    errors.push({
+                        row: i + 1,
+                        message: `Baris ${i + 1}, Kolom "${kv.header}": Nilai ${nilai} di luar rentang 0-100`
+                    });
+                    rowHasError = true;
+                    continue;
+                }
+            }
+
+            // Proses hanya kolom yang boleh diupdate
             for (const kv of komponenBolehUpdate) {
                 const headerIdx = headers.indexOf(kv.header);
                 if (headerIdx < 0) continue;
@@ -1216,21 +1274,7 @@ exports.importNilaiExcel = async (req, res) => {
                 if (nilaiStr === '' || nilaiStr === '-') continue;
 
                 const nilai = parseFloat(nilaiStr);
-                if (isNaN(nilai)) {
-                    errors.push({
-                        row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${kv.header}": "${nilaiStr}" bukan angka`
-                    });
-                    continue;
-                }
-
-                if (nilai < 0 || nilai > 100) {
-                    errors.push({
-                        row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${kv.header}": Nilai ${nilai} di luar rentang 0-100`
-                    });
-                    continue;
-                }
+                if (isNaN(nilai) || nilai < 0 || nilai > 100) continue; // Sudah divalidasi di atas
 
                 const nilaiBulat = Math.round(nilai);
                 await connection.execute(
@@ -1245,6 +1289,7 @@ exports.importNilaiExcel = async (req, res) => {
             }
 
             if (rowSavedCount > 0) successCount++;
+            else if (rowHasError) skippedCount++;
             else skippedCount++;
         }
 
@@ -1254,22 +1299,39 @@ exports.importNilaiExcel = async (req, res) => {
                 await updateAllNilaiRaporForMapel(mapelId, userId, req);
             } catch (recalcErr) {
                 console.error('Error hitung ulang nilai rapor:', recalcErr);
+                warnings.push({
+                    row: 0,
+                    message: '⚠️ Gagal menghitung ulang nilai rapor otomatis. Silakan refresh halaman.'
+                });
             }
         }
 
         await connection.commit();
 
+        // ─── Build Response ──────────────────────────────────────────────
         let message = '';
-        if (successCount > 0) {
-            message = `Import berhasil! ${successCount} siswa, ${totalNilaiDisimpan} nilai disimpan.`;
+        let success = true;
+
+        if (errors.length > 0) {
+            success = false;
+            if (successCount > 0) {
+                message = `⚠️ Import sebagian berhasil: ${successCount} siswa (${totalNilaiDisimpan} nilai) disimpan, tetapi ada ${errors.length} error yang perlu diperbaiki.`;
+            } else {
+                message = `❌ Import gagal: ${errors.length} error ditemukan. Tidak ada data yang disimpan.`;
+            }
+        } else if (successCount > 0) {
+            message = `✅ Import berhasil! ${successCount} siswa, ${totalNilaiDisimpan} nilai disimpan.`;
         } else {
-            message = 'Tidak ada data yang berhasil diimport.';
+            message = 'ℹ️ Tidak ada data yang berhasil diimport. Periksa file Excel Anda.';
         }
 
-        if (errors.length > 0) message += `\n⚠️ ${errors.length} error.`;
+        // 🆕 BARU: Tambahkan info kolom yang diabaikan
+        if (komponenDiabaikan.length > 0) {
+            message += `\n\nℹ️ Kolom [${komponenDiabaikan.map(kv => kv.header).join(', ')}] diabaikan karena periode ${jenis_penilaian} sedang aktif.`;
+        }
 
         res.json({
-            success: true,
+            success: success,
             message: message,
             data: {
                 total_baris: data.length - dataStartIndex,
@@ -1278,9 +1340,12 @@ exports.importNilaiExcel = async (req, res) => {
                 dilewati: skippedCount,
                 total_nilai_disimpan: totalNilaiDisimpan,
                 errors: errors.length > 0 ? errors.slice(0, 20) : null,
-                warnings: warnings.length > 0 ? warnings.slice(0, 10) : null,
+                warnings: warnings.length > 0 ? warnings : null,
                 komponen_diimport: komponenBolehUpdate.map(kv => kv.header),
-                periode_aktif: jenis_penilaian
+                komponen_diabaikan: komponenDiabaikan.map(kv => kv.header), // 🆕 BARU
+                komponen_tidak_dikenali: komponenInvalid, // 🆕 BARU
+                periode_aktif: jenis_penilaian,
+                ada_error: errors.length > 0
             }
         });
 
