@@ -253,10 +253,9 @@ export default function InputNilaiGBSClient() {
 
     // ═════════════════════════════════════════════════════════════════════════
     // 🆕 BARU: FUNGSI VALIDASI NILAI (0-100)
-    // Dipanggil saat user selesai input (onBlur) untuk validasi real-time
     // ═════════════════════════════════════════════════════════════════════════
     const validateNilai = (komponenId: number, nilai: number | null): string | null => {
-        if (nilai === null) return null; // Kosong = OK
+        if (nilai === null) return null;
         if (typeof nilai !== 'number' || isNaN(nilai)) {
             return 'Nilai harus berupa angka';
         }
@@ -266,15 +265,13 @@ export default function InputNilaiGBSClient() {
         if (nilai > 100) {
             return 'Nilai tidak boleh lebih dari 100';
         }
-        return null; // Valid
+        return null;
     };
 
     // ═════════════════════════════════════════════════════════════════════════
     // 🆕 BARU: HANDLER INPUT NILAI DENGAN VALIDASI
-    // Jika nilai invalid, tampilkan error inline dan reset nilai ke null
     // ═════════════════════════════════════════════════════════════════════════
     const handleNilaiChange = (komponenId: number, value: string) => {
-        // Hanya izinkan angka atau kosong
         if (value === '' || /^\d+$/.test(value)) {
             const newValue = value === '' ? null : parseInt(value);
             setEditingNilai(prev => ({
@@ -282,7 +279,6 @@ export default function InputNilaiGBSClient() {
                 [komponenId]: newValue
             }));
 
-            // Clear error saat user mulai mengetik
             if (editingErrors[komponenId]) {
                 setEditingErrors(prev => {
                     const newErrors = { ...prev };
@@ -298,19 +294,15 @@ export default function InputNilaiGBSClient() {
         const error = validateNilai(komponenId, nilai);
 
         if (error) {
-            // Tampilkan error inline
             setEditingErrors(prev => ({
                 ...prev,
                 [komponenId]: error
             }));
-            // 🆕 BARU: Reset nilai ke null (TIDAK auto-correct ke 0 atau 100)
-            // User harus input ulang nilai yang valid
             setEditingNilai(prev => ({
                 ...prev,
                 [komponenId]: null
             }));
         } else {
-            // Clear error jika valid
             setEditingErrors(prev => {
                 const newErrors = { ...prev };
                 delete newErrors[komponenId];
@@ -621,7 +613,6 @@ export default function InputNilaiGBSClient() {
 
         setEditingSiswa(siswa);
         setEditingNilai({ ...siswa.nilai });
-        // 🆕 BARU: Reset error saat buka modal edit
         setEditingErrors({});
         setShowEdit(true);
     };
@@ -638,7 +629,6 @@ export default function InputNilaiGBSClient() {
     const openConfirmSimpan = () => {
         if (!editingSiswa || !selectedMapelId) return;
 
-        // 🆕 BARU: Validasi SEMUA nilai sebelum simpan
         const validationErrors: string[] = [];
         for (const [idStr, nilai] of Object.entries(editingNilai)) {
             if (nilai !== null) {
@@ -648,7 +638,6 @@ export default function InputNilaiGBSClient() {
                     const nama = komponenList.find(k => k.id_komponen === komponenId)?.nama_komponen || idStr;
                     validationErrors.push(`• ${nama}: ${error}`);
 
-                    // Tampilkan error inline
                     setEditingErrors(prev => ({
                         ...prev,
                         [komponenId]: error
@@ -657,7 +646,6 @@ export default function InputNilaiGBSClient() {
             }
         }
 
-        // Jika ada error validasi, tampilkan pesan error dan batal simpan
         if (validationErrors.length > 0) {
             showModal({
                 type: 'error',
@@ -765,7 +753,7 @@ export default function InputNilaiGBSClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: HANDLER IMPORT NILAI
+    // 🆕 BARU: HANDLER IMPORT NILAI (DENGAN 4 HUMAN ERROR PREVENTION)
     // ═════════════════════════════════════════════════════════════════════════
 
     const openImportModal = () => {
@@ -792,6 +780,58 @@ export default function InputNilaiGBSClient() {
         setImportFile(null);
         if (importFileInputRef.current) importFileInputRef.current.value = '';
         setShowImportModal(true);
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: FUNGSI DOWNLOAD ERROR REPORT (CSV)
+    // ═════════════════════════════════════════════════════════════════════════
+    const downloadErrorReport = (errors: any[]) => {
+        const headers = ['No', 'Baris', 'Nama Siswa', 'Catatan', 'Alasan Error'];
+
+        const rows = errors.map((err, index) => {
+            const message = err.message || '';
+            const rowMatch = message.match(/Baris\s+(\d+)/i);
+            const rowNumber = rowMatch ? rowMatch[1] : '-';
+
+            const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
+            const namaSiswa = namaMatch ? namaMatch[1] : '-';
+
+            const catatanMatch = message.match(/catatan\s+(\d+)/i);
+            const catatan = catatanMatch ? catatanMatch[1] : '-';
+
+            const escapedMessage = message.replace(/"/g, '""');
+
+            return [
+                index + 1,
+                rowNumber,
+                namaSiswa,
+                catatan,
+                `"${escapedMessage}"`
+            ].join(',');
+        });
+
+        const BOM = '\uFEFF';
+        const csvContent = BOM + [
+            headers.join(','),
+            ...rows
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        const timestamp = new Date().toISOString().split('T')[0];
+        const safeMapelName = (currentMapel?.nama_mapel || 'Mapel').replace(/[^a-z0-9]/gi, '_');
+        const safeKelasName = (currentKelas?.nama_kelas || 'Kelas').replace(/[^a-z0-9]/gi, '_');
+        const filename = `error_import_nilai_${safeMapelName}_${safeKelasName}_${timestamp}.csv`;
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const handleDownloadTemplate = async () => {
@@ -827,15 +867,17 @@ export default function InputNilaiGBSClient() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
+            // ✅ FIX: Tutup modal import DULU
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
+            // ✅ FIX: Tampilkan notifikasi success SETELAH modal import tertutup
             setTimeout(() => {
                 showModal({
                     type: 'success',
                     title: 'Template Berhasil Diunduh',
-                    message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Nilai"'
+                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file Excel\n4. Klik tombol "Import Nilai" untuk upload file'
                 });
             }, 300);
 
@@ -890,6 +932,9 @@ export default function InputNilaiGBSClient() {
         setImportFile(file);
     };
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🆕 BARU: EXECUTE IMPORT (DENGAN 4 HUMAN ERROR PREVENTION)
+    // ═════════════════════════════════════════════════════════════════════════
     const executeImportNilai = async () => {
         if (!importFile || !selectedMapelId || !selectedKelasId) {
             showModal({
@@ -944,25 +989,79 @@ export default function InputNilaiGBSClient() {
                 }
             }
 
+            // ✅ FIX: Tutup modal import DULU
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            let successMessage = data.message;
-            if (data.data?.errors && data.data.errors.length > 0) {
-                successMessage += `\n\n⚠️ Detail Error (maks 20):\n${data.data.errors.slice(0, 20).map((e: any) => `• ${e.message}`).join('\n')}`;
+            // ═══════════════════════════════════════════════════════════════════
+            // 🆕 BARU: PARSING 4 HUMAN ERROR PREVENTION DARI BACKEND
+            // ═══════════════════════════════════════════════════════════════════
+            const errors = data.data?.errors || [];
+            const warnings = data.data?.warnings || [];
+            const totalErrors = errors.length;
+            const totalWarnings = warnings.length;
+            const nisDuplikatCount = data.data?.nis_duplikat_count || 0;
+            const nisDuplikatDetail = data.data?.nis_duplikat_detail || [];
+            const barisDenganNilai = data.data?.baris_dengan_nilai || 0;
+            const barisDenganDataSiswa = data.data?.baris_dengan_data_siswa || 0;
+            const pesanPenting = data.data?.pesan_penting;
+
+            // 🆕 AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            if (totalErrors > 4) {
+                downloadErrorReport(errors);
             }
-            if (data.data?.warnings && data.data.warnings.length > 0) {
-                successMessage += `\n\nℹ️ Peringatan:\n${data.data.warnings.slice(0, 10).map((w: any) => `• ${w.message}`).join('\n')}`;
+
+            // ✅ Build success message dengan semua info dari backend
+            let successMessage = data.message;
+
+            // 🆕 Info baris dengan nilai dan data siswa
+            if (barisDenganDataSiswa > 0) {
+                successMessage += `\n\n📝 ${barisDenganDataSiswa} baris data siswa diproses`;
+            }
+            if (barisDenganNilai > 0) {
+                successMessage += `\n💯 ${barisDenganNilai} baris berisi nilai`;
+            }
+
+            // 🆕 Detail error
+            if (totalErrors > 0) {
+                if (totalErrors <= 4) {
+                    successMessage += `\n\n📋 Detail Error:\n${errors.slice(0, 4).map((e: any) => `• ${e.message}`).join('\n')}`;
+                } else {
+                    successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
+                    successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_nilai_*.csv)`;
+                }
+            }
+
+            // 🆕 Detail warnings
+            if (totalWarnings > 0) {
+                successMessage += `\n\nℹ️ Peringatan:\n${warnings.slice(0, 10).map((w: any) => `• ${w.message}`).join('\n')}`;
+            }
+
+            // 🆕 Info NIS duplikat dengan detail
+            if (nisDuplikatCount > 0) {
+                successMessage += `\n\n⚠️ DITEMUKAN ${nisDuplikatCount} NIS DUPLIKAT.`;
+                if (nisDuplikatDetail.length > 0) {
+                    successMessage += `\n   Detail: ${nisDuplikatDetail.slice(0, 3).map((d: any) => `Baris ${d.row} (NIS: ${d.nis})`).join(', ')}`;
+                    if (nisDuplikatDetail.length > 3) {
+                        successMessage += `, dan ${nisDuplikatDetail.length - 3} lainnya`;
+                    }
+                }
+                successMessage += `\n   Hanya data pertama yang diproses, duplikat diabaikan.`;
+            }
+
+            // 🆕 Pesan penting
+            if (pesanPenting) {
+                successMessage += `\n\n🔔 ${pesanPenting}`;
             }
 
             setTimeout(() => {
                 showModal({
-                    type: data.data?.errors?.length > 0 ? 'warning' : 'success',
-                    title: data.data?.errors?.length > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    type: totalErrors > 0 ? 'warning' : 'success',
+                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
                     message: successMessage
                 });
-            }, 250);
+            }, 300);
 
         } catch (err: any) {
             showModal({
@@ -1995,12 +2094,28 @@ export default function InputNilaiGBSClient() {
                         {jenisPenilaianAktif && (
                             <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
                                 <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-orange-800">
-                                    <strong>Periode {jenisPenilaianAktif} Aktif:</strong>{' '}
-                                    {jenisPenilaianAktif === 'PTS'
-                                        ? 'Hanya kolom PTS yang akan diimport. Kolom UH dan PAS akan diabaikan.'
-                                        : 'Kolom UH dan PAS akan diimport. Kolom PTS akan diabaikan (terkunci).'}
-                                </p>
+                                <div className="text-xs text-orange-800 space-y-1">
+                                    <p>
+                                        <strong>Periode {jenisPenilaianAktif} Aktif:</strong>
+                                    </p>
+                                    {jenisPenilaianAktif === 'PTS' ? (
+                                        <>
+                                            <p>• ✅ <strong>Yang diimport:</strong> Nilai PTS</p>
+                                            <p>• ℹ️ <strong>Yang diabaikan:</strong> UH dan PAS</p>
+                                            <p className="mt-1 text-orange-700">
+                                                💡 <strong>Tip:</strong> Isi kolom UH dan PAS saat periode PAS aktif.
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p>• ✅ <strong>Yang diimport:</strong> UH dan PAS</p>
+                                            <p>• ℹ️ <strong>Yang diabaikan:</strong> PTS (terkunci)</p>
+                                            <p className="mt-1 text-orange-700">
+                                                💡 <strong>Tip:</strong> Nilai PTS sudah dikunci dan tidak dapat diubah.
+                                            </p>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         )}
 

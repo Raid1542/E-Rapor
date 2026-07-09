@@ -62,18 +62,22 @@ exports.getDeskripsiFromKategori = (nilai, kategoriList) => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * Recompute nilai rapor PAS setelah bobot berubah
- * Formula: (rataUH × bobotUH) + (PTS × bobotPTS) + (PAS × bobotPAS)
+ * Recompute nilai rapor setelah import nilai
+ * Formula PTS: nilai_rapor = nilai PTS langsung
+ * Formula PAS: (rataUH × bobotUH) + (PTS × bobotPTS) + (PAS × bobotPAS)
  */
 exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
     try {
         const tahunAjaranIndukId = req?.idTahunAjaranInduk;
         const semesterId = req?.idSemesterAktif;
-        const { semester } = req?.penilaianContext || {};
+        const { semester, jenis: jenisPenilaianAktif } = req?.penilaianContext || {};
 
         if (!tahunAjaranIndukId || !semesterId || !semester) {
             throw new Error('Data tahun ajaran tidak ditemukan');
         }
+
+        // ✅ DIPERBAIKI: Deteksi periode aktif (PTS atau PAS)
+        const jenisPenilaian = jenisPenilaianAktif || 'PAS';
 
         // Ambil kelas & siswa
         const [gkRows] = await db.execute(
@@ -96,7 +100,7 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             [mapelId, kelas_id]
         );
 
-        // Build bobot map (prioritas: spesifik kelas > global)
+        // Build bobot map
         const bobotMap = new Map();
         bobotRows.forEach(b => {
             if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
@@ -124,49 +128,74 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             const siswaId = siswa.siswa_id;
             const nilai = nilaiDetailMap.get(siswaId) || {};
 
-            let nilaiPTSFinal = 0;
-            if (ptsKomponen) {
-                const [ptsRow] = await db.execute(
-                    `SELECT nilai_rapor FROM nilai_rapor WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = 'PTS'`,
-                    [siswaId, mapelId, semesterId, semester]
-                );
-                nilaiPTSFinal = ptsRow.length > 0 ? ptsRow[0].nilai_rapor : 0;
-            }
-
-            const nilaiUH = uhKomponenIds.map(id => nilai[id]).filter(v => v != null && !isNaN(v));
-            const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
-            const nilaiPAS = pasKomponen ? (nilai[pasKomponen.id_komponen] || 0) : 0;
-
-            const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
-            const bobotPTS = ptsKomponen ? bobotMap.get(ptsKomponen.id_komponen) || 0 : 0;
-            const bobotPAS = pasKomponen ? bobotMap.get(pasKomponen.id_komponen) || 0 : 0;
-            const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
-
             let nilaiRapor = 0;
-            if (totalBobot > 0) {
-                nilaiRapor = (rataUH * totalBobotUH + nilaiPTSFinal * bobotPTS + nilaiPAS * bobotPAS) / totalBobot;
-            }
-            nilaiRapor = Math.floor(nilaiRapor);
-
-            const [kategoriRows] = await db.execute(
-                `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
-                 WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND is_active = 1 ORDER BY min_nilai DESC`,
-                [mapelId, semesterId]
-            );
-
             let deskripsi = 'Belum ada deskripsi';
-            for (const k of kategoriRows) {
-                if (nilaiRapor >= k.min_nilai && nilaiRapor <= k.max_nilai) {
-                    deskripsi = k.deskripsi;
-                    break;
+
+            // ✅ DIPERBAIKI: Hitung nilai rapor sesuai periode
+            if (jenisPenilaian === 'PTS') {
+                // Formula PTS: nilai_rapor = nilai PTS langsung
+                const nilaiPTS = ptsKomponen ? (nilai[ptsKomponen.id_komponen] || 0) : 0;
+                nilaiRapor = nilaiPTS;
+                
+                // Ambil deskripsi dari konfigurasi PTS
+                const [kategoriPTSRows] = await db.execute(
+                    `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
+                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND jenis_penilaian = 'PTS' AND is_active = 1 ORDER BY min_nilai DESC`,
+                    [mapelId, semesterId]
+                );
+                
+                for (const k of kategoriPTSRows) {
+                    if (nilaiRapor >= k.min_nilai && nilaiRapor <= k.max_nilai) {
+                        deskripsi = k.deskripsi;
+                        break;
+                    }
+                }
+            } else {
+                // Formula PAS: (rataUH × bobotUH) + (PTS × bobotPTS) + (PAS × bobotPAS)
+                let nilaiPTSFinal = 0;
+                if (ptsKomponen) {
+                    const [ptsRow] = await db.execute(
+                        `SELECT nilai_rapor FROM nilai_rapor WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = 'PTS'`,
+                        [siswaId, mapelId, semesterId, semester]
+                    );
+                    nilaiPTSFinal = ptsRow.length > 0 ? ptsRow[0].nilai_rapor : 0;
+                }
+
+                const nilaiUH = uhKomponenIds.map(id => nilai[id]).filter(v => v != null && !isNaN(v));
+                const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
+                const nilaiPAS = pasKomponen ? (nilai[pasKomponen.id_komponen] || 0) : 0;
+
+                const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
+                const bobotPTS = ptsKomponen ? bobotMap.get(ptsKomponen.id_komponen) || 0 : 0;
+                const bobotPAS = pasKomponen ? bobotMap.get(pasKomponen.id_komponen) || 0 : 0;
+                const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
+
+                if (totalBobot > 0) {
+                    nilaiRapor = (rataUH * totalBobotUH + nilaiPTSFinal * bobotPTS + nilaiPAS * bobotPAS) / totalBobot;
+                }
+                nilaiRapor = Math.floor(nilaiRapor);
+
+                // Ambil deskripsi dari konfigurasi PAS
+                const [kategoriPASRows] = await db.execute(
+                    `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
+                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND jenis_penilaian = 'PAS' AND is_active = 1 ORDER BY min_nilai DESC`,
+                    [mapelId, semesterId]
+                );
+                
+                for (const k of kategoriPASRows) {
+                    if (nilaiRapor >= k.min_nilai && nilaiRapor <= k.max_nilai) {
+                        deskripsi = k.deskripsi;
+                        break;
+                    }
                 }
             }
 
+            // ✅ DIPERBAIKI: Simpan dengan jenis_penilaian yang benar
             await db.execute(
                 `INSERT INTO nilai_rapor (siswa_id, mapel_id, kelas_id, tahun_ajaran_id, semester, jenis_penilaian, nilai_rapor, deskripsi, created_by_user_id, updated_at)
-                 VALUES (?, ?, ?, ?, ?, 'PAS', ?, ?, ?, NOW())
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                  ON DUPLICATE KEY UPDATE nilai_rapor = VALUES(nilai_rapor), deskripsi = VALUES(deskripsi), updated_at = NOW()`,
-                [siswaId, mapelId, kelas_id, semesterId, semester, nilaiRapor, deskripsi, userId]
+                [siswaId, mapelId, kelas_id, semesterId, semester, jenisPenilaian, nilaiRapor, deskripsi, userId]
             );
         }
     } catch (err) {

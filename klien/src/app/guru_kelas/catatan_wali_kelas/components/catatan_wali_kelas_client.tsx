@@ -4,6 +4,10 @@
  * UPDATE: 
  *   ✅ FIX: Hapus pengecekan NOT_ASSIGNED di loadData (endpoint tidak pakai middleware)
  *   🆕 BARU: Fitur Import Catatan Wali Kelas dari Excel
+ *   ✅ FIX: Tampilkan info kolom yang diabaikan saat import
+ *   ✅ FIX: Tampilkan info NIS duplikat dan pesan penting
+ *   ✅ FIX: Z-index NotifModal [130] agar tidak ditimpa modal import
+ *   ✅ FIX: Notifikasi download template muncul di atas modal import
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
  */
@@ -65,18 +69,20 @@ const GlobalStyles = () => (
     `}</style>
 );
 
-// ====== NOTIF MODAL ======
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
-};
-
+// ═════════════════════════════════════════════════════════════════════════
+// ✅ DIPERBAIKI: Z-INDEX [130] agar NotifModal muncul di atas modal import
+// ═════════════════════════════════════════════════════════════════════════
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+    const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+        success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+        error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+        warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+        network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    };
+    
     const s = MODAL_STYLES[modal.type];
     return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 ap-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -85,7 +91,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK</button>
             </div>
         </div>
     );
@@ -456,7 +462,7 @@ export default function CatatanWaliClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: IMPORT CATATAN WALI KELAS HANDLERS
+    // 🆕 BARU: IMPORT CATATAN WALI KELAS HANDLERS (DENGAN INFO LENGKAP)
     // ═════════════════════════════════════════════════════════════════════════
 
     const openImportModal = () => {
@@ -476,6 +482,9 @@ export default function CatatanWaliClient() {
         setShowImportModal(true);
     };
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // ✅ DIPERBAIKI: Notifikasi muncul di atas modal import (z-index [130])
+    // ═════════════════════════════════════════════════════════════════════════
     const handleDownloadTemplate = async () => {
         setDownloadingTemplate(true);
         try {
@@ -500,11 +509,17 @@ export default function CatatanWaliClient() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
+            // ✅ FIX: Tampilkan notifikasi DULU (z-index [130] akan muncul di atas modal import)
             showModal({
                 type: 'success',
                 title: 'Template Berhasil Diunduh',
-                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi catatan wali kelas (min 20 karakter)\n3. Isi keputusan naik tingkat (khusus PAS Genap)\n4. Simpan file\n5. Upload kembali melalui tombol "Import Catatan"'
+                message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Isi catatan wali kelas (minimal 20 karakter)\n3. Isi keputusan naik tingkat (khusus PAS Genap)\n4. Simpan file Excel\n5. Klik tombol "Import Catatan" untuk upload file'
             });
+
+            // ✅ FIX: Tutup modal import SETELAH notifikasi muncul
+            setTimeout(() => {
+                setShowImportModal(false);
+            }, 300);
         } catch (err: any) {
             showModal({
                 type: 'error',
@@ -643,7 +658,7 @@ export default function CatatanWaliClient() {
                 downloadErrorReportCatatan(errors);
             }
 
-            // Build success message
+            // ✅ Build success message dengan semua info dari backend
             let successMessage = data.message;
 
             if (totalErrors > 0) {
@@ -653,6 +668,28 @@ export default function CatatanWaliClient() {
                     successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
                     successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_catatan_wali_*.csv)`;
                 }
+            }
+
+            // 🆕 BARU: Tampilkan info kolom yang diabaikan
+            if (data.data?.kolom_diabaikan && data.data.kolom_diabaikan.length > 0) {
+                successMessage += `\n\nℹ️ Kolom "${data.data.kolom_diabaikan.join(', ')}" diabaikan karena hanya berlaku untuk PAS Semester Genap.`;
+            }
+
+            // 🆕 BARU: Tampilkan info NIS duplikat
+            if (data.data?.nis_duplikat_count && data.data.nis_duplikat_count > 0) {
+                successMessage += `\n\n⚠️ DITEMUKAN ${data.data.nis_duplikat_count} NIS DUPLIKAT.`;
+                if (data.data.nis_duplikat_detail && data.data.nis_duplikat_detail.length > 0) {
+                    successMessage += `\n   Detail: ${data.data.nis_duplikat_detail.slice(0, 3).map((d: any) => `Baris ${d.row} (NIS: ${d.nis})`).join(', ')}`;
+                    if (data.data.nis_duplikat_detail.length > 3) {
+                        successMessage += `, dan ${data.data.nis_duplikat_detail.length - 3} lainnya`;
+                    }
+                }
+                successMessage += `\n   Hanya data pertama yang diproses, duplikat diabaikan.`;
+            }
+
+            // 🆕 BARU: Tampilkan pesan penting
+            if (data.data?.pesan_penting) {
+                successMessage += `\n\n🔔 ${data.data.pesan_penting}`;
             }
 
             setTimeout(() => {
@@ -1257,12 +1294,27 @@ export default function CatatanWaliClient() {
                         {/* Info Periode */}
                         <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
                             <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-orange-800">
-                                <strong>Periode {jenisPenilaian} {semester}:</strong>{' '}
-                                {jenisPenilaian === 'PAS' && semester === 'Genap'
-                                    ? 'Catatan dan keputusan naik tingkat wajib diisi.'
-                                    : 'Hanya catatan yang wajib diisi. Keputusan naik tingkat tidak perlu.'}
-                            </p>
+                            <div className="text-xs text-orange-800 space-y-1">
+                                <p>
+                                    <strong>Periode {jenisPenilaian} {semester}:</strong>
+                                </p>
+                                {jenisPenilaian === 'PAS' && semester === 'Genap' ? (
+                                    <>
+                                        <p>• ✅ <strong>Yang diimport:</strong> Catatan dan keputusan naik tingkat</p>
+                                        <p className="mt-1 text-orange-700">
+                                            💡 <strong>Tip:</strong> Kedua kolom wajib diisi.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p>• ✅ <strong>Yang diimport:</strong> Hanya catatan wali kelas</p>
+                                        <p>• ℹ️ <strong>Yang diabaikan:</strong> Kolom "Naik Tingkat"</p>
+                                        <p className="mt-1 text-orange-700">
+                                            💡 <strong>Tip:</strong> Keputusan naik tingkat hanya berlaku untuk PAS Semester Genap.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* Tombol Download Template */}
@@ -1351,10 +1403,7 @@ export default function CatatanWaliClient() {
                                 onClick={executeImport}
                                 disabled={!importFile || importing}
                                 className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                style={{
-                                    background: 'linear-gradient(135deg,#10b981,#059669)',
-                                    boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
-                                }}
+                                style={{ background: 'linear-gradient(135deg,#10b981,#059669)', boxShadow: '0 3px 10px rgba(16,185,129,0.3)' }}
                             >
                                 {importing ? (
                                     <>

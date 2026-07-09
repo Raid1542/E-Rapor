@@ -17,6 +17,9 @@
  * 
  * ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetch tahun ajaran
  * 🆕 BARU: Fitur Import Nilai Kokurikuler dari Excel
+ * ✅ FIX: Modal import konsisten dengan input nilai akademik
+ * ✅ FIX: Notifikasi hanya muncul setelah klik import
+ * ✅ FIX: Auto-download CSV jika error > 5
  */
 
 'use client';
@@ -89,7 +92,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
+// ─── NOTIF MODAL ─────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
   success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
@@ -110,13 +113,13 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
           <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
           <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
         </div>
-        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
+        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK</button>
       </div>
     </div>
   );
 };
 
-// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+// ─── SHARED STYLE CONSTANTS ──────────────────────────────────────────────────
 
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-400 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
@@ -197,7 +200,7 @@ export default function KokurikulerClient() {
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HELPER FUNCTIONS
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
 
   const canEditAspek = useCallback((aspekId: number): boolean => {
     if (!jenisPenilaianAktif) return false;
@@ -503,8 +506,8 @@ export default function KokurikulerClient() {
         type: 'warning',
         title: 'Tidak Ada Aspek yang Bisa Diedit',
         message: `Saat ini periode ${jenisPenilaianAktif} aktif.\n\n${jenisPenilaianAktif === 'PTS'
-            ? "Hanya aspek Mutaba'ah Yaumiyah yang dapat diisi.\n\nSilakan pilih siswa lain atau tunggu periode PAS untuk mengisi aspek lainnya."
-            : "Silakan hubungi administrator."
+          ? "Hanya aspek Mutaba'ah Yaumiyah yang dapat diisi.\n\nSilakan pilih siswa lain atau tunggu periode PAS untuk mengisi aspek lainnya."
+          : "Silakan hubungi administrator."
           }`
       });
       return;
@@ -629,7 +632,7 @@ export default function KokurikulerClient() {
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🆕 BARU: IMPORT NILAI KOKURIKULER HANDLERS
+  // 🆕 BARU: IMPORT NILAI KOKURIKULER HANDLERS (KONSISTEN DENGAN INPUT NILAI)
   // ═══════════════════════════════════════════════════════════════════════════
 
   const openImportModal = () => {
@@ -697,6 +700,7 @@ export default function KokurikulerClient() {
     }
   };
 
+  // ✅ DIPERBAIKI: Hapus warning modal saat pilih file
   const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -728,6 +732,8 @@ export default function KokurikulerClient() {
       return;
     }
 
+    // ✅ DIPERBAIKI: Tidak ada warning modal lagi saat pilih file
+    // Info periode sudah ditampilkan di modal import
     setImportFile(file);
   };
 
@@ -820,22 +826,45 @@ export default function KokurikulerClient() {
         downloadErrorReportKokurikuler(errors);
       }
 
-      // Build success message
-      let successMessage = data.message;
-      if (errors.length > 0) {
+      // ✅ Build notifikasi SIMPEL setelah import
+      let notifMessage = '';
+
+      if (errors.length === 0) {
+        // SUKSES TOTAL
+        notifMessage = `✅ Import berhasil!\n\n` +
+          `👥 ${data.data?.berhasil || 0} siswa berhasil diimport\n` +
+          `📊 ${data.data?.total_nilai_disimpan || 0} nilai disimpan`;
+      } else {
+        // ADA ERROR
+        notifMessage = `⚠️ Import selesai dengan catatan\n\n` +
+          `✅ Berhasil: ${data.data?.berhasil || 0} siswa\n` +
+          `❌ Gagal: ${errors.length} baris\n`;
+
+        // Tampilkan detail error (max 3)
         if (errors.length <= 5) {
-          successMessage += `\n\n📋 Detail Error:\n${errors.map((e: any) => `• ${e.message}`).join('\n')}`;
+          notifMessage += `\n📋 Detail Error:\n`;
+          errors.slice(0, 3).forEach((e: any, i: number) => {
+            notifMessage += `${i + 1}. ${e.message}\n`;
+          });
         } else {
-          successMessage += `\n\n📋 Contoh Error (3 dari ${errors.length}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
-          successMessage += `\n\n📥 File CSV error telah diunduh otomatis!`;
+          notifMessage += `\n📋 Contoh Error:\n`;
+          errors.slice(0, 2).forEach((e: any, i: number) => {
+            notifMessage += `${i + 1}. ${e.message}\n`;
+          });
+          notifMessage += `\n📥 File CSV error telah diunduh otomatis!`;
         }
+      }
+
+      // Info kolom yang diabaikan (jika ada)
+      if (data.data?.aspek_diabaikan && data.data.aspek_diabaikan.length > 0) {
+        notifMessage += `\n\nℹ️ Kolom diabaikan: ${data.data.aspek_diabaikan.join(', ')}`;
       }
 
       setTimeout(() => {
         showModal({
           type: errors.length > 0 ? 'warning' : 'success',
-          title: errors.length > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
-          message: successMessage
+          title: errors.length > 0 ? 'Import Selesai' : 'Import Berhasil!',
+          message: notifMessage
         });
       }, 250);
 
@@ -1345,7 +1374,24 @@ export default function KokurikulerClient() {
             <thead>
               <tr style={TH_GRAD}>
                 {['No.', 'Nama Siswa', 'NIS', 'NISN', "Mutaba'ah", 'BPI', 'Literasi', 'Proyek', 'Aksi'].map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={i} className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap relative group">
+                    {h}
+                    {jenisPenilaianAktif === 'PTS' &&
+                      (h === 'BPI' || h === 'Literasi' || h === 'Proyek') && (
+                        <div className="absolute -top-1 -right-1">
+                          <Lock size={12} className="text-white/80" />
+                        </div>
+                      )}
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-48 text-center">
+                      {jenisPenilaianAktif === 'PTS' && (h === 'BPI' || h === 'Literasi' || h === 'Proyek')
+                        ? `Terkunci - Hanya Mutaba'ah yang bisa diinput saat PTS`
+                        : jenisPenilaianAktif === 'PAS'
+                          ? 'Dapat diinput'
+                          : 'Periode belum aktif'}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -1843,7 +1889,7 @@ export default function KokurikulerClient() {
         </div>
       )}
 
-      {/* 🆕 BARU: MODAL IMPORT NILAI KOKURIKULER */}
+      {/* 🆕 BARU: MODAL IMPORT NILAI KOKURIKULER (KONSISTEN DENGAN INPUT NILAI) */}
       {showImportModal && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center p-4 dg-fadeIn"
@@ -1873,7 +1919,7 @@ export default function KokurikulerClient() {
               </button>
             </div>
 
-            {/* Info Box */}
+            {/* Info Box - Langkah-langkah */}
             <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
               <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
                 <AlertCircle size={16} className="text-blue-600" />
@@ -1888,15 +1934,25 @@ export default function KokurikulerClient() {
               </ol>
             </div>
 
-            {/* Info Periode */}
+            {/* Info Periode - DIPERBAIKI dengan info lebih detail */}
             <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
               <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-orange-800">
-                <strong>Periode {jenisPenilaianAktif} Aktif:</strong>{' '}
-                {jenisPenilaianAktif === 'PTS'
-                  ? "Hanya aspek Mutaba'ah yang akan diimport. Aspek lain (BPI, Literasi, Proyek) akan diabaikan."
-                  : 'Semua aspek (Mutaba\'ah, BPI, Literasi, Proyek) akan diimport.'}
-              </p>
+              <div className="text-xs text-orange-800 space-y-1">
+                <p>
+                  <strong>Periode {jenisPenilaianAktif} Aktif:</strong>
+                </p>
+                {jenisPenilaianAktif === 'PTS' ? (
+                  <>
+                    <p>• ✅ <strong>Yang diimport:</strong> Mutaba'ah Yaumiyah</p>
+                    <p>• 🔒 <strong>Yang diabaikan:</strong> BPI, Literasi, Proyek</p>
+                    <p className="mt-1 text-orange-700">
+                      💡 <strong>Tip:</strong> Isi kolom lain nanti saat periode PAS aktif. Data tidak akan hilang.
+                    </p>
+                  </>
+                ) : (
+                  <p>• ✅ Semua aspek (Mutaba'ah, BPI, Literasi, Proyek) akan diimport.</p>
+                )}
+              </div>
             </div>
 
             {/* Tombol Download Template */}
@@ -1930,8 +1986,8 @@ export default function KokurikulerClient() {
               </label>
               <div
                 className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
-                    ? 'border-green-400 bg-green-50'
-                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                  ? 'border-green-400 bg-green-50'
+                  : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
                   }`}
                 onClick={() => importFileInputRef.current?.click()}
               >

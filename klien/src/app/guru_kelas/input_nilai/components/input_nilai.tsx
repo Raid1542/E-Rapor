@@ -10,10 +10,11 @@
  *   - 🆕 BARU: Fitur Import Nilai dari Excel (Download Template + Upload)
  *   - 🆕 BARU: Auto-download CSV error report jika error > 5
  *   - 🆕 BARU: Validasi ketat nilai 0-100 dengan error inline (TIDAK auto-correct)
+ *   - 🆕 BARU: Notifikasi simpel dengan info lengkap (nilai di-round, NIS duplikat, dll)
  */
 'use client';
 import { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock, Upload, Download } from 'lucide-react';
+import { Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, LogOut, Lock, Upload, Download, Info } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -78,7 +79,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK</button>
             </div>
         </div>
     );
@@ -87,7 +88,6 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
 const inputDisabledCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-400 outline-none bg-gray-100 border-gray-200 cursor-not-allowed";
-// 🆕 BARU: Class untuk input yang error (border merah)
 const inputErrorCls = "w-full border-2 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-red-400 focus:border-red-400 bg-red-50/40 border-red-500 placeholder:text-gray-400";
 const PAGE_BG = { background: '#fdf6f0' };
 const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
@@ -155,10 +155,10 @@ export default function InputNilaiClient() {
     const [editClosing, setEditClosing] = useState(false);
     const [editingSiswa, setEditingSiswa] = useState<SiswaNilai | null>(null);
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
-    
+
     // 🆕 BARU: State untuk tracking error per komponen saat edit nilai
     const [editingErrors, setEditingErrors] = useState<Record<number, string>>({});
-    
+
     const [saving, setSaving] = useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -438,7 +438,6 @@ export default function InputNilaiClient() {
 
         setEditingSiswa(siswa);
         setEditingNilai({ ...siswa.nilai });
-        // 🆕 BARU: Reset error saat buka modal edit
         setEditingErrors({});
         setShowEdit(true);
     };
@@ -447,10 +446,9 @@ export default function InputNilaiClient() {
 
     // ═════════════════════════════════════════════════════════════════════════════
     // 🆕 BARU: FUNGSI VALIDASI NILAI (0-100)
-    // Dipanggil saat user selesai input (onBlur) untuk validasi real-time
     // ═════════════════════════════════════════════════════════════════════════════
     const validateNilai = (komponenId: number, nilai: number | null): string | null => {
-        if (nilai === null) return null; // Kosong = OK
+        if (nilai === null) return null;
         if (typeof nilai !== 'number' || isNaN(nilai)) {
             return 'Nilai harus berupa angka';
         }
@@ -460,15 +458,10 @@ export default function InputNilaiClient() {
         if (nilai > 100) {
             return 'Nilai tidak boleh lebih dari 100';
         }
-        return null; // Valid
+        return null;
     };
 
-    // ═════════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: HANDLER INPUT NILAI DENGAN VALIDASI
-    // Jika nilai invalid, tampilkan error inline dan reset nilai ke null
-    // ═════════════════════════════════════════════════════════════════════════════
     const handleNilaiChange = (komponenId: number, value: string) => {
-        // Hanya izinkan angka atau kosong
         if (value === '' || /^\d+$/.test(value)) {
             const newValue = value === '' ? null : parseInt(value);
             setEditingNilai(prev => ({
@@ -476,7 +469,6 @@ export default function InputNilaiClient() {
                 [komponenId]: newValue
             }));
 
-            // Clear error saat user mulai mengetik
             if (editingErrors[komponenId]) {
                 setEditingErrors(prev => {
                     const newErrors = { ...prev };
@@ -492,19 +484,15 @@ export default function InputNilaiClient() {
         const error = validateNilai(komponenId, nilai);
 
         if (error) {
-            // Tampilkan error inline
             setEditingErrors(prev => ({
                 ...prev,
                 [komponenId]: error
             }));
-            // 🆕 BARU: Reset nilai ke null (TIDAK auto-correct ke 0 atau 100)
-            // User harus input ulang nilai yang valid
             setEditingNilai(prev => ({
                 ...prev,
                 [komponenId]: null
             }));
         } else {
-            // Clear error jika valid
             setEditingErrors(prev => {
                 const newErrors = { ...prev };
                 delete newErrors[komponenId];
@@ -516,7 +504,6 @@ export default function InputNilaiClient() {
     const openConfirmSimpan = () => {
         if (!editingSiswa || !selectedMapelId) return;
 
-        // 🆕 BARU: Validasi SEMUA nilai sebelum simpan
         const validationErrors: string[] = [];
         for (const [idStr, nilai] of Object.entries(editingNilai)) {
             if (nilai !== null) {
@@ -525,8 +512,7 @@ export default function InputNilaiClient() {
                 if (error) {
                     const nama = komponenList.find(k => k.id_komponen === komponenId)?.nama_komponen || idStr;
                     validationErrors.push(`• ${nama}: ${error}`);
-                    
-                    // Tampilkan error inline
+
                     setEditingErrors(prev => ({
                         ...prev,
                         [komponenId]: error
@@ -535,7 +521,6 @@ export default function InputNilaiClient() {
             }
         }
 
-        // Jika ada error validasi, tampilkan pesan error dan batal simpan
         if (validationErrors.length > 0) {
             showModal({
                 type: 'error',
@@ -759,26 +744,19 @@ export default function InputNilaiClient() {
 
     // ═════════════════════════════════════════════════════════════════════════════
     // 🆕 BARU: FUNGSI DOWNLOAD ERROR REPORT CSV
-    // Generate file CSV berisi detail error import untuk dianalisis guru
-    // Format: No, Baris, Kolom, Alasan Error
     // ═════════════════════════════════════════════════════════════════════════════
     const downloadErrorReport = (errors: any[], mapelName: string, kelasName: string) => {
-        // Header CSV
         const headers = ['No', 'Baris', 'Kolom', 'Alasan Error'];
 
-        // Parse error message untuk extract info
         const rows = errors.map((err, index) => {
             const message = err.message || '';
 
-            // Extract baris dari message (format: "Baris X: ..." atau "Baris X, Kolom ...")
             const rowMatch = message.match(/Baris\s+(\d+)/i);
             const rowNumber = rowMatch ? rowMatch[1] : '-';
 
-            // Extract kolom dari message (format: "Kolom "X"")
             const colMatch = message.match(/Kolom\s+"([^"]+)"/i);
             const column = colMatch ? colMatch[1] : '-';
 
-            // Escape quotes untuk CSV (double quote menjadi "")
             const escapedMessage = message.replace(/"/g, '""');
 
             return [
@@ -789,19 +767,16 @@ export default function InputNilaiClient() {
             ].join(',');
         });
 
-        // Build CSV content dengan BOM untuk UTF-8 (agar Excel baca dengan benar)
         const BOM = '\uFEFF';
         const csvContent = BOM + [
             headers.join(','),
             ...rows
         ].join('\n');
 
-        // Generate blob dan download
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
 
-        // Generate filename dengan timestamp dan info mapel
         const timestamp = new Date().toISOString().split('T')[0];
         const safeMapelName = (mapelName || 'Mapel').replace(/[^a-z0-9]/gi, '_');
         const safeKelasName = (kelasName || 'Kelas').replace(/[^a-z0-9]/gi, '_');
@@ -816,7 +791,7 @@ export default function InputNilaiClient() {
         URL.revokeObjectURL(url);
     };
 
-    // 🆕 BARU: Handler untuk eksekusi import (DENGAN AUTO-DOWNLOAD CSV)
+    // 🆕 BARU: Handler untuk eksekusi import (DENGAN 3 HUMAN ERROR PREVENTION)
     const executeImportNilai = async () => {
         if (!importFile || !selectedMapelId) {
             showModal({
@@ -842,8 +817,43 @@ export default function InputNilaiClient() {
 
             const data = await response.json();
 
+            // ═══════════════════════════════════════════════════════════════════
+            // 🆕 BARU: HANDLE 3 HUMAN ERROR PREVENTION DARI BACKEND
+            // ═══════════════════════════════════════════════════════════════════
+
             if (!response.ok) {
-                throw new Error(data.message || 'Gagal mengimport nilai');
+                // Backend mengembalikan error dengan pesan spesifik
+                const errorMessage = data.message || 'Gagal mengimport nilai';
+
+                // Cek apakah ini salah satu dari 3 human error
+                if (errorMessage.includes('tidak ada data sama sekali')) {
+                    showModal({
+                        type: 'error',
+                        title: '❌ File Excel Kosong',
+                        message: errorMessage
+                    });
+                } else if (errorMessage.includes('tidak ada data siswa')) {
+                    showModal({
+                        type: 'error',
+                        title: '❌ Data Siswa Kosong',
+                        message: errorMessage
+                    });
+                } else if (errorMessage.includes('tidak ada nilai yang diisi')) {
+                    showModal({
+                        type: 'error',
+                        title: '❌ File Tanpa Nilai',
+                        message: errorMessage
+                    });
+                } else {
+                    showModal({
+                        type: 'error',
+                        title: 'Gagal Import',
+                        message: errorMessage
+                    });
+                }
+
+                setImporting(false);
+                return;
             }
 
             // Refresh data nilai
@@ -873,71 +883,93 @@ export default function InputNilaiClient() {
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
             // ═══════════════════════════════════════════════════════════════════
-            // 🆕 BARU: LOGIKA AUTO-DOWNLOAD CSV ERROR REPORT
-            // Jika error > 5, auto-download CSV agar guru bisa analisis
+            // 🆕 BARU: NOTIFIKASI SIMPEL DENGAN INFO LENGKAP
             // ═══════════════════════════════════════════════════════════════════
             const errors = data.data?.errors || [];
             const warnings = data.data?.warnings || [];
             const totalErrors = errors.length;
             const totalWarnings = warnings.length;
+            const nilaiDiRound = data.data?.nilai_di_round || 0;
+            const nisDuplikat = data.data?.nis_duplikat_count || 0;
+            const komponenDiabaikan = data.data?.komponen_diabaikan || [];
+            const komponenTidakDikenali = data.data?.komponen_tidak_dikenali || [];
+            const barisDenganNilai = data.data?.baris_dengan_nilai || 0;
+            const barisDenganDataSiswa = data.data?.baris_dengan_data_siswa || 0;
 
             // ✅ AUTO-DOWNLOAD CSV JIKA ERROR > 5
             if (totalErrors > 5) {
                 downloadErrorReport(errors, currentMapel?.nama_mapel || '', kelasNama);
             }
 
-            // Build summary message
+            // Build summary message yang SIMPEL dan MUDAH DIPAHAMI
             const summaryLines: string[] = [];
 
             // Header summary
-            summaryLines.push(`✅ Berhasil: ${data.data?.berhasil || 0} siswa`);
-            summaryLines.push(`❌ Gagal: ${totalErrors} siswa`);
-            if (totalWarnings > 0) {
-                summaryLines.push(`⚠️ Peringatan: ${totalWarnings} siswa`);
-            }
-            summaryLines.push('');
+            if (totalErrors === 0) {
+                summaryLines.push(`✅ Import berhasil!\n`);
+                summaryLines.push(`👥 ${data.data?.berhasil || 0} siswa berhasil diimport`);
+                summaryLines.push(`📊 ${data.data?.total_nilai_disimpan || 0} nilai disimpan\n`);
 
-            // Detail errors
+                // Info tambahan tentang data yang diproses
+                if (barisDenganDataSiswa > 0) {
+                    summaryLines.push(`📝 ${barisDenganDataSiswa} baris data siswa diproses`);
+                }
+                if (barisDenganNilai > 0) {
+                    summaryLines.push(`💯 ${barisDenganNilai} baris berisi nilai`);
+                }
+                summaryLines.push('');
+            } else {
+                summaryLines.push(`⚠️ Import selesai dengan catatan\n`);
+                summaryLines.push(`✅ Berhasil: ${data.data?.berhasil || 0} siswa`);
+                summaryLines.push(`❌ Gagal: ${totalErrors} siswa\n`);
+            }
+
+            // Info tambahan yang penting
+            const infoTambahan: string[] = [];
+
+            if (nilaiDiRound > 0) {
+                infoTambahan.push(`• ${nilaiDiRound} nilai desimal dibulatkan (contoh: 85.7 → 86)`);
+            }
+
+            if (nisDuplikat > 0) {
+                infoTambahan.push(`• ${nisDuplikat} NIS duplikat ditemukan (hanya data pertama yang diproses)`);
+            }
+
+            if (komponenDiabaikan.length > 0) {
+                infoTambahan.push(`• Kolom [${komponenDiabaikan.join(', ')}] diabaikan karena periode ${data.data?.periode_aktif || '-'} sedang aktif`);
+            }
+
+            if (komponenTidakDikenali.length > 0) {
+                infoTambahan.push(`• Kolom [${komponenTidakDikenali.join(', ')}] tidak dikenali sebagai komponen penilaian`);
+            }
+
+            if (infoTambahan.length > 0) {
+                summaryLines.push(`ℹ️ Catatan:\n${infoTambahan.join('\n')}\n`);
+            }
+
+            // Detail errors (jika ada)
             if (totalErrors > 0) {
                 if (totalErrors <= 5) {
-                    // Jika error <= 5, tampilkan semua di modal
-                    summaryLines.push('📋 Detail Error:');
-                    errors.slice(0, 5).forEach((e: any, i: number) => {
-                        summaryLines.push(`${i + 1}. ${e.message}`);
-                    });
+                    summaryLines.push(`📋 Detail Error:\n${errors.slice(0, 5).map((e: any, i: number) => `${i + 1}. ${e.message}`).join('\n')}\n`);
                 } else {
-                    // Jika error > 5, tampilkan 3 contoh + info CSV
-                    summaryLines.push(`📋 Contoh Error (3 dari ${totalErrors}):`);
-                    errors.slice(0, 3).forEach((e: any, i: number) => {
-                        summaryLines.push(`${i + 1}. ${e.message}`);
-                    });
-                    summaryLines.push('');
+                    summaryLines.push(`📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any, i: number) => `${i + 1}. ${e.message}`).join('\n')}\n`);
                     summaryLines.push(`📥 File CSV error telah diunduh otomatis!`);
-                    summaryLines.push(`   (error_import_nilai_*.csv)`);
+                    summaryLines.push(`   (error_import_nilai_*.csv)\n`);
                 }
             }
 
-            // Detail warnings
+            // Detail warnings (jika ada)
             if (totalWarnings > 0) {
-                summaryLines.push('');
-                summaryLines.push('ℹ️ Peringatan:');
-                warnings.slice(0, 3).forEach((w: any, i: number) => {
-                    summaryLines.push(`${i + 1}. ${w.message}`);
-                });
+                summaryLines.push(`⚠️ Peringatan:\n${warnings.slice(0, 3).map((w: any, i: number) => `${i + 1}. ${w.message}`).join('\n')}`);
                 if (totalWarnings > 3) {
                     summaryLines.push(`   ... dan ${totalWarnings - 3} peringatan lainnya`);
                 }
             }
 
-            // Info periode
-            summaryLines.push('');
-            summaryLines.push(`📊 Periode: ${data.data?.periode_aktif || '-'}`);
-            summaryLines.push(`📚 Komponen: ${(data.data?.komponen_diimport || []).join(', ')}`);
-
             setTimeout(() => {
                 showModal({
                     type: totalErrors > 0 ? 'warning' : 'success',
-                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
+                    title: totalErrors > 0 ? 'Import Selesai' : 'Import Berhasil!',
                     message: summaryLines.join('\n')
                 });
             }, 250);
@@ -1541,7 +1573,7 @@ export default function InputNilaiClient() {
                                 style={{ background: '#eff6ff', border: '1px solid #93c5fd' }}>
                                 <AlertCircle size={18} style={{ color: '#1d4ed8', flexShrink: 0 }} className="mt-0.5" />
                                 <p className="text-xs" style={{ color: '#1e40af' }}>
-                                    <strong>ℹ️ Validasi Nilai:</strong> Nilai harus berupa angka antara <strong>0-100</strong>. 
+                                    <strong>ℹ️ Validasi Nilai:</strong> Nilai harus berupa angka antara <strong>0-100</strong>.
                                     Jika Anda input nilai di luar rentang, sistem akan menampilkan pesan error dan nilai akan direset.
                                 </p>
                             </div>
@@ -1590,7 +1622,6 @@ export default function InputNilaiClient() {
                                                         }`}
                                                     style={isDisabled ? {} : error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 2px 8px rgba(232,105,10,0.08)' }}
                                                 />
-                                                {/* 🆕 BARU: Tampilkan error inline */}
                                                 {error && (
                                                     <p className="text-xs text-red-600 mt-1 text-center font-semibold">
                                                         {error}
@@ -1651,7 +1682,6 @@ export default function InputNilaiClient() {
                                                             }`}
                                                         style={isActive ? error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' } : {}}
                                                     />
-                                                    {/* 🆕 BARU: Tampilkan error inline */}
                                                     {error && (
                                                         <p className="text-xs text-red-600 mt-2 text-center font-semibold">
                                                             {error}

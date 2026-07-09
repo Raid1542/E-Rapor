@@ -7,6 +7,9 @@
  *   ✅ FIX: Handle setLoading(false) di semua case fetchAbsensi
  *   🆕 BARU: Fitur Import Absensi dari Excel
  *   🆕 BARU: Auto-download CSV error report jika error > 4
+ *   ✅ FIX: Modal import konsisten dengan input nilai & kokurikuler
+ *   ✅ FIX: Notifikasi hanya muncul setelah klik import
+ *   ✅ FIX: Hapus duplikasi fungsi
  *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
  *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
  *   - Tab PTS/PAS menunjukkan status (Aktif/Menunggu/Selesai)
@@ -91,7 +94,7 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
                 </div>
                 <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
+                    OK
                 </button>
             </div>
         </div>
@@ -528,7 +531,7 @@ export default function AbsensiClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: IMPORT ABSENSI HANDLERS
+    // 🆕 BARU: IMPORT ABSENSI HANDLERS (KONSISTEN DENGAN INPUT NILAI)
     // ═════════════════════════════════════════════════════════════════════════
 
     const openImportModal = () => {
@@ -621,37 +624,18 @@ export default function AbsensiClient() {
         setImportFile(file);
     };
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: FUNGSI DOWNLOAD ERROR REPORT ABSENSI (CSV)
-    // Generate file CSV berisi detail error import absensi
-    // Format: No, Baris, Sakit, Izin, Alpha, Alasan Error
-    // ═════════════════════════════════════════════════════════════════════════
-
     const downloadErrorReportAbsensi = (errors: any[]) => {
-        // Header CSV
         const headers = ['No', 'Baris', 'Sakit', 'Izin', 'Alpha', 'Alasan Error'];
-
-        // Parse error message untuk extract data
         const rows = errors.map((err, index) => {
             const message = err.message || '';
-
-            // Extract baris dari message (format: "Baris X: ..." atau "Baris X, ...")
             const rowMatch = message.match(/Baris\s+(\d+)/i);
             const rowNumber = rowMatch ? rowMatch[1] : '-';
-
-            // Extract nilai sakit (format: "Sakit: X" atau "Total sakit (X)")
             const sakitMatch = message.match(/(?:Sakit|Total sakit)\s*[\(:]\s*(\d+)/i);
             const sakit = sakitMatch ? sakitMatch[1] : '-';
-
-            // Extract nilai izin (format: "Izin: X" atau "Total izin (X)")
             const izinMatch = message.match(/(?:Izin|Total izin)\s*[\(:]\s*(\d+)/i);
             const izin = izinMatch ? izinMatch[1] : '-';
-
-            // Extract nilai alpha (format: "Alpha: X" atau "Total alpha (X)")
             const alphaMatch = message.match(/(?:Alpha|Total alpha)\s*[\(:]\s*(\d+)/i);
             const alpha = alphaMatch ? alphaMatch[1] : '-';
-
-            // Escape quotes untuk CSV (double quote menjadi "")
             const escapedMessage = message.replace(/"/g, '""');
 
             return [
@@ -664,19 +648,16 @@ export default function AbsensiClient() {
             ].join(',');
         });
 
-        // Build CSV content dengan BOM untuk UTF-8 (agar Excel baca dengan benar)
         const BOM = '\uFEFF';
         const csvContent = BOM + [
             headers.join(','),
             ...rows
         ].join('\n');
 
-        // Generate blob dan download
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
 
-        // Generate filename dengan timestamp
         const timestamp = new Date().toISOString().split('T')[0];
         const filename = `error_import_absensi_${jenisPenilaian}_${timestamp}.csv`;
 
@@ -724,36 +705,53 @@ export default function AbsensiClient() {
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // ═════════════════════════════════════════════════════════════════
-            // 🆕 BARU: AUTO-DOWNLOAD CSV JIKA ERROR > 4
-            // ═════════════════════════════════════════════════════════════════
+            // 🆕 AUTO-DOWNLOAD CSV jika error > 4
             const errors = data.data?.errors || [];
             const totalErrors = errors.length;
 
-            // Auto-download CSV jika error > 4
             if (totalErrors > 4) {
                 downloadErrorReportAbsensi(errors);
             }
 
-            // Build success message
-            let successMessage = data.message;
-            
-            if (totalErrors > 0) {
+            // ✅ Build notifikasi SIMPEL setelah import
+            let notifMessage = '';
+
+            if (totalErrors === 0) {
+                // SUKSES TOTAL
+                notifMessage = `✅ Import berhasil!\n\n` +
+                    `👥 ${data.data?.berhasil || 0} siswa berhasil diimport\n` +
+                    `📊 ${data.data?.total_records_saved || 0} data absensi disimpan`;
+            } else {
+                // ADA ERROR
+                notifMessage = `⚠️ Import selesai dengan catatan\n\n` +
+                    `✅ Berhasil: ${data.data?.berhasil || 0} siswa\n` +
+                    `❌ Gagal: ${totalErrors} baris\n`;
+
+                // Tampilkan detail error (max 3)
                 if (totalErrors <= 4) {
-                    // Jika error <= 4, tampilkan semua di modal
-                    successMessage += `\n\n📋 Detail Error:\n${errors.map((e: any) => `• ${e.message}`).join('\n')}`;
+                    notifMessage += `\n📋 Detail Error:\n`;
+                    errors.slice(0, 3).forEach((e: any, i: number) => {
+                        notifMessage += `${i + 1}. ${e.message}\n`;
+                    });
                 } else {
-                    // Jika error > 4, tampilkan 3 contoh + info CSV
-                    successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
-                    successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_absensi_${jenisPenilaian}_*.csv)`;
+                    notifMessage += `\n📋 Contoh Error:\n`;
+                    errors.slice(0, 2).forEach((e: any, i: number) => {
+                        notifMessage += `${i + 1}. ${e.message}\n`;
+                    });
+                    notifMessage += `\n📥 File CSV error telah diunduh otomatis!`;
                 }
+            }
+
+            // Info periode
+            if (data.data?.periode) {
+                notifMessage += `\n\n📊 Periode: ${data.data.periode}`;
             }
 
             setTimeout(() => {
                 showModal({
                     type: totalErrors > 0 ? 'warning' : 'success',
-                    title: totalErrors > 0 ? 'Import Selesai (Ada Error)' : 'Import Berhasil!',
-                    message: successMessage
+                    title: totalErrors > 0 ? 'Import Selesai' : 'Import Berhasil!',
+                    message: notifMessage
                 });
             }, 250);
 
@@ -1321,7 +1319,7 @@ export default function AbsensiClient() {
                 </div>
             )}
 
-            {/* 🆕 BARU: Modal Import Absensi */}
+            {/* 🆕 BARU: Modal Import Absensi (KONSISTEN DENGAN INPUT NILAI) */}
             {showImportModal && (
                 <div
                     className="fixed inset-0 z-[120] flex items-center justify-center p-4 ab-fadeIn"
@@ -1351,7 +1349,7 @@ export default function AbsensiClient() {
                             </button>
                         </div>
 
-                        {/* Info Box */}
+                        {/* Info Box - Langkah-langkah */}
                         <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
                             <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
                                 <AlertCircle size={16} className="text-blue-600" />
@@ -1366,15 +1364,31 @@ export default function AbsensiClient() {
                             </ol>
                         </div>
 
-                        {/* Info Periode */}
+                        {/* Info Periode - DIPERBAIKI dengan info lebih detail */}
                         <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
                             <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-orange-800">
-                                <strong>Periode {jenisPenilaian}:</strong>{' '}
-                                {jenisPenilaian === 'PTS'
-                                    ? 'Input absensi untuk periode PTS saja.'
-                                    : 'Input total absensi semester (harus ≥ data PTS yang sudah diinput).'}
-                            </p>
+                            <div className="text-xs text-orange-800 space-y-1">
+                                <p>
+                                    <strong>Periode {jenisPenilaian} Aktif:</strong>
+                                </p>
+                                {jenisPenilaian === 'PTS' ? (
+                                    <>
+                                        <p>• ✅ <strong>Yang diimport:</strong> Data absensi periode PTS</p>
+                                        <p>• 📊 <strong>Format:</strong> Sakit, Izin, Alpha (0-90 hari)</p>
+                                        <p className="mt-1 text-orange-700">
+                                            💡 <strong>Tip:</strong> Data PAS akan diinput saat periode PAS aktif.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p>• ✅ <strong>Yang diimport:</strong> Total absensi semester</p>
+                                        <p>• 📊 <strong>Format:</strong> Sakit, Izin, Alpha (0-90 hari)</p>
+                                        <p className="mt-1 text-orange-700">
+                                            ⚠️ <strong>Perhatian:</strong> Total harus ≥ data PTS yang sudah diinput.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* Tombol Download Template */}

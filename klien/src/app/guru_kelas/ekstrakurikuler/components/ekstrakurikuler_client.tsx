@@ -6,6 +6,12 @@
  *   - Kondisi 2: Read-Only mode jika PAS belum aktif atau sudah selesai
  *   - Tambah: Popup konfirmasi dengan template yang sama seperti kokurikuler
  *   - 🆕 BARU: Fitur Import Ekstrakurikuler dari Excel
+ *   - ✅ DIPERBAIKI: Konsisten dengan backend (4 Human Error Prevention)
+ *   - ✅ DIPERBAIKI: Tampilkan info NIS duplikat
+ *   - ✅ DIPERBAIKI: Tambahkan kolom NIS di CSV error report
+ *   - ✅ DIPERBAIKI: Tutup modal import setelah download template
+ *   - ✅ DIPERBAIKI: Validasi duplikasi ekskul di frontend
+ *   - ✅ DIPERBAIKI: Info import lebih lengkap
  */
 
 'use client';
@@ -345,7 +351,7 @@ export default function EkskulClient() {
         setEditData(newData);
     };
 
-    // ✅ Validasi + buka modal konfirmasi (sama seperti kokurikuler)
+    // ✅ DIPERBAIKI: Validasi + buka modal konfirmasi + cek duplikasi ekskul
     const openConfirmSave = () => {
         if (!editSiswa) return;
 
@@ -356,6 +362,17 @@ export default function EkskulClient() {
                 type: 'warning',
                 title: 'Tidak Ada Perubahan',
                 message: 'Tidak ada data yang diubah.'
+            });
+            return;
+        }
+
+        // ✅ DIPERBAIKI: Validasi duplikasi ekskul
+        const ekskulIds = validEkskul.map(e => e.ekskul_id);
+        if (new Set(ekskulIds).size !== ekskulIds.length) {
+            showModal({
+                type: 'warning',
+                title: 'Ekskul Duplikat',
+                message: 'Tidak boleh memilih ekstrakurikuler yang sama lebih dari 1 kali.\n\nSilakan pilih ekskul yang berbeda untuk setiap slot.'
             });
             return;
         }
@@ -463,6 +480,7 @@ export default function EkskulClient() {
         setShowImportModal(true);
     };
 
+    // ✅ DIPERBAIKI: Tutup modal import setelah download template
     const handleDownloadTemplate = async () => {
         setDownloadingTemplate(true);
         try {
@@ -486,11 +504,19 @@ export default function EkskulClient() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            showModal({
-                type: 'success',
-                title: 'Template Berhasil Diunduh',
-                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file\n5. Upload kembali melalui tombol "Import Ekskul"'
-            });
+            // ✅ DIPERBAIKI: Tutup modal import DULU
+            setShowImportModal(false);
+            setImportFile(null);
+            if (importFileInputRef.current) importFileInputRef.current.value = '';
+
+            // ✅ DIPERBAIKI: Tampilkan notifikasi success SETELAH modal import tertutup
+            setTimeout(() => {
+                showModal({
+                    type: 'success',
+                    title: 'Template Berhasil Diunduh',
+                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
+                });
+            }, 300);
         } catch (err: any) {
             showModal({
                 type: 'error',
@@ -536,13 +562,17 @@ export default function EkskulClient() {
         setImportFile(file);
     };
 
+    // ✅ DIPERBAIKI: Tambahkan kolom NIS di CSV error report
     const downloadErrorReportEkskul = (errors: any[]) => {
-        const headers = ['No', 'Baris', 'Nama Siswa', 'Alasan Error'];
+        const headers = ['No', 'Baris', 'NIS', 'Nama Siswa', 'Alasan Error'];
 
         const rows = errors.map((err, index) => {
             const message = err.message || '';
             const rowMatch = message.match(/Baris\s+(\d+)/i);
             const rowNumber = rowMatch ? rowMatch[1] : '-';
+
+            const nisMatch = message.match(/NIS\s+"([^"]+)"/i);
+            const nis = nisMatch ? nisMatch[1] : '-';
 
             const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
             const namaSiswa = namaMatch ? namaMatch[1] : '-';
@@ -552,6 +582,7 @@ export default function EkskulClient() {
             return [
                 index + 1,
                 rowNumber,
+                nis,
                 namaSiswa,
                 `"${escapedMessage}"`
             ].join(',');
@@ -579,6 +610,7 @@ export default function EkskulClient() {
         URL.revokeObjectURL(url);
     };
 
+    // ✅ DIPERBAIKI: Tampilkan info NIS duplikat
     const executeImport = async () => {
         if (!importFile) {
             showModal({
@@ -643,6 +675,19 @@ export default function EkskulClient() {
                     successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
                     successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_ekskul_*.csv)`;
                 }
+            }
+
+            // ✅ DIPERBAIKI: Tampilkan info NIS duplikat
+            if (data.data?.nis_duplikat_count && data.data.nis_duplikat_count > 0) {
+                const duplikatInfo = data.data.nis_duplikat_detail
+                    .map((d: any) => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`)
+                    .join(', ');
+                successMessage += `\n\n⚠️ DITEMUKAN ${data.data.nis_duplikat_count} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses.`;
+            }
+
+            // ✅ DIPERBAIKI: Tampilkan pesan penting
+            if (data.data?.pesan_penting) {
+                successMessage += `\n\n💡 ${data.data.pesan_penting}`;
             }
 
             setTimeout(() => {
@@ -1139,7 +1184,7 @@ export default function EkskulClient() {
                         </div>
 
                         <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
-                            Apakah Anda yakin ingin menyimpan data ini?
+                            Apakah Anda yakin ingin menyimpan data {confirmSiswaNama}?
                         </p>
 
                         <div className="flex gap-3">
@@ -1217,13 +1262,18 @@ export default function EkskulClient() {
                             </ol>
                         </div>
 
-                        {/* Info Periode */}
+                        {/* ✅ DIPERBAIKI: Info Periode lebih lengkap */}
                         <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
                             <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-orange-800">
-                                <strong>Info:</strong>{' '}
-                                Setiap siswa dapat mengikuti maksimal 3 ekstrakurikuler. Setiap ekskul wajib memiliki deskripsi aktivitas.
-                            </p>
+                            <div className="text-xs text-orange-800 space-y-1">
+                                <p><strong>Info Import:</strong></p>
+                                <p>• Setiap siswa dapat mengikuti maksimal 3 ekstrakurikuler</p>
+                                <p>• Setiap ekskul wajib memiliki deskripsi aktivitas</p>
+                                <p>• NIS harus unik (tidak boleh duplikat)</p>
+                                <p className="mt-1 text-orange-700">
+                                    💡 <strong>Tip:</strong> Input hanya tersedia saat PAS aktif. Data dikunci jika PAS selesai.
+                                </p>
+                            </div>
                         </div>
 
                         {/* Tombol Download Template */}

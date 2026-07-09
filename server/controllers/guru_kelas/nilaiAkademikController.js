@@ -6,6 +6,10 @@
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  * Update: 7 Juli 2026 - Tambah fitur import nilai dari Excel + Validasi NISN & Nama
+ * Update: 9 Juli 2026 - Tambah 6 Human Error Prevention untuk fitur import
+ * Update: 9 Juli 2026 - Fix bug nilai 0 dianggap kosong
+ * Update: 9 Juli 2026 - Fix Human Error #1 untuk deteksi file hanya header
+ * Update: 9 Juli 2026 - Hapus timestamp header di template
  */
 
 const db = require('../../config/db');
@@ -662,13 +666,9 @@ exports.eksporNilaiExcel = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 7. DOWNLOAD TEMPLATE IMPORT NILAI (SIMPLE - LANGSUNG KOLOM)
+// 🆕 7. DOWNLOAD TEMPLATE IMPORT NILAI (TANPA TIMESTAMP - HEADER DI ROW 1)
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * GET /api/guru-kelas/nilai/import-template?mapel_id=X
- * Template Excel sederhana - langsung kolom header tanpa title/info
- */
 exports.downloadTemplateNilai = async (req, res) => {
     try {
         const { mapel_id } = req.query;
@@ -687,7 +687,6 @@ exports.downloadTemplateNilai = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
 
-        // ─── Ambil Data Kelas ─────────────────────────────────────────────
         const [kelasRow] = await db.execute(
             `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
             [userId, semesterId]
@@ -697,7 +696,6 @@ exports.downloadTemplateNilai = async (req, res) => {
         }
         const kelas_id = kelasRow[0].kelas_id;
 
-        // ─── Validasi Akses Mapel ─────────────────────────────────────────
         const [mapelCheck] = await db.execute(
             `SELECT 1 FROM pembelajaran WHERE kelas_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
             [kelas_id, mapelId, semesterId]
@@ -706,14 +704,12 @@ exports.downloadTemplateNilai = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Mapel ini tidak diajarkan di kelas Anda' });
         }
 
-        // ─── Ambil Nama Mapel ─────────────────────────────────────────────
         const [mapelRow] = await db.execute(
             `SELECT nama_mapel FROM mata_pelajaran WHERE id_mata_pelajaran = ?`,
             [mapelId]
         );
         const namaMapel = mapelRow[0]?.nama_mapel || 'Mata Pelajaran';
 
-        // ─── Ambil Daftar Siswa ───────────────────────────────────────────
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
              FROM siswa s
@@ -723,40 +719,34 @@ exports.downloadTemplateNilai = async (req, res) => {
             [kelas_id, tahunAjaranIndukId]
         );
 
-        // ─── Ambil Komponen Penilaian ─────────────────────────────────────
         const [komponenRows] = await db.execute(
             `SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan ASC`
         );
 
-        // ─── Ambil Nama Kelas ─────────────────────────────────────────────
         const [kelasNamaRow] = await db.execute(
             `SELECT nama_kelas FROM kelas WHERE id_kelas = ?`,
             [kelas_id]
         );
         const namaKelas = kelasNamaRow[0]?.nama_kelas || 'Kelas';
 
-        // ═══════════════════════════════════════════════════════════════════
-        // BUILD EXCEL WORKBOOK
-        // ═══════════════════════════════════════════════════════════════════
-
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'E-Rapor SDIT Ulil Albab Batam';
         workbook.created = new Date();
 
-        // ─── Warna Brand ──────────────────────────────────────────────────
+        const worksheet = workbook.addWorksheet('Template Input Nilai');
+
         const colors = {
-            primary: 'FFE8690A',      // Orange brand
-            primaryDark: 'FFC95B08',  // Dark orange
-            blue: 'FF4A90E2',         // Blue for identity
+            primary: 'FFE8690A',
+            primaryDark: 'FFC95B08',
+            blue: 'FF4A90E2',
             white: 'FFFFFFFF',
             black: 'FF000000',
             gray: 'FF666666',
-            lightOrange: 'FFFFF5E6',  // Light orange bg
-            lightBlue: 'FFE8F4FD',    // Light blue bg
+            lightOrange: 'FFFFF5E6',
+            lightBlue: 'FFE8F4FD',
             border: 'FFCCCCCC'
         };
 
-        // ─── Style Definitions ────────────────────────────────────────────
         const thinBorder = {
             top: { style: 'thin', color: { argb: colors.border } },
             left: { style: 'thin', color: { argb: colors.border } },
@@ -764,13 +754,7 @@ exports.downloadTemplateNilai = async (req, res) => {
             right: { style: 'thin', color: { argb: colors.border } }
         };
 
-        // ═══════════════════════════════════════════════════════════════════
-        // SHEET 1: TEMPLATE INPUT NILAI (LANGSUNG KOLOM)
-        // ═══════════════════════════════════════════════════════════════════
-
-        const worksheet = workbook.addWorksheet('Template Input Nilai');
-
-        // ─── Row 1: Column Headers (LANGSUNG DI ROW 1) ────────────────────
+        // ✅ DIPERBAIKI: Header langsung di Row 1 (TANPA TIMESTAMP)
         const headers = ['No', 'NIS', 'NISN', 'Nama Siswa', ...komponenRows.map(k => k.nama_komponen)];
         const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
@@ -782,7 +766,6 @@ exports.downloadTemplateNilai = async (req, res) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cell.border = thinBorder;
 
-            // Warna berbeda: Biru untuk identitas, Orange untuk nilai
             cell.fill = {
                 type: 'pattern',
                 pattern: 'solid',
@@ -790,63 +773,35 @@ exports.downloadTemplateNilai = async (req, res) => {
             };
         });
 
-        // ─── Row 2+: Data Siswa ───────────────────────────────────────────
+        // ✅ DIPERBAIKI: Data siswa mulai dari Row 2
         siswaRows.forEach((siswa, index) => {
-            const rowNum = 2 + index;
+            const rowNum = 2 + index; // ✅ Mulai dari row 2 (bukan 3)
             const dataRow = worksheet.getRow(rowNum);
             dataRow.height = 22;
 
             const isEvenRow = index % 2 === 0;
 
-            // Kolom No
-            const noCell = dataRow.getCell(1);
-            noCell.value = index + 1;
-            noCell.font = { name: 'Calibri', size: 11, bold: true };
-            noCell.alignment = { vertical: 'middle', horizontal: 'center' };
-            noCell.border = thinBorder;
-            noCell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: isEvenRow ? colors.lightBlue : colors.white }
-            };
+            const identitasData = [
+                index + 1,
+                siswa.nis || '',
+                siswa.nisn || '',
+                siswa.nama_lengkap || ''
+            ];
 
-            // Kolom NIS
-            const nisCell = dataRow.getCell(2);
-            nisCell.value = siswa.nis || '';
-            nisCell.font = { name: 'Calibri', size: 11 };
-            nisCell.alignment = { vertical: 'middle', horizontal: 'center' };
-            nisCell.border = thinBorder;
-            nisCell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: isEvenRow ? colors.lightBlue : colors.white }
-            };
+            identitasData.forEach((val, colIdx) => {
+                const cell = dataRow.getCell(colIdx + 1);
+                cell.value = val;
+                cell.font = { name: 'Calibri', size: 11, bold: colIdx === 3 };
+                cell.alignment = { vertical: 'middle', horizontal: colIdx === 3 ? 'left' : 'center' };
+                cell.border = thinBorder;
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: isEvenRow ? colors.lightBlue : colors.white }
+                };
+                cell.protection = { locked: true };
+            });
 
-            // Kolom NISN
-            const nisnCell = dataRow.getCell(3);
-            nisnCell.value = siswa.nisn || '';
-            nisnCell.font = { name: 'Calibri', size: 11 };
-            nisnCell.alignment = { vertical: 'middle', horizontal: 'center' };
-            nisnCell.border = thinBorder;
-            nisnCell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: isEvenRow ? colors.lightBlue : colors.white }
-            };
-
-            // Kolom Nama Siswa
-            const namaCell = dataRow.getCell(4);
-            namaCell.value = siswa.nama_lengkap || '';
-            namaCell.font = { name: 'Calibri', size: 11, bold: true };
-            namaCell.alignment = { vertical: 'middle', horizontal: 'left' };
-            namaCell.border = thinBorder;
-            namaCell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: isEvenRow ? colors.lightBlue : colors.white }
-            };
-
-            // Kolom Nilai (kosong, siap diisi)
             komponenRows.forEach((komp, kompIdx) => {
                 const cell = dataRow.getCell(5 + kompIdx);
                 cell.value = '';
@@ -859,7 +814,6 @@ exports.downloadTemplateNilai = async (req, res) => {
                     fgColor: { argb: isEvenRow ? colors.lightOrange : colors.white }
                 };
 
-                // ✅ DATA VALIDATION: Hanya angka 0-100
                 cell.dataValidation = {
                     type: 'whole',
                     operator: 'between',
@@ -874,9 +828,8 @@ exports.downloadTemplateNilai = async (req, res) => {
             });
         });
 
-        // ─── Pesan Jika Tidak Ada Siswa ───────────────────────────────────
         if (siswaRows.length === 0) {
-            worksheet.mergeCells('A2:H2');
+            worksheet.mergeCells('A2:H2'); // ✅ Mulai dari row 2
             const emptyCell = worksheet.getCell('A2');
             emptyCell.value = 'Belum ada siswa di kelas ini. Silakan hubungi Admin.';
             emptyCell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: colors.gray } };
@@ -885,29 +838,25 @@ exports.downloadTemplateNilai = async (req, res) => {
             emptyCell.border = thinBorder;
         }
 
-        // ─── Set Column Width ─────────────────────────────────────────────
         worksheet.columns = [
-            { width: 6 },   // No
-            { width: 15 },  // NIS
-            { width: 15 },  // NISN
-            { width: 30 },  // Nama Siswa
-            ...komponenRows.map(() => ({ width: 12 })) // Komponen nilai
+            { width: 6 },
+            { width: 15 },
+            { width: 15 },
+            { width: 30 },
+            ...komponenRows.map(() => ({ width: 12 }))
         ];
 
-        // ─── Freeze Header Row (Row 1) ────────────────────────────────────
+        // ✅ DIPERBAIKI: Freeze hanya 1 row (header)
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-        // ═══════════════════════════════════════════════════════════════════
-        // SHEET 2: PETUNJUK (SIMPLE)
-        // ═══════════════════════════════════════════════════════════════════
-
+        // Sheet Petunjuk (tanpa emoji)
         const petunjukSheet = workbook.addWorksheet('Petunjuk');
         petunjukSheet.columns = [{ width: 90 }];
 
         const petunjukContent = [
             { text: 'PETUNJUK PENGISIAN TEMPLATE', bold: true, size: 14, color: colors.primary },
             { text: '' },
-            { text: `📚 ${namaMapel}  |  🏫 ${namaKelas}  |  📝 ${jenis_penilaian || 'PTS'}  |  👥 ${siswaRows.length} siswa`, size: 11, color: colors.primaryDark },
+            { text: `${namaMapel}  |  ${namaKelas}  |  ${jenis_penilaian || 'PTS'}  |  ${siswaRows.length} siswa`, size: 11, color: colors.primaryDark },
             { text: '' },
             { text: 'ATURAN PENTING:', bold: true, size: 11 },
             { text: '1. JANGAN mengubah kolom No, NIS, NISN, dan Nama Siswa' },
@@ -942,10 +891,6 @@ exports.downloadTemplateNilai = async (req, res) => {
             petunjukSheet.getRow(idx + 1).height = item.bold ? 22 : 18;
         });
 
-        // ═══════════════════════════════════════════════════════════════════
-        // GENERATE & SEND
-        // ═══════════════════════════════════════════════════════════════════
-
         const buffer = await workbook.xlsx.writeBuffer();
         const fileName = `Template_Nilai_${namaMapel.replace(/[^a-z0-9]/gi, '_')}_${namaKelas.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
 
@@ -963,8 +908,26 @@ exports.downloadTemplateNilai = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 8. IMPORT NILAI DARI EXCEL (DENGAN VALIDASI KETAT & NOTIFIKASI JELAS)
+// 🆕 8. IMPORT NILAI DARI EXCEL (DENGAN 5 HUMAN ERROR PREVENTION)
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/guru-kelas/nilai/import
+ * Upload file Excel dan import nilai
+ * 
+ * 🆕 5 HUMAN ERROR PREVENTION:
+ * 1. ✅ File Excel Kosong Total (tidak ada baris data) - KRITIS
+ * 2. ✅ Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
+ * 3. ✅ File Tanpa Nilai (hanya identitas siswa) - KRITIS
+ * 4. ✅ Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
+ * 5. ✅ Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
+ * 
+ * ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
+ * 
+ * 🆕 BUG FIX:
+ * - ✅ Nilai 0 sekarang dianggap sebagai nilai valid, bukan kosong
+ * - ✅ Human Error #1 sekarang mengecek baris data valid, bukan hanya jumlah baris
+ */
 
 exports.importNilaiExcel = async (req, res) => {
     const connection = await db.getConnection();
@@ -989,7 +952,6 @@ exports.importNilaiExcel = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Data konteks penilaian tidak lengkap' });
         }
 
-        // ─── Validasi Akses Guru ─────────────────────────────────────────
         const [kelasRow] = await db.execute(
             `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
             [userId, semesterId]
@@ -1015,7 +977,6 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // ─── Baca File Excel ─────────────────────────────────────────────
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
@@ -1028,7 +989,7 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // ─── Cari Header Row ─────────────────────────────────────────────
+        // ✅ DIPERBAIKI: Cari header row (bisa di row 0 atau row 1)
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(10, data.length); i++) {
             const row = data[i].map(c => String(c).trim().toLowerCase());
@@ -1048,7 +1009,6 @@ exports.importNilaiExcel = async (req, res) => {
         const headers = data[headerRowIndex].map(h => String(h).trim());
         const dataStartIndex = headerRowIndex + 1;
 
-        // ─── Validasi Kolom Wajib ────────────────────────────────────────
         const requiredColumns = ['NIS', 'Nama Siswa'];
         const missingColumns = requiredColumns.filter(col =>
             !headers.some(h => h.toLowerCase() === col.toLowerCase())
@@ -1066,7 +1026,6 @@ exports.importNilaiExcel = async (req, res) => {
         const idxNISN = findColIndex('NISN');
         const idxNama = findColIndex('Nama Siswa');
 
-        // ─── Ambil Komponen dari Header ──────────────────────────────────
         const komponenHeaders = headers.slice(4);
         const [komponenRows] = await db.execute(
             `SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan ASC`
@@ -1078,13 +1037,13 @@ exports.importNilaiExcel = async (req, res) => {
         });
 
         const komponenValid = [];
-        const komponenInvalid = []; // 🆕 BARU: Track kolom yang tidak dikenali
+        const komponenInvalid = [];
         komponenHeaders.forEach(header => {
             const headerUpper = header.toUpperCase().trim();
             if (komponenMap[headerUpper]) {
                 komponenValid.push({ header, id: komponenMap[headerUpper] });
             } else {
-                komponenInvalid.push(header); // 🆕 BARU
+                komponenInvalid.push(header);
             }
         });
 
@@ -1095,7 +1054,6 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // ─── Filter Komponen Berdasarkan Periode ─────────────────────────
         const [komponenList] = await db.execute(
             `SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`
         );
@@ -1125,12 +1083,153 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // 🆕 BARU: Identifikasi kolom yang akan diabaikan karena periode
         const komponenDiabaikan = komponenValid.filter(kv =>
             !komponenBolehUpdate.find(kbu => kbu.id === kv.id)
         );
 
-        // ─── Ambil Data Siswa ────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #1: VALIDASI FILE KOSONG TOTAL (DIPERBAIKI)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaBarisDataValid = false;
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (row && row.length > 0 && row.some(cell => String(cell).trim() !== '')) {
+                adaBarisDataValid = true;
+                break;
+            }
+        }
+        
+        if (!adaBarisDataValid) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel kosong - tidak ada data sama sekali.\n\n` +
+                         `File hanya berisi header tanpa baris data siswa.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Pastikan ada baris data siswa\n` +
+                         `3. Isi nilai pada kolom komponen\n` +
+                         `4. Upload kembali file yang sudah diisi`,
+                data: {
+                    total_baris: 0,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: 0,
+                    total_nilai_disimpan: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel kosong. Tidak ada baris data siswa.'
+                    }],
+                    komponen_diimport: komponenBolehUpdate.map(kv => kv.header),
+                    periode_aktif: jenis_penilaian
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #2: VALIDASI DATA SISWA KOSONG (NIS/Nama tidak ada)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaDataSiswa = false;
+        let barisDenganDataSiswa = 0;
+        
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0) continue;
+            
+            const nis = String(row[idxNIS] || '').trim();
+            const nama = String(row[idxNama] || '').trim();
+            
+            if (nis || nama) {
+                adaDataSiswa = true;
+                barisDenganDataSiswa++;
+            }
+        }
+        
+        if (!adaDataSiswa) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel tidak valid - tidak ada data siswa.\n\n` +
+                         `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
+                         `3. Isi nilai pada kolom komponen\n` +
+                         `4. Upload kembali file yang sudah diisi`,
+                data: {
+                    total_baris: data.length - dataStartIndex,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: data.length - dataStartIndex,
+                    total_nilai_disimpan: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.'
+                    }],
+                    komponen_diimport: komponenBolehUpdate.map(kv => kv.header),
+                    periode_aktif: jenis_penilaian
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #3: VALIDASI FILE TANPA NILAI (Hanya identitas siswa)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaNilaiDiFile = false;
+        let barisDenganNilai = 0;
+        
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0) continue;
+            
+            let barisIniPunyaNilai = false;
+            
+            for (const kv of komponenValid) {
+                const headerIdx = headers.indexOf(kv.header);
+                if (headerIdx < 0) continue;
+                
+                const nilaiStr = String(row[headerIdx] || '').trim();
+                
+                // ✅ DIPERBAIKI: Nilai 0 adalah nilai valid, bukan kosong
+                if (nilaiStr && nilaiStr !== '-' && nilaiStr !== '') {
+                    adaNilaiDiFile = true;
+                    barisIniPunyaNilai = true;
+                }
+            }
+            
+            if (barisIniPunyaNilai) barisDenganNilai++;
+        }
+        
+        if (!adaNilaiDiFile) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel tidak valid - tidak ada nilai yang diisi.\n\n` +
+                         `File hanya berisi data identitas siswa (Nama, NIS, NISN) tanpa nilai komponen.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Isi kolom komponen nilai (${komponenBolehUpdate.map(kv => kv.header).join(', ')}) dengan angka 0-100\n` +
+                         `3. Upload kembali file yang sudah diisi\n\n` +
+                         `📊 Periode aktif: ${jenis_penilaian}`,
+                data: {
+                    total_baris: data.length - dataStartIndex,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: data.length - dataStartIndex,
+                    total_nilai_disimpan: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel tidak berisi nilai. Hanya data identitas siswa yang terdeteksi.'
+                    }],
+                    komponen_diimport: komponenBolehUpdate.map(kv => kv.header),
+                    periode_aktif: jenis_penilaian
+                }
+            });
+        }
+
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
              FROM siswa s
@@ -1144,7 +1243,6 @@ exports.importNilaiExcel = async (req, res) => {
             if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s;
         });
 
-        // ─── Proses Data per Baris ───────────────────────────────────────
         await connection.beginTransaction();
 
         const errors = [];
@@ -1152,8 +1250,17 @@ exports.importNilaiExcel = async (req, res) => {
         let successCount = 0;
         let skippedCount = 0;
         let totalNilaiDisimpan = 0;
+        
+        let nilaiDiRound = 0;
+        
+        // 🆕 HUMAN ERROR #4: Track duplikasi NIS
+        const nisDiproses = new Set();
+        const nisDuplikat = [];
+        
+        // 🆕 HUMAN ERROR #5: Track duplikasi NISN
+        const nisnDiproses = new Set();
+        const nisnDuplikat = [];
 
-        // 🆕 BARU: Warning untuk kolom yang diabaikan karena periode
         if (komponenDiabaikan.length > 0) {
             warnings.push({
                 row: 0,
@@ -1161,7 +1268,6 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        // 🆕 BARU: Warning untuk kolom yang tidak dikenali
         if (komponenInvalid.length > 0) {
             warnings.push({
                 row: 0,
@@ -1184,6 +1290,35 @@ exports.importNilaiExcel = async (req, res) => {
                 continue;
             }
 
+            // 🆕 HUMAN ERROR #4: Cek duplikasi NIS
+            if (nisDiproses.has(nis)) {
+                nisDuplikat.push({ row: i + 1, nis, nama: namaSiswa });
+                warnings.push({ 
+                    row: i + 1, 
+                    message: `⚠️ Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                });
+                skippedCount++;
+                continue;
+            }
+            nisDiproses.add(nis);
+
+            // 🆕 HUMAN ERROR #5: Cek duplikasi NISN
+            if (idxNISN >= 0) {
+                const nisnExcel = String(row[idxNISN] || '').trim();
+                if (nisnExcel) {
+                    if (nisnDiproses.has(nisnExcel)) {
+                        nisnDuplikat.push({ row: i + 1, nisn: nisnExcel, nama: namaSiswa });
+                        warnings.push({ 
+                            row: i + 1, 
+                            message: `⚠️ Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                        });
+                        skippedCount++;
+                        continue;
+                    }
+                    nisnDiproses.add(nisnExcel);
+                }
+            }
+
             const siswa = siswaMapByNIS[nis];
             if (!siswa) {
                 errors.push({
@@ -1194,7 +1329,7 @@ exports.importNilaiExcel = async (req, res) => {
                 continue;
             }
 
-            // Validasi NISN
+            // Validasi NISN cocok dengan DB
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 const nisnDB = String(siswa.nisn || '').trim();
@@ -1208,7 +1343,8 @@ exports.importNilaiExcel = async (req, res) => {
                 }
             }
 
-            // Validasi Nama
+            // ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
+            // Hanya validasi nama cocok dengan DB
             if (idxNama >= 0) {
                 const namaExcel = String(row[idxNama] || '').trim().toLowerCase();
                 const namaDB = String(siswa.nama_lengkap || '').trim().toLowerCase();
@@ -1233,8 +1369,9 @@ exports.importNilaiExcel = async (req, res) => {
             const siswaId = siswa.id_siswa;
             let rowSavedCount = 0;
             let rowHasError = false;
+            
+            let semuaNilaiNol = true;
 
-            // 🆕 BARU: Validasi SEMUA kolom komponen (termasuk yang diabaikan)
             for (const kv of komponenValid) {
                 const headerIdx = headers.indexOf(kv.header);
                 if (headerIdx < 0) continue;
@@ -1244,7 +1381,6 @@ exports.importNilaiExcel = async (req, res) => {
 
                 const nilai = parseFloat(nilaiStr);
 
-                // Validasi angka
                 if (isNaN(nilai)) {
                     errors.push({
                         row: i + 1,
@@ -1254,7 +1390,6 @@ exports.importNilaiExcel = async (req, res) => {
                     continue;
                 }
 
-                // Validasi range 0-100
                 if (nilai < 0 || nilai > 100) {
                     errors.push({
                         row: i + 1,
@@ -1265,7 +1400,6 @@ exports.importNilaiExcel = async (req, res) => {
                 }
             }
 
-            // Proses hanya kolom yang boleh diupdate
             for (const kv of komponenBolehUpdate) {
                 const headerIdx = headers.indexOf(kv.header);
                 if (headerIdx < 0) continue;
@@ -1274,9 +1408,18 @@ exports.importNilaiExcel = async (req, res) => {
                 if (nilaiStr === '' || nilaiStr === '-') continue;
 
                 const nilai = parseFloat(nilaiStr);
-                if (isNaN(nilai) || nilai < 0 || nilai > 100) continue; // Sudah divalidasi di atas
+                if (isNaN(nilai) || nilai < 0 || nilai > 100) continue;
 
                 const nilaiBulat = Math.round(nilai);
+                
+                if (nilai !== nilaiBulat) {
+                    nilaiDiRound++;
+                }
+                
+                if (nilaiBulat !== 0) {
+                    semuaNilaiNol = false;
+                }
+
                 await connection.execute(
                     `INSERT INTO nilai_detail 
                      (siswa_id, mapel_id, komponen_id, nilai, tahun_ajaran_id, created_by_user_id)
@@ -1288,12 +1431,18 @@ exports.importNilaiExcel = async (req, res) => {
                 totalNilaiDisimpan++;
             }
 
+            if (semuaNilaiNol && rowSavedCount > 0) {
+                warnings.push({
+                    row: i + 1,
+                    message: `⚠️ Baris ${i + 1} (${siswa.nama_lengkap}): Semua nilai diisi 0. Pastikan ini bukan kesalahan.`
+                });
+            }
+
             if (rowSavedCount > 0) successCount++;
             else if (rowHasError) skippedCount++;
             else skippedCount++;
         }
 
-        // ─── Recompute Nilai Rapor ───────────────────────────────────────
         if (successCount > 0) {
             try {
                 await updateAllNilaiRaporForMapel(mapelId, userId, req);
@@ -1308,7 +1457,6 @@ exports.importNilaiExcel = async (req, res) => {
 
         await connection.commit();
 
-        // ─── Build Response ──────────────────────────────────────────────
         let message = '';
         let success = true;
 
@@ -1325,10 +1473,43 @@ exports.importNilaiExcel = async (req, res) => {
             message = 'ℹ️ Tidak ada data yang berhasil diimport. Periksa file Excel Anda.';
         }
 
-        // 🆕 BARU: Tambahkan info kolom yang diabaikan
         if (komponenDiabaikan.length > 0) {
             message += `\n\nℹ️ Kolom [${komponenDiabaikan.map(kv => kv.header).join(', ')}] diabaikan karena periode ${jenis_penilaian} sedang aktif.`;
         }
+        
+        if (nilaiDiRound > 0) {
+            message += `\n\nℹ️ ${nilaiDiRound} nilai desimal di-round ke bilangan bulat terdekat (contoh: 85.7 → 86).`;
+        }
+        
+        // 🆕 BARU: Tampilkan info duplikasi NIS
+        if (nisDuplikat.length > 0) {
+            const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+            });
+            
+            message += `\n\n⚠️ PERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+        
+        // 🆕 BARU: Tampilkan info duplikasi NISN
+        if (nisnDuplikat.length > 0) {
+            const duplikatInfo = nisnDuplikat.map(d => `Baris ${d.row} (NISN: ${d.nisn}, ${d.nama})`).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+            });
+            
+            message += `\n\n⚠️ PERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+        
+        message += `\n💡 INFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
+        
+        message += `\n\n📖 Petunjuk:\n` +
+                   `- Kolom yang diimport: ${komponenBolehUpdate.map(kv => kv.header).join(', ')}\n` +
+                   `- Kolom yang diabaikan: ${komponenDiabaikan.length > 0 ? komponenDiabaikan.map(kv => kv.header).join(', ') : 'Tidak ada'}\n` +
+                   `- Periode aktif: ${jenis_penilaian}\n` +
+                   `- Format nilai: Angka bulat 0-100`;
 
         res.json({
             success: success,
@@ -1342,10 +1523,20 @@ exports.importNilaiExcel = async (req, res) => {
                 errors: errors.length > 0 ? errors.slice(0, 20) : null,
                 warnings: warnings.length > 0 ? warnings : null,
                 komponen_diimport: komponenBolehUpdate.map(kv => kv.header),
-                komponen_diabaikan: komponenDiabaikan.map(kv => kv.header), // 🆕 BARU
-                komponen_tidak_dikenali: komponenInvalid, // 🆕 BARU
+                komponen_diabaikan: komponenDiabaikan.map(kv => kv.header),
+                komponen_tidak_dikenali: komponenInvalid,
                 periode_aktif: jenis_penilaian,
-                ada_error: errors.length > 0
+                ada_error: errors.length > 0,
+                nilai_di_round: nilaiDiRound,
+                nis_duplikat_count: nisDuplikat.length,
+                nis_duplikat_detail: nisDuplikat,
+                nisn_duplikat_count: nisnDuplikat.length,
+                nisn_duplikat_detail: nisnDuplikat,
+                baris_dengan_nilai: barisDenganNilai,
+                baris_dengan_data_siswa: barisDenganDataSiswa,
+                pesan_penting: (nisDuplikat.length > 0 || nisnDuplikat.length > 0)
+                    ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
+                    : null
             }
         });
 

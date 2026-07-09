@@ -1,198 +1,14 @@
 /**
  * Nama File: ekskulController.js
  * Fungsi: CRUD ekstrakurikuler siswa (max 3 ekskul per siswa)
- * UPDATE: Fix bug query guru_kelas yang salah pakai tahunAjaranIndukId
+ * UPDATE: 
+ *   - Fix bug query guru_kelas yang salah pakai tahunAjaranIndukId
+ *   - Tambah 4 Human Error Prevention untuk import ekskul
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
 
 const db = require('../../config/db');
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. GET EKSKUL SISWA
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * GET /api/guru-kelas/ekskul
- * Ambil ekskul semua siswa di kelas + master ekskul untuk dropdown
- */
-exports.getEkskulSiswa = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;
-        const semesterId = req.idSemesterAktif;
-        const { semester } = req.penilaianContext || {};
-        const pasStatus = req.tahunAjaranAktif?.status_pas || 'nonaktif';
-
-        if (!tahunAjaranIndukId || !semesterId || !semester) {
-            return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
-        }
-
-        // ✅ PERBAIKAN: Ambil kelas guru dengan JOIN ke tahun_ajaran
-        const [guruKelasRows] = await db.execute(
-            `SELECT gk.kelas_id, k.nama_kelas 
-                FROM guru_kelas gk 
-                INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
-                INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-                WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-                LIMIT 1`,
-            [userId, tahunAjaranIndukId]  // ✅ Pakai tahunAjaranIndukId dengan JOIN
-        );
-
-        if (guruKelasRows.length === 0) {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini',
-                code: 'NOT_ASSIGNED'  // ✅ Tambah code agar frontend bisa handle
-            });
-        }
-        const { kelas_id, nama_kelas } = guruKelasRows[0];
-
-        // Ambil siswa + ekskul per siswa
-        const [siswaRows] = await db.execute(
-            `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis, s.nisn 
-                FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-                WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
-                ORDER BY s.nama_lengkap`,
-            [kelas_id, tahunAjaranIndukId]
-        );
-
-        const data = [];
-        for (const siswa of siswaRows) {
-            const [ekskulRows] = await db.execute(
-                `SELECT e.id_ekskul, e.nama_ekskul, pe.deskripsi 
-                    FROM peserta_ekstrakurikuler pe JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
-                    WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ?`,
-                [siswa.id_siswa, semesterId]
-            );
-
-            data.push({
-                id: siswa.id_siswa,
-                nama: siswa.nama,
-                nis: siswa.nis,
-                nisn: siswa.nisn,
-                ekskul: ekskulRows.map(e => ({ id: e.id_ekskul, nama: e.nama_ekskul, deskripsi: e.deskripsi })),
-                jumlah_ekskul: ekskulRows.length,
-            });
-        }
-
-        // Master ekskul untuk dropdown
-        const [daftar_ekskul] = await db.execute(
-            `SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE tahun_ajaran_id = ?`,
-            [semesterId]
-        );
-
-        res.json({ success: true, data, daftar_ekskul, kelas: nama_kelas, semester, pasStatus });
-    } catch (err) {
-        console.error('Error getEkskulSiswa:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil data ekskul' });
-    }
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. UPDATE EKSKUL SISWA
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * PUT /api/guru-kelas/ekskul/:siswaId
- * Update ekskul siswa (max 3, tidak boleh duplikat, deskripsi wajib)
- */
-exports.updateEkskulSiswa = async (req, res) => {
-    try {
-        const { siswaId } = req.params;
-        const { ekskulList } = req.body;
-
-        // Validasi array max 3
-        if (!Array.isArray(ekskulList) || ekskulList.length > 3) {
-            return res.status(400).json({ success: false, message: 'Maksimal 3 ekskul' });
-        }
-
-        // Validasi duplikat
-        const ekskulIds = ekskulList.map(e => parseInt(e.ekskul_id)).filter(id => id > 0);
-        if (new Set(ekskulIds).size !== ekskulIds.length) {
-            return res.status(400).json({ success: false, message: 'Ekskul tidak boleh duplikat' });
-        }
-
-        // Validasi deskripsi
-        for (let i = 0; i < ekskulList.length; i++) {
-            const item = ekskulList[i];
-            if (!item.ekskul_id || item.ekskul_id <= 0) {
-                return res.status(400).json({ success: false, message: `Ekskul ke-${i + 1} harus dipilih` });
-            }
-            if (!item.deskripsi?.trim()) {
-                return res.status(400).json({ success: false, message: `Deskripsi ekskul ke-${i + 1} wajib diisi` });
-            }
-        }
-
-        const userId = req.user.id;
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;
-        const semesterId = req.idSemesterAktif;
-
-        // ✅ PERBAIKAN: Ambil kelas guru dengan JOIN ke tahun_ajaran
-        const [guruKelasRows] = await db.execute(
-            `SELECT gk.kelas_id 
-                FROM guru_kelas gk
-                INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-                WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-                LIMIT 1`,
-            [userId, tahunAjaranIndukId]
-        );
-
-        if (guruKelasRows.length === 0) {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Anda belum ditugaskan sebagai wali kelas',
-                code: 'NOT_ASSIGNED'
-            });
-        }
-        const { kelas_id } = guruKelasRows[0];
-
-        // Validasi siswa di kelas
-        const [valid] = await db.execute(
-            `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?`,
-            [siswaId, kelas_id, tahunAjaranIndukId]
-        );
-
-        if (valid.length === 0) {
-            return res.status(403).json({ success: false, message: 'Siswa tidak di kelas Anda' });
-        }
-
-        // Hapus ekskul lama yang tidak dipilih
-        if (ekskulIds.length > 0) {
-            const placeholders = ekskulIds.map(() => '?').join(',');
-            await db.execute(
-                `DELETE FROM peserta_ekstrakurikuler 
-                    WHERE siswa_id = ? AND tahun_ajaran_id = ? AND ekskul_id NOT IN (${placeholders})`,
-                [siswaId, semesterId, ...ekskulIds]
-            );
-        } else {
-            await db.execute(
-                `DELETE FROM peserta_ekstrakurikuler WHERE siswa_id = ? AND tahun_ajaran_id = ?`,
-                [siswaId, semesterId]
-            );
-        }
-
-        // Insert/Update ekskul yang dipilih
-        for (const ekskul of ekskulList) {
-            const ekskulId = parseInt(ekskul.ekskul_id);
-            const deskripsi = ekskul.deskripsi?.trim() || '';
-            if (ekskulId <= 0) continue;
-
-            await db.execute(
-                `INSERT INTO peserta_ekstrakurikuler (siswa_id, ekskul_id, tahun_ajaran_id, deskripsi) 
-                    VALUES (?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE deskripsi = VALUES(deskripsi), updated_at = CURRENT_TIMESTAMP`,
-                [siswaId, ekskulId, semesterId, deskripsi]
-            );
-        }
-
-        res.json({ success: true, message: 'Ekskul berhasil diperbarui' });
-    } catch (err) {
-        console.error('Error updateEkskulSiswa:', err);
-        res.status(500).json({ success: false, message: 'Gagal update ekskul: ' + err.message });
-    }
-};
-
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 
@@ -231,18 +47,176 @@ const calculateSimilarity = (str1, str2) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: DOWNLOAD TEMPLATE IMPORT EKSKUL
+// 1. GET EKSKUL SISWA
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * GET /api/guru-kelas/ekskul/import-template
- * Download template Excel untuk import ekskul siswa
- * 
- * Struktur Excel:
- * - Kolom: No, NIS, NISN, Nama Siswa, Ekskul 1, Deskripsi 1, Ekskul 2, Deskripsi 2, Ekskul 3, Deskripsi 3
- * - Dropdown untuk nama ekskul
- * - Data ekskul yang sudah ada terisi otomatis
- */
+exports.getEkskulSiswa = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const tahunAjaranIndukId = req.idTahunAjaranInduk;
+        const semesterId = req.idSemesterAktif;
+        const { semester } = req.penilaianContext || {};
+        const pasStatus = req.tahunAjaranAktif?.status_pas || 'nonaktif';
+
+        if (!tahunAjaranIndukId || !semesterId || !semester) {
+            return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
+        }
+
+        const [guruKelasRows] = await db.execute(
+            `SELECT gk.kelas_id, k.nama_kelas 
+                FROM guru_kelas gk 
+                INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
+                INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+                WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+                LIMIT 1`,
+            [userId, tahunAjaranIndukId]
+        );
+
+        if (guruKelasRows.length === 0) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini',
+                code: 'NOT_ASSIGNED'
+            });
+        }
+        const { kelas_id, nama_kelas } = guruKelasRows[0];
+
+        const [siswaRows] = await db.execute(
+            `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis, s.nisn 
+                FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+                WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
+                ORDER BY s.nama_lengkap`,
+            [kelas_id, tahunAjaranIndukId]
+        );
+
+        const data = [];
+        for (const siswa of siswaRows) {
+            const [ekskulRows] = await db.execute(
+                `SELECT e.id_ekskul, e.nama_ekskul, pe.deskripsi 
+                    FROM peserta_ekstrakurikuler pe JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
+                    WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ?`,
+                [siswa.id_siswa, semesterId]
+            );
+
+            data.push({
+                id: siswa.id_siswa,
+                nama: siswa.nama,
+                nis: siswa.nis,
+                nisn: siswa.nisn,
+                ekskul: ekskulRows.map(e => ({ id: e.id_ekskul, nama: e.nama_ekskul, deskripsi: e.deskripsi })),
+                jumlah_ekskul: ekskulRows.length,
+            });
+        }
+
+        const [daftar_ekskul] = await db.execute(
+            `SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE tahun_ajaran_id = ?`,
+            [semesterId]
+        );
+
+        res.json({ success: true, data, daftar_ekskul, kelas: nama_kelas, semester, pasStatus });
+    } catch (err) {
+        console.error('Error getEkskulSiswa:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data ekskul' });
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. UPDATE EKSKUL SISWA
+// ═════════════════════════════════════════════════════════════════════════════
+
+exports.updateEkskulSiswa = async (req, res) => {
+    try {
+        const { siswaId } = req.params;
+        const { ekskulList } = req.body;
+
+        if (!Array.isArray(ekskulList) || ekskulList.length > 3) {
+            return res.status(400).json({ success: false, message: 'Maksimal 3 ekskul' });
+        }
+
+        const ekskulIds = ekskulList.map(e => parseInt(e.ekskul_id)).filter(id => id > 0);
+        if (new Set(ekskulIds).size !== ekskulIds.length) {
+            return res.status(400).json({ success: false, message: 'Ekskul tidak boleh duplikat' });
+        }
+
+        for (let i = 0; i < ekskulList.length; i++) {
+            const item = ekskulList[i];
+            if (!item.ekskul_id || item.ekskul_id <= 0) {
+                return res.status(400).json({ success: false, message: `Ekskul ke-${i + 1} harus dipilih` });
+            }
+            if (!item.deskripsi?.trim()) {
+                return res.status(400).json({ success: false, message: `Deskripsi ekskul ke-${i + 1} wajib diisi` });
+            }
+        }
+
+        const userId = req.user.id;
+        const tahunAjaranIndukId = req.idTahunAjaranInduk;
+        const semesterId = req.idSemesterAktif;
+
+        const [guruKelasRows] = await db.execute(
+            `SELECT gk.kelas_id 
+                FROM guru_kelas gk
+                INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+                WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+                LIMIT 1`,
+            [userId, tahunAjaranIndukId]
+        );
+
+        if (guruKelasRows.length === 0) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Anda belum ditugaskan sebagai wali kelas',
+                code: 'NOT_ASSIGNED'
+            });
+        }
+        const { kelas_id } = guruKelasRows[0];
+
+        const [valid] = await db.execute(
+            `SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?`,
+            [siswaId, kelas_id, tahunAjaranIndukId]
+        );
+
+        if (valid.length === 0) {
+            return res.status(403).json({ success: false, message: 'Siswa tidak di kelas Anda' });
+        }
+
+        if (ekskulIds.length > 0) {
+            const placeholders = ekskulIds.map(() => '?').join(',');
+            await db.execute(
+                `DELETE FROM peserta_ekstrakurikuler 
+                    WHERE siswa_id = ? AND tahun_ajaran_id = ? AND ekskul_id NOT IN (${placeholders})`,
+                [siswaId, semesterId, ...ekskulIds]
+            );
+        } else {
+            await db.execute(
+                `DELETE FROM peserta_ekstrakurikuler WHERE siswa_id = ? AND tahun_ajaran_id = ?`,
+                [siswaId, semesterId]
+            );
+        }
+
+        for (const ekskul of ekskulList) {
+            const ekskulId = parseInt(ekskul.ekskul_id);
+            const deskripsi = ekskul.deskripsi?.trim() || '';
+            if (ekskulId <= 0) continue;
+
+            await db.execute(
+                `INSERT INTO peserta_ekstrakurikuler (siswa_id, ekskul_id, tahun_ajaran_id, deskripsi) 
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE deskripsi = VALUES(deskripsi), updated_at = CURRENT_TIMESTAMP`,
+                [siswaId, ekskulId, semesterId, deskripsi]
+            );
+        }
+
+        res.json({ success: true, message: 'Ekskul berhasil diperbarui' });
+    } catch (err) {
+        console.error('Error updateEkskulSiswa:', err);
+        res.status(500).json({ success: false, message: 'Gagal update ekskul: ' + err.message });
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: DOWNLOAD TEMPLATE IMPORT EKSKUL (TANPA TIMESTAMP - HEADER DI ROW 1)
+// ═════════════════════════════════════════════════════════════════════════════
+
 exports.downloadTemplateEkskul = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -253,7 +227,6 @@ exports.downloadTemplateEkskul = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
         }
 
-        // Ambil kelas guru dengan JOIN ke tahun_ajaran
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas 
                 FROM guru_kelas gk 
@@ -274,13 +247,11 @@ exports.downloadTemplateEkskul = async (req, res) => {
 
         const { kelas_id, nama_kelas } = guruKelasRows[0];
 
-        // Ambil daftar ekskul untuk dropdown
         const [daftarEkskul] = await db.execute(
             `SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE tahun_ajaran_id = ?`,
             [semesterId]
         );
 
-        // Ambil siswa aktif di kelas
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
                 FROM siswa s
@@ -290,7 +261,6 @@ exports.downloadTemplateEkskul = async (req, res) => {
             [kelas_id, tahunAjaranIndukId]
         );
 
-        // Ambil ekskul yang sudah ada untuk setiap siswa
         const [existingEkskulRows] = await db.execute(
             `SELECT pe.siswa_id, pe.ekskul_id, pe.deskripsi, e.nama_ekskul
                 FROM peserta_ekstrakurikuler pe
@@ -301,7 +271,6 @@ exports.downloadTemplateEkskul = async (req, res) => {
             [semesterId]
         );
 
-        // Group ekskul by siswa
         const ekskulBySiswa = {};
         existingEkskulRows.forEach(row => {
             if (!ekskulBySiswa[row.siswa_id]) {
@@ -314,35 +283,14 @@ exports.downloadTemplateEkskul = async (req, res) => {
             });
         });
 
-        // ═════════════════════════════════════════════════════════════════
-        // BUILD EXCEL WORKBOOK
-        // ═════════════════════════════════════════════════════════════════
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'E-Rapor SDIT Ulil Albab Batam';
         workbook.created = new Date();
 
         const worksheet = workbook.addWorksheet('Ekstrakurikuler');
 
-        // Row 1: Title
-        worksheet.mergeCells('A1:J1');
-        const titleCell = worksheet.getCell('A1');
-        titleCell.value = 'TEMPLATE IMPORT EKSTRAKURIKULER SISWA';
-        titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
-        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8690A' } };
-        worksheet.getRow(1).height = 30;
-
-        // Row 2: Info
-        worksheet.mergeCells('A2:J2');
-        const infoCell = worksheet.getCell('A2');
-        infoCell.value = `Kelas: ${nama_kelas} | Maksimal 3 ekskul per siswa | Setiap ekskul wajib memiliki deskripsi`;
-        infoCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF666666' } };
-        infoCell.alignment = { vertical: 'middle', horizontal: 'center' };
-        infoCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
-        worksheet.getRow(2).height = 22;
-
-        // Row 3: Headers
-        const headerRow = worksheet.getRow(3);
+        // ✅ DIPERBAIKI: Header langsung di Row 1 (TANPA TIMESTAMP)
+        const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
 
         const headers = [
@@ -370,16 +318,15 @@ exports.downloadTemplateEkskul = async (req, res) => {
             };
         });
 
-        // Row 4+: Data Siswa
+        // ✅ DIPERBAIKI: Data siswa mulai dari Row 2
         siswaRows.forEach((siswa, index) => {
-            const rowNum = 4 + index;
+            const rowNum = 2 + index; // ✅ Mulai dari row 2
             const dataRow = worksheet.getRow(rowNum);
             dataRow.height = 60;
 
             const isEvenRow = index % 2 === 0;
             const existingEkskul = ekskulBySiswa[siswa.id_siswa] || [];
 
-            // Kolom identitas (read-only)
             const identitasData = [
                 index + 1,
                 siswa.nis || '',
@@ -406,12 +353,10 @@ exports.downloadTemplateEkskul = async (req, res) => {
                 cell.protection = { locked: true };
             });
 
-            // Kolom ekskul dan deskripsi (3 pasang)
             for (let i = 0; i < 3; i++) {
                 const ekskulCol = 5 + (i * 2);
                 const deskripsiCol = 6 + (i * 2);
 
-                // Kolom Ekskul (dropdown)
                 const ekskulCell = dataRow.getCell(ekskulCol);
                 if (existingEkskul[i]) {
                     ekskulCell.value = existingEkskul[i].nama_ekskul;
@@ -419,7 +364,6 @@ exports.downloadTemplateEkskul = async (req, res) => {
                     ekskulCell.value = '';
                 }
 
-                // Dropdown untuk ekskul
                 if (daftarEkskul.length > 0) {
                     const ekskulNames = daftarEkskul.map(e => e.nama_ekskul);
                     ekskulCell.dataValidation = {
@@ -445,7 +389,6 @@ exports.downloadTemplateEkskul = async (req, res) => {
                     fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' }
                 };
 
-                // Kolom Deskripsi
                 const deskripsiCell = dataRow.getCell(deskripsiCol);
                 if (existingEkskul[i]) {
                     deskripsiCell.value = existingEkskul[i].deskripsi || '';
@@ -468,34 +411,31 @@ exports.downloadTemplateEkskul = async (req, res) => {
             }
         });
 
-        // Pesan Jika Tidak Ada Siswa
         if (siswaRows.length === 0) {
-            worksheet.mergeCells('A4:J4');
-            const emptyCell = worksheet.getCell('A4');
+            worksheet.mergeCells('A2:J2'); // ✅ Mulai dari row 2
+            const emptyCell = worksheet.getCell('A2');
             emptyCell.value = 'Belum ada siswa di kelas ini. Silakan hubungi Admin.';
             emptyCell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF666666' } };
             emptyCell.alignment = { vertical: 'middle', horizontal: 'center' };
             emptyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
         }
 
-        // Set Column Width
         worksheet.columns = [
-            { width: 6 },   // No
-            { width: 15 },  // NIS
-            { width: 15 },  // NISN
-            { width: 30 },  // Nama Siswa
-            { width: 20 },  // Ekskul 1
-            { width: 30 },  // Deskripsi 1
-            { width: 20 },  // Ekskul 2
-            { width: 30 },  // Deskripsi 2
-            { width: 20 },  // Ekskul 3
-            { width: 30 }   // Deskripsi 3
+            { width: 6 },
+            { width: 15 },
+            { width: 15 },
+            { width: 30 },
+            { width: 20 },
+            { width: 30 },
+            { width: 20 },
+            { width: 30 },
+            { width: 20 },
+            { width: 30 }
         ];
 
-        // Freeze Header Row
-        worksheet.views = [{ state: 'frozen', ySplit: 3 }];
+        // ✅ DIPERBAIKI: Freeze hanya 1 row (header)
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-        // Generate & Send
         const buffer = await workbook.xlsx.writeBuffer();
         const fileName = `Template_Ekskul_${nama_kelas.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
 
@@ -513,21 +453,21 @@ exports.downloadTemplateEkskul = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: IMPORT EKSTRAKURIKULER DARI EXCEL
+// 🆕 BARU: IMPORT EKSTRAKURIKULER DARI EXCEL (DENGAN 5 HUMAN ERROR PREVENTION)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
  * POST /api/guru-kelas/ekskul/import
  * Upload file Excel dan import ekskul siswa
  * 
- * Validasi:
- * - Siswa harus terdaftar di kelas
- * - NISN harus cocok
- * - Nama harus cocok (similarity check)
- * - Maksimal 3 ekskul per siswa
- * - Setiap ekskul wajib memiliki deskripsi
- * - Tidak boleh duplikasi ekskul yang sama
- * - Ekskul harus ada di daftar ekskul
+ * 🆕 5 HUMAN ERROR PREVENTION:
+ * 1. ✅ File Excel Kosong Total (tidak ada baris data) - KRITIS
+ * 2. ✅ Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
+ * 3. ✅ Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
+ * 4. ✅ Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
+ * 5. ✅ Validasi ekskul (wajib ada di daftar, tidak duplikat, deskripsi wajib)
+ * 
+ * ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
  */
 exports.importEkskulExcel = async (req, res) => {
     const connection = await db.getConnection();
@@ -545,7 +485,6 @@ exports.importEkskulExcel = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
         }
 
-        // Ambil kelas guru dengan JOIN ke tahun_ajaran
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id 
                 FROM guru_kelas gk
@@ -565,7 +504,6 @@ exports.importEkskulExcel = async (req, res) => {
 
         const { kelas_id } = guruKelasRows[0];
 
-        // Ambil daftar ekskul untuk validasi
         const [daftarEkskul] = await db.execute(
             `SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE tahun_ajaran_id = ?`,
             [semesterId]
@@ -576,20 +514,18 @@ exports.importEkskulExcel = async (req, res) => {
             ekskulMapByName[e.nama_ekskul.toLowerCase()] = e.id_ekskul;
         });
 
-        // Baca File Excel
         const xlsxWorkbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = xlsxWorkbook.SheetNames[0];
         const xlsxWorksheet = xlsxWorkbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(xlsxWorksheet, { header: 1, defval: '' });
 
-        if (data.length < 4) {
+        if (data.length < 2) {
             return res.status(400).json({
                 success: false,
                 message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.'
             });
         }
 
-        // Cari Header Row
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(10, data.length); i++) {
             const row = data[i].map(c => String(c).trim().toLowerCase());
@@ -609,7 +545,43 @@ exports.importEkskulExcel = async (req, res) => {
         const headers = data[headerRowIndex].map(h => String(h).trim());
         const dataStartIndex = headerRowIndex + 1;
 
-        // Validasi Kolom Wajib
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #1: VALIDASI FILE KOSONG TOTAL
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaBarisDataValid = false;
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (row && row.length > 0 && row.some(cell => String(cell).trim() !== '')) {
+                adaBarisDataValid = true;
+                break;
+            }
+        }
+        
+        if (!adaBarisDataValid) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel kosong - tidak ada data sama sekali.\n\n` +
+                         `File hanya berisi header tanpa baris data siswa.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Pastikan ada baris data siswa\n` +
+                         `3. Isi data ekskul (maksimal 3 ekskul per siswa)\n` +
+                         `4. Upload kembali file yang sudah diisi`,
+                data: {
+                    total_baris: 0,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel kosong. Tidak ada baris data siswa.'
+                    }]
+                }
+            });
+        }
+
         const requiredColumns = ['NIS', 'Nama Siswa'];
         const missingColumns = requiredColumns.filter(col =>
             !headers.some(h => h.toLowerCase() === col.toLowerCase())
@@ -627,7 +599,50 @@ exports.importEkskulExcel = async (req, res) => {
         const idxNISN = findColIndex('NISN');
         const idxNama = findColIndex('Nama Siswa');
 
-        // Cari kolom ekskul dan deskripsi
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #2: VALIDASI DATA SISWA KOSONG
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaDataSiswa = false;
+        let barisDenganDataSiswa = 0;
+        
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0) continue;
+            
+            const nis = String(row[idxNIS] || '').trim();
+            const nama = String(row[idxNama] || '').trim();
+            
+            if (nis || nama) {
+                adaDataSiswa = true;
+                barisDenganDataSiswa++;
+            }
+        }
+        
+        if (!adaDataSiswa) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel tidak valid - tidak ada data siswa.\n\n` +
+                         `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
+                         `3. Isi data ekskul (maksimal 3 ekskul per siswa)\n` +
+                         `4. Upload kembali file yang sudah diisi`,
+                data: {
+                    total_baris: data.length - dataStartIndex,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: data.length - dataStartIndex,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.'
+                    }]
+                }
+            });
+        }
+
         const idxEkskul1 = headers.findIndex(h => h.toLowerCase().includes('ekskul') && h.includes('1'));
         const idxDeskripsi1 = headers.findIndex(h => h.toLowerCase().includes('deskripsi') && h.includes('1'));
         const idxEkskul2 = headers.findIndex(h => h.toLowerCase().includes('ekskul') && h.includes('2'));
@@ -635,7 +650,6 @@ exports.importEkskulExcel = async (req, res) => {
         const idxEkskul3 = headers.findIndex(h => h.toLowerCase().includes('ekskul') && h.includes('3'));
         const idxDeskripsi3 = headers.findIndex(h => h.toLowerCase().includes('deskripsi') && h.includes('3'));
 
-        // Ambil Data Siswa dari Database
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
                 FROM siswa s
@@ -649,13 +663,20 @@ exports.importEkskulExcel = async (req, res) => {
             if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s;
         });
 
-        // Proses Data per Baris
         await connection.beginTransaction();
 
         const errors = [];
         const warnings = [];
         let successCount = 0;
         let skippedCount = 0;
+        
+        // 🆕 HUMAN ERROR #3: Track duplikasi NIS
+        const nisDiproses = new Set();
+        const nisDuplikat = [];
+        
+        // 🆕 HUMAN ERROR #4: Track duplikasi NISN
+        const nisnDiproses = new Set();
+        const nisnDuplikat = [];
 
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -672,6 +693,35 @@ exports.importEkskulExcel = async (req, res) => {
                 continue;
             }
 
+            // 🆕 HUMAN ERROR #3: Cek duplikasi NIS
+            if (nisDiproses.has(nis)) {
+                nisDuplikat.push({ row: i + 1, nis, nama: namaSiswa });
+                warnings.push({ 
+                    row: i + 1, 
+                    message: `⚠️ Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                });
+                skippedCount++;
+                continue;
+            }
+            nisDiproses.add(nis);
+
+            // 🆕 HUMAN ERROR #4: Cek duplikasi NISN
+            if (idxNISN >= 0) {
+                const nisnExcel = String(row[idxNISN] || '').trim();
+                if (nisnExcel) {
+                    if (nisnDiproses.has(nisnExcel)) {
+                        nisnDuplikat.push({ row: i + 1, nisn: nisnExcel, nama: namaSiswa });
+                        warnings.push({ 
+                            row: i + 1, 
+                            message: `⚠️ Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                        });
+                        skippedCount++;
+                        continue;
+                    }
+                    nisnDiproses.add(nisnExcel);
+                }
+            }
+
             const siswa = siswaMapByNIS[nis];
             if (!siswa) {
                 errors.push({
@@ -682,7 +732,7 @@ exports.importEkskulExcel = async (req, res) => {
                 continue;
             }
 
-            // Validasi NISN
+            // Validasi NISN cocok dengan DB
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 const nisnDB = String(siswa.nisn || '').trim();
@@ -696,7 +746,8 @@ exports.importEkskulExcel = async (req, res) => {
                 }
             }
 
-            // Validasi Nama
+            // ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
+            // Hanya validasi nama cocok dengan DB
             if (idxNama >= 0) {
                 const namaExcel = String(row[idxNama] || '').trim().toLowerCase();
                 const namaDB = String(siswa.nama_lengkap || '').trim().toLowerCase();
@@ -718,9 +769,8 @@ exports.importEkskulExcel = async (req, res) => {
                 }
             }
 
-            // Proses 3 ekskul
             const ekskulList = [];
-            const ekskulIds = new Set(); // Untuk cek duplikasi
+            const ekskulIds = new Set();
 
             for (let j = 0; j < 3; j++) {
                 const idxEkskul = j === 0 ? idxEkskul1 : j === 1 ? idxEkskul2 : idxEkskul3;
@@ -731,7 +781,6 @@ exports.importEkskulExcel = async (req, res) => {
                 const namaEkskul = String(row[idxEkskul] || '').trim();
                 if (!namaEkskul) continue;
 
-                // Validasi ekskul ada di daftar
                 const ekskulId = ekskulMapByName[namaEkskul.toLowerCase()];
                 if (!ekskulId) {
                     errors.push({
@@ -741,7 +790,6 @@ exports.importEkskulExcel = async (req, res) => {
                     continue;
                 }
 
-                // Validasi tidak duplikat
                 if (ekskulIds.has(ekskulId)) {
                     errors.push({
                         row: i + 1,
@@ -750,7 +798,6 @@ exports.importEkskulExcel = async (req, res) => {
                     continue;
                 }
 
-                // Validasi deskripsi wajib
                 const deskripsi = idxDeskripsi >= 0 ? String(row[idxDeskripsi] || '').trim() : '';
                 if (!deskripsi) {
                     errors.push({
@@ -767,7 +814,6 @@ exports.importEkskulExcel = async (req, res) => {
                 });
             }
 
-            // Validasi maksimal 3 ekskul
             if (ekskulList.length > 3) {
                 errors.push({
                     row: i + 1,
@@ -777,13 +823,11 @@ exports.importEkskulExcel = async (req, res) => {
                 continue;
             }
 
-            // Hapus ekskul lama
             await connection.execute(
                 `DELETE FROM peserta_ekstrakurikuler WHERE siswa_id = ? AND tahun_ajaran_id = ?`,
                 [siswa.id_siswa, semesterId]
             );
 
-            // Insert ekskul baru
             for (const ekskul of ekskulList) {
                 await connection.execute(
                     `INSERT INTO peserta_ekstrakurikuler (siswa_id, ekskul_id, tahun_ajaran_id, deskripsi)
@@ -797,20 +841,45 @@ exports.importEkskulExcel = async (req, res) => {
 
         await connection.commit();
 
-        // Build Response
         let message = '';
+        let success = true;
+        
         if (successCount > 0) {
-            message = `Import berhasil! ${successCount} data ekskul berhasil disimpan.`;
+            message = `✅ Import berhasil! ${successCount} data ekskul berhasil disimpan.`;
         } else {
-            message = 'Tidak ada data yang berhasil diimport.';
+            message = 'ℹ️ Tidak ada data yang berhasil diimport.';
         }
 
         if (errors.length > 0) {
             message += `\n\n⚠️ Ada ${errors.length} error yang perlu diperbaiki.`;
         }
 
+        // 🆕 BARU: Tampilkan info duplikasi NIS
+        if (nisDuplikat.length > 0) {
+            const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+            });
+            
+            message += `\n\n⚠️ PERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+        
+        // 🆕 BARU: Tampilkan info duplikasi NISN
+        if (nisnDuplikat.length > 0) {
+            const duplikatInfo = nisnDuplikat.map(d => `Baris ${d.row} (NISN: ${d.nisn}, ${d.nama})`).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+            });
+            
+            message += `\n\n⚠️ PERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+        
+        message += `\n💡 INFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
+
         res.json({
-            success: true,
+            success: success,
             message: message,
             data: {
                 total_baris: data.length - dataStartIndex,
@@ -818,7 +887,15 @@ exports.importEkskulExcel = async (req, res) => {
                 gagal: errors.length,
                 dilewati: skippedCount,
                 errors: errors.length > 0 ? errors.slice(0, 20) : null,
-                warnings: warnings.length > 0 ? warnings.slice(0, 10) : null
+                warnings: warnings.length > 0 ? warnings : null,
+                nis_duplikat_count: nisDuplikat.length,
+                nis_duplikat_detail: nisDuplikat,
+                nisn_duplikat_count: nisnDuplikat.length,
+                nisn_duplikat_detail: nisnDuplikat,
+                baris_dengan_data_siswa: barisDenganDataSiswa,
+                pesan_penting: (nisDuplikat.length > 0 || nisnDuplikat.length > 0)
+                    ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
+                    : null
             }
         });
 

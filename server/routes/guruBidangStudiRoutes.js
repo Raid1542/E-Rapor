@@ -4,6 +4,7 @@
 * Pembuat: Raid Aqil Athallah - NIM: 3312401022
 * Tanggal: 1 Oktober 2025
 * Update: 8 Juli 2026 - Tambah fitur import nilai dari Excel
+* Update: 9 Juli 2026 - Fix duplikasi uploadExcelNilai
 */
 const express = require('express');
 const router = express.Router();
@@ -41,19 +42,13 @@ const upload = multer({
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 🆕 BARU: SETUP UPLOAD EXCEL UNTUK IMPORT NILAI (.xlsx/.xls max 10MB)
+// ✅ PERBAIKAN: Gunakan memoryStorage agar req.file.buffer tersedia
 // ═════════════════════════════════════════════════════════════════════════════
-const excelStorage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-        cb(null, `import_nilai_gbs_${uniqueSuffix}${ext}`);
-    },
-});
+const excelMemoryStorage = multer.memoryStorage();
 
 const uploadExcelNilai = multer({
-    storage: excelStorage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // Max 10MB
+    storage: excelMemoryStorage,
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
         if (!['.xlsx', '.xls'].includes(ext)) {
@@ -93,8 +88,6 @@ router.delete('/atur-penilaian/kategori/:id', authenticate, guruBidangStudiOnly,
 // ═════════════════════════════════════════════════════════════════════════════
 // 🆕 BARU: IMPORT NILAI DARI EXCEL (HARUS SEBELUM /nilai/:mapelId/:kelasId!)
 // ═════════════════════════════════════════════════════════════════════════════
-// ⚠️ PENTING: Route import-template HARUS diletakkan SEBELUM /nilai/:mapelId/:kelasId
-// karena jika tidak, kata "import-template" akan dianggap sebagai parameter :mapelId
 
 // Download template Excel untuk import nilai
 router.get('/nilai/import-template',

@@ -6,6 +6,7 @@
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  * Update: 8 Juli 2026 - Tambah fitur import nilai kokurikuler dari Excel + Validasi Nama
+ * Update: 9 Juli 2026 - Tambah 3 Human Error Prevention untuk import kokurikuler
  */
 
 const db = require('../../config/db');
@@ -359,18 +360,6 @@ exports.saveJudulProyek = async (req, res) => {
 // 🆕 BARU: DOWNLOAD TEMPLATE IMPORT NILAI KOKURIKULER (SIMPEL - TANPA TITLE)
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * GET /api/guru-kelas/kokurikuler/import-template
- * Download template Excel untuk import nilai kokurikuler
- * 
- * RULES:
- * - PTS Aktif: Hanya kolom Mutaba'ah yang aktif (kolom lain readonly)
- * - PAS Aktif: Semua kolom aktif
- * 
- * STRUKTUR:
- * - Row 1: Header Kolom (langsung)
- * - Row 2+: Data Siswa
- */
 exports.downloadTemplateKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -407,16 +396,12 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
             [kelasId, indukId]
         );
 
-        // ═══════════════════════════════════════════════════════════════════
-        // BUILD EXCEL WORKBOOK DENGAN EXCELJS
-        // ═══════════════════════════════════════════════════════════════════
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'E-Rapor SDIT Ulil Albab Batam';
         workbook.created = new Date();
 
         const worksheet = workbook.addWorksheet('Template Kokurikuler');
 
-        // ─── Row 1: Column Headers (LANGSUNG DI ROW 1) ──────────────────
         const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
 
@@ -443,7 +428,6 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                 right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
             };
 
-            // Warna berbeda untuk kolom identitas vs aspek
             if (colIdx < 4) {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF34495E' } };
             } else {
@@ -452,7 +436,6 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
             }
         });
 
-        // ─── Row 2+: Data Siswa ─────────────────────────────────────────
         siswaRows.forEach((siswa, index) => {
             const rowNum = 2 + index;
             const dataRow = worksheet.getRow(rowNum);
@@ -460,7 +443,6 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
 
             const isEvenRow = index % 2 === 0;
 
-            // Kolom identitas
             const identitasData = [index + 1, siswa.nis || '', siswa.nisn || '', siswa.nama_lengkap || ''];
             identitasData.forEach((val, colIdx) => {
                 const cell = dataRow.getCell(colIdx + 1);
@@ -480,7 +462,6 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                 };
             });
 
-            // Kolom aspek kokurikuler
             kolomAspek.forEach((aspek, aspekIdx) => {
                 const colIdx = 5 + aspekIdx;
                 const cell = dataRow.getCell(colIdx);
@@ -498,13 +479,11 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                     fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' }
                 };
 
-                // 🔒 LOCK KOLOM jika PTS aktif dan bukan Mutaba'ah
                 if (jenis_penilaian === 'PTS' && aspek.id !== ASPEK_ID.MUTABAAH) {
                     cell.value = '🔒';
                     cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF999999' } };
                 } else {
                     cell.value = '';
-                    // ✅ DATA VALIDATION: Hanya angka 0-100 integer
                     cell.dataValidation = {
                         type: 'whole',
                         operator: 'between',
@@ -520,7 +499,6 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
             });
         });
 
-        // ─── Pesan Jika Tidak Ada Siswa ─────────────────────────────────
         if (siswaRows.length === 0) {
             worksheet.mergeCells('A2:H2');
             const emptyCell = worksheet.getCell('A2');
@@ -530,22 +508,19 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
             emptyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
         }
 
-        // ─── Set Column Width ───────────────────────────────────────────
         worksheet.columns = [
-            { width: 6 },   // No
-            { width: 15 },  // NIS
-            { width: 15 },  // NISN
-            { width: 30 },  // Nama Siswa
-            { width: 14 },  // Mutaba'ah
-            { width: 10 },  // BPI
-            { width: 12 },  // Literasi
-            { width: 12 },  // Proyek
+            { width: 6 },
+            { width: 15 },
+            { width: 15 },
+            { width: 30 },
+            { width: 14 },
+            { width: 10 },
+            { width: 12 },
+            { width: 12 },
         ];
 
-        // ─── Freeze Header Row ──────────────────────────────────────────
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-        // ─── Generate & Send ────────────────────────────────────────────
         const buffer = await workbook.xlsx.writeBuffer();
         const fileName = `Template_Kokurikuler_${kelasNama.replace(/[^a-z0-9]/gi, '_')}_${jenis_penilaian}.xlsx`;
 
@@ -563,18 +538,24 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: IMPORT NILAI KOKURIKULER DARI EXCEL (DENGAN VALIDASI NAMA)
+// 🆕 BARU: IMPORT NILAI KOKURIKULER DARI EXCEL (DENGAN 5 HUMAN ERROR PREVENTION)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
  * POST /api/guru-kelas/kokurikuler/import
  * Upload file Excel dan import nilai kokurikuler
  * 
- * RULES:
- * - PTS Aktif: Hanya aspek Mutaba'ah yang diimport
- * - PAS Aktif: Semua aspek diimport
- * - Grade & deskripsi dihitung otomatis dari konfigurasi
- * - Validasi NISN dan Nama siswa
+ * 🆕 5 HUMAN ERROR PREVENTION:
+ * 1. ✅ File Excel Kosong Total (tidak ada baris data) - KRITIS
+ * 2. ✅ Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
+ * 3. ✅ File Tanpa Nilai (hanya identitas siswa) - KRITIS
+ * 4. ✅ Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
+ * 5. ✅ Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
+ * 
+ * ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
+ * 
+ * 🆕 BUG FIX:
+ * - ✅ Warning eksplisit untuk kolom aspek yang diabaikan (PTS aktif)
  */
 exports.importNilaiKokurikuler = async (req, res) => {
     const connection = await db.getConnection();
@@ -673,10 +654,154 @@ exports.importNilaiKokurikuler = async (req, res) => {
             return true;
         });
 
+        // 🆕 BARU: Identifikasi aspek yang TIDAK boleh diimport (untuk warning)
+        const aspekDilarangImport = aspekKolomMap.filter(asp => {
+            if (asp.idx < 0) return false;
+            return !aspekBolehImport.find(allowed => allowed.id === asp.id);
+        });
+
         if (aspekBolehImport.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: `Tidak ada kolom aspek yang valid untuk periode ${jenis_penilaian}.`
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #1: VALIDASI FILE KOSONG TOTAL (DIPERBAIKI)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaBarisDataValid = false;
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (row && row.length > 0 && row.some(cell => String(cell).trim() !== '')) {
+                adaBarisDataValid = true;
+                break;
+            }
+        }
+        
+        if (!adaBarisDataValid) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel kosong - tidak ada data sama sekali.\n\n` +
+                         `File hanya berisi header tanpa baris data siswa.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Pastikan ada baris data siswa\n` +
+                         `3. Isi nilai pada kolom aspek kokurikuler\n` +
+                         `4. Upload kembali file yang sudah diisi`,
+                data: {
+                    total_baris: 0,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: 0,
+                    total_nilai_disimpan: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel kosong. Tidak ada baris data siswa.'
+                    }],
+                    periode_aktif: jenis_penilaian
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #2: VALIDASI DATA SISWA KOSONG (NIS/Nama tidak ada)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaDataSiswa = false;
+        let barisDenganDataSiswa = 0;
+        
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0) continue;
+            
+            const nis = String(row[idxNIS] || '').trim();
+            const nama = String(row[idxNama] || '').trim();
+            
+            if (nis || nama) {
+                adaDataSiswa = true;
+                barisDenganDataSiswa++;
+            }
+        }
+        
+        if (!adaDataSiswa) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel tidak valid - tidak ada data siswa.\n\n` +
+                         `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
+                         `3. Isi nilai pada kolom aspek kokurikuler\n` +
+                         `4. Upload kembali file yang sudah diisi`,
+                data: {
+                    total_baris: data.length - dataStartIndex,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: data.length - dataStartIndex,
+                    total_nilai_disimpan: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.'
+                    }],
+                    periode_aktif: jenis_penilaian
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 HUMAN ERROR #3: VALIDASI FILE TANPA NILAI (Hanya identitas siswa)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let adaNilaiDiFile = false;
+        let barisDenganNilai = 0;
+        
+        for (let i = dataStartIndex; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0) continue;
+            
+            let barisIniPunyaNilai = false;
+            
+            for (const asp of aspekKolomMap) {
+                if (asp.idx < 0) continue;
+                
+                const nilaiStr = String(row[asp.idx] || '').trim();
+                
+                if (nilaiStr && nilaiStr !== '-' && nilaiStr !== '' && nilaiStr !== '🔒') {
+                    adaNilaiDiFile = true;
+                    barisIniPunyaNilai = true;
+                }
+            }
+            
+            if (barisIniPunyaNilai) barisDenganNilai++;
+        }
+        
+        if (!adaNilaiDiFile) {
+            return res.status(400).json({
+                success: false,
+                message: `❌ File Excel tidak valid - tidak ada nilai yang diisi.\n\n` +
+                         `File hanya berisi data identitas siswa (Nama, NIS, NISN) tanpa nilai aspek kokurikuler.\n\n` +
+                         `💡 Solusi:\n` +
+                         `1. Download ulang template Excel\n` +
+                         `2. Isi kolom aspek kokurikuler (${aspekBolehImport.map(a => a.nama).join(', ')}) dengan angka 0-100\n` +
+                         `3. Upload kembali file yang sudah diisi\n\n` +
+                         `📊 Periode aktif: ${jenis_penilaian}`,
+                data: {
+                    total_baris: data.length - dataStartIndex,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: data.length - dataStartIndex,
+                    total_nilai_disimpan: 0,
+                    errors: null,
+                    warnings: [{
+                        row: 0,
+                        message: 'File Excel tidak berisi nilai. Hanya data identitas siswa yang terdeteksi.'
+                    }],
+                    periode_aktif: jenis_penilaian
+                }
             });
         }
 
@@ -719,6 +844,18 @@ exports.importNilaiKokurikuler = async (req, res) => {
         let successCount = 0;
         let skippedCount = 0;
         let totalNilaiDisimpan = 0;
+        
+        // 🆕 HUMAN ERROR #4: Track duplikasi NIS
+        const nisDiproses = new Set();
+        const nisDuplikat = [];
+        
+        // 🆕 HUMAN ERROR #5: Track duplikasi NISN
+        const nisnDiproses = new Set();
+        const nisnDuplikat = [];
+        
+        // Track kolom yang diabaikan
+        let kolomDiabaikanCount = 0;
+        const kolomDiabaikanSet = new Set();
 
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -735,6 +872,35 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 continue;
             }
 
+            // 🆕 HUMAN ERROR #4: Cek duplikasi NIS
+            if (nisDiproses.has(nis)) {
+                nisDuplikat.push({ row: i + 1, nis, nama: namaSiswa });
+                warnings.push({ 
+                    row: i + 1, 
+                    message: `⚠️ Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                });
+                skippedCount++;
+                continue;
+            }
+            nisDiproses.add(nis);
+
+            // 🆕 HUMAN ERROR #5: Cek duplikasi NISN
+            if (idxNISN >= 0) {
+                const nisnExcel = String(row[idxNISN] || '').trim();
+                if (nisnExcel) {
+                    if (nisnDiproses.has(nisnExcel)) {
+                        nisnDuplikat.push({ row: i + 1, nisn: nisnExcel, nama: namaSiswa });
+                        warnings.push({ 
+                            row: i + 1, 
+                            message: `⚠️ Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                        });
+                        skippedCount++;
+                        continue;
+                    }
+                    nisnDiproses.add(nisnExcel);
+                }
+            }
+
             const siswa = siswaMapByNIS[nis];
             if (!siswa) {
                 errors.push({
@@ -745,7 +911,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 continue;
             }
 
-            // Validasi NISN
+            // Validasi NISN cocok dengan DB
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 const nisnDB = String(siswa.nisn || '').trim();
@@ -759,7 +925,8 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 }
             }
 
-            // 🆕 BARU: Validasi Nama
+            // ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
+            // Hanya validasi nama cocok dengan DB
             if (idxNama >= 0) {
                 const namaExcel = String(row[idxNama] || '').trim().toLowerCase();
                 const namaDB = String(siswa.nama_lengkap || '').trim().toLowerCase();
@@ -777,6 +944,17 @@ exports.importNilaiKokurikuler = async (req, res) => {
                             row: i + 1,
                             message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.`
                         });
+                    }
+                }
+            }
+
+            // 🆕 BARU: Deteksi kolom aspek yang diisi tapi diabaikan (PTS aktif)
+            if (jenis_penilaian === 'PTS' && aspekDilarangImport.length > 0) {
+                for (const aspek of aspekDilarangImport) {
+                    const nilaiStr = String(row[aspek.idx] || '').trim();
+                    if (nilaiStr && nilaiStr !== '🔒' && nilaiStr !== '-' && nilaiStr !== '') {
+                        kolomDiabaikanCount++;
+                        kolomDiabaikanSet.add(aspek.nama);
                     }
                 }
             }
@@ -864,18 +1042,58 @@ exports.importNilaiKokurikuler = async (req, res) => {
 
         // ─── Build Response ─────────────────────────────────────────────
         let message = '';
+        let success = true;
+
         if (successCount > 0) {
-            message = `Import berhasil! ${successCount} siswa berhasil diimport dengan ${totalNilaiDisimpan} nilai disimpan.`;
+            message = `✅ Import berhasil! ${successCount} siswa berhasil diimport dengan ${totalNilaiDisimpan} nilai disimpan.`;
         } else {
-            message = 'Tidak ada data yang berhasil diimport.';
+            message = 'ℹ️ Tidak ada data yang berhasil diimport.';
+        }
+
+        // 🆕 BARU: Tampilkan warning eksplisit jika ada kolom yang diabaikan
+        if (jenis_penilaian === 'PTS' && kolomDiabaikanCount > 0) {
+            const namaKolom = Array.from(kolomDiabaikanSet).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ PERHATIAN: Kolom [${namaKolom}] DIABAIKAN karena periode PTS sedang aktif. Hanya kolom Mutaba'ah yang diimport. Silakan input kolom lain saat periode PAS aktif.`
+            });
         }
 
         if (errors.length > 0) {
             message += `\n\n⚠️ Ada ${errors.length} error yang perlu diperbaiki.`;
         }
 
+        // 🆕 BARU: Tampilkan info duplikasi NIS
+        if (nisDuplikat.length > 0) {
+            const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+            });
+            
+            message += `\n\n⚠️ PERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+        
+        // 🆕 BARU: Tampilkan info duplikasi NISN
+        if (nisnDuplikat.length > 0) {
+            const duplikatInfo = nisnDuplikat.map(d => `Baris ${d.row} (NISN: ${d.nisn}, ${d.nama})`).join(', ');
+            warnings.unshift({
+                row: 0,
+                message: `⚠️ DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+            });
+            
+            message += `\n\n⚠️ PERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+        
+        message += `\n💡 INFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
+
+        // 🆕 BARU: Tambahkan info kolom yang diabaikan di message
+        if (jenis_penilaian === 'PTS' && kolomDiabaikanCount > 0) {
+            message += `\n\n💡 INFO: Kolom [${Array.from(kolomDiabaikanSet).join(', ')}] tidak diimport karena hanya Mutaba'ah yang aktif saat PTS.`;
+        }
+
         res.json({
-            success: true,
+            success: success,
             message: message,
             data: {
                 total_baris: data.length - dataStartIndex,
@@ -886,7 +1104,22 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 errors: errors.length > 0 ? errors.slice(0, 20) : null,
                 warnings: warnings.length > 0 ? warnings.slice(0, 10) : null,
                 periode_aktif: jenis_penilaian,
-                aspek_diimport: aspekBolehImport.map(a => a.nama)
+                aspek_diimport: aspekBolehImport.map(a => a.nama),
+                aspek_diabaikan: jenis_penilaian === 'PTS' 
+                    ? aspekDilarangImport.map(a => a.nama) 
+                    : [],
+                kolom_diabaikan_count: kolomDiabaikanCount,
+                baris_dengan_nilai: barisDenganNilai,
+                baris_dengan_data_siswa: barisDenganDataSiswa,
+                nis_duplikat_count: nisDuplikat.length,
+                nis_duplikat_detail: nisDuplikat,
+                nisn_duplikat_count: nisnDuplikat.length,
+                nisn_duplikat_detail: nisnDuplikat,
+                pesan_penting: (nisDuplikat.length > 0 || nisnDuplikat.length > 0)
+                    ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
+                    : jenis_penilaian === 'PTS' && kolomDiabaikanCount > 0
+                        ? `Hanya Mutaba'ah yang diimport. Kolom lain diabaikan.`
+                        : null
             }
         });
 
