@@ -2,7 +2,8 @@
  * Nama File: absensiController.js
  * Fungsi: Controller absensi siswa guru kelas (PTS/PAS) + IMPORT EXCEL
  * Update: ✅ Template absensi semua nilai diisi 0 (kosong untuk input baru)
- * Update: ✅ Tambah 4 Human Error Prevention untuk import absensi
+ * Update: ✅ Tambah 5 Human Error Prevention untuk import absensi
+ * Update: ✅ Perbaiki Human Error #3 - Nilai 0 dianggap "tidak ada nilai"
  */
 const absensiModel = require('../../models/guru_kelas/absensiModel');
 const db = require('../../config/db');
@@ -388,11 +389,13 @@ exports.downloadTemplateAbsensi = async (req, res) => {
  * 🆕 5 HUMAN ERROR PREVENTION:
  * 1. ✅ File Excel Kosong Total (tidak ada baris data) - KRITIS
  * 2. ✅ Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
- * 3. ✅ File Tanpa Nilai Absensi (hanya identitas siswa) - KRITIS
+ * 3. ✅ File Tanpa Nilai Absensi (hanya identitas siswa atau semua nilai 0) - KRITIS
  * 4. ✅ Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
  * 5. ✅ Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
  * 
  * ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
+ * 
+ * ✅ DIPERBAIKI: Query existing absensi menggunakan MAX() untuk ambil nilai PTS tertinggi
  */
 
 exports.importAbsensiExcel = async (req, res) => {
@@ -572,6 +575,7 @@ exports.importAbsensiExcel = async (req, res) => {
         
         // ═══════════════════════════════════════════════════════════════════
         // 🆕 HUMAN ERROR #3: VALIDASI FILE TANPA NILAI ABSENSI
+        // ✅ DIPERBAIKI: Nilai 0 dianggap sebagai "tidak ada nilai yang diisi"
         // ═══════════════════════════════════════════════════════════════════
         
         let adaNilaiDiFile = false;
@@ -583,13 +587,13 @@ exports.importAbsensiExcel = async (req, res) => {
             
             let barisIniPunyaNilai = false;
             
-            const sakitStr = String(row[idxSakit] || '').trim();
-            const izinStr = String(row[idxIzin] || '').trim();
-            const alphaStr = String(row[idxAlpha] || '').trim();
+            // ✅ DIPERBAIKI: Nilai 0 dianggap sebagai "tidak ada nilai yang diisi"
+            // Hanya nilai > 0 yang dianggap sebagai "nilai yang diisi"
+            const sakitNum = parseFloat(String(row[idxSakit] || '0').trim());
+            const izinNum = parseFloat(String(row[idxIzin] || '0').trim());
+            const alphaNum = parseFloat(String(row[idxAlpha] || '0').trim());
             
-            if ((sakitStr && sakitStr !== '-') || 
-                (izinStr && izinStr !== '-') || 
-                (alphaStr && alphaStr !== '-')) {
+            if ((sakitNum > 0) || (izinNum > 0) || (alphaNum > 0)) {
                 adaNilaiDiFile = true;
                 barisIniPunyaNilai = true;
             }
@@ -601,10 +605,10 @@ exports.importAbsensiExcel = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: `❌ File Excel tidak valid - tidak ada nilai absensi yang diisi.\n\n` +
-                         `File hanya berisi data identitas siswa (Nama, NIS, NISN) tanpa nilai absensi.\n\n` +
+                         `File hanya berisi data identitas siswa (Nama, NIS, NISN) dengan nilai 0 (default template).\n\n` +
                          `💡 Solusi:\n` +
                          `1. Download ulang template Excel\n` +
-                         `2. Isi kolom absensi (Sakit, Izin, Alpha) dengan angka 0-90\n` +
+                         `2. Isi kolom absensi (Sakit, Izin, Alpha) dengan angka > 0\n` +
                          `3. Upload kembali file yang sudah diisi\n\n` +
                          `📊 Periode aktif: ${jenisPenilaian}`,
                 data: {
@@ -616,7 +620,7 @@ exports.importAbsensiExcel = async (req, res) => {
                     errors: null,
                     warnings: [{
                         row: 0,
-                        message: 'File Excel tidak berisi nilai absensi. Hanya data identitas siswa yang terdeteksi.'
+                        message: 'File Excel tidak berisi nilai absensi. Hanya data identitas siswa dengan nilai 0 (default template).'
                     }],
                     periode: jenisPenilaian
                 }
@@ -636,10 +640,18 @@ exports.importAbsensiExcel = async (req, res) => {
             if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s;
         });
         
+        // ═══════════════════════════════════════════════════════════════════
+        // ✅ DIPERBAIKI: Query Existing Absensi dengan MAX() untuk ambil nilai PTS tertinggi
+        // ═══════════════════════════════════════════════════════════════════
+        
         const [existingAbsensiRows] = await db.execute(
-            `SELECT siswa_id, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total
+            `SELECT siswa_id, 
+                    MAX(sakit_pts) as sakit_pts, 
+                    MAX(izin_pts) as izin_pts, 
+                    MAX(alpha_pts) as alpha_pts
              FROM absensi
-             WHERE kelas_id = ? AND id_tahun_ajaran = ?`,
+             WHERE kelas_id = ? AND id_tahun_ajaran = ?
+             GROUP BY siswa_id`,
             [kelasId, semesterId]
         );
         
@@ -648,10 +660,7 @@ exports.importAbsensiExcel = async (req, res) => {
             existingAbsensiMap[row.siswa_id] = {
                 sakit_pts: row.sakit_pts || 0,
                 izin_pts: row.izin_pts || 0,
-                alpha_pts: row.alpha_pts || 0,
-                sakit_total: row.sakit_total || 0,
-                izin_total: row.izin_total || 0,
-                alpha_total: row.alpha_total || 0
+                alpha_pts: row.alpha_pts || 0
             };
         });
         
@@ -795,6 +804,10 @@ exports.importAbsensiExcel = async (req, res) => {
                 skippedCount++;
                 continue;
             }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // ✅ DIPERBAIKI: Validasi PAS tidak boleh kurang dari PTS
+            // ═══════════════════════════════════════════════════════════════════
             
             if (jenisPenilaian === 'PAS') {
                 const existingData = existingAbsensiMap[siswaId];
