@@ -1,12 +1,14 @@
 /**
  * Nama File: kokurikulerController.js
- * Fungsi: Controller untuk manajemen nilai kokurikuler siswa (BPI, Proyek, Literasi, Mutaba'ah).
- *         Menangani input nilai, perhitungan grade otomatis, dan manajemen judul proyek.
- *         + IMPORT NILAI KOKURIKULER DARI EXCEL
+ * Fungsi: Controller untuk manajemen nilai kokurikuler siswa (BPI, Proyek, Literasi, Mutaba'ah)
+ *         Menangani input nilai, perhitungan grade otomatis, dan manajemen judul proyek
+ *         + Import nilai kokurikuler dari Excel
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
- * Update: 8 Juli 2026 - Tambah fitur import nilai kokurikuler dari Excel + Validasi Nama
- * Update: 9 Juli 2026 - Tambah 3 Human Error Prevention untuk import kokurikuler
+ * Update: 10 Juli 2026 - Tambah validasi kategori kokurikuler sebelum input nilai
+ * Update: 10 Juli 2026 - Tambah validasi kategori kokurikuler sebelum import Excel
+ * Update: 10 Juli 2026 - Hapus emoji dari komentar dan pesan (sesuai coding convention)
+ * Update: 10 Juli 2026 - Indentasi 2 spasi (sesuai coding convention)
  */
 
 const db = require('../../config/db');
@@ -15,10 +17,7 @@ const ExcelJS = require('exceljs');
 const kokurikulerModel = require('../../models/guru_kelas/kokurikulerModel');
 const proyekModel = require('../../models/guru_kelas/proyekKokurikulerModel');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// KONSTANTA & HELPER
-// ═════════════════════════════════════════════════════════════════════════════
-
+// Konstanta untuk ID aspek kokurikuler
 const ASPEK_ID = {
     BPI: 2,
     PROYEK: 3,
@@ -34,14 +33,20 @@ const DAFTAR_ASPEK = [
     { id: ASPEK_ID.PROYEK, nama: 'Proyek', kolom: 'nilai_proyek', grade: 'grade_proyek', deskripsi: 'deskripsi_proyek' },
 ];
 
-/** Tentukan jenis penilaian aktif berdasarkan status PTS/PAS */
+// Konstanta untuk pesan error
+const ERROR_MESSAGES = {
+    KATEGORI_BELUM_DIATUR: 'KATEGORI_BELUM_DIATUR',
+    GRADE_TIDAK_DITEMUKAN: 'GRADE_TIDAK_DITEMUKAN',
+};
+
+// Tentukan jenis penilaian aktif berdasarkan status PTS/PAS
 const getJenisPenilaian = (status_pts, status_pas) => {
     if (status_pts === 'aktif') return 'PTS';
     if (status_pas === 'aktif') return 'PAS';
     return null;
 };
 
-/** Helper: Ambil kelas_id dari guru yang sedang login */
+// Helper: Ambil kelas_id dari guru yang sedang login
 const getKelasIdByGuru = async (userId, semesterId) => {
     const [rows] = await db.execute(
         'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ? LIMIT 1',
@@ -50,10 +55,7 @@ const getKelasIdByGuru = async (userId, semesterId) => {
     return rows[0]?.kelas_id || null;
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: HELPER FUNCTION - Hitung Kesamaan String (Levenshtein Distance)
-// ═════════════════════════════════════════════════════════════════════════════
-
+// Helper: Hitung kesamaan string (Levenshtein Distance)
 const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
@@ -85,6 +87,128 @@ const calculateSimilarity = (str1, str2) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+// 🆕 BARU: HELPER - Cek apakah kategori grade sudah diatur untuk aspek tertentu
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cek apakah kategori grade sudah diatur untuk aspek yang aktif
+ * Returns: { 
+ *   exists: boolean, 
+ *   aspekTanpaKategori: string[],
+ *   aspekDenganCelah: Array<{nama: string, celah: string[]}>
+ * }
+ */
+const cekKategoriGradeKokurikuler = async (kelasId, semesterId, semester, jenisPenilaian) => {
+    try {
+        // Ambil semua aspek kokurikuler
+        const [aspekRows] = await db.execute(
+            'SELECT id_aspek_kokurikuler, nama FROM aspek_kokurikuler ORDER BY urutan ASC'
+        );
+
+        // Ambil kategori grade yang sudah ada untuk periode aktif
+        const [kategoriRows] = await db.execute(
+            `SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
+             FROM kategori_grade_kokurikuler 
+             WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
+             ORDER BY rentang_min ASC`,
+            [kelasId, semesterId, semester, jenisPenilaian]
+        );
+
+        const aspekDenganKategori = new Set(
+            kategoriRows.map(r => r.id_aspek_kokurikuler)
+        );
+
+        // Tentukan aspek mana yang harus dicek berdasarkan periode
+        const aspekYangDicek = jenisPenilaian === 'PTS'
+            ? aspekRows.filter(a => a.id_aspek_kokurikuler === ASPEK_ID.MUTABAAH)
+            : aspekRows;
+
+        // Cari aspek yang belum ada kategorinya
+        const aspekTanpaKategori = [];
+        const aspekDenganCelah = [];
+
+        aspekYangDicek.forEach(aspek => {
+            if (!aspekDenganKategori.has(aspek.id_aspek_kokurikuler)) {
+                // Aspek ini sama sekali belum ada kategori
+                aspekTanpaKategori.push({
+                    id: aspek.id_aspek_kokurikuler,
+                    nama: aspek.nama,
+                });
+            } else {
+                // Aspek ini punya kategori, cek apakah ada celah dalam rentang
+                const kategoriAspek = kategoriRows.filter(
+                    k => k.id_aspek_kokurikuler === aspek.id_aspek_kokurikuler
+                );
+
+                const celah = cekCelahRentang(kategoriAspek);
+                if (celah.length > 0) {
+                    aspekDenganCelah.push({
+                        id: aspek.id_aspek_kokurikuler,
+                        nama: aspek.nama,
+                        celah: celah,
+                    });
+                }
+            }
+        });
+
+        return {
+            exists: aspekTanpaKategori.length === 0 && aspekDenganCelah.length === 0,
+            aspekTanpaKategori: aspekTanpaKategori,
+            aspekDenganCelah: aspekDenganCelah,
+        };
+    } catch (err) {
+        console.error('Error cekKategoriGradeKokurikuler:', err);
+        return { 
+            exists: false, 
+            aspekTanpaKategori: [{id: 0, nama: 'Error checking'}],
+            aspekDenganCelah: []
+        };
+    }
+};
+
+/**
+ * Helper: Cek celah dalam rentang nilai
+ * @param {Array} kategoriArray - Array kategori dengan rentang_min dan rentang_max
+ * @returns {Array<string>} - Array string yang menjelaskan celah yang ditemukan
+ */
+const cekCelahRentang = (kategoriArray) => {
+    const celah = [];
+    
+    if (kategoriArray.length === 0) {
+        return ['0-100'];
+    }
+
+    // Sort berdasarkan rentang_min
+    const sorted = [...kategoriArray].sort((a, b) => 
+        parseFloat(a.rentang_min) - parseFloat(b.rentang_min)
+    );
+
+    // Cek apakah dimulai dari 0
+    const firstMin = parseFloat(sorted[0].rentang_min);
+    if (firstMin > 0) {
+        celah.push(`0-${Math.floor(firstMin - 1)}`);
+    }
+
+    // Cek celah antar kategori
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const currentMax = parseFloat(sorted[i].rentang_max);
+        const nextMin = parseFloat(sorted[i + 1].rentang_min);
+
+        if (currentMax + 1 < nextMin) {
+            celah.push(`${Math.floor(currentMax + 1)}-${Math.floor(nextMin - 1)}`);
+        }
+    }
+
+    // Cek apakah berakhir di 100
+    const lastMax = parseFloat(sorted[sorted.length - 1].rentang_max);
+    if (lastMax < 100) {
+        celah.push(`${Math.floor(lastMax + 1)}-100`);
+    }
+
+    return celah;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 // 1. GET NILAI KOKURIKULER (SEMUA SISWA)
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -112,17 +236,26 @@ exports.getNilaiKokurikuler = async (req, res) => {
 
         const siswaRows = await kokurikulerModel.getSiswaByKelas(kelas_id, idInduk);
         if (siswaRows.length === 0) {
-            return res.json({ success: true, data: [], kelas: kelasNama, semester, tahunAjaranId: semesterId, message: 'Tidak ada siswa di kelas ini' });
+            return res.json({
+                success: true,
+                data: [],
+                kelas: kelasNama,
+                semester,
+                tahunAjaranId: semesterId,
+                message: 'Tidak ada siswa di kelas ini',
+            });
         }
 
         const nilaiRows = await kokurikulerModel.getNilaiByKelas(kelas_id, semesterId, semester, jenis_penilaian);
 
-        const [gradeConfigRows] = await db.execute(`
-            SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
-            FROM kategori_grade_kokurikuler
-            WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
-        `, [kelas_id, semesterId, semester, jenis_penilaian]);
+        const [gradeConfigRows] = await db.execute(
+            `SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
+       FROM kategori_grade_kokurikuler
+       WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
+            [kelas_id, semesterId, semester, jenis_penilaian]
+        );
 
+        // Helper: Cari grade berdasarkan nilai
         const findGradeByNilai = (aspekId, nilai) => {
             if (nilai === null || nilai === undefined) return { grade: null, deskripsi: null };
             const config = gradeConfigRows.find(c =>
@@ -147,7 +280,10 @@ exports.getNilaiKokurikuler = async (req, res) => {
             }
 
             nilaiBySiswa[row.id_siswa][row.id_aspek_kokurikuler] = {
-                nilai: row.nilai, grade, deskripsi, id_judul_proyek: row.id_judul_proyek
+                nilai: row.nilai,
+                grade,
+                deskripsi,
+                id_judul_proyek: row.id_judul_proyek,
             };
         });
 
@@ -159,7 +295,14 @@ exports.getNilaiKokurikuler = async (req, res) => {
             nilai: nilaiBySiswa[siswa.id_siswa] || {},
         }));
 
-        res.json({ success: true, data: result, kelas: kelasNama, semester, jenis_penilaian, tahunAjaranId: semesterId });
+        res.json({
+            success: true,
+            data: result,
+            kelas: kelasNama,
+            semester,
+            jenis_penilaian,
+            tahunAjaranId: semesterId,
+        });
     } catch (error) {
         console.error('Error getNilaiKokurikuler:', error);
         res.status(500).json({ success: false, message: error.message });
@@ -189,7 +332,13 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Kelas aktif tidak ditemukan.' });
         }
 
-        const rows = await kokurikulerModel.getNilaiBySiswa(siswaId, kelas_id, semesterId, semester, jenis_penilaian);
+        const rows = await kokurikulerModel.getNilaiBySiswa(
+            siswaId,
+            kelas_id,
+            semesterId,
+            semester,
+            jenis_penilaian
+        );
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('Error getNilaiKokurikulerBySiswa:', err);
@@ -199,6 +348,7 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. UPDATE NILAI KOKURIKULER
+// 🆕 DIPERBAIKI: Tambah validasi kategori grade sebelum simpan nilai
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.updateNilaiKokurikuler = async (req, res) => {
@@ -207,7 +357,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
         const { aspek_id, nilai, grade, deskripsi, id_judul_proyek } = req.body;
 
         const userId = req.user.id;
-        
+
         const taAktif = await kokurikulerModel.getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
@@ -219,6 +369,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
         const status_pts = taAktif.status_pts;
         const status_pas = taAktif.status_pas;
 
+        // Validasi input
         if (!aspek_id || nilai === undefined) {
             return res.status(400).json({ success: false, message: 'aspek_id dan nilai wajib diisi' });
         }
@@ -229,7 +380,10 @@ exports.updateNilaiKokurikuler = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nilai harus antara 0 dan 100' });
         }
 
-        const [aspekCheck] = await db.execute(`SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE id_aspek_kokurikuler = ?`, [aspek_id]);
+        const [aspekCheck] = await db.execute(
+            `SELECT id_aspek_kokurikuler FROM aspek_kokurikuler WHERE id_aspek_kokurikuler = ?`,
+            [aspek_id]
+        );
         if (aspekCheck.length === 0) {
             return res.status(400).json({ success: false, message: 'Aspek kokurikuler tidak valid' });
         }
@@ -240,7 +394,10 @@ exports.updateNilaiKokurikuler = async (req, res) => {
         }
 
         if (jenis_penilaian === 'PTS' && aspek_id !== ASPEK_ID.MUTABAAH) {
-            return res.status(403).json({ success: false, message: 'Saat PTS aktif, hanya aspek Mutaba\'ah yang dapat diisi.' });
+            return res.status(403).json({
+                success: false,
+                message: 'Saat PTS aktif, hanya aspek Mutaba\'ah yang dapat diisi.',
+            });
         }
 
         const kelas_id = await getKelasIdByGuru(userId, semesterId);
@@ -249,40 +406,122 @@ exports.updateNilaiKokurikuler = async (req, res) => {
         }
 
         const [siswaCheck] = await db.execute(
-            `SELECT s.id_siswa FROM siswa s INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id WHERE s.id_siswa = ? AND sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?`,
+            `SELECT s.id_siswa FROM siswa s 
+       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+       WHERE s.id_siswa = ? AND sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?`,
             [siswaId, kelas_id, idInduk]
         );
         if (siswaCheck.length === 0) {
             return res.status(403).json({ success: false, message: 'Siswa tidak ditemukan di kelas Anda' });
         }
 
+        // ═════════════════════════════════════════════════════════════════════
+        // 🆕 BARU: VALIDASI - Cek apakah kategori grade sudah diatur untuk aspek ini
+        // ═════════════════════════════════════════════════════════════════════
+
+        const kategoriCheck = await cekKategoriGradeKokurikuler(
+            kelas_id,
+            semesterId,
+            semester,
+            jenis_penilaian
+        );
+
+        if (!kategoriCheck.exists) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    `Kategori Penilaian Belum Diatur\n\n` +
+                    `Aspek berikut belum memiliki konfigurasi grade untuk periode ${jenis_penilaian}:\n` +
+                    `${kategoriCheck.aspekTanpaKategori.map(n => `- ${n}`).join('\n')}\n\n` +
+                    `Solusi:\n` +
+                    `1. Buka menu "Atur Penilaian" > "Kategori Kokurikuler"\n` +
+                    `2. Pilih aspek yang belum diatur\n` +
+                    `3. Atur rentang nilai dan grade (minimal 1 kategori)\n` +
+                    `4. Setelah selesai, Anda dapat menginput nilai siswa`,
+                code: ERROR_MESSAGES.KATEGORI_BELUM_DIATUR,
+                data: {
+                    aspek_tanpa_kategori: kategoriCheck.aspekTanpaKategori,
+                    jenis_penilaian,
+                },
+            });
+        }
+
+        // Hitung grade otomatis jika tidak disediakan
         let finalGrade = grade;
         let finalDeskripsi = deskripsi;
 
         if ((!finalGrade || !finalDeskripsi) && nilai !== null) {
-            const [gradeConfig] = await db.execute(`
-                SELECT grade, deskripsi FROM kategori_grade_kokurikuler
-                WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ? AND ? >= rentang_min AND ? <= rentang_max LIMIT 1
-            `, [aspek_id, kelas_id, semesterId, semester, jenis_penilaian, nilai, nilai]);
+            const [gradeConfig] = await db.execute(
+                `SELECT grade, deskripsi FROM kategori_grade_kokurikuler
+         WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? 
+         AND semester = ? AND jenis_penilaian = ? AND ? >= rentang_min AND ? <= rentang_max 
+         LIMIT 1`,
+                [aspek_id, kelas_id, semesterId, semester, jenis_penilaian, nilai, nilai]
+            );
 
             if (gradeConfig.length > 0) {
                 finalGrade = gradeConfig[0].grade;
                 finalDeskripsi = gradeConfig[0].deskripsi;
+            } else {
+                // 🆕 BARU: Grade tidak ditemukan (kategori belum lengkap)
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        `Konfigurasi Grade Tidak Lengkap\n\n` +
+                        `Nilai ${nilai} tidak masuk dalam rentang kategori grade yang telah diatur.\n\n` +
+                        `Solusi:\n` +
+                        `1. Periksa kembali rentang nilai di "Kategori Kokurikuler"\n` +
+                        `2. Pastikan rentang mencakup semua kemungkinan nilai (0-100)\n` +
+                        `3. Tambahkan kategori grade jika diperlukan`,
+                    code: ERROR_MESSAGES.GRADE_TIDAK_DITEMUKAN,
+                });
             }
         }
 
-        const existing = await kokurikulerModel.checkExistingNilai(siswaId, aspek_id, kelas_id, semesterId, semester, jenis_penilaian);
+        // Simpan nilai
+        const existing = await kokurikulerModel.checkExistingNilai(
+            siswaId,
+            aspek_id,
+            kelas_id,
+            semesterId,
+            semester,
+            jenis_penilaian
+        );
 
         if (existing) {
-            await kokurikulerModel.updateNilai(existing.id_nilai_kokurikuler, nilai, finalGrade, finalDeskripsi, id_judul_proyek || null);
+            await kokurikulerModel.updateNilai(
+                existing.id_nilai_kokurikuler,
+                nilai,
+                finalGrade,
+                finalDeskripsi,
+                id_judul_proyek || null
+            );
         } else {
-            await kokurikulerModel.insertNilai(siswaId, aspek_id, kelas_id, semesterId, semester, jenis_penilaian, nilai, finalGrade, finalDeskripsi, id_judul_proyek || null);
+            await kokurikulerModel.insertNilai(
+                siswaId,
+                aspek_id,
+                kelas_id,
+                semesterId,
+                semester,
+                jenis_penilaian,
+                nilai,
+                finalGrade,
+                finalDeskripsi,
+                id_judul_proyek || null
+            );
         }
 
         res.json({
             success: true,
             message: 'Nilai berhasil disimpan',
-            data: { id_siswa: parseInt(siswaId), aspek_id, nilai, grade: finalGrade, deskripsi: finalDeskripsi, jenis_penilaian }
+            data: {
+                id_siswa: parseInt(siswaId),
+                aspek_id,
+                nilai,
+                grade: finalGrade,
+                deskripsi: finalDeskripsi,
+                jenis_penilaian,
+            },
         });
     } catch (err) {
         console.error('Error updateNilaiKokurikuler:', err);
@@ -298,7 +537,7 @@ exports.getJudulProyek = async (req, res) => {
     try {
         const userId = req.user.id;
         const taAktif = await kokurikulerModel.getTahunAjaranAktif();
-        
+
         if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
 
         const kelasId = await getKelasIdByGuru(userId, taAktif.id_tahun_ajaran);
@@ -320,14 +559,17 @@ exports.saveJudulProyek = async (req, res) => {
     try {
         const { judul } = req.body;
         const userId = req.user.id;
-        
+
         const taAktif = await kokurikulerModel.getTahunAjaranAktif();
         if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
 
         const status_pas = taAktif.status_pas;
 
         if (status_pas !== 'aktif') {
-            return res.status(403).json({ success: false, message: 'Judul proyek hanya dapat diatur saat periode PAS aktif.' });
+            return res.status(403).json({
+                success: false,
+                message: 'Judul proyek hanya dapat diatur saat periode PAS aktif.',
+            });
         }
 
         const kelasId = await getKelasIdByGuru(userId, taAktif.id_tahun_ajaran);
@@ -345,7 +587,7 @@ exports.saveJudulProyek = async (req, res) => {
         res.json({
             success: true,
             message: result.action === 'created' ? 'Judul proyek berhasil disimpan' : 'Judul proyek berhasil diperbarui',
-            data: result
+            data: result,
         });
     } catch (err) {
         console.error('Error saveJudulProyek:', err);
@@ -357,7 +599,7 @@ exports.saveJudulProyek = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: DOWNLOAD TEMPLATE IMPORT NILAI KOKURIKULER (SIMPEL - TANPA TITLE)
+// 6. DOWNLOAD TEMPLATE IMPORT NILAI KOKURIKULER
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.downloadTemplateKokurikuler = async (req, res) => {
@@ -389,10 +631,10 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
 
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
-             FROM siswa s
-             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
-             ORDER BY s.nama_lengkap ASC`,
+       FROM siswa s
+       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+       WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+       ORDER BY s.nama_lengkap ASC`,
             [kelasId, indukId]
         );
 
@@ -408,9 +650,10 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
         const kolomAspek = DAFTAR_ASPEK.map(asp => ({
             nama: asp.nama,
             id: asp.id,
-            color: asp.id === ASPEK_ID.MUTABAAH ? 'FFE8690A' :
-                   asp.id === ASPEK_ID.BPI ? 'FF4A90E2' :
-                   asp.id === ASPEK_ID.LITERASI ? 'FF50C878' : 'FF9B59B6'
+            color:
+                asp.id === ASPEK_ID.MUTABAAH ? 'FFE8690A' :
+                    asp.id === ASPEK_ID.BPI ? 'FF4A90E2' :
+                        asp.id === ASPEK_ID.LITERASI ? 'FF50C878' : 'FF9B59B6',
         }));
 
         const headers = ['No', 'NIS', 'NISN', 'Nama Siswa'];
@@ -425,7 +668,7 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
             };
 
             if (colIdx < 4) {
@@ -453,12 +696,12 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                     top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 };
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' }
+                    fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' },
                 };
             });
 
@@ -471,16 +714,16 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                     top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 };
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' }
+                    fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' },
                 };
 
                 if (jenis_penilaian === 'PTS' && aspek.id !== ASPEK_ID.MUTABAAH) {
-                    cell.value = '🔒';
+                    cell.value = 'Terkunci';
                     cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF999999' } };
                 } else {
                     cell.value = '';
@@ -493,7 +736,7 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
                         error: 'Nilai harus berupa angka bulat antara 0 sampai 100',
                         showInputMessage: true,
                         promptTitle: 'Input Nilai',
-                        prompt: 'Masukkan nilai 0-100'
+                        prompt: 'Masukkan nilai 0-100',
                     };
                 }
             });
@@ -527,35 +770,33 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
-
     } catch (err) {
         console.error('Error downloadTemplateKokurikuler:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal membuat template: ' + err.message
+            message: 'Gagal membuat template: ' + err.message,
         });
     }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: IMPORT NILAI KOKURIKULER DARI EXCEL (DENGAN 5 HUMAN ERROR PREVENTION)
+// 7. IMPORT NILAI KOKURIKULER DARI EXCEL
+// 🆕 DIPERBAIKI: Tambah validasi kategori grade sebelum import
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
  * POST /api/guru-kelas/kokurikuler/import
  * Upload file Excel dan import nilai kokurikuler
- * 
- * 🆕 5 HUMAN ERROR PREVENTION:
- * 1. ✅ File Excel Kosong Total (tidak ada baris data) - KRITIS
- * 2. ✅ Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
- * 3. ✅ File Tanpa Nilai (hanya identitas siswa) - KRITIS
- * 4. ✅ Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
- * 5. ✅ Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
- * 
- * ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
- * 
- * 🆕 BUG FIX:
- * - ✅ Warning eksplisit untuk kolom aspek yang diabaikan (PTS aktif)
+ *
+ * Validasi:
+ * 1. File Excel Kosong Total (tidak ada baris data) - KRITIS
+ * 2. Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
+ * 3. File Tanpa Nilai (hanya identitas siswa) - KRITIS
+ * 4. Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
+ * 5. Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
+ * 6. Kategori Grade Belum Diatur - KRITIS (BARU)
+ *
+ * NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
  */
 exports.importNilaiKokurikuler = async (req, res) => {
     const connection = await db.getConnection();
@@ -588,7 +829,38 @@ exports.importNilaiKokurikuler = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Kelas tidak ditemukan' });
         }
 
-        // ─── Baca File Excel ────────────────────────────────────────────
+        // ═════════════════════════════════════════════════════════════════════
+        // 🆕 BARU: VALIDASI - Cek apakah kategori grade sudah diatur SEBELUM proses file
+        // ═════════════════════════════════════════════════════════════════════
+
+        const kategoriCheck = await cekKategoriGradeKokurikuler(
+            kelasId,
+            semesterId,
+            semester,
+            jenis_penilaian
+        );
+
+        if (!kategoriCheck.exists) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    `Kategori Penilaian Belum Diatur\n\n` +
+                    `Aspek berikut belum memiliki konfigurasi grade untuk periode ${jenis_penilaian}:\n` +
+                    `${kategoriCheck.aspekTanpaKategori.map(n => `- ${n}`).join('\n')}\n\n` +
+                    `Solusi:\n` +
+                    `1. Buka menu "Atur Penilaian" > "Kategori Kokurikuler"\n` +
+                    `2. Pilih aspek yang belum diatur\n` +
+                    `3. Atur rentang nilai dan grade (minimal 1 kategori)\n` +
+                    `4. Setelah selesai, Anda dapat import nilai dari Excel`,
+                code: ERROR_MESSAGES.KATEGORI_BELUM_DIATUR,
+                data: {
+                    aspek_tanpa_kategori: kategoriCheck.aspekTanpaKategori,
+                    jenis_penilaian,
+                },
+            });
+        }
+
+        // Baca File Excel
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
@@ -597,11 +869,11 @@ exports.importNilaiKokurikuler = async (req, res) => {
         if (data.length < 2) {
             return res.status(400).json({
                 success: false,
-                message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.'
+                message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.',
             });
         }
 
-        // ─── Cari Header Row ────────────────────────────────────────────
+        // Cari Header Row
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(10, data.length); i++) {
             const row = data[i].map(c => String(c).trim().toLowerCase());
@@ -614,14 +886,14 @@ exports.importNilaiKokurikuler = async (req, res) => {
         if (headerRowIndex === -1) {
             return res.status(400).json({
                 success: false,
-                message: 'Header tidak ditemukan. Pastikan ada kolom "NIS" dan "Nama Siswa".'
+                message: 'Header tidak ditemukan. Pastikan ada kolom "NIS" dan "Nama Siswa".',
             });
         }
 
         const headers = data[headerRowIndex].map(h => String(h).trim());
         const dataStartIndex = headerRowIndex + 1;
 
-        // ─── Validasi Kolom Wajib ───────────────────────────────────────
+        // Validasi Kolom Wajib
         const requiredColumns = ['NIS', 'Nama Siswa'];
         const missingColumns = requiredColumns.filter(col =>
             !headers.some(h => h.toLowerCase() === col.toLowerCase())
@@ -630,7 +902,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
         if (missingColumns.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Kolom wajib tidak ditemukan: ${missingColumns.join(', ')}`
+                message: `Kolom wajib tidak ditemukan: ${missingColumns.join(', ')}`,
             });
         }
 
@@ -639,13 +911,13 @@ exports.importNilaiKokurikuler = async (req, res) => {
         const idxNISN = findColIndex('NISN');
         const idxNama = findColIndex('Nama Siswa');
 
-        // ─── Mapping Kolom Aspek ────────────────────────────────────────
+        // Mapping Kolom Aspek
         const aspekKolomMap = DAFTAR_ASPEK.map(asp => ({
             ...asp,
-            idx: findColIndex(asp.nama)
+            idx: findColIndex(asp.nama),
         }));
 
-        // ─── Filter Aspek yang Boleh Diimport ───────────────────────────
+        // Filter Aspek yang Boleh Diimport
         const aspekBolehImport = aspekKolomMap.filter(asp => {
             if (asp.idx < 0) return false;
             if (jenis_penilaian === 'PTS') {
@@ -654,7 +926,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
             return true;
         });
 
-        // 🆕 BARU: Identifikasi aspek yang TIDAK boleh diimport (untuk warning)
+        // Identifikasi aspek yang TIDAK boleh diimport (untuk warning)
         const aspekDilarangImport = aspekKolomMap.filter(asp => {
             if (asp.idx < 0) return false;
             return !aspekBolehImport.find(allowed => allowed.id === asp.id);
@@ -663,14 +935,11 @@ exports.importNilaiKokurikuler = async (req, res) => {
         if (aspekBolehImport.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: `Tidak ada kolom aspek yang valid untuk periode ${jenis_penilaian}.`
+                message: `Tidak ada kolom aspek yang valid untuk periode ${jenis_penilaian}.`,
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        // 🆕 HUMAN ERROR #1: VALIDASI FILE KOSONG TOTAL (DIPERBAIKI)
-        // ═══════════════════════════════════════════════════════════════════
-        
+        // Validasi File Kosong Total
         let adaBarisDataValid = false;
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -679,17 +948,18 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 break;
             }
         }
-        
+
         if (!adaBarisDataValid) {
             return res.status(400).json({
                 success: false,
-                message: `❌ File Excel kosong - tidak ada data sama sekali.\n\n` +
-                         `File hanya berisi header tanpa baris data siswa.\n\n` +
-                         `💡 Solusi:\n` +
-                         `1. Download ulang template Excel\n` +
-                         `2. Pastikan ada baris data siswa\n` +
-                         `3. Isi nilai pada kolom aspek kokurikuler\n` +
-                         `4. Upload kembali file yang sudah diisi`,
+                message:
+                    `File Excel kosong - tidak ada data sama sekali.\n\n` +
+                    `File hanya berisi header tanpa baris data siswa.\n\n` +
+                    `Solusi:\n` +
+                    `1. Download ulang template Excel\n` +
+                    `2. Pastikan ada baris data siswa\n` +
+                    `3. Isi nilai pada kolom aspek kokurikuler\n` +
+                    `4. Upload kembali file yang sudah diisi`,
                 data: {
                     total_baris: 0,
                     berhasil: 0,
@@ -699,43 +969,41 @@ exports.importNilaiKokurikuler = async (req, res) => {
                     errors: null,
                     warnings: [{
                         row: 0,
-                        message: 'File Excel kosong. Tidak ada baris data siswa.'
+                        message: 'File Excel kosong. Tidak ada baris data siswa.',
                     }],
-                    periode_aktif: jenis_penilaian
-                }
+                    periode_aktif: jenis_penilaian,
+                },
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        // 🆕 HUMAN ERROR #2: VALIDASI DATA SISWA KOSONG (NIS/Nama tidak ada)
-        // ═══════════════════════════════════════════════════════════════════
-        
+        // Validasi Data Siswa Kosong
         let adaDataSiswa = false;
         let barisDenganDataSiswa = 0;
-        
+
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-            
+
             const nis = String(row[idxNIS] || '').trim();
             const nama = String(row[idxNama] || '').trim();
-            
+
             if (nis || nama) {
                 adaDataSiswa = true;
                 barisDenganDataSiswa++;
             }
         }
-        
+
         if (!adaDataSiswa) {
             return res.status(400).json({
                 success: false,
-                message: `❌ File Excel tidak valid - tidak ada data siswa.\n\n` +
-                         `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
-                         `💡 Solusi:\n` +
-                         `1. Download ulang template Excel\n` +
-                         `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
-                         `3. Isi nilai pada kolom aspek kokurikuler\n` +
-                         `4. Upload kembali file yang sudah diisi`,
+                message:
+                    `File Excel tidak valid - tidak ada data siswa.\n\n` +
+                    `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
+                    `Solusi:\n` +
+                    `1. Download ulang template Excel\n` +
+                    `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
+                    `3. Isi nilai pada kolom aspek kokurikuler\n` +
+                    `4. Upload kembali file yang sudah diisi`,
                 data: {
                     total_baris: data.length - dataStartIndex,
                     berhasil: 0,
@@ -745,50 +1013,48 @@ exports.importNilaiKokurikuler = async (req, res) => {
                     errors: null,
                     warnings: [{
                         row: 0,
-                        message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.'
+                        message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.',
                     }],
-                    periode_aktif: jenis_penilaian
-                }
+                    periode_aktif: jenis_penilaian,
+                },
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        // 🆕 HUMAN ERROR #3: VALIDASI FILE TANPA NILAI (Hanya identitas siswa)
-        // ═══════════════════════════════════════════════════════════════════
-        
+        // Validasi File Tanpa Nilai
         let adaNilaiDiFile = false;
         let barisDenganNilai = 0;
-        
+
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-            
+
             let barisIniPunyaNilai = false;
-            
+
             for (const asp of aspekKolomMap) {
                 if (asp.idx < 0) continue;
-                
+
                 const nilaiStr = String(row[asp.idx] || '').trim();
-                
-                if (nilaiStr && nilaiStr !== '-' && nilaiStr !== '' && nilaiStr !== '🔒') {
+
+                if (nilaiStr && nilaiStr !== '-' && nilaiStr !== '' && nilaiStr !== 'Terkunci') {
                     adaNilaiDiFile = true;
                     barisIniPunyaNilai = true;
                 }
             }
-            
+
             if (barisIniPunyaNilai) barisDenganNilai++;
         }
-        
+
         if (!adaNilaiDiFile) {
             return res.status(400).json({
                 success: false,
-                message: `❌ File Excel tidak valid - tidak ada nilai yang diisi.\n\n` +
-                         `File hanya berisi data identitas siswa (Nama, NIS, NISN) tanpa nilai aspek kokurikuler.\n\n` +
-                         `💡 Solusi:\n` +
-                         `1. Download ulang template Excel\n` +
-                         `2. Isi kolom aspek kokurikuler (${aspekBolehImport.map(a => a.nama).join(', ')}) dengan angka 0-100\n` +
-                         `3. Upload kembali file yang sudah diisi\n\n` +
-                         `📊 Periode aktif: ${jenis_penilaian}`,
+                message:
+                    `File Excel tidak valid - tidak ada nilai yang diisi.\n\n` +
+                    `File hanya berisi data identitas siswa (Nama, NIS, NISN) tanpa nilai aspek kokurikuler.\n\n` +
+                    `Solusi:\n` +
+                    `1. Download ulang template Excel\n` +
+                    `2. Isi kolom aspek kokurikuler (${aspekBolehImport.map(a => a.nama).join(', ')}) dengan angka 0-100\n` +
+                    `3. Upload kembali file yang sudah diisi\n\n` +
+                    `Periode aktif: ${jenis_penilaian}`,
                 data: {
                     total_baris: data.length - dataStartIndex,
                     berhasil: 0,
@@ -798,19 +1064,19 @@ exports.importNilaiKokurikuler = async (req, res) => {
                     errors: null,
                     warnings: [{
                         row: 0,
-                        message: 'File Excel tidak berisi nilai. Hanya data identitas siswa yang terdeteksi.'
+                        message: 'File Excel tidak berisi nilai. Hanya data identitas siswa yang terdeteksi.',
                     }],
-                    periode_aktif: jenis_penilaian
-                }
+                    periode_aktif: jenis_penilaian,
+                },
             });
         }
 
-        // ─── Ambil Data Siswa ───────────────────────────────────────────
+        // Ambil Data Siswa
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
-             FROM siswa s
-             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
+       FROM siswa s
+       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+       WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
             [kelasId, indukId]
         );
 
@@ -819,12 +1085,13 @@ exports.importNilaiKokurikuler = async (req, res) => {
             if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s;
         });
 
-        // ─── Ambil Konfigurasi Grade ────────────────────────────────────
-        const [gradeConfigRows] = await db.execute(`
-            SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
-            FROM kategori_grade_kokurikuler
-            WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
-        `, [kelasId, semesterId, semester, jenis_penilaian]);
+        // Ambil Konfigurasi Grade
+        const [gradeConfigRows] = await db.execute(
+            `SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
+       FROM kategori_grade_kokurikuler
+       WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
+            [kelasId, semesterId, semester, jenis_penilaian]
+        );
 
         const findGradeByNilai = (aspekId, nilai) => {
             if (nilai === null || nilai === undefined) return { grade: null, deskripsi: null };
@@ -836,7 +1103,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
             return config ? { grade: config.grade, deskripsi: config.deskripsi } : { grade: null, deskripsi: null };
         };
 
-        // ─── Proses Data per Baris ──────────────────────────────────────
+        // Proses Data per Baris
         await connection.beginTransaction();
 
         const errors = [];
@@ -844,15 +1111,15 @@ exports.importNilaiKokurikuler = async (req, res) => {
         let successCount = 0;
         let skippedCount = 0;
         let totalNilaiDisimpan = 0;
-        
-        // 🆕 HUMAN ERROR #4: Track duplikasi NIS
+
+        // Track duplikasi NIS
         const nisDiproses = new Set();
         const nisDuplikat = [];
-        
-        // 🆕 HUMAN ERROR #5: Track duplikasi NISN
+
+        // Track duplikasi NISN
         const nisnDiproses = new Set();
         const nisnDuplikat = [];
-        
+
         // Track kolom yang diabaikan
         let kolomDiabaikanCount = 0;
         const kolomDiabaikanSet = new Set();
@@ -872,27 +1139,27 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 continue;
             }
 
-            // 🆕 HUMAN ERROR #4: Cek duplikasi NIS
+            // Cek duplikasi NIS
             if (nisDiproses.has(nis)) {
                 nisDuplikat.push({ row: i + 1, nis, nama: namaSiswa });
-                warnings.push({ 
-                    row: i + 1, 
-                    message: `⚠️ Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                warnings.push({
+                    row: i + 1,
+                    message: `Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.`,
                 });
                 skippedCount++;
                 continue;
             }
             nisDiproses.add(nis);
 
-            // 🆕 HUMAN ERROR #5: Cek duplikasi NISN
+            // Cek duplikasi NISN
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 if (nisnExcel) {
                     if (nisnDiproses.has(nisnExcel)) {
                         nisnDuplikat.push({ row: i + 1, nisn: nisnExcel, nama: namaSiswa });
-                        warnings.push({ 
-                            row: i + 1, 
-                            message: `⚠️ Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                        warnings.push({
+                            row: i + 1,
+                            message: `Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.`,
                         });
                         skippedCount++;
                         continue;
@@ -905,7 +1172,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
             if (!siswa) {
                 errors.push({
                     row: i + 1,
-                    message: `Baris ${i + 1}: Siswa dengan NIS "${nis}" tidak ditemukan di kelas ini`
+                    message: `Baris ${i + 1}: Siswa dengan NIS "${nis}" tidak ditemukan di kelas ini`,
                 });
                 skippedCount++;
                 continue;
@@ -918,15 +1185,14 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 if (nisnExcel && nisnDB && nisnExcel !== nisnDB) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}: NISN tidak cocok. Excel: "${nisnExcel}", DB: "${nisnDB}"`
+                        message: `Baris ${i + 1}: NISN tidak cocok. Excel: "${nisnExcel}", DB: "${nisnDB}"`,
                     });
                     skippedCount++;
                     continue;
                 }
             }
 
-            // ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
-            // Hanya validasi nama cocok dengan DB
+            // Validasi nama cocok dengan DB (nama boleh duplikat)
             if (idxNama >= 0) {
                 const namaExcel = String(row[idxNama] || '').trim().toLowerCase();
                 const namaDB = String(siswa.nama_lengkap || '').trim().toLowerCase();
@@ -935,43 +1201,43 @@ exports.importNilaiKokurikuler = async (req, res) => {
                     if (similarity < 0.7) {
                         errors.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Nama tidak cocok. Excel: "${row[idxNama]}", DB: "${siswa.nama_lengkap}"`
+                            message: `Baris ${i + 1}: Nama tidak cocok. Excel: "${row[idxNama]}", DB: "${siswa.nama_lengkap}"`,
                         });
                         skippedCount++;
                         continue;
                     } else {
                         warnings.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.`
+                            message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.`,
                         });
                     }
                 }
             }
 
-            // 🆕 BARU: Deteksi kolom aspek yang diisi tapi diabaikan (PTS aktif)
+            // Deteksi kolom aspek yang diisi tapi diabaikan (PTS aktif)
             if (jenis_penilaian === 'PTS' && aspekDilarangImport.length > 0) {
                 for (const aspek of aspekDilarangImport) {
                     const nilaiStr = String(row[aspek.idx] || '').trim();
-                    if (nilaiStr && nilaiStr !== '🔒' && nilaiStr !== '-' && nilaiStr !== '') {
+                    if (nilaiStr && nilaiStr !== 'Terkunci' && nilaiStr !== '-' && nilaiStr !== '') {
                         kolomDiabaikanCount++;
                         kolomDiabaikanSet.add(aspek.nama);
                     }
                 }
             }
 
-            // ─── Proses Setiap Aspek yang Boleh Diimport ────────────────
+            // Proses Setiap Aspek yang Boleh Diimport
             const nilaiAspek = {};
             let rowSavedCount = 0;
 
             for (const aspek of aspekBolehImport) {
                 const nilaiStr = String(row[aspek.idx] || '').trim();
-                if (nilaiStr === '' || nilaiStr === '-' || nilaiStr === '🔒') continue;
+                if (nilaiStr === '' || nilaiStr === '-' || nilaiStr === 'Terkunci') continue;
 
                 const nilai = parseFloat(nilaiStr);
                 if (isNaN(nilai)) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${aspek.nama}": "${nilaiStr}" bukan angka`
+                        message: `Baris ${i + 1}, Kolom "${aspek.nama}": "${nilaiStr}" bukan angka`,
                     });
                     continue;
                 }
@@ -979,7 +1245,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 if (!Number.isInteger(nilai)) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${aspek.nama}": Nilai harus bilangan bulat`
+                        message: `Baris ${i + 1}, Kolom "${aspek.nama}": Nilai harus bilangan bulat`,
                     });
                     continue;
                 }
@@ -987,7 +1253,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 if (nilai < 0 || nilai > 100) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${aspek.nama}": Nilai ${nilai} di luar rentang 0-100`
+                        message: `Baris ${i + 1}, Kolom "${aspek.nama}": Nilai ${nilai} di luar rentang 0-100`,
                     });
                     continue;
                 }
@@ -999,34 +1265,39 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 totalNilaiDisimpan++;
             }
 
-            // ─── Simpan ke Database (UPSERT) ────────────────────────────
+            // Simpan ke Database (UPSERT)
             if (rowSavedCount > 0) {
                 for (const [aspekId, data] of Object.entries(nilaiAspek)) {
                     const aspekIdNum = parseInt(aspekId);
-                    
+
                     const existing = await kokurikulerModel.checkExistingNilai(
-                        siswa.id_siswa, aspekIdNum, kelasId, semesterId, semester, jenis_penilaian
+                        siswa.id_siswa,
+                        aspekIdNum,
+                        kelasId,
+                        semesterId,
+                        semester,
+                        jenis_penilaian
                     );
 
                     if (existing) {
                         await kokurikulerModel.updateNilai(
-                            existing.id_nilai_kokurikuler, 
-                            data.nilai, 
-                            data.grade, 
-                            data.deskripsi, 
+                            existing.id_nilai_kokurikuler,
+                            data.nilai,
+                            data.grade,
+                            data.deskripsi,
                             null
                         );
                     } else {
                         await kokurikulerModel.insertNilai(
-                            siswa.id_siswa, 
-                            aspekIdNum, 
-                            kelasId, 
-                            semesterId, 
-                            semester, 
-                            jenis_penilaian, 
-                            data.nilai, 
-                            data.grade, 
-                            data.deskripsi, 
+                            siswa.id_siswa,
+                            aspekIdNum,
+                            kelasId,
+                            semesterId,
+                            semester,
+                            jenis_penilaian,
+                            data.nilai,
+                            data.grade,
+                            data.deskripsi,
                             null
                         );
                     }
@@ -1040,56 +1311,58 @@ exports.importNilaiKokurikuler = async (req, res) => {
 
         await connection.commit();
 
-        // ─── Build Response ─────────────────────────────────────────────
+        // Build Response
         let message = '';
         let success = true;
 
         if (successCount > 0) {
-            message = `✅ Import berhasil! ${successCount} siswa berhasil diimport dengan ${totalNilaiDisimpan} nilai disimpan.`;
+            message = `Import berhasil! ${successCount} siswa berhasil diimport dengan ${totalNilaiDisimpan} nilai disimpan.`;
         } else {
-            message = 'ℹ️ Tidak ada data yang berhasil diimport.';
+            message = 'Tidak ada data yang berhasil diimport.';
         }
 
-        // 🆕 BARU: Tampilkan warning eksplisit jika ada kolom yang diabaikan
+        // Tampilkan warning eksplisit jika ada kolom yang diabaikan
         if (jenis_penilaian === 'PTS' && kolomDiabaikanCount > 0) {
             const namaKolom = Array.from(kolomDiabaikanSet).join(', ');
             warnings.unshift({
                 row: 0,
-                message: `⚠️ PERHATIAN: Kolom [${namaKolom}] DIABAIKAN karena periode PTS sedang aktif. Hanya kolom Mutaba'ah yang diimport. Silakan input kolom lain saat periode PAS aktif.`
+                message:
+                    `PERHATIAN: Kolom [${namaKolom}] DIABAIKAN karena periode PTS sedang aktif. ` +
+                    `Hanya kolom Mutaba'ah yang diimport. Silakan input kolom lain saat periode PAS aktif.`,
             });
         }
 
         if (errors.length > 0) {
-            message += `\n\n⚠️ Ada ${errors.length} error yang perlu diperbaiki.`;
+            message += `\n\nAda ${errors.length} error yang perlu diperbaiki.`;
         }
 
-        // 🆕 BARU: Tampilkan info duplikasi NIS
+        // Tampilkan info duplikasi NIS
         if (nisDuplikat.length > 0) {
             const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
             warnings.unshift({
                 row: 0,
-                message: `⚠️ DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+                message: `DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`,
             });
-            
-            message += `\n\n⚠️ PERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+
+            message += `\n\nPERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
         }
-        
-        // 🆕 BARU: Tampilkan info duplikasi NISN
+
+        // Tampilkan info duplikasi NISN
         if (nisnDuplikat.length > 0) {
             const duplikatInfo = nisnDuplikat.map(d => `Baris ${d.row} (NISN: ${d.nisn}, ${d.nama})`).join(', ');
             warnings.unshift({
                 row: 0,
-                message: `⚠️ DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+                message: `DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`,
             });
-            
-            message += `\n\n⚠️ PERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
-        }
-        
-        message += `\n💡 INFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
 
-        // 🆕 BARU: Tambahkan info kolom yang diabaikan di message
+            message += `\n\nPERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+        }
+
+        message += `\nINFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
+
+        // Tambahkan info kolom yang diabaikan di message
         if (jenis_penilaian === 'PTS' && kolomDiabaikanCount > 0) {
-            message += `\n\n💡 INFO: Kolom [${Array.from(kolomDiabaikanSet).join(', ')}] tidak diimport karena hanya Mutaba'ah yang aktif saat PTS.`;
+            message += `\n\nINFO: Kolom [${Array.from(kolomDiabaikanSet).join(', ')}] tidak diimport karena hanya Mutaba'ah yang aktif saat PTS.`;
         }
 
         res.json({
@@ -1105,9 +1378,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
                 warnings: warnings.length > 0 ? warnings.slice(0, 10) : null,
                 periode_aktif: jenis_penilaian,
                 aspek_diimport: aspekBolehImport.map(a => a.nama),
-                aspek_diabaikan: jenis_penilaian === 'PTS' 
-                    ? aspekDilarangImport.map(a => a.nama) 
-                    : [],
+                aspek_diabaikan: jenis_penilaian === 'PTS' ? aspekDilarangImport.map(a => a.nama) : [],
                 kolom_diabaikan_count: kolomDiabaikanCount,
                 baris_dengan_nilai: barisDenganNilai,
                 baris_dengan_data_siswa: barisDenganDataSiswa,
@@ -1119,18 +1390,98 @@ exports.importNilaiKokurikuler = async (req, res) => {
                     ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
                     : jenis_penilaian === 'PTS' && kolomDiabaikanCount > 0
                         ? `Hanya Mutaba'ah yang diimport. Kolom lain diabaikan.`
-                        : null
-            }
+                        : null,
+            },
         });
-
     } catch (err) {
         await connection.rollback();
         console.error('Error importNilaiKokurikuler:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengimport nilai: ' + err.message
+            message: 'Gagal mengimport nilai: ' + err.message,
         });
     } finally {
         connection.release();
+    }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 8. CEK STATUS KATEGORI KOKURIKULER
+// Fungsi: Cek apakah kategori grade sudah diatur untuk periode aktif
+// Digunakan frontend untuk tampilkan warning proaktif sebelum input nilai
+// ═════════════════════════════════════════════════════════════════════════════
+
+exports.cekStatusKategoriKokurikuler = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        if (!taAktif) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tahun ajaran aktif belum diatur',
+            });
+        }
+
+        const semesterId = taAktif.id_tahun_ajaran;
+        const semester = taAktif.semester;
+        const jenis_penilaian = getJenisPenilaian(taAktif.status_pts, taAktif.status_pas);
+
+        // Jika periode belum aktif, return info
+        if (!jenis_penilaian) {
+            return res.json({
+                success: true,
+                data: {
+                    configured: false,
+                    aspek_tanpa_kategori: [],
+                    aspek_dengan_celah: [],
+                    jenis_penilaian: null,
+                    message: 'Periode penilaian belum aktif',
+                },
+            });
+        }
+
+        const kelas_id = await getKelasIdByGuru(userId, semesterId);
+        if (!kelas_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Kelas tidak ditemukan',
+            });
+        }
+
+        // Gunakan helper yang sudah diperbaiki
+        const kategoriCheck = await cekKategoriGradeKokurikuler(
+            kelas_id,
+            semesterId,
+            semester,
+            jenis_penilaian
+        );
+
+        // Build pesan yang lebih informatif
+        let message = '';
+        if (kategoriCheck.exists) {
+            message = 'Semua kategori sudah diatur dengan lengkap';
+        } else {
+            const totalMasalah = kategoriCheck.aspekTanpaKategori.length + kategoriCheck.aspekDenganCelah.length;
+            message = `Ditemukan ${totalMasalah} masalah pada kategori grade`;
+        }
+
+        res.json({
+            success: true,
+            data: {
+                configured: kategoriCheck.exists,
+                aspek_tanpa_kategori: kategoriCheck.aspekTanpaKategori,
+                aspek_dengan_celah: kategoriCheck.aspekDenganCelah,
+                jenis_penilaian,
+                semester,
+                message: message,
+            },
+        });
+    } catch (err) {
+        console.error('Error cekStatusKategoriKokurikuler:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Gagal mengecek status kategori: ' + err.message,
+        });
     }
 };

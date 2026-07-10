@@ -1089,6 +1089,7 @@ export default function AturPenilaianGuruKelasClient() {
                     {/* KOKURIKULER TAB */}
                     {activeTab === 'kokurikuler' && (
                         <div>
+                            <CoverageWarning coverage={coverageInfo} />
                             {kategoriLoading ? (
                                 <div className="py-16 text-center">
                                     <div className="w-10 h-10 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />

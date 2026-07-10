@@ -12,6 +12,11 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 // ====== KONSTANTA API ======
 const API = 'http://localhost:5000/api/guru-bidang-studi';
 
+// ====== KONSTANTA ERROR CODE ======
+const ERROR_CODES = {
+    KONFIGURASI_BELUM_LENGKAP: 'KONFIGURASI_BELUM_LENGKAP',
+};
+
 // ====== DESIGN TOKENS ======
 const THEME = {
     colors: {
@@ -79,6 +84,20 @@ interface SiswaNilai {
     nilai_rapor_pas: number;
     deskripsi_pas: string;
     nilai: Record<number, number | null>;
+}
+
+// BARU: Interface untuk status konfigurasi penilaian
+interface KategoriStatus {
+    configured: boolean;
+    bobot: {
+        total: number;
+        status: 'lengkap' | 'belum_100' | 'error';
+    };
+    kategori: {
+        covered: boolean;
+        celah: string[];
+    };
+    message: string;
 }
 
 // ====== GLOBAL STYLES ======
@@ -162,14 +181,14 @@ const PeriodNotActiveModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
                     <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0 ring-4 ring-orange-100">
                         <AlertCircle size={24} className="text-orange-500" />
                     </div>
-                    <h3 className="text-base font-bold text-gray-900">⏳ Periode Penilaian Belum Aktif</h3>
+                    <h3 className="text-base font-bold text-gray-900">Periode Penilaian Belum Aktif</h3>
                 </div>
                 <p className="text-sm text-gray-600 mb-4 leading-relaxed">
                     Baik <strong>PTS</strong> maupun <strong>PAS</strong> belum dibuka oleh admin. Anda dapat melihat data siswa sebagai persiapan.
                 </p>
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6">
                     <p className="text-xs text-orange-800">
-                        <strong>💡 Tip:</strong> Silakan hubungi admin untuk membuka periode penilaian agar dapat menginput nilai.
+                        <strong>Tip:</strong> Silakan hubungi admin untuk membuka periode penilaian agar dapat menginput nilai.
                     </p>
                 </div>
                 <button
@@ -199,6 +218,10 @@ export default function InputNilaiGBSClient() {
 
     const [bobotSudahDiatur, setBobotSudahDiatur] = useState<boolean>(true);
     const [showBobotWarning, setShowBobotWarning] = useState(false);
+
+    // BARU: State untuk status konfigurasi penilaian
+    const [kategoriStatus, setKategoriStatus] = useState<KategoriStatus | null>(null);
+    const [kategoriLoading, setKategoriLoading] = useState(false);
 
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
     const [kelasList, setKelasList] = useState<KelasItem[]>([]);
@@ -232,14 +255,14 @@ export default function InputNilaiGBSClient() {
     const [editingSiswa, setEditingSiswa] = useState<SiswaNilai | null>(null);
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
 
-    // 🆕 BARU: State untuk tracking error per komponen saat edit nilai
+    // BARU: State untuk tracking error per komponen saat edit nilai
     const [editingErrors, setEditingErrors] = useState<Record<number, string>>({});
 
     const [saving, setSaving] = useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-    // 🆕 BARU: STATE untuk Import Nilai dari Excel
+    // BARU: STATE untuk Import Nilai dari Excel
     const [showImportModal, setShowImportModal] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -251,8 +274,72 @@ export default function InputNilaiGBSClient() {
     const isReadOnly = isPeriodNotActive || isPeriodLocked;
     const readOnlyReason: 'not_open' | 'locked' | null = isPeriodLocked ? 'locked' : (isPeriodNotActive ? 'not_open' : null);
 
+    // BARU: Tentukan apakah konfigurasi belum lengkap
+    const konfigurasiBelumLengkap = kategoriStatus && !kategoriStatus.configured;
+
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: FUNGSI VALIDASI NILAI (0-100)
+    // BARU: FUNGSI CEK STATUS KONFIGURASI PENILAIAN
+    // ═════════════════════════════════════════════════════════════════════════
+    const cekStatusKategori = useCallback(async (mapelId: number, kelasId: number) => {
+        setKategoriLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const res = await fetch(
+                `${API}/nilai/cek-status-kategori?mapel_id=${mapelId}&kelas_id=${kelasId}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    setKategoriStatus(data.data);
+                }
+            }
+        } catch (err) {
+            console.error('Error cekStatusKategori:', err);
+        } finally {
+            setKategoriLoading(false);
+        }
+    }, []);
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // BARU: FUNGSI BANGUN PESAN WARNING KONFIGURASI
+    // ═════════════════════════════════════════════════════════════════════════
+    const buildKonfigurasiWarningMessage = (status: KategoriStatus): string => {
+        const masalah: string[] = [];
+
+        if (status.bobot.status !== 'lengkap') {
+            masalah.push(
+                `• Bobot komponen belum 100% (saat ini: ${status.bobot.total}%)\n` +
+                `  Silakan atur di menu "Atur Penilaian" > "Bobot Penilaian"`
+            );
+        }
+
+        if (!status.kategori.covered) {
+            masalah.push(
+                `• Kategori nilai rapor belum lengkap\n` +
+                `  Celah rentang: ${status.kategori.celah.join(', ')}\n` +
+                `  Silakan atur di menu "Atur Penilaian" > "Kategori Akademik"`
+            );
+        }
+
+        return (
+            `Konfigurasi Penilaian Belum Lengkap\n\n` +
+            `Masalah yang ditemukan:\n${masalah.join('\n\n')}\n\n` +
+            `Solusi:\n` +
+            `1. Buka menu "Atur Penilaian"\n` +
+            `2. Atur bobot komponen agar total 100%\n` +
+            `3. Atur kategori nilai rapor agar rentang 0-100 tercover\n` +
+            `4. Setelah selesai, Anda dapat menginput nilai siswa`
+        );
+    };
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // FUNGSI VALIDASI NILAI (0-100)
     // ═════════════════════════════════════════════════════════════════════════
     const validateNilai = (komponenId: number, nilai: number | null): string | null => {
         if (nilai === null) return null;
@@ -269,7 +356,7 @@ export default function InputNilaiGBSClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: HANDLER INPUT NILAI DENGAN VALIDASI
+    // HANDLER INPUT NILAI DENGAN VALIDASI
     // ═════════════════════════════════════════════════════════════════════════
     const handleNilaiChange = (komponenId: number, value: string) => {
         if (value === '' || /^\d+$/.test(value)) {
@@ -437,6 +524,7 @@ export default function InputNilaiGBSClient() {
             setCurrentKelas(null);
             setBobotSudahDiatur(true);
             setShowBobotWarning(false);
+            setKategoriStatus(null);
             return;
         }
 
@@ -516,6 +604,9 @@ export default function InputNilaiGBSClient() {
                 } else {
                     setShowBobotWarning(false);
                 }
+
+                // BARU: Cek status konfigurasi penilaian
+                cekStatusKategori(selectedMapelId, selectedKelasId);
             } catch (err: any) {
                 showModal({
                     type: 'error',
@@ -527,7 +618,7 @@ export default function InputNilaiGBSClient() {
             }
         };
         fetchNilai();
-    }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal, jenisPenilaianAktif, isReadOnly]);
+    }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal, jenisPenilaianAktif, isReadOnly, cekStatusKategori]);
 
     // ====== FILTER & PAGINATION ======
     useEffect(() => {
@@ -604,10 +695,20 @@ export default function InputNilaiGBSClient() {
             } else {
                 showModal({
                     type: 'warning',
-                    title: '⏳ Mode Baca Saja',
+                    title: 'Mode Baca Saja',
                     message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengedit nilai siswa.\n\nSilakan tunggu admin membuka periode penilaian.'
                 });
             }
+            return;
+        }
+
+        // BARU: Cek konfigurasi penilaian sebelum edit
+        if (konfigurasiBelumLengkap && kategoriStatus) {
+            showModal({
+                type: 'error',
+                title: 'Konfigurasi Penilaian Belum Lengkap',
+                message: buildKonfigurasiWarningMessage(kategoriStatus)
+            });
             return;
         }
 
@@ -672,8 +773,8 @@ export default function InputNilaiGBSClient() {
         if (jenisPenilaianAktif === 'PAS' && !bobotSudahDiatur) {
             showModal({
                 type: 'warning',
-                title: '⚠️ Bobot Penilaian Belum Diatur',
-                message: `Bobot penilaian untuk mata pelajaran "${currentMapel?.nama_mapel}" belum diatur.\n\nNilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata).\n\n💡 Tip: Atur bobot terlebih dahulu di menu "Atur Penilaian" untuk hasil yang akurat.\n\nApakah Anda tetap ingin melanjutkan menyimpan nilai?`
+                title: 'Bobot Penilaian Belum Diatur',
+                message: `Bobot penilaian untuk mata pelajaran "${currentMapel?.nama_mapel}" belum diatur.\n\nNilai rapor akan dihitung dengan bobot default (UH, PTS, PAS sama rata).\n\nTip: Atur bobot terlebih dahulu di menu "Atur Penilaian" untuk hasil yang akurat.\n\nApakah Anda tetap ingin melanjutkan menyimpan nilai?`
             });
             setEditClosing(true);
             setTimeout(() => {
@@ -706,6 +807,12 @@ export default function InputNilaiGBSClient() {
 
             if (!res.ok) {
                 const err = await res.json().catch(() => ({ message: 'Gagal menyimpan' }));
+
+                // BARU: Handle error konfigurasi belum lengkap
+                if (err.code === ERROR_CODES.KONFIGURASI_BELUM_LENGKAP) {
+                    throw new Error(err.message);
+                }
+
                 throw new Error(err.message);
             }
 
@@ -753,7 +860,7 @@ export default function InputNilaiGBSClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: HANDLER IMPORT NILAI (DENGAN 4 HUMAN ERROR PREVENTION)
+    // HANDLER IMPORT NILAI (DENGAN 4 HUMAN ERROR PREVENTION)
     // ═════════════════════════════════════════════════════════════════════════
 
     const openImportModal = () => {
@@ -777,13 +884,23 @@ export default function InputNilaiGBSClient() {
             return;
         }
 
+        // BARU: Cek konfigurasi penilaian sebelum import
+        if (konfigurasiBelumLengkap && kategoriStatus) {
+            showModal({
+                type: 'error',
+                title: 'Konfigurasi Penilaian Belum Lengkap',
+                message: buildKonfigurasiWarningMessage(kategoriStatus)
+            });
+            return;
+        }
+
         setImportFile(null);
         if (importFileInputRef.current) importFileInputRef.current.value = '';
         setShowImportModal(true);
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: FUNGSI DOWNLOAD ERROR REPORT (CSV)
+    // FUNGSI DOWNLOAD ERROR REPORT (CSV)
     // ═════════════════════════════════════════════════════════════════════════
     const downloadErrorReport = (errors: any[]) => {
         const headers = ['No', 'Baris', 'Nama Siswa', 'Catatan', 'Alasan Error'];
@@ -844,6 +961,16 @@ export default function InputNilaiGBSClient() {
             return;
         }
 
+        // BARU: Cek konfigurasi penilaian sebelum download template
+        if (konfigurasiBelumLengkap && kategoriStatus) {
+            showModal({
+                type: 'error',
+                title: 'Konfigurasi Penilaian Belum Lengkap',
+                message: buildKonfigurasiWarningMessage(kategoriStatus)
+            });
+            return;
+        }
+
         setDownloadingTemplate(true);
         try {
             const token = localStorage.getItem('token');
@@ -867,17 +994,17 @@ export default function InputNilaiGBSClient() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            // ✅ FIX: Tutup modal import DULU
+            // FIX: Tutup modal import DULU
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // ✅ FIX: Tampilkan notifikasi success SETELAH modal import tertutup
+            // FIX: Tampilkan notifikasi success SETELAH modal import tertutup
             setTimeout(() => {
                 showModal({
                     type: 'success',
                     title: 'Template Berhasil Diunduh',
-                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file Excel\n4. Klik tombol "Import Nilai" untuk upload file'
+                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\nLangkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file Excel\n4. Klik tombol "Import Nilai" untuk upload file'
                 });
             }, 300);
 
@@ -933,7 +1060,7 @@ export default function InputNilaiGBSClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: EXECUTE IMPORT (DENGAN 4 HUMAN ERROR PREVENTION)
+    // EXECUTE IMPORT (DENGAN 4 HUMAN ERROR PREVENTION)
     // ═════════════════════════════════════════════════════════════════════════
     const executeImportNilai = async () => {
         if (!importFile || !selectedMapelId || !selectedKelasId) {
@@ -962,6 +1089,17 @@ export default function InputNilaiGBSClient() {
             const data = await response.json();
 
             if (!response.ok) {
+                // BARU: Handle error konfigurasi belum lengkap
+                if (data.code === ERROR_CODES.KONFIGURASI_BELUM_LENGKAP) {
+                    showModal({
+                        type: 'error',
+                        title: 'Konfigurasi Penilaian Belum Lengkap',
+                        message: data.message
+                    });
+                    setImporting(false);
+                    return;
+                }
+
                 throw new Error(data.message || 'Gagal mengimport nilai');
             }
 
@@ -989,14 +1127,12 @@ export default function InputNilaiGBSClient() {
                 }
             }
 
-            // ✅ FIX: Tutup modal import DULU
+            // FIX: Tutup modal import DULU
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // ═══════════════════════════════════════════════════════════════════
-            // 🆕 BARU: PARSING 4 HUMAN ERROR PREVENTION DARI BACKEND
-            // ═══════════════════════════════════════════════════════════════════
+            // PARSING 4 HUMAN ERROR PREVENTION DARI BACKEND
             const errors = data.data?.errors || [];
             const warnings = data.data?.warnings || [];
             const totalErrors = errors.length;
@@ -1007,40 +1143,40 @@ export default function InputNilaiGBSClient() {
             const barisDenganDataSiswa = data.data?.baris_dengan_data_siswa || 0;
             const pesanPenting = data.data?.pesan_penting;
 
-            // 🆕 AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            // AUTO-DOWNLOAD CSV JIKA ERROR > 4
             if (totalErrors > 4) {
                 downloadErrorReport(errors);
             }
 
-            // ✅ Build success message dengan semua info dari backend
+            // Build success message dengan semua info dari backend
             let successMessage = data.message;
 
-            // 🆕 Info baris dengan nilai dan data siswa
+            // Info baris dengan nilai dan data siswa
             if (barisDenganDataSiswa > 0) {
-                successMessage += `\n\n📝 ${barisDenganDataSiswa} baris data siswa diproses`;
+                successMessage += `\n\n${barisDenganDataSiswa} baris data siswa diproses`;
             }
             if (barisDenganNilai > 0) {
-                successMessage += `\n💯 ${barisDenganNilai} baris berisi nilai`;
+                successMessage += `\n${barisDenganNilai} baris berisi nilai`;
             }
 
-            // 🆕 Detail error
+            // Detail error
             if (totalErrors > 0) {
                 if (totalErrors <= 4) {
-                    successMessage += `\n\n📋 Detail Error:\n${errors.slice(0, 4).map((e: any) => `• ${e.message}`).join('\n')}`;
+                    successMessage += `\n\nDetail Error:\n${errors.slice(0, 4).map((e: any) => `• ${e.message}`).join('\n')}`;
                 } else {
-                    successMessage += `\n\n📋 Contoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
-                    successMessage += `\n\n📥 File CSV error telah diunduh otomatis!\n   (error_import_nilai_*.csv)`;
+                    successMessage += `\n\nContoh Error (3 dari ${totalErrors}):\n${errors.slice(0, 3).map((e: any) => `• ${e.message}`).join('\n')}`;
+                    successMessage += `\n\nFile CSV error telah diunduh otomatis!\n   (error_import_nilai_*.csv)`;
                 }
             }
 
-            // 🆕 Detail warnings
+            // Detail warnings
             if (totalWarnings > 0) {
-                successMessage += `\n\nℹ️ Peringatan:\n${warnings.slice(0, 10).map((w: any) => `• ${w.message}`).join('\n')}`;
+                successMessage += `\n\nPeringatan:\n${warnings.slice(0, 10).map((w: any) => `• ${w.message}`).join('\n')}`;
             }
 
-            // 🆕 Info NIS duplikat dengan detail
+            // Info NIS duplikat dengan detail
             if (nisDuplikatCount > 0) {
-                successMessage += `\n\n⚠️ DITEMUKAN ${nisDuplikatCount} NIS DUPLIKAT.`;
+                successMessage += `\n\nDITEMUKAN ${nisDuplikatCount} NIS DUPLIKAT.`;
                 if (nisDuplikatDetail.length > 0) {
                     successMessage += `\n   Detail: ${nisDuplikatDetail.slice(0, 3).map((d: any) => `Baris ${d.row} (NIS: ${d.nis})`).join(', ')}`;
                     if (nisDuplikatDetail.length > 3) {
@@ -1050,9 +1186,9 @@ export default function InputNilaiGBSClient() {
                 successMessage += `\n   Hanya data pertama yang diproses, duplikat diabaikan.`;
             }
 
-            // 🆕 Pesan penting
+            // Pesan penting
             if (pesanPenting) {
-                successMessage += `\n\n🔔 ${pesanPenting}`;
+                successMessage += `\n\n${pesanPenting}`;
             }
 
             setTimeout(() => {
@@ -1165,36 +1301,95 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {showBobotWarning && jenisPenilaianAktif === 'PAS' && !isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
-                    style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
-                    <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-yellow-600" />
-                    <div className="flex-1">
-                        <p className="text-sm font-bold mb-1 text-yellow-900">
-                            ⚠️ Bobot Penilaian Belum Diatur
-                        </p>
-                        <p className="text-xs text-yellow-800">
-                            Bobot penilaian untuk mata pelajaran <strong>{currentMapel?.nama_mapel}</strong> belum diatur.
-                            Nilai rapor akan dihitung dengan bobot default.
-                        </p>
-                        <div className="flex gap-2 mt-2">
-                            <button
-                                onClick={() => {
-                                    setShowBobotWarning(false);
-                                    window.location.href = '/guru-bidang-studi/atur-penilaian';
-                                }}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                style={{ background: '#fcd34d', color: '#78350f', border: '1px solid #f59e0b' }}
-                            >
-                                Atur Bobot Sekarang
-                            </button>
-                            <button
-                                onClick={() => setShowBobotWarning(false)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                style={{ background: '#fff', color: '#78350f', border: '1px solid #fcd34d' }}
-                            >
-                                Tutup
-                            </button>
+            {/* BARU: Banner warning konfigurasi belum lengkap */}
+            {konfigurasiBelumLengkap && kategoriStatus && !isReadOnly && selectedMapelId && selectedKelasId && (
+                <div
+                    className="mb-5 rounded-xl overflow-hidden animate-fade-in-up"
+                    style={{ border: '1px solid #fca5a5' }}
+                >
+                    <div
+                        className="flex items-center gap-3 px-5 py-3"
+                        style={{ background: '#fee2e2' }}
+                    >
+                        <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center"
+                            style={{ background: '#fecaca' }}
+                        >
+                            <AlertCircle size={16} className="text-red-700" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-red-900">
+                                Konfigurasi Penilaian Belum Lengkap
+                            </p>
+                            <p className="text-xs text-red-700">
+                                {kategoriStatus?.message || 'Ada masalah pada konfigurasi penilaian'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="px-5 py-4 bg-white">
+                        <div className="space-y-3">
+                            {/* Info bobot */}
+                            {kategoriStatus?.bobot.status !== 'lengkap' && (
+                                <div
+                                    className="flex items-start gap-3 p-3 rounded-lg"
+                                    style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}
+                                >
+                                    <AlertCircle
+                                        size={16}
+                                        className="text-yellow-600 flex-shrink-0 mt-0.5"
+                                    />
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold text-yellow-900 mb-1">
+                                            Bobot Komponen Belum 100%
+                                        </p>
+                                        <p className="text-xs text-yellow-800">
+                                            Total bobot saat ini:{' '}
+                                            <strong>{kategoriStatus?.bobot.total || 0}%</strong>
+                                        </p>
+                                        <p className="text-xs text-yellow-700 mt-1">
+                                            Silakan atur di menu "Atur Penilaian" &gt; "Bobot Penilaian"
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            {/* Info kategori */}
+                            {!kategoriStatus?.kategori?.covered && (
+                                <div
+                                    className="flex items-start gap-3 p-3 rounded-lg"
+                                    style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}
+                                >
+                                    <AlertCircle
+                                        size={16}
+                                        className="text-yellow-600 flex-shrink-0 mt-0.5"
+                                    />
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold text-yellow-900 mb-1">
+                                            Kategori Nilai Rapor Belum Lengkap
+                                        </p>
+                                        <p className="text-xs text-yellow-800 mb-2">
+                                            Celah rentang yang belum tercover:
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {kategoriStatus?.kategori?.celah?.map((celah, idx) => (
+                                                <span
+                                                    key={idx}
+                                                    className="px-2 py-1 rounded text-xs font-bold"
+                                                    style={{
+                                                        background: '#fcd34d',
+                                                        color: '#78350f',
+                                                        border: '1px solid #f59e0b',
+                                                    }}
+                                                >
+                                                    {celah}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-yellow-700 mt-2">
+                                            Silakan atur di menu "Atur Penilaian" &gt; "Kategori Akademik"
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1244,9 +1439,9 @@ export default function InputNilaiGBSClient() {
                                 >
                                     <option value="">
                                         {kelasLoading
-                                            ? '⏳ Memuat kelas...'
+                                            ? 'Memuat kelas...'
                                             : kelasFiltered.length === 0
-                                                ? '❌ Tidak ada kelas'
+                                                ? 'Tidak ada kelas'
                                                 : '-- Pilih Kelas --'}
                                     </option>
                                     {kelasFiltered.map(kelas => (
@@ -1289,17 +1484,44 @@ export default function InputNilaiGBSClient() {
                                     {canEditNilai && (
                                         <button
                                             onClick={openImportModal}
-                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+                                            disabled={!!konfigurasiBelumLengkap}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                             style={{
-                                                background: 'linear-gradient(135deg,#10b981,#059669)',
+                                                background: konfigurasiBelumLengkap
+                                                    ? '#d1d5db'
+                                                    : 'linear-gradient(135deg,#10b981,#059669)',
                                                 color: 'white',
-                                                boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
+                                                boxShadow: konfigurasiBelumLengkap
+                                                    ? 'none'
+                                                    : '0 3px 10px rgba(16,185,129,0.3)'
                                             }}
-                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#059669,#047857)'; }}
-                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#10b981,#059669)'; }}
+                                            onMouseEnter={e => {
+                                                if (!konfigurasiBelumLengkap) {
+                                                    (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#059669,#047857)';
+                                                }
+                                            }}
+                                            onMouseLeave={e => {
+                                                if (!konfigurasiBelumLengkap) {
+                                                    (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#10b981,#059669)';
+                                                }
+                                            }}
+                                            title={
+                                                konfigurasiBelumLengkap
+                                                    ? 'Konfigurasi penilaian belum lengkap'
+                                                    : ''
+                                            }
                                         >
-                                            <Upload size={16} />
-                                            Import Nilai
+                                            {konfigurasiBelumLengkap ? (
+                                                <>
+                                                    <AlertCircle size={16} />
+                                                    Belum Diatur
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Upload size={16} />
+                                                    Import Nilai
+                                                </>
+                                            )}
                                         </button>
                                     )}
 
@@ -1395,21 +1617,32 @@ export default function InputNilaiGBSClient() {
                                                         </button>
                                                         <button
                                                             onClick={() => handleEdit(siswa)}
-                                                            disabled={!canEditNilai}
+                                                            disabled={!canEditNilai || !!konfigurasiBelumLengkap}
                                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                             style={{
-                                                                background: canEditNilai ? '#fff0e5' : '#e5e7eb',
-                                                                border: canEditNilai ? `1px solid ${THEME.colors.tertiary}` : '1px solid #d1d5db',
-                                                                color: canEditNilai ? '#b35a08' : '#6b7280'
+                                                                background: canEditNilai && !konfigurasiBelumLengkap ? '#fff0e5' : '#e5e7eb',
+                                                                border: canEditNilai && !konfigurasiBelumLengkap ? `1px solid ${THEME.colors.tertiary}` : '1px solid #d1d5db',
+                                                                color: canEditNilai && !konfigurasiBelumLengkap ? '#b35a08' : '#6b7280'
                                                             }}
                                                             onMouseEnter={e => {
-                                                                if (canEditNilai) e.currentTarget.style.background = '#ffe4c8';
+                                                                if (canEditNilai && !konfigurasiBelumLengkap) e.currentTarget.style.background = '#ffe4c8';
                                                             }}
                                                             onMouseLeave={e => {
-                                                                if (canEditNilai) e.currentTarget.style.background = '#fff0e5';
+                                                                if (canEditNilai && !konfigurasiBelumLengkap) e.currentTarget.style.background = '#fff0e5';
                                                             }}
+                                                            title={
+                                                                konfigurasiBelumLengkap
+                                                                    ? 'Konfigurasi penilaian belum lengkap'
+                                                                    : !canEditNilai
+                                                                        ? 'Tidak dapat input nilai'
+                                                                        : ''
+                                                            }
                                                         >
-                                                            {canEditNilai ? (
+                                                            {konfigurasiBelumLengkap ? (
+                                                                <>
+                                                                    <AlertCircle size={13} /> Belum Diatur
+                                                                </>
+                                                            ) : canEditNilai ? (
                                                                 <>
                                                                     <Pencil size={13} /> Edit
                                                                 </>
@@ -1502,7 +1735,7 @@ export default function InputNilaiGBSClient() {
                                                         Rapor PTS
                                                     </p>
                                                     <p className="text-xs" style={{ color: '#a89a8c' }}>
-                                                        {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                        {statusPTS === 'aktif' ? 'Aktif' : statusPTS === 'selesai' ? 'Selesai' : 'Menunggu'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -1537,7 +1770,7 @@ export default function InputNilaiGBSClient() {
                                                         Rapor PAS
                                                     </p>
                                                     <p className="text-xs" style={{ color: '#a89a8c' }}>
-                                                        {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                        {statusPAS === 'aktif' ? 'Aktif' : statusPAS === 'selesai' ? 'Selesai' : 'Menunggu'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -1626,7 +1859,7 @@ export default function InputNilaiGBSClient() {
                                                             Penilaian Tengah Semester
                                                         </p>
                                                         <p className="text-xs" style={{ color: '#a89a8c' }}>
-                                                            {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                            {statusPTS === 'aktif' ? 'Aktif' : statusPTS === 'selesai' ? 'Selesai' : 'Menunggu'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1662,7 +1895,7 @@ export default function InputNilaiGBSClient() {
                                                             Penilaian Akhir Semester
                                                         </p>
                                                         <p className="text-xs" style={{ color: '#a89a8c' }}>
-                                                            {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? 'Selesai' : '⏳ Menunggu'}
+                                                            {statusPAS === 'aktif' ? 'Aktif' : statusPAS === 'selesai' ? 'Selesai' : 'Menunggu'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1687,7 +1920,7 @@ export default function InputNilaiGBSClient() {
                                 onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
                                 Tutup
                             </button>
-                            {canEditNilai && (
+                            {canEditNilai && !konfigurasiBelumLengkap && (
                                 <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}
                                     className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2"
                                     style={{ background: THEME.gradients.secondary, boxShadow: THEME.shadows.sm }}
@@ -1736,12 +1969,12 @@ export default function InputNilaiGBSClient() {
                                 </div>
                             )}
 
-                            {/* 🆕 BARU: Info validasi nilai */}
+                            {/* BARU: Info validasi nilai */}
                             <div className="rounded-xl px-4 py-3 flex items-start gap-3"
                                 style={{ background: '#eff6ff', border: '1px solid #93c5fd' }}>
                                 <AlertCircle size={18} style={{ color: '#1d4ed8', flexShrink: 0 }} className="mt-0.5" />
                                 <p className="text-xs" style={{ color: '#1e40af' }}>
-                                    <strong>ℹ️ Validasi Nilai:</strong> Nilai harus berupa angka antara <strong>0-100</strong>.
+                                    <strong>Validasi Nilai:</strong> Nilai harus berupa angka antara <strong>0-100</strong>.
                                     Jika Anda input nilai di luar rentang, sistem akan menampilkan pesan error dan nilai akan direset.
                                 </p>
                             </div>
@@ -1751,7 +1984,7 @@ export default function InputNilaiGBSClient() {
                                     style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
                                     <AlertCircle size={18} style={{ color: '#a16207', flexShrink: 0 }} className="mt-0.5" />
                                     <p className="text-xs" style={{ color: '#78350f' }}>
-                                        <strong>⚠️ Peringatan:</strong> Bobot penilaian belum diatur. Nilai rapor akan dihitung dengan bobot default.
+                                        <strong>Peringatan:</strong> Bobot penilaian belum diatur. Nilai rapor akan dihitung dengan bobot default.
                                     </p>
                                 </div>
                             )}
@@ -1825,7 +2058,7 @@ export default function InputNilaiGBSClient() {
                                                         }`}
                                                     style={!isDisabled ? (error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' }) : {}}
                                                 />
-                                                {/* 🆕 BARU: Tampilkan error inline */}
+                                                {/* BARU: Tampilkan error inline */}
                                                 {error && (
                                                     <p className="text-xs text-red-600 mt-2 text-center font-semibold">
                                                         {error}
@@ -1897,7 +2130,7 @@ export default function InputNilaiGBSClient() {
                                                         }`}
                                                     style={!isDisabled ? (error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' }) : {}}
                                                 />
-                                                {/* 🆕 BARU: Tampilkan error inline */}
+                                                {/* BARU: Tampilkan error inline */}
                                                 {error && (
                                                     <p className="text-xs text-red-600 mt-2 text-center font-semibold">
                                                         {error}
@@ -1957,7 +2190,7 @@ export default function InputNilaiGBSClient() {
                                                                     : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
                                                                 }`}
                                                         />
-                                                        {/* 🆕 BARU: Tampilkan error inline */}
+                                                        {/* BARU: Tampilkan error inline */}
                                                         {error && (
                                                             <p className="text-xs text-red-600 mt-1 text-center font-semibold">
                                                                 {error}
@@ -2048,7 +2281,7 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* 🆕 BARU: MODAL IMPORT NILAI DARI EXCEL */}
+            {/* BARU: MODAL IMPORT NILAI DARI EXCEL */}
             {showImportModal && (
                 <div
                     className="fixed inset-0 z-[120] flex items-center justify-center p-4 fade-in"
@@ -2100,18 +2333,18 @@ export default function InputNilaiGBSClient() {
                                     </p>
                                     {jenisPenilaianAktif === 'PTS' ? (
                                         <>
-                                            <p>• ✅ <strong>Yang diimport:</strong> Nilai PTS</p>
-                                            <p>• ℹ️ <strong>Yang diabaikan:</strong> UH dan PAS</p>
+                                            <p>• Yang diimport: Nilai PTS</p>
+                                            <p>• Yang diabaikan: UH dan PAS</p>
                                             <p className="mt-1 text-orange-700">
-                                                💡 <strong>Tip:</strong> Isi kolom UH dan PAS saat periode PAS aktif.
+                                                <strong>Tip:</strong> Isi kolom UH dan PAS saat periode PAS aktif.
                                             </p>
                                         </>
                                     ) : (
                                         <>
-                                            <p>• ✅ <strong>Yang diimport:</strong> UH dan PAS</p>
-                                            <p>• ℹ️ <strong>Yang diabaikan:</strong> PTS (terkunci)</p>
+                                            <p>• Yang diimport: UH dan PAS</p>
+                                            <p>• Yang diabaikan: PTS (terkunci)</p>
                                             <p className="mt-1 text-orange-700">
-                                                💡 <strong>Tip:</strong> Nilai PTS sudah dikunci dan tidak dapat diubah.
+                                                <strong>Tip:</strong> Nilai PTS sudah dikunci dan tidak dapat diubah.
                                             </p>
                                         </>
                                     )}
@@ -2136,7 +2369,7 @@ export default function InputNilaiGBSClient() {
                                 ) : (
                                     <>
                                         <Download size={16} />
-                                        📥 Download Template Excel
+                                        Download Template Excel
                                     </>
                                 )}
                             </button>
