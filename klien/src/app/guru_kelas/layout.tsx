@@ -1,48 +1,31 @@
 /**
  * Nama File: layout.tsx
- * Fungsi: Layout utama untuk seluruh halaman di rute guru kelas.
- *         Menyediakan struktur dasar seperti navbar, sidebar, dan konten dinamis.
- *         Dilengkapi dengan AuthGuard untuk proteksi route berdasarkan role.
+ * Fungsi: Layout utama untuk seluruh halaman di rute guru kelas
+ *         Menyediakan struktur dasar seperti navbar, sidebar, dan konten dinamis
+ *         Dilengkapi dengan AuthGuard untuk proteksi route berdasarkan role
+ *         Dilengkapi dengan NavigationGuard untuk konfirmasi saat tekan back button
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
  * Update: 28 Juni 2026 - Tambah AuthGuard untuk proteksi route
+ * Update: 10 Juli 2026 - Tambah NavigationGuard untuk konfirmasi back button
  */
 
-import type { Metadata } from "next";
+import type { Metadata } from 'next';
 import GuruKelasLayout from './components/Layout';
 import AuthGuard from '@/components/AuthGuard';
+import NavigationGuard from '@/components/NavigationGuard';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// METADATA HALAMAN
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Konfigurasi metadata untuk SEO dan title halaman.
- * Menggunakan template pattern untuk konsistensi title di seluruh halaman.
- */
+// Konfigurasi metadata untuk SEO dan title halaman
 export const metadata: Metadata = {
     title: {
-        template: "Guru Kelas - %s",
-        default: "Guru Kelas",
+        template: 'Guru Kelas - %s',
+        default: 'Guru Kelas',
     },
-    description: "Kelola Data Siswa Berdasarkan Kelas",
+    description: 'Kelola Data Siswa Berdasarkan Kelas',
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ROOT LAYOUT COMPONENT
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Komponen layout utama untuk rute guru kelas.
- * 
- * Struktur:
- *   AuthGuard (proteksi role) 
- *     └─ GuruKelasLayout (navbar + sidebar)
- *         └─ children (konten halaman dinamis)
- * 
- * @param children - Konten halaman yang akan dirender
- * @returns Layout terproteksi dengan struktur konsisten
- */
+// Komponen layout utama untuk rute guru kelas
+// Struktur: AuthGuard → NavigationGuard → GuruKelasLayout → children
 export default function GuruKelasRootLayout({
     children,
 }: {
@@ -50,9 +33,11 @@ export default function GuruKelasRootLayout({
 }) {
     return (
         <AuthGuard allowedRoles={['guru_kelas']}>
-            <GuruKelasLayout>
-                {children}
-            </GuruKelasLayout>
+            <NavigationGuard>
+                <GuruKelasLayout>
+                    {children}
+                </GuruKelasLayout>
+            </NavigationGuard>
         </AuthGuard>
     );
 }
