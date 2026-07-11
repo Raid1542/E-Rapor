@@ -2,7 +2,7 @@
  * Nama File: authController.js
  * Fungsi: Controller autentikasi (login) dengan JWT token
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 const jwt = require('jsonwebtoken');
@@ -10,79 +10,91 @@ const { comparePassword } = require('../utils/hash');
 const db = require('../config/db');
 const userModel = require('../models/authModel');
 
-// POST: Login user (validasi kredensial + generate JWT token)
+// Konstanta untuk JWT token expiration
+const TOKEN_EXPIRY = '8h';
+
+/**
+ * POST /login - Autentikasi user dan generate JWT token
+ * Validasi kredensial, verifikasi role, dan return data profil lengkap
+ */
 const login = async (req, res) => {
     const { email_sekolah, password, role: selectedRole } = req.body;
 
-    // Validasi input
+    // Validasi input wajib
     if (!email_sekolah || !password || !selectedRole) {
-        return res.status(400).json({ success: false, message: 'Email, password, dan role wajib diisi' });
+        return res.status(400).json({
+            success: false,
+            message: 'Email, password, dan role wajib diisi',
+        });
     }
 
     try {
-        // Step 1: Cari user berdasarkan email
+        // Cari user berdasarkan email
         const [userRows] = await db.execute(
             `SELECT u.id_user, u.email_sekolah, u.password, u.nama_lengkap, u.status, ur.role
-                FROM user u JOIN user_role ur ON u.id_user = ur.id_user
-                WHERE u.email_sekolah = ?`,
+        FROM user u 
+        JOIN user_role ur ON u.id_user = ur.id_user
+        WHERE u.email_sekolah = ?`,
             [email_sekolah]
         );
 
+        // Validasi user tidak ditemukan
         if (userRows.length === 0) {
-    return res.status(401).json({ 
-        success: false, 
-        message: 'Email atau password salah',
-        code: 'INVALID_CREDENTIALS'
-    });
-}
+            return res.status(401).json({
+                success: false,
+                message: 'Email atau password salah',
+                code: 'INVALID_CREDENTIALS',
+            });
+        }
 
         const user = userRows[0];
 
-        // Step 2: Cek status akun
+        // Cek status akun aktif
         if (user.status !== 'aktif') {
-            return res.status(403).json({ 
-                success: false, 
+            return res.status(403).json({
+                success: false,
                 message: 'Akun tidak aktif. Silakan hubungi administrator.',
-                code: 'ACCOUNT_INACTIVE'
+                code: 'ACCOUNT_INACTIVE',
             });
         }
 
-        // Step 3: Verifikasi password
+        // Verifikasi password dengan bcrypt
         const isMatch = await comparePassword(password, user.password);
         if (!isMatch) {
-            return res.status(401).json({ 
-                success: false, 
+            return res.status(401).json({
+                success: false,
                 message: 'Password salah',
-                code: 'WRONG_PASSWORD'
+                code: 'WRONG_PASSWORD',
             });
         }
 
-        // Step 4: Validasi role
+        // Validasi role yang dipilih user
         const roles = await userModel.getRolesByUserId(user.id_user);
         if (!roles.includes(selectedRole)) {
-            return res.status(403).json({ 
-                success: false, 
+            return res.status(403).json({
+                success: false,
                 message: `Anda tidak memiliki akses sebagai ${selectedRole}`,
-                code: 'ROLE_NOT_ALLOWED'
+                code: 'ROLE_NOT_ALLOWED',
             });
         }
 
-        // Step 5: Generate JWT token
+        // Generate JWT token dengan payload user
         const token = jwt.sign(
             { id: user.id_user, role: selectedRole },
             process.env.JWT_SECRET,
-            { expiresIn: '8h' }
+            { expiresIn: TOKEN_EXPIRY }
         );
 
-        // Step 6: Ambil data profil (guru)
+        // Ambil data profil guru dari tabel guru
         const [guruRows] = await db.execute(
             `SELECT niy, nuptk, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, no_telepon, foto_path 
-                FROM guru WHERE user_id = ?`,
+        FROM guru 
+        WHERE user_id = ?`,
             [user.id_user]
         );
         const guruData = guruRows[0] || {};
 
-        // Step 7: Return response
+        // Return response dengan token dan data user lengkap
         return res.status(200).json({
             success: true,
             token,
@@ -103,7 +115,10 @@ const login = async (req, res) => {
             },
         });
     } catch (err) {
-        return res.status(500).json({ success: false, message: 'Terjadi kesalahan server: ' + err.message });
+        return res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server: ' + err.message,
+        });
     }
 };
 

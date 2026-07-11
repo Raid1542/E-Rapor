@@ -2,34 +2,53 @@
  * Nama File: sekolahModel.js
  * Fungsi: Model profil sekolah (single record, id = 1)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
+// Konstanta untuk ID sekolah
 const SCHOOL_ID = 1;
 
+// Model profil sekolah
 const sekolahModel = {
-  /** Ambil data sekolah */
+  // Ambil data sekolah
   async getSekolah() {
-    const [rows] = await db.execute('SELECT * FROM sekolah WHERE id = ?', [SCHOOL_ID]);
-    return rows[0] || null;
+    try {
+      const [rows] = await db.execute(
+        'SELECT * FROM sekolah WHERE id = ?',
+        [SCHOOL_ID]
+      );
+      return rows[0] || null;
+    } catch (err) {
+      console.error('Error getSekolah:', err);
+      throw err;
+    }
   },
 
-  /** Update data sekolah (UPSERT pattern) */
+  // Update data sekolah dengan UPSERT pattern
   async updateSekolah(newData) {
     try {
       const existing = await sekolahModel.getSekolah();
 
+      // Data default jika belum ada
       const defaultData = {
-        nama_sekolah: 'SDIT ULIL ALBAB', npsn: '0000000000', nss: '00000000',
-        alamat: 'Alamat Sekolah', kode_pos: '00000', telepon: '0000000000',
-        email: 'info@sekolah.sch.id', website: 'https://sekolah.sch.id',
-        kepala_sekolah: 'Kepala Sekolah', niy_kepala_sekolah: '0000000000000000', logo_path: null,
+        nama_sekolah: 'SDIT ULIL ALBAB',
+        npsn: '0000000000',
+        nss: '00000000',
+        alamat: 'Alamat Sekolah',
+        kode_pos: '00000',
+        telepon: '0000000000',
+        email: 'info@sekolah.sch.id',
+        website: 'https://sekolah.sch.id',
+        kepala_sekolah: 'Kepala Sekolah',
+        niy_kepala_sekolah: '0000000000000000',
+        logo_path: null,
       };
 
       const current = existing || defaultData;
 
+      // Merge data baru dengan data existing
       const merged = {
         nama_sekolah: (newData.nama_sekolah ?? current.nama_sekolah)?.trim(),
         npsn: (newData.npsn ?? current.npsn)?.trim(),
@@ -44,6 +63,7 @@ const sekolahModel = {
         logo_path: newData.logo_path ?? current.logo_path,
       };
 
+      // Update data
       const [result] = await db.execute(
         `UPDATE sekolah SET 
           nama_sekolah = ?, npsn = ?, nss = ?, alamat = ?, kode_pos = ?,
@@ -53,6 +73,7 @@ const sekolahModel = {
         [...Object.values(merged), SCHOOL_ID]
       );
 
+      // Insert jika belum ada
       if (result.affectedRows === 0) {
         await db.execute(
           `INSERT INTO sekolah (

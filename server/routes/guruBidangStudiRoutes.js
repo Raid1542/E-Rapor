@@ -196,7 +196,6 @@ router.delete(
 
 // ═════════════════════════════════════════════════════════════════════════════
 // ROUTE: INPUT NILAI & IMPORT EXCEL
-// PENTING: Route statis HARUS SEBELUM route dengan parameter (:mapelId/:kelasId)
 // ═════════════════════════════════════════════════════════════════════════════
 
 // Route statis: Download template import
@@ -218,8 +217,7 @@ router.post(
     controller.importNilaiExcelGBS
 );
 
-// Route statis: Cek status konfigurasi penilaian (BARU)
-// Digunakan frontend untuk validasi bobot + kategori rapor sebelum input nilai
+// Route statis: Cek status konfigurasi penilaian
 router.get(
     '/nilai/cek-status-kategori',
     authenticate,

@@ -22,7 +22,11 @@ const authenticate = (req, res, next) => {
 
     // Cek keberadaan token
     if (!token) {
-        return res.status(401).json({ success: false, message: 'Token tidak ditemukan', code: 'NO_TOKEN' });
+        return res.status(401).json({
+            success: false,
+            message: 'Token tidak ditemukan',
+            code: 'NO_TOKEN',
+        });
     }
 
     try {
@@ -31,7 +35,11 @@ const authenticate = (req, res, next) => {
 
         // Validasi payload token
         if (!decoded.id || !decoded.role) {
-            return res.status(403).json({ success: false, message: 'Token tidak valid: payload tidak lengkap', code: 'INVALID_TOKEN' });
+            return res.status(403).json({
+                success: false,
+                message: 'Token tidak valid: payload tidak lengkap',
+                code: 'INVALID_TOKEN',
+            });
         }
 
         // Simpan data user di request object
@@ -40,10 +48,18 @@ const authenticate = (req, res, next) => {
     } catch (err) {
         // Handle token expired
         if (err.name === 'TokenExpiredError') {
-            return res.status(401).json({ success: false, message: 'Token telah kadaluarsa', code: 'TOKEN_EXPIRED' });
+            return res.status(401).json({
+                success: false,
+                message: 'Token telah kadaluarsa',
+                code: 'TOKEN_EXPIRED',
+            });
         }
         // Handle invalid token
-        return res.status(403).json({ success: false, message: 'Token tidak valid', code: 'INVALID_TOKEN' });
+        return res.status(403).json({
+            success: false,
+            message: 'Token tidak valid',
+            code: 'INVALID_TOKEN',
+        });
     }
 };
 

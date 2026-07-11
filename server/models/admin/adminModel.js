@@ -2,19 +2,20 @@
  * Nama File: adminModel.js
  * Fungsi: Model untuk CRUD admin & pembelajaran
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 const hashUtils = require('../../utils/hash');
 
 const adminModel = {
-    /** Ambil user by ID */
+    // Ambil user by ID
     async findById(id) {
         const [rows] = await db.execute(`SELECT * FROM user WHERE id_user = ?`, [id]);
         return rows[0] || null;
     },
 
-    /** Update password */
+    // Update password
     async updatePassword(id_user, hashedPassword) {
         const [result] = await db.execute(
             'UPDATE user SET password = ?, updated_at = NOW() WHERE id_user = ?',
@@ -23,7 +24,7 @@ const adminModel = {
         return result.affectedRows > 0;
     },
 
-    /** Update user (email, nama, status) */
+    // Update user (email, nama, status)
     async updateUser(id, data, connection = db) {
         const { email_sekolah, nama_lengkap, status } = data;
         await connection.execute(
@@ -32,21 +33,21 @@ const adminModel = {
         );
     },
 
-    /** Ambil daftar semua admin */
+    // Ambil daftar semua admin
     async getAdminList() {
         const [rows] = await db.execute(`
-            SELECT 
-                u.id_user AS id, u.email_sekolah AS email, u.nama_lengkap AS nama, u.status AS statusAdmin,
-                g.niy, g.nuptk, g.tempat_lahir, g.tanggal_lahir, g.jenis_kelamin, g.alamat, g.no_telepon, g.foto_path  
-            FROM user u
-            LEFT JOIN guru g ON u.id_user = g.user_id
-            WHERE u.id_user IN (SELECT id_user FROM user_role WHERE role = 'admin')
-            ORDER BY u.id_user
-        `);
+        SELECT 
+        u.id_user AS id, u.email_sekolah AS email, u.nama_lengkap AS nama, u.status AS statusAdmin,
+        g.niy, g.nuptk, g.tempat_lahir, g.tanggal_lahir, g.jenis_kelamin, g.alamat, g.no_telepon, g.foto_path  
+        FROM user u
+        LEFT JOIN guru g ON u.id_user = g.user_id
+        WHERE u.id_user IN (SELECT id_user FROM user_role WHERE role = 'admin')
+        ORDER BY u.id_user
+    `);
         return rows;
     },
 
-    /** Buat admin baru (user + role + guru) */
+    // Buat admin baru (user + role + guru)
     async createAdmin(userData, connection = db) {
         const {
             email_sekolah, password, nama_lengkap,
@@ -73,7 +74,7 @@ const adminModel = {
         return id_user;
     },
 
-    /** Update admin (user + guru) */
+    // Update admin (user + guru)
     async updateAdmin(id, data, connection = db) {
         const {
             email_sekolah = '', nama_lengkap = '', password, status = '',
@@ -109,31 +110,31 @@ const adminModel = {
         }
     },
 
-    /** Ambil mapel wajib yang belum ditugaskan di kelas */
+    // Ambil mapel wajib yang belum ditugaskan di kelas
     async getMapelWajibBelumDitugaskan(kelasId, tahunAjaranId) {
         const [rows] = await db.execute(`
-            SELECT mp.id_mata_pelajaran AS id, mp.nama_mapel, mp.kode_mapel, mp.urutan_rapor
-            FROM mata_pelajaran mp
-            WHERE mp.tahun_ajaran_id = ? AND mp.jenis = 'wajib'
-            AND NOT EXISTS (SELECT 1 FROM pembelajaran p WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ?)
-            ORDER BY mp.urutan_rapor ASC, mp.nama_mapel ASC
-        `, [tahunAjaranId, kelasId]);
+        SELECT mp.id_mata_pelajaran AS id, mp.nama_mapel, mp.kode_mapel, mp.urutan_rapor
+        FROM mata_pelajaran mp
+        WHERE mp.tahun_ajaran_id = ? AND mp.jenis = 'wajib'
+        AND NOT EXISTS (SELECT 1 FROM pembelajaran p WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ?)
+        ORDER BY mp.urutan_rapor ASC, mp.nama_mapel ASC
+    `, [tahunAjaranId, kelasId]);
         return rows;
     },
 
-    /** Ambil mapel pilihan yang belum ditugaskan di kelas */
+    // Ambil mapel pilihan yang belum ditugaskan di kelas
     async getMapelPilihanBelumDitugaskan(kelasId, tahunAjaranId) {
         const [rows] = await db.execute(`
-            SELECT mp.id_mata_pelajaran AS id, mp.nama_mapel, mp.kode_mapel
-            FROM mata_pelajaran mp
-            WHERE mp.tahun_ajaran_id = ? AND mp.jenis = 'pilihan'
-            AND NOT EXISTS (SELECT 1 FROM pembelajaran p WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ?)
-            ORDER BY mp.nama_mapel ASC
-        `, [tahunAjaranId, kelasId]);
+        SELECT mp.id_mata_pelajaran AS id, mp.nama_mapel, mp.kode_mapel
+        FROM mata_pelajaran mp
+        WHERE mp.tahun_ajaran_id = ? AND mp.jenis = 'pilihan'
+        AND NOT EXISTS (SELECT 1 FROM pembelajaran p WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ?)
+        ORDER BY mp.nama_mapel ASC
+    `, [tahunAjaranId, kelasId]);
         return rows;
     },
 
-    /** Bulk insert mapel wajib (otomatis ke guru kelas) */
+    // Bulk insert mapel wajib (otomatis ke guru kelas)
     async bulkInsertMapelWajib(kelasId, mapelIds, guruKelasId, tahunAjaranId, connection) {
         const inserted = [];
 

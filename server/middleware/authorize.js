@@ -5,28 +5,28 @@
  * Tanggal: 1 Oktober 2025
  */
 
-// Factory function: buat middleware otorisasi berdasarkan role (support string/array/variadic)
+// Factory function: buat middleware otorisasi berdasarkan role
 const authorize = (...allowedRoles) => {
     return (req, res, next) => {
         const userRole = req.user?.role;
 
-        // Step 1: Validasi keberadaan role user
+        // Validasi keberadaan role user
         if (!userRole) {
             return res.status(403).json({ message: 'Anda tidak memiliki akses' });
         }
 
-        // Step 2: Normalisasi input role (flatten array)
+        // Normalisasi input role (flatten array)
         let rolesArray = [];
         for (const role of allowedRoles) {
             if (Array.isArray(role)) rolesArray.push(...role);
             else rolesArray.push(role);
         }
 
-        // Step 3: Case-insensitive comparison
+        // Case-insensitive comparison
         const normalizedUserRole = userRole.toLowerCase();
         const normalizedAllowedRoles = rolesArray.map(r => r.toLowerCase());
 
-        // Step 4: Validasi role
+        // Validasi role
         if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
             return res.status(403).json({ message: 'Anda tidak memiliki akses' });
         }

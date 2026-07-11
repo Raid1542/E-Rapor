@@ -2,12 +2,13 @@
  * Nama File: ekstrakurikulerModel.js
  * Fungsi: Model untuk CRUD ekstrakurikuler & keanggotaan
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
 const ekstrakurikulerModel = {
-  /** Ambil semua ekskul per tahun ajaran + jumlah siswa */
+  // Ambil semua ekskul per tahun ajaran + jumlah siswa
   async getAllByTahunAjaran(tahun_ajaran_id) {
     const [rows] = await db.execute(
       `SELECT 
@@ -24,7 +25,7 @@ const ekstrakurikulerModel = {
     return rows;
   },
 
-  /** Tambah ekskul baru */
+  // Tambah ekskul baru
   async create(data) {
     const { nama_ekskul, pembina_id, keterangan, tahun_ajaran_id } = data;
     const [result] = await db.execute(
@@ -35,7 +36,7 @@ const ekstrakurikulerModel = {
     return result.insertId;
   },
 
-  /** Update ekskul */
+  // Update ekskul
   async update(id, data) {
     const { nama_ekskul, pembina_id, keterangan, tahun_ajaran_id } = data;
     const [result] = await db.execute(
@@ -46,7 +47,7 @@ const ekstrakurikulerModel = {
     return result.affectedRows > 0;
   },
 
-  /** Hapus ekskul (hanya jika tidak punya anggota) */
+  // Hapus ekskul (hanya jika tidak punya anggota)
   async deleteById(id) {
     const [peserta] = await db.execute(
       'SELECT id_peserta_ekskul FROM peserta_ekstrakurikuler WHERE ekskul_id = ? LIMIT 1',
@@ -58,23 +59,26 @@ const ekstrakurikulerModel = {
     return result.affectedRows > 0;
   },
 
-  /** Ambil detail ekskul by ID */
+  // Ambil detail ekskul by ID
   async getById(id) {
     const [rows] = await db.execute('SELECT * FROM ekstrakurikuler WHERE id_ekskul = ?', [id]);
     return rows[0] || null;
   },
 
-  /** Cek duplikasi nama ekskul */
+  // Cek duplikasi nama ekskul
   async isNamaEkskulExist(nama_ekskul, tahun_ajaran_id, excludeId = null) {
     let query = 'SELECT id_ekskul FROM ekstrakurikuler WHERE LOWER(nama_ekskul) = LOWER(?) AND tahun_ajaran_id = ?';
     const params = [nama_ekskul.trim(), tahun_ajaran_id];
-    if (excludeId) { query += ' AND id_ekskul != ?'; params.push(excludeId); }
+    if (excludeId) {
+      query += ' AND id_ekskul != ?';
+      params.push(excludeId);
+    }
 
     const [rows] = await db.execute(query, params);
     return rows.length > 0;
   },
 
-  /** Daftar pembina aktif untuk dropdown */
+  // Daftar pembina aktif untuk dropdown
   async getAllPembinaAktif() {
     const [rows] = await db.execute(
       `SELECT id_pembina_ekstrakurikuler AS id, nama_lengkap AS nama 
@@ -83,7 +87,7 @@ const ekstrakurikulerModel = {
     return rows;
   },
 
-  /** Daftar ekskul aktif untuk dropdown */
+  // Daftar ekskul aktif untuk dropdown
   async getDaftarEkskulAktif(tahun_ajaran_id) {
     const [rows] = await db.execute(
       'SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE tahun_ajaran_id = ? ORDER BY nama_ekskul',
@@ -92,7 +96,7 @@ const ekstrakurikulerModel = {
     return rows;
   },
 
-  /** Peserta ekskul (untuk lihat siswa) */
+  // Peserta ekskul (untuk lihat siswa)
   async getPesertaByEkskul(ekskulId, tahunAjaranId) {
     const [rows] = await db.execute(
       `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap AS nama, k.nama_kelas, k.id_kelas
@@ -107,7 +111,7 @@ const ekstrakurikulerModel = {
     return rows;
   },
 
-  /** Ekskul yang diikuti siswa */
+  // Ekskul yang diikuti siswa
   async getEkskulSiswa(siswaId, tahunAjaranId) {
     const [rows] = await db.execute(
       `SELECT e.id_ekskul, e.nama_ekskul, COALESCE(pe.deskripsi, e.keterangan, 'Belum diisi') AS deskripsi
@@ -119,7 +123,7 @@ const ekstrakurikulerModel = {
     return rows;
   },
 
-  /** Simpan keanggotaan ekskul siswa */
+  // Simpan keanggotaan ekskul siswa
   async savePesertaEkskul(siswaId, tahunAjaranId, ekskulList) {
     await db.execute('DELETE FROM peserta_ekstrakurikuler WHERE siswa_id = ? AND tahun_ajaran_id = ?', [siswaId, tahunAjaranId]);
     if (ekskulList.length === 0) return;
@@ -128,7 +132,7 @@ const ekstrakurikulerModel = {
     await db.query('INSERT INTO peserta_ekstrakurikuler (siswa_id, ekskul_id, tahun_ajaran_id, deskripsi) VALUES ?', [insertData]);
   },
 
-  /** Guru kelas aktif */
+  // Guru kelas aktif
   async getGuruKelasAktif(userId) {
     const [rows] = await db.execute(
       `SELECT gk.kelas_id, ta.id_tahun_ajaran, ta.tahun_ajaran, k.nama_kelas
@@ -141,7 +145,7 @@ const ekstrakurikulerModel = {
     return rows[0] || null;
   },
 
-  /** Siswa di kelas */
+  // Siswa di kelas
   async getSiswaInKelas(kelasId, tahunAjaranId) {
     const [rows] = await db.execute(
       `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis, s.nisn
@@ -152,7 +156,7 @@ const ekstrakurikulerModel = {
     return rows;
   },
 
-  /** Cek siswa di kelas */
+  // Cek siswa di kelas
   async isSiswaInKelas(siswaId, kelasId, tahunAjaranId) {
     const [rows] = await db.execute(
       'SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?',
@@ -161,11 +165,14 @@ const ekstrakurikulerModel = {
     return rows.length > 0;
   },
 
-  /** Cek pembina sudah ditugaskan */
+  // Cek pembina sudah ditugaskan
   async isPembinaAlreadyAssigned(pembinaId, semesterId, excludeEkskulId = null) {
     let query = 'SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE pembina_id = ? AND tahun_ajaran_id = ?';
     const params = [pembinaId, semesterId];
-    if (excludeEkskulId) { query += ' AND id_ekskul != ?'; params.push(excludeEkskulId); }
+    if (excludeEkskulId) {
+      query += ' AND id_ekskul != ?';
+      params.push(excludeEkskulId);
+    }
     query += ' LIMIT 1';
 
     const [rows] = await db.execute(query, params);

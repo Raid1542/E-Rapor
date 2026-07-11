@@ -1,8 +1,11 @@
 /**
  * Nama File: guruKelasRoutes.js
  * Fungsi: Route API untuk role guru kelas (profil, absensi, catatan, ekskul, kokurikuler, akademik, rapor)
+ *         Menangani semua endpoint untuk role guru kelas dengan validasi akses dan penilaian status
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 11 Juli 2026 - Tambah route cek-status-kategori untuk validasi konfigurasi
+ * Update: 11 Juli 2026 - Perbaiki struktur komentar dan indentasi (sesuai coding convention)
  */
 
 const express = require('express');
@@ -18,6 +21,10 @@ const cekPenilaianStatus = require('../middleware/cekPenilaianStatus');
 const cekGuruKelasDitugaskan = require('../middleware/cekGuruKelasDitugaskan');
 const guruKelasControllers = require('../controllers/guru_kelas');
 
+// ═════════════════════════════════════════════════════════════════════════════
+// KONSTANTA
+// ═════════════════════════════════════════════════════════════════════════════
+
 // Konstanta untuk direktori upload
 const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
 
@@ -32,6 +39,10 @@ const EXT_EXCEL = ['.xlsx', '.xls'];
 // Konstanta untuk semester valid
 const SEMESTER_VALID = ['Ganjil', 'Genap'];
 const JENIS_VALID = ['PTS', 'PAS'];
+
+// ═════════════════════════════════════════════════════════════════════════════
+// KONFIGURASI MULTER
+// ═════════════════════════════════════════════════════════════════════════════
 
 // Pastikan direktori upload tersedia
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -78,6 +89,10 @@ const UPLOAD_EXCEL = multer({
         cb(null, true);
     },
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MIDDLEWARE
+// ═════════════════════════════════════════════════════════════════════════════
 
 // Middleware: hanya guru kelas
 const GURU_KELAS_ONLY = authorize(['guru_kelas']);
@@ -398,96 +413,593 @@ const adminOrGuruKelasDitugaskan = [
     },
 ];
 
-// --- Data Kelas & Siswa ---
-router.get('/dashboard', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, safeHandler(guruKelasControllers.getDashboardData));
-router.get('/kelas', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, safeHandler(guruKelasControllers.getKelasSaya));
-router.get('/siswa', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getSiswaByKelas));
-router.get('/progress-penilaian', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getProgressPenilaian));
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: DATA KELAS & SISWA
+// ═════════════════════════════════════════════════════════════════════════════
 
-// --- Profil (Edit, Ganti Password, Upload Foto) ---
-router.put('/profil', authenticate, GURU_KELAS_ONLY, safeHandler(guruKelasControllers.editProfil));
-router.put('/ganti-password', authenticate, GURU_KELAS_ONLY, safeHandler(guruKelasControllers.gantiPassword));
-router.put('/upload_foto', authenticate, GURU_KELAS_ONLY, UPLOAD_FOTO.single('foto'), safeHandler(guruKelasControllers.uploadFotoProfil));
+router.get(
+    '/dashboard',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    safeHandler(guruKelasControllers.getDashboardData)
+);
+router.get(
+    '/kelas',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    safeHandler(guruKelasControllers.getKelasSaya)
+);
+router.get(
+    '/siswa',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getSiswaByKelas)
+);
+router.get(
+    '/progress-penilaian',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getProgressPenilaian)
+);
 
-// --- Absensi (GET per jenis/semester, POST upsert, IMPORT Excel) ---
-router.get('/absensi/import-template', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateAbsensi));
-router.post('/absensi/import', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, UPLOAD_EXCEL.single('file'), safeHandler(guruKelasControllers.importAbsensiExcel));
-router.get('/absensi/:jenis/:semester', authenticate, GURU_KELAS_ONLY, validateJenisSemester, cekStatusAbsensi, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getAbsensiSiswa));
-router.post('/absensi', authenticate, GURU_KELAS_ONLY, validateAbsensiJenis, cekStatusAbsensi, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.upsertAbsensi));
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: PROFIL GURU (Edit, Ganti Password, Upload Foto)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// --- Catatan Wali Kelas (GET per jenis/semester, PUT per siswa, IMPORT Excel) ---
-router.get('/catatan-wali-kelas/import-template', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateCatatanWali));
-router.post('/catatan-wali-kelas/import', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, UPLOAD_EXCEL.single('file'), safeHandler(guruKelasControllers.importCatatanWaliExcel));
-router.get('/catatan-wali-kelas/:jenis/:semester', authenticate, GURU_KELAS_ONLY, validateJenisSemester, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getCatatanWaliKelas));
-router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester', authenticate, GURU_KELAS_ONLY, validateJenisSemester, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateCatatanWaliKelas));
+router.put(
+    '/profil',
+    authenticate,
+    GURU_KELAS_ONLY,
+    safeHandler(guruKelasControllers.editProfil)
+);
+router.put(
+    '/ganti-password',
+    authenticate,
+    GURU_KELAS_ONLY,
+    safeHandler(guruKelasControllers.gantiPassword)
+);
+router.put(
+    '/upload_foto',
+    authenticate,
+    GURU_KELAS_ONLY,
+    UPLOAD_FOTO.single('foto'),
+    safeHandler(guruKelasControllers.uploadFotoProfil)
+);
 
-// --- Ekstrakurikuler (GET siswa, PUT update, IMPORT Excel) ---
-router.get('/ekskul/import-template', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateEkskul));
-router.post('/ekskul/import', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, UPLOAD_EXCEL.single('file'), safeHandler(guruKelasControllers.importEkskulExcel));
-router.get('/ekskul', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getEkskulSiswa));
-router.put('/ekskul/:siswaId', authenticate, GURU_KELAS_ONLY, validateIdParam('siswaId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateEkskulSiswa));
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: ABSENSI (GET per jenis/semester, POST upsert, IMPORT Excel)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// --- Kokurikuler (Judul Proyek + Nilai per siswa + IMPORT Excel) ---
-router.get('/kokurikuler/judul-proyek', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getJudulProyek));
-router.post('/kokurikuler/judul-proyek', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.saveJudulProyek));
-router.get('/kokurikuler/import-template', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateKokurikuler));
-router.get('/kokurikuler/cek-status-kategori', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, safeHandler(guruKelasControllers.cekStatusKategoriKokurikuler));
-router.post('/kokurikuler/import', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, UPLOAD_EXCEL.single('file'), safeHandler(guruKelasControllers.importNilaiKokurikuler));
-router.get('/kokurikuler', authenticate, GURU_KELAS_ONLY, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getNilaiKokurikuler));
-router.get('/kokurikuler/:siswaId', authenticate, GURU_KELAS_ONLY, validateIdParam('siswaId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getNilaiKokurikulerBySiswa));
-router.put('/kokurikuler/:siswaId', authenticate, GURU_KELAS_ONLY, validateIdParam('siswaId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateNilaiKokurikuler));
+router.get(
+    '/absensi/import-template',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.downloadTemplateAbsensi)
+);
+router.post(
+    '/absensi/import',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    UPLOAD_EXCEL.single('file'),
+    safeHandler(guruKelasControllers.importAbsensiExcel)
+);
+router.get(
+    '/absensi/:jenis/:semester',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateJenisSemester,
+    cekStatusAbsensi,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getAbsensiSiswa)
+);
+router.post(
+    '/absensi',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateAbsensiJenis,
+    cekStatusAbsensi,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.upsertAbsensi)
+);
 
-// --- Nilai Akademik (Mapel, Nilai per mapel, Update komponen, Update rapor, Export/Import Excel) ---
-router.get('/mapel', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, safeHandler(guruKelasControllers.getMapelForGuruKelas));
-router.get('/nilai/cek-status-kategori', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, cekPenilaianStatus, safeHandler(guruKelasControllers.cekStatusKategoriAkademik));
-router.get('/nilai/import-template', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, setPenilaianContextAktif, safeHandler(guruKelasControllers.downloadTemplateNilai));
-router.post('/nilai/import', authenticate, GURU_KELAS_ONLY, cekTahunAjaranAktif, setPenilaianContextAktif, cekPenilaianStatus, cekGuruKelasDitugaskan, UPLOAD_EXCEL.single('file'), safeHandler(guruKelasControllers.importNilaiExcel));
-router.get('/nilai/:mapelId', authenticate, GURU_KELAS_ONLY, validateIdParam('mapelId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getNilaiByMapel));
-router.put('/nilai-komponen/:mapelId/:siswaId', authenticate, GURU_KELAS_ONLY, validateIdParam('mapelId'), validateIdParam('siswaId'), (req, res, next) => {
-    req.validatedMapelId = req.params.mapelId;
-    req.validatedSiswaId = req.params.siswaId;
-    next();
-}, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateNilaiKomponen));
-router.put('/nilai-rapor/:mapelId/:siswaId', authenticate, GURU_KELAS_ONLY, validateIdParam('mapelId'), validateIdParam('siswaId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateNilaiRapor));
-router.get('/nilai-ekspor/:mapelId', authenticate, GURU_KELAS_ONLY, validateIdParam('mapelId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.eksporNilaiExcel));
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: CATATAN WALI KELAS (GET per jenis/semester, PUT per siswa, IMPORT Excel)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// --- Atur Penilaian: Data Pendukung (Aspek Kokurikuler, Komponen) ---
-router.get('/atur-penilaian/aspek-kokurikuler', authenticate, GURU_KELAS_ONLY, safeHandler(guruKelasControllers.getAspekKokurikuler));
-router.post('/atur-penilaian/aspek-kokurikuler', authenticate, GURU_KELAS_ONLY, safeHandler(guruKelasControllers.createAspekKokurikuler));
-router.get('/atur-penilaian/komponen', authenticate, GURU_KELAS_ONLY, safeHandler(guruKelasControllers.getKomponenPenilaian));
+router.get(
+    '/catatan-wali-kelas/import-template',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.downloadTemplateCatatanWali)
+);
+router.post(
+    '/catatan-wali-kelas/import',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    UPLOAD_EXCEL.single('file'),
+    safeHandler(guruKelasControllers.importCatatanWaliExcel)
+);
+router.get(
+    '/catatan-wali-kelas/:jenis/:semester',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateJenisSemester,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getCatatanWaliKelas)
+);
+router.put(
+    '/catatan-wali-kelas/:siswa_id/:jenis/:semester',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateJenisSemester,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateCatatanWaliKelas)
+);
 
-// --- Atur Penilaian: Kategori Nilai Akademik ---
-router.get('/atur-penilaian/kategori-akademik', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getKategoriNilaiAkademik));
-router.post('/atur-penilaian/kategori-akademik', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.createKategoriNilaiAkademik));
-router.put('/atur-penilaian/kategori-akademik/:id', authenticate, GURU_KELAS_ONLY, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateKategoriNilaiAkademik));
-router.delete('/atur-penilaian/kategori-akademik/:id', authenticate, GURU_KELAS_ONLY, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.deleteKategoriNilaiAkademik));
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: EKSTRAKURIKULER (GET siswa, PUT update, IMPORT Excel)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// --- Atur Penilaian: Kategori Kokurikuler ---
-router.get('/atur-penilaian/kategori-kokurikuler', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getKategoriNilaiKokurikuler));
-router.post('/atur-penilaian/kategori-kokurikuler', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.createKategoriNilaiKokurikuler));
-router.put('/atur-penilaian/kategori-kokurikuler/:id', authenticate, GURU_KELAS_ONLY, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateKategoriNilaiKokurikuler));
-router.delete('/atur-penilaian/kategori-kokurikuler/:id', authenticate, GURU_KELAS_ONLY, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.deleteKategoriNilaiKokurikuler));
-router.post('/atur-penilaian/kategori-kokurikuler-batch', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.saveBatchKategoriKokurikuler));
+router.get(
+    '/ekskul/import-template',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.downloadTemplateEkskul)
+);
+router.post(
+    '/ekskul/import',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    UPLOAD_EXCEL.single('file'),
+    safeHandler(guruKelasControllers.importEkskulExcel)
+);
+router.get(
+    '/ekskul',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getEkskulSiswa)
+);
+router.put(
+    '/ekskul/:siswaId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('siswaId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateEkskulSiswa)
+);
 
-// --- Atur Penilaian: Bobot & Deskripsi Rata-Rata ---
-router.get('/atur-penilaian/bobot-akademik/:mapelId', authenticate, GURU_KELAS_ONLY, validateIdParam('mapelId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getBobotAkademikByMapel));
-router.put('/atur-penilaian/bobot-akademik/:mapelId', authenticate, GURU_KELAS_ONLY, validateIdParam('mapelId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateBobotAkademikByMapel));
-router.get('/atur-penilaian/deskripsi-rata-rata', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getKategoriDeskripsiRataRata));
-router.post('/atur-penilaian/deskripsi-rata-rata', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.createKategoriDeskripsiRataRata));
-router.put('/atur-penilaian/deskripsi-rata-rata/:id', authenticate, GURU_KELAS_ONLY, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateKategoriDeskripsiRataRata));
-router.delete('/atur-penilaian/deskripsi-rata-rata/:id', authenticate, GURU_KELAS_ONLY, validateIdParam('id'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.deleteKategoriDeskripsiRataRata));
-router.post('/atur-penilaian/deskripsi-rata-rata-batch', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.saveBatchKategoriDeskripsiRataRata));
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: KOKURIKULER (Judul Proyek + Nilai per siswa + IMPORT Excel)
+// PENTING: Route statis HARUS SEBELUM route dengan parameter (:siswaId)
+// ═════════════════════════════════════════════════════════════════════════════
 
-// --- Rekapan Nilai ---
-router.get('/rekapan-nilai', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getRekapanNilai));
-router.get('/rekapan-nilai/export-excel', authenticate, GURU_KELAS_ONLY, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.exportRekapanNilaiExcel));
+// Route statis: Judul proyek
+router.get(
+    '/kokurikuler/judul-proyek',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getJudulProyek)
+);
+router.post(
+    '/kokurikuler/judul-proyek',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.saveJudulProyek)
+);
 
-// --- Tahun Ajaran Aktif ---
-router.get('/tahun-ajaran/aktif', authenticate, GURU_KELAS_ONLY, safeHandler(guruKelasControllers.getTahunAjaranAktif));
+// Route statis: Import template
+router.get(
+    '/kokurikuler/import-template',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.downloadTemplateKokurikuler)
+);
 
-// --- Rapor: Generate PDF/DOCX (Admin atau Guru Kelas yang ditugaskan) ---
-router.get('/generate-rapor-bulk/:jenis/:semester', ...adminOrGuruKelasDitugaskan, validateJenisSemester, safeHandler(guruKelasControllers.generateRaporBulk));
-router.get('/generate-rapor/:siswaId/:jenis/:semester', ...adminOrGuruKelasDitugaskan, validateRaporParams, safeHandler(guruKelasControllers.generateRaporPDF));
-router.get('/generate-rapor/:siswaId/:jenis/:semester/:tahunAjaranId', ...adminOrGuruKelasDitugaskan, validateRaporParamsWithTA, safeHandler(guruKelasControllers.generateRaporPDF));
+// Route statis: Cek status konfigurasi penilaian (BARU)
+// Digunakan frontend untuk validasi bobot + kategori rapor sebelum input nilai
+router.get(
+    '/kokurikuler/cek-status-kategori',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    safeHandler(guruKelasControllers.cekStatusKategoriKokurikuler)
+);
+
+// Route statis: Import nilai
+router.post(
+    '/kokurikuler/import',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    setPenilaianContextAktif,
+    cekGuruKelasDitugaskan,
+    UPLOAD_EXCEL.single('file'),
+    safeHandler(guruKelasControllers.importNilaiKokurikuler)
+);
+
+// Route dengan parameter: Nilai kokurikuler
+router.get(
+    '/kokurikuler',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getNilaiKokurikuler)
+);
+router.get(
+    '/kokurikuler/:siswaId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('siswaId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getNilaiKokurikulerBySiswa)
+);
+router.put(
+    '/kokurikuler/:siswaId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('siswaId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateNilaiKokurikuler)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: NILAI AKADEMIK (Mapel, Nilai per mapel, Update komponen, Update rapor, Export/Import Excel)
+// PENTING: Route statis HARUS SEBELUM route dengan parameter (:mapelId)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Route statis: Daftar mapel
+router.get(
+    '/mapel',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    safeHandler(guruKelasControllers.getMapelForGuruKelas)
+);
+
+// Route statis: Cek status konfigurasi penilaian (BARU)
+// Digunakan frontend untuk validasi bobot + kategori rapor sebelum input nilai
+router.get(
+    '/nilai/cek-status-kategori',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    cekPenilaianStatus,
+    safeHandler(guruKelasControllers.cekStatusKategoriAkademik)
+);
+
+// Route statis: Import template
+router.get(
+    '/nilai/import-template',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    setPenilaianContextAktif,
+    safeHandler(guruKelasControllers.downloadTemplateNilai)
+);
+
+// Route statis: Import nilai
+router.post(
+    '/nilai/import',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekTahunAjaranAktif,
+    setPenilaianContextAktif,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    UPLOAD_EXCEL.single('file'),
+    safeHandler(guruKelasControllers.importNilaiExcel)
+);
+
+// Route dengan parameter: Nilai akademik
+router.get(
+    '/nilai/:mapelId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('mapelId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getNilaiByMapel)
+);
+router.put(
+    '/nilai-komponen/:mapelId/:siswaId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('mapelId'),
+    validateIdParam('siswaId'),
+    (req, res, next) => {
+        req.validatedMapelId = req.params.mapelId;
+        req.validatedSiswaId = req.params.siswaId;
+        next();
+    },
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateNilaiKomponen)
+);
+router.put(
+    '/nilai-rapor/:mapelId/:siswaId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('mapelId'),
+    validateIdParam('siswaId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateNilaiRapor)
+);
+router.get(
+    '/nilai-ekspor/:mapelId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('mapelId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.eksporNilaiExcel)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: ATUR PENILAIAN - DATA PENDUKUNG (Aspek Kokurikuler, Komponen)
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/atur-penilaian/aspek-kokurikuler',
+    authenticate,
+    GURU_KELAS_ONLY,
+    safeHandler(guruKelasControllers.getAspekKokurikuler)
+);
+router.post(
+    '/atur-penilaian/aspek-kokurikuler',
+    authenticate,
+    GURU_KELAS_ONLY,
+    safeHandler(guruKelasControllers.createAspekKokurikuler)
+);
+router.get(
+    '/atur-penilaian/komponen',
+    authenticate,
+    GURU_KELAS_ONLY,
+    safeHandler(guruKelasControllers.getKomponenPenilaian)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: ATUR PENILAIAN - KATEGORI NILAI AKADEMIK
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/atur-penilaian/kategori-akademik',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getKategoriNilaiAkademik)
+);
+router.post(
+    '/atur-penilaian/kategori-akademik',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.createKategoriNilaiAkademik)
+);
+router.put(
+    '/atur-penilaian/kategori-akademik/:id',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateKategoriNilaiAkademik)
+);
+router.delete(
+    '/atur-penilaian/kategori-akademik/:id',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.deleteKategoriNilaiAkademik)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: ATUR PENILAIAN - KATEGORI KOKURIKULER
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/atur-penilaian/kategori-kokurikuler',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getKategoriNilaiKokurikuler)
+);
+router.post(
+    '/atur-penilaian/kategori-kokurikuler',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.createKategoriNilaiKokurikuler)
+);
+router.put(
+    '/atur-penilaian/kategori-kokurikuler/:id',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateKategoriNilaiKokurikuler)
+);
+router.delete(
+    '/atur-penilaian/kategori-kokurikuler/:id',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.deleteKategoriNilaiKokurikuler)
+);
+router.post(
+    '/atur-penilaian/kategori-kokurikuler-batch',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.saveBatchKategoriKokurikuler)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: ATUR PENILAIAN - BOBOT & DESKRIPSI RATA-RATA
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/atur-penilaian/bobot-akademik/:mapelId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('mapelId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getBobotAkademikByMapel)
+);
+router.put(
+    '/atur-penilaian/bobot-akademik/:mapelId',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('mapelId'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateBobotAkademikByMapel)
+);
+router.get(
+    '/atur-penilaian/deskripsi-rata-rata',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getKategoriDeskripsiRataRata)
+);
+router.post(
+    '/atur-penilaian/deskripsi-rata-rata',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.createKategoriDeskripsiRataRata)
+);
+router.put(
+    '/atur-penilaian/deskripsi-rata-rata/:id',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.updateKategoriDeskripsiRataRata)
+);
+router.delete(
+    '/atur-penilaian/deskripsi-rata-rata/:id',
+    authenticate,
+    GURU_KELAS_ONLY,
+    validateIdParam('id'),
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.deleteKategoriDeskripsiRataRata)
+);
+router.post(
+    '/atur-penilaian/deskripsi-rata-rata-batch',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.saveBatchKategoriDeskripsiRataRata)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: REKAPAN NILAI
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/rekapan-nilai',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.getRekapanNilai)
+);
+router.get(
+    '/rekapan-nilai/export-excel',
+    authenticate,
+    GURU_KELAS_ONLY,
+    cekPenilaianStatus,
+    cekGuruKelasDitugaskan,
+    safeHandler(guruKelasControllers.exportRekapanNilaiExcel)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: INFORMASI TAHUN AJARAN AKTIF
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/tahun-ajaran/aktif',
+    authenticate,
+    GURU_KELAS_ONLY,
+    safeHandler(guruKelasControllers.getTahunAjaranAktif)
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ROUTE: RAPOR (Generate PDF/DOCX - Admin atau Guru Kelas yang ditugaskan)
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+    '/generate-rapor-bulk/:jenis/:semester',
+    ...adminOrGuruKelasDitugaskan,
+    validateJenisSemester,
+    safeHandler(guruKelasControllers.generateRaporBulk)
+);
+router.get(
+    '/generate-rapor/:siswaId/:jenis/:semester',
+    ...adminOrGuruKelasDitugaskan,
+    validateRaporParams,
+    safeHandler(guruKelasControllers.generateRaporPDF)
+);
+router.get(
+    '/generate-rapor/:siswaId/:jenis/:semester/:tahunAjaranId',
+    ...adminOrGuruKelasDitugaskan,
+    validateRaporParamsWithTA,
+    safeHandler(guruKelasControllers.generateRaporPDF)
+);
 
 module.exports = router;
