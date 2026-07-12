@@ -1,129 +1,117 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useRef } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { LogOut, X } from 'lucide-react';
 
-// Konstanta untuk path login
 const LOGIN_PATH = '/login';
-
-// Konstanta untuk storage keys
 const STORAGE_KEYS = {
     TOKEN: 'token',
     USER: 'currentUser',
+    NAVIGATION_HISTORY: 'navigationHistory',
 };
 
 interface NavigationGuardProps {
     children: React.ReactNode;
 }
 
-/**
- * Nama File: NavigationGuard.tsx
- * Fungsi: Intercept back button di Next.js App Router
- *         Menampilkan konfirmasi sebelum navigasi keluar
- *         Mencegah user logout accidental saat tekan back button
- * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 10 Juli 2026
- * Update: 10 Juli 2026 - Samakan style dengan Header.tsx (animasi gk-*)
- */
-
-// Global styles untuk animasi (sama dengan Header.tsx)
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes gk-fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    @keyframes gk-scaleIn {
-      from { opacity: 0; transform: scale(0.93) translateY(10px); }
-      to { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    @keyframes gk-pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-      100% { transform: scale(1); }
-    }
-    .gk-fadeIn {
-      animation: gk-fadeIn 0.2s ease;
-    }
-    .gk-scaleIn {
-      animation: gk-scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .gk-pulse {
-      animation: gk-pulse 0.6s ease 0.15s;
-    }
-  `}</style>
+        @keyframes gk-fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes gk-scaleIn {
+            from { opacity: 0; transform: scale(0.93) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes gk-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .gk-fadeIn { animation: gk-fadeIn 0.2s ease; }
+        .gk-scaleIn { animation: gk-scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .gk-pulse { animation: gk-pulse 0.6s ease 0.15s; }
+    `}</style>
 );
 
 export default function NavigationGuard({ children }: NavigationGuardProps) {
     const router = useRouter();
+    const pathname = usePathname();
     const [showConfirm, setShowConfirm] = useState(false);
     const [isClient, setIsClient] = useState(false);
+    const navigationHistoryRef = useRef<string[]>([]);
 
-    // Pastikan komponen sudah mounted di client
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    // Intercept back button menggunakan popstate event
+    // Track navigation history
+    useEffect(() => {
+        if (pathname && isClient) {
+            // Simpan history di sessionStorage
+            const history = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.NAVIGATION_HISTORY) || '[]');
+            history.push(pathname);
+            // Simpan hanya 10 history terakhir
+            if (history.length > 10) history.shift();
+            sessionStorage.setItem(STORAGE_KEYS.NAVIGATION_HISTORY, JSON.stringify(history));
+            navigationHistoryRef.current = history;
+        }
+    }, [pathname, isClient]);
+
+    // ✅ DIHAPUS: Event listener beforeunload yang menyebabkan popup browser
+    // Sekarang hanya menggunakan custom modal untuk konfirmasi logout
+
+    // Handle back button - hanya tampilkan jika akan ke login
     useEffect(() => {
         if (!isClient) return;
 
-        try {
-            // Push state awal untuk mencegah back button langsung keluar
-            window.history.pushState(null, '', window.location.pathname);
+        const handlePopState = () => {
+            const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+            
+            // Jika user masih login
+            if (token) {
+                // Cek history navigasi
+                const history = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.NAVIGATION_HISTORY) || '[]');
+                
+                // Jika history hanya 1 item (langsung ke halaman ini dari login)
+                // atau halaman sebelumnya adalah login
+                const isFromLogin = history.length === 1 || 
+                                   history[history.length - 2] === LOGIN_PATH ||
+                                   history[history.length - 2]?.includes('/login');
+                
+                if (isFromLogin) {
+                    setShowConfirm(true);
+                    // Push state untuk mencegah back keluar
+                    window.history.pushState(null, '', window.location.pathname);
+                }
+            }
+        };
 
-            // Handler untuk popstate event
-            const handlePopState = () => {
-                setShowConfirm(true);
-                // Push state baru agar back button tidak langsung keluar
-                window.history.pushState(null, '', window.location.pathname);
-            };
-
-            window.addEventListener('popstate', handlePopState);
-
-            // Cleanup event listener
-            return () => {
-                window.removeEventListener('popstate', handlePopState);
-            };
-        } catch (err) {
-            console.error('Error setting up navigation guard:', err);
-        }
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
     }, [isClient]);
 
-    // Handle konfirmasi keluar - logout dan redirect ke login
     const handleConfirmLeave = () => {
-        try {
-            setShowConfirm(false);
-            // Clear semua data login
-            localStorage.removeItem(STORAGE_KEYS.TOKEN);
-            localStorage.removeItem(STORAGE_KEYS.USER);
-            sessionStorage.clear();
-            // Hard redirect ke login
-            window.location.href = LOGIN_PATH;
-        } catch (err) {
-            console.error('Error during logout:', err);
-            // Fallback: tetap redirect ke login
-            window.location.href = LOGIN_PATH;
-        }
+        setShowConfirm(false);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(STORAGE_KEYS.USER);
+        sessionStorage.clear();
+        window.location.href = LOGIN_PATH;
     };
 
-    // Handle batal keluar - tutup modal
     const handleCancelLeave = () => {
         setShowConfirm(false);
     };
 
-    // Tampilkan loading saat masih di server
-    if (!isClient) {
-        return null;
-    }
+    if (!isClient) return null;
 
     return (
         <>
             <GlobalStyles />
             {children}
 
-            {/* Modal Konfirmasi Logout - Sama persis dengan Header.tsx */}
             {showConfirm && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 gk-fadeIn">
                     <div
@@ -134,7 +122,6 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 gk-scaleIn"
                         style={{ border: '1px solid #fde0c8' }}
                     >
-                        {/* Button close */}
                         <button
                             onClick={handleCancelLeave}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
@@ -142,12 +129,10 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                             <X size={18} />
                         </button>
 
-                        {/* Icon logout dengan animasi pulse */}
                         <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 gk-pulse">
                             <LogOut size={32} style={{ color: '#e8690a' }} />
                         </div>
 
-                        {/* Title dan message */}
                         <div className="text-center">
                             <h3 className="text-lg font-bold text-gray-900 mb-1">
                                 Konfirmasi Logout
@@ -159,7 +144,6 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                             </p>
                         </div>
 
-                        {/* Buttons */}
                         <div className="flex gap-3 w-full">
                             <button
                                 onClick={handleCancelLeave}
