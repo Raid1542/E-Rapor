@@ -58,37 +58,56 @@ const calculateSimilarity = (str1, str2) => {
 // Validasi kelengkapan bobot komponen dan kategori nilai rapor
 const cekStatusKategoriAkademik = async (mapelId, kelasId, semesterId, jenisPenilaian) => {
     try {
-        // Ambil bobot komponen dari database
-        const [bobotRows] = await db.execute(
-            `SELECT komponen_id, bobot 
-        FROM konfigurasi_mapel_komponen 
-        WHERE mapel_id = ? AND is_active = 1 AND (kelas_id = ? OR kelas_id IS NULL)
-        ORDER BY kelas_id DESC`,
-            [mapelId, kelasId]
+        // LANGKAH 1: Ambil tahun ajaran aktif untuk cek status PTS/PAS
+        const [taRows] = await db.execute(
+            `SELECT status_pts, status_pas FROM tahun_ajaran WHERE id_tahun_ajaran = ?`,
+            [semesterId]
         );
 
-        const bobotMap = new Map();
-        bobotRows.forEach(b => {
-            if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
-                bobotMap.set(b.komponen_id, parseFloat(b.bobot) || 0);
-            }
-        });
+        const statusPTS = taRows[0]?.status_pts || 'nonaktif';
+        const statusPAS = taRows[0]?.status_pas || 'nonaktif';
 
-        const totalBobot = Array.from(bobotMap.values()).reduce((sum, b) => sum + b, 0);
-        const bobotStatus = {
-            total: totalBobot,
-            status: Math.abs(totalBobot - 100) < 0.01 ? 'lengkap' : 'belum_100',
-        };
+        // LANGKAH 2: Handle kasus khusus - PTS aktif (bobot otomatis 100%)
+        let bobotStatus;
+        if (statusPTS === 'aktif') {
+            // Saat PTS aktif, bobot otomatis 100% untuk komponen PTS
+            bobotStatus = {
+                total: 100,
+                status: 'lengkap',
+            };
+        } else {
+            // LANGKAH 3: Cek bobot dari database (untuk PAS)
+            const [bobotRows] = await db.execute(
+                `SELECT komponen_id, bobot 
+                FROM konfigurasi_mapel_komponen 
+                WHERE mapel_id = ? AND is_active = 1 AND (kelas_id = ? OR kelas_id IS NULL)
+                ORDER BY kelas_id DESC`,
+                [mapelId, kelasId]
+            );
 
-        // Ambil kategori nilai rapor dari database
+            const bobotMap = new Map();
+            bobotRows.forEach(b => {
+                if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
+                    bobotMap.set(b.komponen_id, parseFloat(b.bobot) || 0);
+                }
+            });
+
+            const totalBobot = Array.from(bobotMap.values()).reduce((sum, b) => sum + b, 0);
+            bobotStatus = {
+                total: totalBobot,
+                status: Math.abs(totalBobot - 100) < 0.01 ? 'lengkap' : 'belum_100',
+            };
+        }
+
+        // LANGKAH 4: Ambil kategori nilai rapor dari database
         const [kategoriRows] = await db.execute(
             `SELECT min_nilai, max_nilai 
-        FROM konfigurasi_nilai_rapor
-        WHERE (mapel_id = ? OR mapel_id IS NULL) 
-        AND tahun_ajaran_id = ? 
-        AND jenis_penilaian = ? 
-        AND is_active = 1
-        ORDER BY min_nilai ASC`,
+            FROM konfigurasi_nilai_rapor
+            WHERE (mapel_id = ? OR mapel_id IS NULL) 
+            AND tahun_ajaran_id = ? 
+            AND jenis_penilaian = ? 
+            AND is_active = 1
+            ORDER BY min_nilai ASC`,
             [mapelId, semesterId, jenisPenilaian]
         );
 
@@ -125,6 +144,7 @@ const cekStatusKategoriAkademik = async (mapelId, kelasId, semesterId, jenisPeni
             celah: celah,
         };
 
+        // LANGKAH 5: Tentukan configured status
         const configured = bobotStatus.status === 'lengkap' && kategoriStatus.covered;
 
         return {
@@ -133,6 +153,7 @@ const cekStatusKategoriAkademik = async (mapelId, kelasId, semesterId, jenisPeni
             kategori: kategoriStatus,
         };
     } catch (err) {
+        console.error('Error cekStatusKategoriAkademik:', err);
         return {
             configured: false,
             bobot: { total: 0, status: 'error' },

@@ -4,11 +4,7 @@
  *         Menangani input nilai, perhitungan grade otomatis, dan manajemen judul proyek
  *         + Import nilai kokurikuler dari Excel
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
- * Update: 10 Juli 2026 - Tambah validasi kategori kokurikuler sebelum input nilai
- * Update: 10 Juli 2026 - Tambah validasi kategori kokurikuler sebelum import Excel
- * Update: 10 Juli 2026 - Hapus emoji dari komentar dan pesan (sesuai coding convention)
- * Update: 10 Juli 2026 - Indentasi 2 spasi (sesuai coding convention)
+ * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
@@ -46,7 +42,7 @@ const getJenisPenilaian = (status_pts, status_pas) => {
     return null;
 };
 
-// Helper: Ambil kelas_id dari guru yang sedang login
+// Ambil kelas_id dari guru yang sedang login
 const getKelasIdByGuru = async (userId, semesterId) => {
     const [rows] = await db.execute(
         'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ? LIMIT 1',
@@ -55,7 +51,7 @@ const getKelasIdByGuru = async (userId, semesterId) => {
     return rows[0]?.kelas_id || null;
 };
 
-// Helper: Hitung kesamaan string (Levenshtein Distance)
+// Hitung kesamaan string (Levenshtein Distance)
 const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
@@ -87,17 +83,10 @@ const calculateSimilarity = (str1, str2) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 BARU: HELPER - Cek apakah kategori grade sudah diatur untuk aspek tertentu
+// HELPER - Cek apakah kategori grade sudah diatur untuk aspek tertentu
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * Cek apakah kategori grade sudah diatur untuk aspek yang aktif
- * Returns: { 
- *   exists: boolean, 
- *   aspekTanpaKategori: string[],
- *   aspekDenganCelah: Array<{nama: string, celah: string[]}>
- * }
- */
+// Cek apakah kategori grade sudah diatur untuk aspek yang aktif
 const cekKategoriGradeKokurikuler = async (kelasId, semesterId, semester, jenisPenilaian) => {
     try {
         // Ambil semua aspek kokurikuler
@@ -108,9 +97,9 @@ const cekKategoriGradeKokurikuler = async (kelasId, semesterId, semester, jenisP
         // Ambil kategori grade yang sudah ada untuk periode aktif
         const [kategoriRows] = await db.execute(
             `SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
-             FROM kategori_grade_kokurikuler 
-             WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
-             ORDER BY rentang_min ASC`,
+        FROM kategori_grade_kokurikuler 
+        WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?
+        ORDER BY rentang_min ASC`,
             [kelasId, semesterId, semester, jenisPenilaian]
         );
 
@@ -158,28 +147,24 @@ const cekKategoriGradeKokurikuler = async (kelasId, semesterId, semester, jenisP
         };
     } catch (err) {
         console.error('Error cekKategoriGradeKokurikuler:', err);
-        return { 
-            exists: false, 
-            aspekTanpaKategori: [{id: 0, nama: 'Error checking'}],
+        return {
+            exists: false,
+            aspekTanpaKategori: [{ id: 0, nama: 'Error checking' }],
             aspekDenganCelah: []
         };
     }
 };
 
-/**
- * Helper: Cek celah dalam rentang nilai
- * @param {Array} kategoriArray - Array kategori dengan rentang_min dan rentang_max
- * @returns {Array<string>} - Array string yang menjelaskan celah yang ditemukan
- */
+// Cek celah dalam rentang nilai
 const cekCelahRentang = (kategoriArray) => {
     const celah = [];
-    
+
     if (kategoriArray.length === 0) {
         return ['0-100'];
     }
 
     // Sort berdasarkan rentang_min
-    const sorted = [...kategoriArray].sort((a, b) => 
+    const sorted = [...kategoriArray].sort((a, b) =>
         parseFloat(a.rentang_min) - parseFloat(b.rentang_min)
     );
 
@@ -212,6 +197,7 @@ const cekCelahRentang = (kategoriArray) => {
 // 1. GET NILAI KOKURIKULER (SEMUA SISWA)
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Ambil nilai kokurikuler semua siswa di kelas guru
 exports.getNilaiKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -250,12 +236,12 @@ exports.getNilaiKokurikuler = async (req, res) => {
 
         const [gradeConfigRows] = await db.execute(
             `SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
-       FROM kategori_grade_kokurikuler
-       WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
+        FROM kategori_grade_kokurikuler
+        WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
             [kelas_id, semesterId, semester, jenis_penilaian]
         );
 
-        // Helper: Cari grade berdasarkan nilai
+        // Cari grade berdasarkan nilai
         const findGradeByNilai = (aspekId, nilai) => {
             if (nilai === null || nilai === undefined) return { grade: null, deskripsi: null };
             const config = gradeConfigRows.find(c =>
@@ -313,6 +299,7 @@ exports.getNilaiKokurikuler = async (req, res) => {
 // 2. GET NILAI KOKURIKULER BY SISWA
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Ambil nilai kokurikuler untuk satu siswa tertentu
 exports.getNilaiKokurikulerBySiswa = async (req, res) => {
     try {
         const { siswaId } = req.params;
@@ -348,9 +335,9 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. UPDATE NILAI KOKURIKULER
-// 🆕 DIPERBAIKI: Tambah validasi kategori grade sebelum simpan nilai
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Update nilai kokurikuler untuk satu siswa dengan validasi kategori
 exports.updateNilaiKokurikuler = async (req, res) => {
     try {
         const { siswaId } = req.params;
@@ -407,18 +394,15 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 
         const [siswaCheck] = await db.execute(
             `SELECT s.id_siswa FROM siswa s 
-       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-       WHERE s.id_siswa = ? AND sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?`,
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+        WHERE s.id_siswa = ? AND sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?`,
             [siswaId, kelas_id, idInduk]
         );
         if (siswaCheck.length === 0) {
             return res.status(403).json({ success: false, message: 'Siswa tidak ditemukan di kelas Anda' });
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // 🆕 BARU: VALIDASI - Cek apakah kategori grade sudah diatur untuk aspek ini
-        // ═════════════════════════════════════════════════════════════════════
-
+        // Validasi kategori grade sebelum simpan nilai
         const kategoriCheck = await cekKategoriGradeKokurikuler(
             kelas_id,
             semesterId,
@@ -453,9 +437,9 @@ exports.updateNilaiKokurikuler = async (req, res) => {
         if ((!finalGrade || !finalDeskripsi) && nilai !== null) {
             const [gradeConfig] = await db.execute(
                 `SELECT grade, deskripsi FROM kategori_grade_kokurikuler
-         WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? 
-         AND semester = ? AND jenis_penilaian = ? AND ? >= rentang_min AND ? <= rentang_max 
-         LIMIT 1`,
+            WHERE id_aspek_kokurikuler = ? AND kelas_id = ? AND tahun_ajaran_id = ? 
+            AND semester = ? AND jenis_penilaian = ? AND ? >= rentang_min AND ? <= rentang_max 
+            LIMIT 1`,
                 [aspek_id, kelas_id, semesterId, semester, jenis_penilaian, nilai, nilai]
             );
 
@@ -463,7 +447,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
                 finalGrade = gradeConfig[0].grade;
                 finalDeskripsi = gradeConfig[0].deskripsi;
             } else {
-                // 🆕 BARU: Grade tidak ditemukan (kategori belum lengkap)
+                // Grade tidak ditemukan (kategori belum lengkap)
                 return res.status(400).json({
                     success: false,
                     message:
@@ -533,6 +517,7 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 // 4. GET JUDUL PROYEK (P5)
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Ambil judul proyek P5 untuk kelas guru
 exports.getJudulProyek = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -555,6 +540,7 @@ exports.getJudulProyek = async (req, res) => {
 // 5. SAVE JUDUL PROYEK (P5)
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Simpan atau update judul proyek P5 untuk kelas guru
 exports.saveJudulProyek = async (req, res) => {
     try {
         const { judul } = req.body;
@@ -602,6 +588,7 @@ exports.saveJudulProyek = async (req, res) => {
 // 6. DOWNLOAD TEMPLATE IMPORT NILAI KOKURIKULER
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Generate template Excel untuk import nilai kokurikuler
 exports.downloadTemplateKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -631,10 +618,10 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
 
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
-       FROM siswa s
-       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-       WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
-       ORDER BY s.nama_lengkap ASC`,
+        FROM siswa s
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+        ORDER BY s.nama_lengkap ASC`,
             [kelasId, indukId]
         );
 
@@ -781,23 +768,9 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 7. IMPORT NILAI KOKURIKULER DARI EXCEL
-// 🆕 DIPERBAIKI: Tambah validasi kategori grade sebelum import
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * POST /api/guru-kelas/kokurikuler/import
- * Upload file Excel dan import nilai kokurikuler
- *
- * Validasi:
- * 1. File Excel Kosong Total (tidak ada baris data) - KRITIS
- * 2. Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
- * 3. File Tanpa Nilai (hanya identitas siswa) - KRITIS
- * 4. Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
- * 5. Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
- * 6. Kategori Grade Belum Diatur - KRITIS (BARU)
- *
- * NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
- */
+// Import nilai kokurikuler dari Excel dengan validasi kategori grade
 exports.importNilaiKokurikuler = async (req, res) => {
     const connection = await db.getConnection();
 
@@ -829,10 +802,7 @@ exports.importNilaiKokurikuler = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Kelas tidak ditemukan' });
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // 🆕 BARU: VALIDASI - Cek apakah kategori grade sudah diatur SEBELUM proses file
-        // ═════════════════════════════════════════════════════════════════════
-
+        // Validasi kategori grade sebelum proses file
         const kategoriCheck = await cekKategoriGradeKokurikuler(
             kelasId,
             semesterId,
@@ -1074,9 +1044,9 @@ exports.importNilaiKokurikuler = async (req, res) => {
         // Ambil Data Siswa
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
-       FROM siswa s
-       INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-       WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
+        FROM siswa s
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
             [kelasId, indukId]
         );
 
@@ -1088,8 +1058,8 @@ exports.importNilaiKokurikuler = async (req, res) => {
         // Ambil Konfigurasi Grade
         const [gradeConfigRows] = await db.execute(
             `SELECT id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi
-       FROM kategori_grade_kokurikuler
-       WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
+        FROM kategori_grade_kokurikuler
+        WHERE kelas_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = ?`,
             [kelasId, semesterId, semester, jenis_penilaian]
         );
 
@@ -1407,10 +1377,9 @@ exports.importNilaiKokurikuler = async (req, res) => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 8. CEK STATUS KATEGORI KOKURIKULER
-// Fungsi: Cek apakah kategori grade sudah diatur untuk periode aktif
-// Digunakan frontend untuk tampilkan warning proaktif sebelum input nilai
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Cek apakah kategori grade sudah diatur untuk periode aktif
 exports.cekStatusKategoriKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;

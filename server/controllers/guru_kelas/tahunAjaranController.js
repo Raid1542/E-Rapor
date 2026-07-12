@@ -5,7 +5,7 @@
  * Tanggal: 10 Juli 2026
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 /**
  * GET /tahun-ajaran/aktif - Ambil data tahun ajaran yang sedang aktif

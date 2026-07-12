@@ -5,7 +5,7 @@
  * Tanggal: 10 Juli 2026
  */
 
-const db = require('../config/db');
+const db = require('../../config/db');
 const ExcelJS = require('exceljs');
 
 /**

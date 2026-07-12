@@ -1,34 +1,41 @@
 /**
  * Nama File: absensiController.js
- * Fungsi: Controller absensi siswa guru kelas (PTS/PAS) + IMPORT EXCEL
- * Update: ✅ Template absensi semua nilai diisi 0 (kosong untuk input baru)
- * Update: ✅ Tambah 5 Human Error Prevention untuk import absensi
- * Update: ✅ Perbaiki Human Error #3 - Nilai 0 dianggap "tidak ada nilai"
+ * Fungsi: Controller absensi siswa guru kelas (PTS/PAS) + import Excel
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 10 Juli 2026
  */
+
 const absensiModel = require('../../models/guru_kelas/absensiModel');
 const db = require('../../config/db');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 
+// Konstanta untuk batas maksimal absensi
+const MAX_ABSEN = 90;
+
+// Konstanta untuk threshold similarity nama
+const SIMILARITY_THRESHOLD = 0.7;
+
 // ═════════════════════════════════════════════════════════════════════════════
 // HELPER - Hitung Kesamaan String (Levenshtein Distance)
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Hitung tingkat kemiripan antara dua string
 const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
-    
+
     const len1 = str1.length;
     const len2 = str2.length;
     const matrix = [];
-    
+
     for (let i = 0; i <= len1; i++) {
         matrix[i] = [i];
     }
     for (let j = 0; j <= len2; j++) {
         matrix[0][j] = j;
     }
-    
+
     for (let i = 1; i <= len1; i++) {
         for (let j = 1; j <= len2; j++) {
             const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
@@ -39,66 +46,94 @@ const calculateSimilarity = (str1, str2) => {
             );
         }
     }
-    
+
     const maxLen = Math.max(len1, len2);
-    return 1 - (matrix[len1][len2] / maxLen);
+    return 1 - matrix[len1][len2] / maxLen;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. GET ABSENSI SISWA
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Ambil data absensi siswa berdasarkan kelas dan jenis penilaian
 exports.getAbsensiSiswa = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { jenis, semester } = req.penilaianContext || {};
-        
-        if (!userId) return res.status(401).json({ success: false, message: 'User tidak terautentikasi' });
-        
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'User tidak terautentikasi' });
+        }
+
         const infoKelas = req.infoKelasWali;
         if (!infoKelas || !infoKelas.kelas_id) {
-            return res.status(404).json({ success: false, message: 'Data kelas tidak ditemukan. Silakan hubungi admin.' });
+            return res.status(404).json({
+                success: false,
+                message: 'Data kelas tidak ditemukan. Silakan hubungi admin.',
+            });
         }
-        
+
         const kelasId = infoKelas.kelas_id;
         const namaKelas = infoKelas.nama_kelas;
         const tahunAjaranId = req.idSemesterAktif;
-        
+
         if (!tahunAjaranId || !kelasId) {
-            return res.status(500).json({ success: false, message: 'Data tahun ajaran atau kelas tidak valid' });
+            return res.status(500).json({
+                success: false,
+                message: 'Data tahun ajaran atau kelas tidak valid',
+            });
         }
-        
+
+        // Ambil data absensi dari model
         const absensiList = await absensiModel.getAbsensiByKelas(kelasId, tahunAjaranId);
-        
+
+        // Format data berdasarkan jenis penilaian
         const formattedData = absensiList.map(row => {
             if (jenis === 'PTS') {
                 return {
-                    id_siswa: row.id_siswa, nama: row.nama_lengkap, nis: row.nis || '', nisn: row.nisn || '',
-                    sakit: row.sakit_pts, izin: row.izin_pts, alpha: row.alpha_pts,
-                    sudah_diinput: row.sudah_diinput === 1
+                    id_siswa: row.id_siswa,
+                    nama: row.nama_lengkap,
+                    nis: row.nis || '',
+                    nisn: row.nisn || '',
+                    sakit: row.sakit_pts,
+                    izin: row.izin_pts,
+                    alpha: row.alpha_pts,
+                    sudah_diinput: row.sudah_diinput === 1,
                 };
             } else {
                 return {
-                    id_siswa: row.id_siswa, nama: row.nama_lengkap, nis: row.nis || '', nisn: row.nisn || '',
-                    sakit: row.sakit_total, izin: row.izin_total, alpha: row.alpha_total,
+                    id_siswa: row.id_siswa,
+                    nama: row.nama_lengkap,
+                    nis: row.nis || '',
+                    nisn: row.nisn || '',
+                    sakit: row.sakit_total,
+                    izin: row.izin_total,
+                    alpha: row.alpha_total,
                     sudah_diinput: row.sudah_diinput === 1,
-                    pts_sakit: row.sakit_pts, pts_izin: row.izin_pts, pts_alpha: row.alpha_pts
+                    pts_sakit: row.sakit_pts,
+                    pts_izin: row.izin_pts,
+                    pts_alpha: row.alpha_pts,
                 };
             }
         });
-        
+
         res.json({
             success: true,
             data: {
-                kelas_id: kelasId, kelas: namaKelas, jenis_penilaian: jenis, semester,
-                absensi: formattedData, total: formattedData.length
-            }
+                kelas_id: kelasId,
+                kelas: namaKelas,
+                jenis_penilaian: jenis,
+                semester,
+                absensi: formattedData,
+                total: formattedData.length,
+            },
         });
     } catch (err) {
         console.error('Error getAbsensiSiswa:', err);
         res.status(500).json({
-            success: false, message: 'Gagal mengambil data absensi',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+            success: false,
+            message: 'Gagal mengambil data absensi',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined,
         });
     }
 };
@@ -107,153 +142,181 @@ exports.getAbsensiSiswa = async (req, res) => {
 // 2. UPSERT ABSENSI
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Simpan atau update data absensi siswa
 exports.upsertAbsensi = async (req, res) => {
     try {
         const userId = req.user?.id;
         const jenis = req.body.jenis?.toUpperCase() || req.penilaianContext?.jenis;
         const { siswa_id, sakit, izin, alpha } = req.body;
-        
-        if (!userId) return res.status(401).json({ success: false, message: 'User tidak terautentikasi' });
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'User tidak terautentikasi' });
+        }
         if (!jenis || !['PTS', 'PAS'].includes(jenis)) {
             return res.status(400).json({ success: false, message: 'Jenis harus PTS atau PAS' });
         }
-        if (!siswa_id) return res.status(400).json({ success: false, message: 'ID siswa wajib diisi' });
-        
+        if (!siswa_id) {
+            return res.status(400).json({ success: false, message: 'ID siswa wajib diisi' });
+        }
+
+        // Parse dan validasi nilai absensi
         const nilaiSakit = parseInt(sakit) || 0;
         const nilaiIzin = parseInt(izin) || 0;
         const nilaiAlpha = parseInt(alpha) || 0;
-        
+
         if (nilaiSakit < 0 || nilaiIzin < 0 || nilaiAlpha < 0) {
             return res.status(400).json({ success: false, message: 'Nilai absensi tidak boleh negatif' });
         }
-        
-        const MAX_ABSEN = 90;
+
         if (nilaiSakit > MAX_ABSEN || nilaiIzin > MAX_ABSEN || nilaiAlpha > MAX_ABSEN) {
-            return res.status(400).json({ success: false, message: `Nilai absensi tidak boleh lebih dari ${MAX_ABSEN} hari` });
+            return res.status(400).json({
+                success: false,
+                message: `Nilai absensi tidak boleh lebih dari ${MAX_ABSEN} hari`,
+            });
         }
-        
+
         const totalHari = nilaiSakit + nilaiIzin + nilaiAlpha;
         if (totalHari > MAX_ABSEN) {
-            return res.status(400).json({ success: false, message: `Total absensi (${totalHari} hari) tidak boleh lebih dari ${MAX_ABSEN} hari` });
+            return res.status(400).json({
+                success: false,
+                message: `Total absensi (${totalHari} hari) tidak boleh lebih dari ${MAX_ABSEN} hari`,
+            });
         }
-        
+
         const infoKelas = req.infoKelasWali;
         if (!infoKelas || !infoKelas.kelas_id) {
             return res.status(404).json({ success: false, message: 'Data kelas tidak ditemukan' });
         }
-        
+
         const kelasId = infoKelas.kelas_id;
         const tahunAjaranId = req.idSemesterAktif;
-        
+
         if (!tahunAjaranId || !kelasId) {
-            return res.status(500).json({ success: false, message: 'Data tahun ajaran atau kelas tidak valid' });
+            return res.status(500).json({
+                success: false,
+                message: 'Data tahun ajaran atau kelas tidak valid',
+            });
         }
-        
+
+        // Validasi PAS tidak boleh kurang dari PTS
         if (jenis === 'PAS') {
             const ptsData = await absensiModel.checkPTSExists(siswa_id, tahunAjaranId);
             if (ptsData) {
                 if (nilaiSakit < ptsData.sakit_pts) {
-                    return res.status(400).json({ success: false, message: `Total sakit (${nilaiSakit}) tidak boleh kurang dari PTS (${ptsData.sakit_pts})` });
+                    return res.status(400).json({
+                        success: false,
+                        message: `Total sakit (${nilaiSakit}) tidak boleh kurang dari PTS (${ptsData.sakit_pts})`,
+                    });
                 }
                 if (nilaiIzin < ptsData.izin_pts) {
-                    return res.status(400).json({ success: false, message: `Total izin (${nilaiIzin}) tidak boleh kurang dari PTS (${ptsData.izin_pts})` });
+                    return res.status(400).json({
+                        success: false,
+                        message: `Total izin (${nilaiIzin}) tidak boleh kurang dari PTS (${ptsData.izin_pts})`,
+                    });
                 }
                 if (nilaiAlpha < ptsData.alpha_pts) {
-                    return res.status(400).json({ success: false, message: `Total alpha (${nilaiAlpha}) tidak boleh kurang dari PTS (${ptsData.alpha_pts})` });
+                    return res.status(400).json({
+                        success: false,
+                        message: `Total alpha (${nilaiAlpha}) tidak boleh kurang dari PTS (${ptsData.alpha_pts})`,
+                    });
                 }
             }
         }
-        
+
+        // Validasi siswa terdaftar di kelas
         const [siswaCheck] = await db.execute(
             'SELECT 1 FROM siswa_kelas sk WHERE sk.siswa_id = ? AND sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?',
             [siswa_id, kelasId, req.idTahunAjaranInduk]
         );
-        
+
         if (siswaCheck.length === 0) {
             return res.status(400).json({ success: false, message: 'Siswa tidak terdaftar di kelas Anda' });
         }
-        
+
+        // Simpan data absensi berdasarkan jenis penilaian
         if (jenis === 'PTS') {
             await absensiModel.upsertAbsensiPTS(siswa_id, kelasId, tahunAjaranId, nilaiSakit, nilaiIzin, nilaiAlpha);
         } else {
             await absensiModel.upsertAbsensiPAS(siswa_id, kelasId, tahunAjaranId, nilaiSakit, nilaiIzin, nilaiAlpha);
         }
-        
+
         res.json({ success: true, message: `Absensi ${jenis} berhasil disimpan` });
     } catch (err) {
         console.error('Error upsertAbsensi:', err);
         res.status(500).json({
-            success: false, message: 'Gagal menyimpan absensi',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+            success: false,
+            message: 'Gagal menyimpan absensi',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined,
         });
     }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 3. DOWNLOAD TEMPLATE IMPORT ABSENSI
-// ✅ DIPERBAIKI: Semua nilai (Sakit, Izin, Alpha) diisi 0
+// 3. DOWNLOAD TEMPLATE IMPORT ABSENSI
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Generate template Excel untuk import absensi
 exports.downloadTemplateAbsensi = async (req, res) => {
     try {
         const userId = req.user.id;
         const { jenis } = req.query;
-        
+
         if (!jenis || !['PTS', 'PAS'].includes(jenis.toUpperCase())) {
             return res.status(400).json({ success: false, message: 'Parameter jenis (PTS/PAS) wajib diisi' });
         }
-        
+
         const jenisPenilaian = jenis.toUpperCase();
-        
+
+        // Ambil tahun ajaran aktif
         const [taRows] = await db.execute(
-            'SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1'
+            "SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1"
         );
-        
+
         if (taRows.length === 0) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
-        
+
         const semesterId = taRows[0].id_tahun_ajaran;
         const indukId = taRows[0].id_tahun_ajaran_induk;
         const semester = taRows[0].semester;
-        
+
+        // Ambil kelas guru
         const [kelasRow] = await db.execute(
             'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?',
             [userId, semesterId]
         );
-        
+
         if (kelasRow.length === 0) {
             return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
         }
-        
+
         const kelasId = kelasRow[0].kelas_id;
-        
-        const [namaKelasRow] = await db.execute(
-            'SELECT nama_kelas FROM kelas WHERE id_kelas = ?',
-            [kelasId]
-        );
-        
+
+        // Ambil nama kelas
+        const [namaKelasRow] = await db.execute('SELECT nama_kelas FROM kelas WHERE id_kelas = ?', [kelasId]);
         const namaKelas = namaKelasRow[0]?.nama_kelas || 'Kelas';
-        
+
+        // Ambil siswa aktif di kelas
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
-             FROM siswa s
-             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
-             ORDER BY s.nama_lengkap ASC`,
+        FROM siswa s
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+        ORDER BY s.nama_lengkap ASC`,
             [kelasId, indukId]
         );
-        
+
+        // Generate workbook Excel
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'E-Rapor SDIT Ulil Albab Batam';
         workbook.created = new Date();
-        
+
         const worksheet = workbook.addWorksheet('Template Absensi');
-        
-        // Row 1: Column Headers
+
+        // Header di row 1
         const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
-        
+
         const headers = ['No', 'NIS', 'NISN', 'Nama Siswa', 'Sakit', 'Izin', 'Alpha'];
         headers.forEach((header, colIdx) => {
             const cell = headerRow.getCell(colIdx + 1);
@@ -264,30 +327,25 @@ exports.downloadTemplateAbsensi = async (req, res) => {
                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
             };
-            cell.fill = { 
-                type: 'pattern', 
-                pattern: 'solid', 
-                fgColor: { argb: colIdx < 4 ? 'FF34495E' : 'FFE8690A' } 
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: colIdx < 4 ? 'FF34495E' : 'FFE8690A' },
             };
         });
-        
-        // Row 2+: Data Siswa
+
+        // Data siswa mulai dari row 2
         siswaRows.forEach((siswa, index) => {
             const rowNum = 2 + index;
             const dataRow = worksheet.getRow(rowNum);
             dataRow.height = 22;
-            
+
             const isEvenRow = index % 2 === 0;
-            
-            const identitasData = [
-                index + 1,
-                siswa.nis || '',
-                siswa.nisn || '',
-                siswa.nama_lengkap || ''
-            ];
-            
+
+            const identitasData = [index + 1, siswa.nis || '', siswa.nisn || '', siswa.nama_lengkap || ''];
+
             identitasData.forEach((val, colIdx) => {
                 const cell = dataRow.getCell(colIdx + 1);
                 cell.value = val;
@@ -297,50 +355,50 @@ exports.downloadTemplateAbsensi = async (req, res) => {
                     top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 };
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' }
+                    fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' },
                 };
                 cell.protection = { locked: true };
             });
-            
-            // ✅ DIPERBAIKI: Semua nilai diisi 0 (template kosong untuk input baru)
+
+            // Kolom nilai absensi diisi 0 (template kosong untuk input baru)
             ['sakit', 'izin', 'alpha'].forEach((field, fieldIdx) => {
                 const colIdx = 5 + fieldIdx;
                 const cell = dataRow.getCell(colIdx);
-                cell.value = 0; // ✅ Selalu 0, bukan nilai existing
+                cell.value = 0;
                 cell.font = { name: 'Calibri', size: 11 };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
                 cell.border = {
                     top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 };
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' }
+                    fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' },
                 };
-                
+
                 cell.dataValidation = {
                     type: 'whole',
                     operator: 'between',
-                    formulae: [0, 90],
+                    formulae: [0, MAX_ABSEN],
                     showErrorMessage: true,
                     errorTitle: 'Nilai Tidak Valid',
-                    error: 'Nilai absensi harus berupa angka antara 0 sampai 90',
+                    error: `Nilai absensi harus berupa angka antara 0 sampai ${MAX_ABSEN}`,
                     showInputMessage: true,
                     promptTitle: 'Input Absensi',
-                    prompt: 'Masukkan jumlah hari (0-90)'
+                    prompt: `Masukkan jumlah hari (0-${MAX_ABSEN})`,
                 };
             });
         });
-        
-        // Pesan Jika Tidak Ada Siswa
+
+        // Empty state jika tidak ada siswa
         if (siswaRows.length === 0) {
             worksheet.mergeCells('A2:G2');
             const emptyCell = worksheet.getCell('A2');
@@ -349,7 +407,8 @@ exports.downloadTemplateAbsensi = async (req, res) => {
             emptyCell.alignment = { vertical: 'middle', horizontal: 'center' };
             emptyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
         }
-        
+
+        // Set column width
         worksheet.columns = [
             { width: 6 },
             { width: 15 },
@@ -357,98 +416,86 @@ exports.downloadTemplateAbsensi = async (req, res) => {
             { width: 30 },
             { width: 10 },
             { width: 10 },
-            { width: 10 }
+            { width: 10 },
         ];
-        
+
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-        
+
         const buffer = await workbook.xlsx.writeBuffer();
         const fileName = `Template_Absensi_${namaKelas.replace(/[^a-z0-9]/gi, '_')}_${jenisPenilaian}.xlsx`;
-        
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
-        
     } catch (err) {
         console.error('Error downloadTemplateAbsensi:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal membuat template: ' + err.message
+            message: 'Gagal membuat template: ' + err.message,
         });
     }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🆕 4. IMPORT ABSENSI DARI EXCEL (DENGAN 5 HUMAN ERROR PREVENTION)
+// 4. IMPORT ABSENSI DARI EXCEL
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * POST /api/guru-kelas/absensi/import?jenis=PTS|PAS
- * Upload file Excel dan import absensi
- * 
- * 🆕 5 HUMAN ERROR PREVENTION:
- * 1. ✅ File Excel Kosong Total (tidak ada baris data) - KRITIS
- * 2. ✅ Data Siswa Kosong (NIS/Nama tidak ada) - KRITIS
- * 3. ✅ File Tanpa Nilai Absensi (hanya identitas siswa atau semua nilai 0) - KRITIS
- * 4. ✅ Duplikasi NIS (NIS sama lebih dari 1x) - MEDIUM
- * 5. ✅ Duplikasi NISN (NISN sama lebih dari 1x) - MEDIUM
- * 
- * ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
- * 
- * ✅ DIPERBAIKI: Query existing absensi menggunakan MAX() untuk ambil nilai PTS tertinggi
- */
-
+// Import data absensi dari file Excel dengan validasi
 exports.importAbsensiExcel = async (req, res) => {
     const connection = await db.getConnection();
-    
+
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'File Excel wajib diupload' });
         }
-        
+
         const userId = req.user.id;
         const { jenis } = req.query;
-        
+
         if (!jenis || !['PTS', 'PAS'].includes(jenis.toUpperCase())) {
             return res.status(400).json({ success: false, message: 'Parameter jenis (PTS/PAS) wajib diisi' });
         }
-        
+
         const jenisPenilaian = jenis.toUpperCase();
-        
+
+        // Ambil tahun ajaran aktif
         const [taRows] = await db.execute(
-            'SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1'
+            "SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1"
         );
-        
+
         if (taRows.length === 0) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
-        
+
         const semesterId = taRows[0].id_tahun_ajaran;
         const indukId = taRows[0].id_tahun_ajaran_induk;
-        
+
+        // Ambil kelas guru
         const [kelasRow] = await db.execute(
             'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?',
             [userId, semesterId]
         );
-        
+
         if (kelasRow.length === 0) {
             return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
         }
-        
+
         const kelasId = kelasRow[0].kelas_id;
-        
+
+        // Baca file Excel
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-        
+
         if (data.length < 2) {
             return res.status(400).json({
                 success: false,
-                message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.'
+                message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.',
             });
         }
-        
+
+        // Cari header row
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(10, data.length); i++) {
             const row = data[i].map(c => String(c).trim().toLowerCase());
@@ -457,41 +504,39 @@ exports.importAbsensiExcel = async (req, res) => {
                 break;
             }
         }
-        
+
         if (headerRowIndex === -1) {
             return res.status(400).json({
                 success: false,
-                message: 'Header tidak ditemukan. Pastikan ada kolom "NIS" dan "Nama Siswa".'
+                message: 'Header tidak ditemukan. Pastikan ada kolom "NIS" dan "Nama Siswa".',
             });
         }
-        
+
         const headers = data[headerRowIndex].map(h => String(h).trim());
         const dataStartIndex = headerRowIndex + 1;
-        
+
+        // Validasi kolom wajib
         const requiredColumns = ['NIS', 'Nama Siswa', 'Sakit', 'Izin', 'Alpha'];
         const missingColumns = requiredColumns.filter(col =>
             !headers.some(h => h.toLowerCase() === col.toLowerCase())
         );
-        
+
         if (missingColumns.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Kolom wajib tidak ditemukan: ${missingColumns.join(', ')}`
+                message: `Kolom wajib tidak ditemukan: ${missingColumns.join(', ')}`,
             });
         }
-        
-        const findColIndex = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+
+        const findColIndex = name => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
         const idxNIS = findColIndex('NIS');
         const idxNISN = findColIndex('NISN');
         const idxNama = findColIndex('Nama Siswa');
         const idxSakit = findColIndex('Sakit');
         const idxIzin = findColIndex('Izin');
         const idxAlpha = findColIndex('Alpha');
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // 🆕 HUMAN ERROR #1: VALIDASI FILE KOSONG TOTAL
-        // ═══════════════════════════════════════════════════════════════════
-        
+
+        // Validasi file tidak kosong
         let adaBarisDataValid = false;
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -500,17 +545,18 @@ exports.importAbsensiExcel = async (req, res) => {
                 break;
             }
         }
-        
+
         if (!adaBarisDataValid) {
             return res.status(400).json({
                 success: false,
-                message: `❌ File Excel kosong - tidak ada data sama sekali.\n\n` +
-                         `File hanya berisi header tanpa baris data siswa.\n\n` +
-                         `💡 Solusi:\n` +
-                         `1. Download ulang template Excel\n` +
-                         `2. Pastikan ada baris data siswa\n` +
-                         `3. Isi nilai absensi (Sakit, Izin, Alpha)\n` +
-                         `4. Upload kembali file yang sudah diisi`,
+                message:
+                    `File Excel kosong - tidak ada data sama sekali.\n\n` +
+                    `File hanya berisi header tanpa baris data siswa.\n\n` +
+                    `Solusi:\n` +
+                    `1. Download ulang template Excel\n` +
+                    `2. Pastikan ada baris data siswa\n` +
+                    `3. Isi nilai absensi (Sakit, Izin, Alpha)\n` +
+                    `4. Upload kembali file yang sudah diisi`,
                 data: {
                     total_baris: 0,
                     berhasil: 0,
@@ -518,45 +564,40 @@ exports.importAbsensiExcel = async (req, res) => {
                     dilewati: 0,
                     total_records_saved: 0,
                     errors: null,
-                    warnings: [{
-                        row: 0,
-                        message: 'File Excel kosong. Tidak ada baris data siswa.'
-                    }],
-                    periode: jenisPenilaian
-                }
+                    warnings: [{ row: 0, message: 'File Excel kosong. Tidak ada baris data siswa.' }],
+                    periode: jenisPenilaian,
+                },
             });
         }
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // 🆕 HUMAN ERROR #2: VALIDASI DATA SISWA KOSONG
-        // ═══════════════════════════════════════════════════════════════════
-        
+
+        // Validasi data siswa ada
         let adaDataSiswa = false;
         let barisDenganDataSiswa = 0;
-        
+
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-            
+
             const nis = String(row[idxNIS] || '').trim();
             const nama = String(row[idxNama] || '').trim();
-            
+
             if (nis || nama) {
                 adaDataSiswa = true;
                 barisDenganDataSiswa++;
             }
         }
-        
+
         if (!adaDataSiswa) {
             return res.status(400).json({
                 success: false,
-                message: `❌ File Excel tidak valid - tidak ada data siswa.\n\n` +
-                         `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
-                         `💡 Solusi:\n` +
-                         `1. Download ulang template Excel\n` +
-                         `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
-                         `3. Isi nilai absensi (Sakit, Izin, Alpha)\n` +
-                         `4. Upload kembali file yang sudah diisi`,
+                message:
+                    `File Excel tidak valid - tidak ada data siswa.\n\n` +
+                    `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
+                    `Solusi:\n` +
+                    `1. Download ulang template Excel\n` +
+                    `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
+                    `3. Isi nilai absensi (Sakit, Izin, Alpha)\n` +
+                    `4. Upload kembali file yang sudah diisi`,
                 data: {
                     total_baris: data.length - dataStartIndex,
                     berhasil: 0,
@@ -564,53 +605,45 @@ exports.importAbsensiExcel = async (req, res) => {
                     dilewati: data.length - dataStartIndex,
                     total_records_saved: 0,
                     errors: null,
-                    warnings: [{
-                        row: 0,
-                        message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.'
-                    }],
-                    periode: jenisPenilaian
-                }
+                    warnings: [{ row: 0, message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.' }],
+                    periode: jenisPenilaian,
+                },
             });
         }
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // 🆕 HUMAN ERROR #3: VALIDASI FILE TANPA NILAI ABSENSI
-        // ✅ DIPERBAIKI: Nilai 0 dianggap sebagai "tidak ada nilai yang diisi"
-        // ═══════════════════════════════════════════════════════════════════
-        
+
+        // Validasi file memiliki nilai absensi (nilai > 0)
         let adaNilaiDiFile = false;
         let barisDenganNilai = 0;
-        
+
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-            
+
             let barisIniPunyaNilai = false;
-            
-            // ✅ DIPERBAIKI: Nilai 0 dianggap sebagai "tidak ada nilai yang diisi"
-            // Hanya nilai > 0 yang dianggap sebagai "nilai yang diisi"
+
             const sakitNum = parseFloat(String(row[idxSakit] || '0').trim());
             const izinNum = parseFloat(String(row[idxIzin] || '0').trim());
             const alphaNum = parseFloat(String(row[idxAlpha] || '0').trim());
-            
-            if ((sakitNum > 0) || (izinNum > 0) || (alphaNum > 0)) {
+
+            if (sakitNum > 0 || izinNum > 0 || alphaNum > 0) {
                 adaNilaiDiFile = true;
                 barisIniPunyaNilai = true;
             }
-            
+
             if (barisIniPunyaNilai) barisDenganNilai++;
         }
-        
+
         if (!adaNilaiDiFile) {
             return res.status(400).json({
                 success: false,
-                message: `❌ File Excel tidak valid - tidak ada nilai absensi yang diisi.\n\n` +
-                         `File hanya berisi data identitas siswa (Nama, NIS, NISN) dengan nilai 0 (default template).\n\n` +
-                         `💡 Solusi:\n` +
-                         `1. Download ulang template Excel\n` +
-                         `2. Isi kolom absensi (Sakit, Izin, Alpha) dengan angka > 0\n` +
-                         `3. Upload kembali file yang sudah diisi\n\n` +
-                         `📊 Periode aktif: ${jenisPenilaian}`,
+                message:
+                    `File Excel tidak valid - tidak ada nilai absensi yang diisi.\n\n` +
+                    `File hanya berisi data identitas siswa (Nama, NIS, NISN) dengan nilai 0 (default template).\n\n` +
+                    `Solusi:\n` +
+                    `1. Download ulang template Excel\n` +
+                    `2. Isi kolom absensi (Sakit, Izin, Alpha) dengan angka > 0\n` +
+                    `3. Upload kembali file yang sudah diisi\n\n` +
+                    `Periode aktif: ${jenisPenilaian}`,
                 data: {
                     total_baris: data.length - dataStartIndex,
                     berhasil: 0,
@@ -618,75 +651,76 @@ exports.importAbsensiExcel = async (req, res) => {
                     dilewati: data.length - dataStartIndex,
                     total_records_saved: 0,
                     errors: null,
-                    warnings: [{
-                        row: 0,
-                        message: 'File Excel tidak berisi nilai absensi. Hanya data identitas siswa dengan nilai 0 (default template).'
-                    }],
-                    periode: jenisPenilaian
-                }
+                    warnings: [
+                        {
+                            row: 0,
+                            message: 'File Excel tidak berisi nilai absensi. Hanya data identitas siswa dengan nilai 0 (default template).',
+                        },
+                    ],
+                    periode: jenisPenilaian,
+                },
             });
         }
-        
+
+        // Ambil data siswa dari database
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
-             FROM siswa s
-             INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-             WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
+        FROM siswa s
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
             [kelasId, indukId]
         );
-        
+
         const siswaMapByNIS = {};
         siswaRows.forEach(s => {
             if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s;
         });
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // ✅ DIPERBAIKI: Query Existing Absensi dengan MAX() untuk ambil nilai PTS tertinggi
-        // ═══════════════════════════════════════════════════════════════════
-        
+
+        // Query existing absensi dengan MAX() untuk ambil nilai PTS tertinggi
         const [existingAbsensiRows] = await db.execute(
             `SELECT siswa_id, 
-                    MAX(sakit_pts) as sakit_pts, 
-                    MAX(izin_pts) as izin_pts, 
-                    MAX(alpha_pts) as alpha_pts
-             FROM absensi
-             WHERE kelas_id = ? AND id_tahun_ajaran = ?
-             GROUP BY siswa_id`,
+                MAX(sakit_pts) as sakit_pts, 
+                MAX(izin_pts) as izin_pts, 
+                MAX(alpha_pts) as alpha_pts
+        FROM absensi
+        WHERE kelas_id = ? AND id_tahun_ajaran = ?
+        GROUP BY siswa_id`,
             [kelasId, semesterId]
         );
-        
+
         const existingAbsensiMap = {};
         existingAbsensiRows.forEach(row => {
             existingAbsensiMap[row.siswa_id] = {
                 sakit_pts: row.sakit_pts || 0,
                 izin_pts: row.izin_pts || 0,
-                alpha_pts: row.alpha_pts || 0
+                alpha_pts: row.alpha_pts || 0,
             };
         });
-        
+
         await connection.beginTransaction();
-        
+
         const errors = [];
         const warnings = [];
         let successCount = 0;
         let skippedCount = 0;
         let totalRecordsSaved = 0;
-        
-        // 🆕 HUMAN ERROR #4: Track duplikasi NIS
+
+        // Track duplikasi NIS
         const nisDiproses = new Set();
         const nisDuplikat = [];
-        
-        // 🆕 HUMAN ERROR #5: Track duplikasi NISN
+
+        // Track duplikasi NISN
         const nisnDiproses = new Set();
         const nisnDuplikat = [];
-        
+
+        // Proses data per baris
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-            
+
             const nis = String(row[idxNIS] || '').trim();
             const namaSiswa = String(row[idxNama] || '').trim();
-            
+
             if (!nis) {
                 if (namaSiswa) {
                     warnings.push({ row: i + 1, message: `Baris ${i + 1}: NIS kosong untuk "${namaSiswa}"` });
@@ -694,28 +728,28 @@ exports.importAbsensiExcel = async (req, res) => {
                 skippedCount++;
                 continue;
             }
-            
-            // 🆕 HUMAN ERROR #4: Cek duplikasi NIS
+
+            // Cek duplikasi NIS
             if (nisDiproses.has(nis)) {
                 nisDuplikat.push({ row: i + 1, nis, nama: namaSiswa });
-                warnings.push({ 
-                    row: i + 1, 
-                    message: `⚠️ Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                warnings.push({
+                    row: i + 1,
+                    message: `Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.`,
                 });
                 skippedCount++;
                 continue;
             }
             nisDiproses.add(nis);
-            
-            // 🆕 HUMAN ERROR #5: Cek duplikasi NISN
+
+            // Cek duplikasi NISN
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 if (nisnExcel) {
                     if (nisnDiproses.has(nisnExcel)) {
                         nisnDuplikat.push({ row: i + 1, nisn: nisnExcel, nama: namaSiswa });
-                        warnings.push({ 
-                            row: i + 1, 
-                            message: `⚠️ Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` 
+                        warnings.push({
+                            row: i + 1,
+                            message: `Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.`,
                         });
                         skippedCount++;
                         continue;
@@ -723,99 +757,95 @@ exports.importAbsensiExcel = async (req, res) => {
                     nisnDiproses.add(nisnExcel);
                 }
             }
-            
+
             const siswa = siswaMapByNIS[nis];
             if (!siswa) {
                 errors.push({
                     row: i + 1,
-                    message: `Baris ${i + 1}: Siswa dengan NIS "${nis}" tidak ditemukan di kelas ini`
+                    message: `Baris ${i + 1}: Siswa dengan NIS "${nis}" tidak ditemukan di kelas ini`,
                 });
                 skippedCount++;
                 continue;
             }
-            
+
             const siswaId = siswa.id_siswa;
-            
-            // Validasi NISN cocok dengan DB
+
+            // Validasi NISN cocok dengan database
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 const nisnDB = String(siswa.nisn || '').trim();
                 if (nisnExcel && nisnDB && nisnExcel !== nisnDB) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}: NISN tidak cocok. Excel: "${nisnExcel}", DB: "${nisnDB}"`
+                        message: `Baris ${i + 1}: NISN tidak cocok. Excel: "${nisnExcel}", DB: "${nisnDB}"`,
                     });
                     skippedCount++;
                     continue;
                 }
             }
-            
-            // ✅ NAMA BOLEH DUPLIKAT - Tidak ada validasi duplikasi nama
-            // Hanya validasi nama cocok dengan DB
+
+            // Validasi nama cocok dengan database
             if (idxNama >= 0) {
                 const namaExcel = String(row[idxNama] || '').trim().toLowerCase();
                 const namaDB = String(siswa.nama_lengkap || '').trim().toLowerCase();
                 if (namaExcel && namaDB && namaExcel !== namaDB) {
                     const similarity = calculateSimilarity(namaExcel, namaDB);
-                    if (similarity < 0.7) {
+                    if (similarity < SIMILARITY_THRESHOLD) {
                         errors.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Nama tidak cocok. Excel: "${row[idxNama]}", DB: "${siswa.nama_lengkap}"`
+                            message: `Baris ${i + 1}: Nama tidak cocok. Excel: "${row[idxNama]}", DB: "${siswa.nama_lengkap}"`,
                         });
                         skippedCount++;
                         continue;
                     } else {
                         warnings.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.`
+                            message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.`,
                         });
                     }
                 }
             }
-            
+
             const sakit = parseInt(String(row[idxSakit] || '0').trim()) || 0;
             const izin = parseInt(String(row[idxIzin] || '0').trim()) || 0;
             const alpha = parseInt(String(row[idxAlpha] || '0').trim()) || 0;
-            
+
             if (sakit < 0 || izin < 0 || alpha < 0) {
                 errors.push({
                     row: i + 1,
-                    message: `Baris ${i + 1}: Nilai absensi tidak boleh negatif`
+                    message: `Baris ${i + 1}: Nilai absensi tidak boleh negatif`,
                 });
                 skippedCount++;
                 continue;
             }
-            
-            if (sakit > 90 || izin > 90 || alpha > 90) {
+
+            if (sakit > MAX_ABSEN || izin > MAX_ABSEN || alpha > MAX_ABSEN) {
                 errors.push({
                     row: i + 1,
-                    message: `Baris ${i + 1}: Nilai absensi tidak boleh lebih dari 90 hari`
+                    message: `Baris ${i + 1}: Nilai absensi tidak boleh lebih dari ${MAX_ABSEN} hari`,
                 });
                 skippedCount++;
                 continue;
             }
-            
+
             const totalHari = sakit + izin + alpha;
-            if (totalHari > 90) {
+            if (totalHari > MAX_ABSEN) {
                 errors.push({
                     row: i + 1,
-                    message: `Baris ${i + 1}: Total absensi (${totalHari} hari) tidak boleh lebih dari 90 hari`
+                    message: `Baris ${i + 1}: Total absensi (${totalHari} hari) tidak boleh lebih dari ${MAX_ABSEN} hari`,
                 });
                 skippedCount++;
                 continue;
             }
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // ✅ DIPERBAIKI: Validasi PAS tidak boleh kurang dari PTS
-            // ═══════════════════════════════════════════════════════════════════
-            
+
+            // Validasi PAS tidak boleh kurang dari PTS
             if (jenisPenilaian === 'PAS') {
                 const existingData = existingAbsensiMap[siswaId];
                 if (existingData) {
                     if (sakit < existingData.sakit_pts) {
                         errors.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Total sakit (${sakit}) tidak boleh kurang dari PTS (${existingData.sakit_pts})`
+                            message: `Baris ${i + 1}: Total sakit (${sakit}) tidak boleh kurang dari PTS (${existingData.sakit_pts})`,
                         });
                         skippedCount++;
                         continue;
@@ -823,7 +853,7 @@ exports.importAbsensiExcel = async (req, res) => {
                     if (izin < existingData.izin_pts) {
                         errors.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Total izin (${izin}) tidak boleh kurang dari PTS (${existingData.izin_pts})`
+                            message: `Baris ${i + 1}: Total izin (${izin}) tidak boleh kurang dari PTS (${existingData.izin_pts})`,
                         });
                         skippedCount++;
                         continue;
@@ -831,27 +861,28 @@ exports.importAbsensiExcel = async (req, res) => {
                     if (alpha < existingData.alpha_pts) {
                         errors.push({
                             row: i + 1,
-                            message: `Baris ${i + 1}: Total alpha (${alpha}) tidak boleh kurang dari PTS (${existingData.alpha_pts})`
+                            message: `Baris ${i + 1}: Total alpha (${alpha}) tidak boleh kurang dari PTS (${existingData.alpha_pts})`,
                         });
                         skippedCount++;
                         continue;
                     }
                 }
             }
-            
+
+            // Simpan data absensi
             if (jenisPenilaian === 'PTS') {
                 await connection.execute(
                     `INSERT INTO absensi 
-                     (siswa_id, kelas_id, id_tahun_ajaran, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                     ON DUPLICATE KEY UPDATE
-                     sakit_pts = VALUES(sakit_pts),
-                     izin_pts = VALUES(izin_pts),
-                     alpha_pts = VALUES(alpha_pts),
-                     sakit_total = GREATEST(COALESCE(sakit_total, 0), VALUES(sakit_pts)),
-                     izin_total = GREATEST(COALESCE(izin_total, 0), VALUES(izin_pts)),
-                     alpha_total = GREATEST(COALESCE(alpha_total, 0), VALUES(alpha_pts)),
-                     updated_at = NOW()`,
+            (siswa_id, kelas_id, id_tahun_ajaran, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            sakit_pts = VALUES(sakit_pts),
+            izin_pts = VALUES(izin_pts),
+            alpha_pts = VALUES(alpha_pts),
+            sakit_total = GREATEST(COALESCE(sakit_total, 0), VALUES(sakit_pts)),
+            izin_total = GREATEST(COALESCE(izin_total, 0), VALUES(izin_pts)),
+            alpha_total = GREATEST(COALESCE(alpha_total, 0), VALUES(alpha_pts)),
+            updated_at = NOW()`,
                     [siswaId, kelasId, semesterId, sakit, izin, alpha, sakit, izin, alpha]
                 );
             } else {
@@ -859,66 +890,65 @@ exports.importAbsensiExcel = async (req, res) => {
                 const ptsSakit = existingData?.sakit_pts || 0;
                 const ptsIzin = existingData?.izin_pts || 0;
                 const ptsAlpha = existingData?.alpha_pts || 0;
-                
+
                 await connection.execute(
                     `INSERT INTO absensi 
-                     (siswa_id, kelas_id, id_tahun_ajaran, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                     ON DUPLICATE KEY UPDATE
-                     sakit_total = VALUES(sakit_total),
-                     izin_total = VALUES(izin_total),
-                     alpha_total = VALUES(alpha_total),
-                     updated_at = NOW()`,
+            (siswa_id, kelas_id, id_tahun_ajaran, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            sakit_total = VALUES(sakit_total),
+            izin_total = VALUES(izin_total),
+            alpha_total = VALUES(alpha_total),
+            updated_at = NOW()`,
                     [siswaId, kelasId, semesterId, ptsSakit, ptsIzin, ptsAlpha, sakit, izin, alpha]
                 );
             }
-            
+
             successCount++;
             totalRecordsSaved++;
         }
-        
+
         await connection.commit();
-        
+
+        // Build response message
         let message = '';
         let success = true;
-        
+
         if (errors.length > 0) {
             success = false;
             if (successCount > 0) {
-                message = `⚠️ Import sebagian berhasil: ${successCount} data absensi ${jenisPenilaian} disimpan, tetapi ada ${errors.length} error yang perlu diperbaiki.`;
+                message = `Import sebagian berhasil: ${successCount} data absensi ${jenisPenilaian} disimpan, tetapi ada ${errors.length} error yang perlu diperbaiki.`;
             } else {
-                message = `❌ Import gagal: ${errors.length} error ditemukan. Tidak ada data yang disimpan.`;
+                message = `Import gagal: ${errors.length} error ditemukan. Tidak ada data yang disimpan.`;
             }
         } else if (successCount > 0) {
-            message = `✅ Import berhasil! ${successCount} data absensi ${jenisPenilaian} berhasil disimpan.`;
+            message = `Import berhasil! ${successCount} data absensi ${jenisPenilaian} berhasil disimpan.`;
         } else {
-            message = 'ℹ️ Tidak ada data yang berhasil diimport.';
+            message = 'Tidak ada data yang berhasil diimport.';
         }
-        
-        // 🆕 BARU: Tampilkan info duplikasi NIS
+
+        // Info duplikasi NIS
         if (nisDuplikat.length > 0) {
             const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
             warnings.unshift({
                 row: 0,
-                message: `⚠️ DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+                message: `DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`,
             });
-            
-            message += `\n\n⚠️ PERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+            message += `\n\nPERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
         }
-        
-        // 🆕 BARU: Tampilkan info duplikasi NISN
+
+        // Info duplikasi NISN
         if (nisnDuplikat.length > 0) {
             const duplikatInfo = nisnDuplikat.map(d => `Baris ${d.row} (NISN: ${d.nisn}, ${d.nama})`).join(', ');
             warnings.unshift({
                 row: 0,
-                message: `⚠️ DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`
+                message: `DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`,
             });
-            
-            message += `\n\n⚠️ PERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
+            message += `\n\nPERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
         }
-        
-        message += `\n💡 INFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
-        
+
+        message += `\nINFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
+
         res.json({
             success: success,
             message: message,
@@ -937,18 +967,18 @@ exports.importAbsensiExcel = async (req, res) => {
                 nisn_duplikat_detail: nisnDuplikat,
                 baris_dengan_nilai: barisDenganNilai,
                 baris_dengan_data_siswa: barisDenganDataSiswa,
-                pesan_penting: (nisDuplikat.length > 0 || nisnDuplikat.length > 0)
-                    ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
-                    : null
-            }
+                pesan_penting:
+                    nisDuplikat.length > 0 || nisnDuplikat.length > 0
+                        ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
+                        : null,
+            },
         });
-        
     } catch (err) {
         await connection.rollback();
         console.error('Error importAbsensiExcel:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengimport absensi: ' + err.message
+            message: 'Gagal mengimport absensi: ' + err.message,
         });
     } finally {
         connection.release();
