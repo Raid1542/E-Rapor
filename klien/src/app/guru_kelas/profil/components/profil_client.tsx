@@ -1,14 +1,27 @@
-// ============================================================
-// File: profil_client.tsx
-// Fungsi: Komponen utama untuk mengelola profil dan kata sandi
-//         pengguna (guru kelas), termasuk upload foto profil.
-// Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Muhammad Auriel Almayda - NIM: 3312401093
-// Tanggal: 15 September 2025
+/**
+ * Nama File: profil_client.tsx
+ * Fungsi: Komponen client-side untuk manajemen profil guru kelas
+ * UPDATE: Menggunakan template identik dengan profil Guru Bidang Studi
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ */
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Camera } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Camera, Lock, Upload, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X, User, KeyRound } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
+
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+
+type ModalType = 'success' | 'error' | 'warning' | 'network';
+
+interface ModalConfig {
+    type: ModalType;
+    title: string;
+    message: string;
+}
 
 interface UserProfile {
     id: number;
@@ -20,100 +33,331 @@ interface UserProfile {
     jenis_kelamin?: string;
     alamat?: string;
     no_telepon?: string;
+    tempat_lahir?: string;
+    tanggal_lahir?: string | null;
     profileImage?: string;
 }
 
-const ProfilClient = () => {
+// ─── GLOBAL STYLES (DENGAN ANIMASI) ────────────────────────────────────────────
+
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes pf-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pf-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes pf-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pf-slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .pf-fadeIn  { animation: pf-fadeIn  0.2s ease; }
+        .pf-scaleIn { animation: pf-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .pf-pulse   { animation: pf-pulse   0.6s ease 0.15s; }
+        .pf-slideUp { animation: pf-slideUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+        
+        /* Animasi entrance seperti dashboard */
+        .anim-in { animation: pf-slideUp 0.5s ease forwards; opacity: 0; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.1s; }
+        .d3 { animation-delay: 0.15s; }
+        .d4 { animation-delay: 0.2s; }
+    `}</style>
+);
+
+// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
+
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+};
+
+const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+    const s = MODAL_STYLES[modal.type];
+    return (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 pf-fadeIn">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 pf-scaleIn">
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                    <X size={18} />
+                </button>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} pf-pulse`}>
+                    {s.icon}
+                </div>
+                <div className="text-center">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+                </div>
+                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
+                    Ok
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+
+const PAGE_BG = { background: '#fdf6f0' };
+const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+const readonlyCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-500 outline-none bg-gray-50 border-gray-200 cursor-not-allowed";
+
+const labelCls = "block text-sm font-semibold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+
+const ProfilePage = () => {
+    const router = useRouter();
+    const { showSessionExpired, handleLogout } = useSession();
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
     const [formData, setFormData] = useState({
-        nama: '',
-        nuptk: '',
-        niy: '',
-        jenisKelamin: 'Laki-laki',
-        telepon: '',
-        email: '',
-        alamat: ''
+        nama: '', nuptk: '', niy: '', jenisKelamin: 'Laki-laki',
+        telepon: '', email: '', alamat: '', tempatLahir: '', tanggalLahir: ''
     });
 
-    const [passwordData, setPasswordData] = useState({
-        oldPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-    });
-
-    const [isConfirmed, setIsConfirmed] = useState(false);
-    const [roleLabel, setRoleLabel] = useState('Guru Kelas');
-
-    // Foto profil
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [selectedFileName, setSelectedFileName] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [initialFormData, setInitialFormData] = useState<typeof formData | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // === Muat data user dari localStorage ===
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+    const initialFormDataRef = useRef<typeof formData | null>(null);
+
+    const [modal, setModal] = useState<ModalConfig | null>(null);
+    const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+    const closeModal = useCallback(() => setModal(null), []);
+
+    // ── Fetch profil ───────────────────────────────────────────────────────────
+
     useEffect(() => {
-        const stored = localStorage.getItem('currentUser');
-        if (!stored) {
-            window.location.href = '/login';
-            return;
-        }
+        const fetchProfile = async () => {
+            const token = localStorage.getItem('token');
+            const storedUser = localStorage.getItem('currentUser');
 
-        try {
-            const user: UserProfile = JSON.parse(stored);
-            const initialData = {
-                nama: user.nama_lengkap || '',
-                nuptk: user.nuptk || '',
-                niy: user.niy || '',
-                jenisKelamin: user.jenis_kelamin || 'Laki-laki',
-                telepon: user.no_telepon || '',
-                email: user.email_sekolah || '',
-                alamat: user.alamat || ''
-            };
-            setFormData(initialData);
-            setInitialFormData(initialData);
-
-            if (user.profileImage) {
-                const imgUrl = user.profileImage.startsWith('/')
-                    ? `${API_URL}${user.profileImage}`
-                    : `${API_URL}/${user.profileImage}`;
-                setProfileImage(imgUrl);
+            if (!token || !storedUser) {
+                window.location.href = '/login';
+                return;
             }
 
-            const roleMap: Record<string, string> = {
-                admin: 'Admin',
-                guru: 'Guru',
-                'guru kelas': 'Guru Kelas',
-                'guru_kelas': 'Guru Kelas',
-                'guru bidang studi': 'Guru Bidang Studi'
-            };
-            setRoleLabel(roleMap[user.role] || 'Guru');
-        } catch (e) {
-            console.error('Gagal memuat profil', e);
-            window.location.href = '/login';
-        }
-    }, [API_URL]);
+            try {
+                const userData: UserProfile = JSON.parse(storedUser);
+
+                const res = await fetch(`${API_URL}/api/guru-kelas/profil`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                let freshData: any = userData;
+
+                if (res.ok) {
+                    const apiResponse = await res.json();
+                    freshData = apiResponse.user || apiResponse.data || apiResponse;
+
+                    const updatedUser = {
+                        ...userData,
+                        nama_lengkap: freshData.nama_lengkap || userData.nama_lengkap,
+                        email_sekolah: freshData.email_sekolah || userData.email_sekolah,
+                        niy: freshData.niy || userData.niy || '',
+                        nuptk: freshData.nuptk || userData.nuptk || '',
+                        jenis_kelamin: freshData.jenis_kelamin || userData.jenis_kelamin || 'Laki-laki',
+                        no_telepon: freshData.no_telepon || userData.no_telepon || '',
+                        alamat: freshData.alamat || userData.alamat || '',
+                        tempat_lahir: freshData.tempat_lahir || '',
+                        tanggal_lahir: freshData.tanggal_lahir || null,
+                        profileImage: freshData.profileImage || freshData.foto_path || null
+                    };
+                    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                }
+
+                if (freshData.profileImage && freshData.profileImage.trim()) {
+                    const imgUrl = freshData.profileImage.startsWith('http')
+                        ? freshData.profileImage
+                        : freshData.profileImage.startsWith('/')
+                            ? `${API_URL}${freshData.profileImage}`
+                            : `${API_URL}/${freshData.profileImage}`;
+                    setProfileImage(imgUrl);
+                } else {
+                    setProfileImage(null);
+                }
+
+                const loadedData = {
+                    nama: freshData.nama_lengkap || '',
+                    nuptk: freshData.nuptk || '',
+                    niy: freshData.niy || '',
+                    jenisKelamin: freshData.jenis_kelamin || 'Laki-laki',
+                    telepon: freshData.no_telepon || '',
+                    email: freshData.email_sekolah || '',
+                    alamat: freshData.alamat || '',
+                    tempatLahir: freshData.tempat_lahir || '',
+                    tanggalLahir: freshData.tanggal_lahir || ''
+                };
+                setFormData(loadedData);
+                initialFormDataRef.current = { ...loadedData };
+            } catch (e) {
+                console.error('Gagal memuat data profil:', e);
+                showModal({ type: 'network', title: 'Gagal Memuat Profil', message: 'Tidak dapat memuat data profil. Periksa koneksi internet Anda.' });
+            }
+        };
+
+        fetchProfile();
+    }, [API_URL, showModal]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // === Upload Foto Profil ===
+    // ── Validasi Tanggal Lahir (usia minimal 18 tahun) ────────────────────────
+
+    const validateTanggalLahir = (tanggal: string): string | null => {
+        if (!tanggal) return 'Tanggal lahir wajib diisi';
+
+        const dob = new Date(tanggal);
+        if (isNaN(dob.getTime())) return 'Tanggal lahir tidak valid';
+
+        const today = new Date();
+        const dobMid = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
+        const todMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+        if (dobMid > todMid) {
+            return 'Tanggal lahir tidak boleh di masa depan';
+        }
+
+        let age = today.getFullYear() - dob.getFullYear();
+        const m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+
+        if (age < 18) {
+            return `Usia minimal 18 tahun`;
+        }
+
+        return null;
+    };
+
+    // ── Buka modal konfirmasi ─────────────────────────────────────────────────
+
+    const openConfirmModal = () => {
+        const tanggalError = validateTanggalLahir(formData.tanggalLahir);
+        if (tanggalError) {
+            setErrors({ tanggalLahir: tanggalError });
+            showModal({
+                type: 'warning',
+                title: 'Tanggal Lahir Tidak Valid',
+                message: tanggalError
+            });
+            return;
+        }
+
+        setErrors({});
+
+        const initial = initialFormDataRef.current;
+        const hasChanges = !initial ||
+            formData.nama !== initial.nama ||
+            formData.nuptk !== initial.nuptk ||
+            formData.niy !== initial.niy ||
+            formData.jenisKelamin !== initial.jenisKelamin ||
+            formData.telepon !== initial.telepon ||
+            formData.alamat !== initial.alamat ||
+            formData.tempatLahir !== initial.tempatLahir ||
+            formData.tanggalLahir !== initial.tanggalLahir;
+
+        if (!hasChanges) {
+            showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah. Silakan ubah data terlebih dahulu sebelum menyimpan.' });
+            return;
+        }
+
+        setShowConfirmModal(true);
+    };
+
+    // ── Eksekusi submit profil (setelah konfirmasi) ───────────────────────────
+
+    const executeSubmitProfile = async () => {
+        const token = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('currentUser');
+        if (!token || !storedUser) {
+            showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi login tidak valid. Silakan login ulang.' });
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const response = await fetch(`${API_URL}/api/guru-kelas/profil`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    nama_lengkap: formData.nama,
+                    email_sekolah: formData.email,
+                    niy: formData.niy,
+                    nuptk: formData.nuptk,
+                    jenis_kelamin: formData.jenisKelamin,
+                    no_telepon: formData.telepon,
+                    alamat: formData.alamat,
+                    tempat_lahir: formData.tempatLahir,
+                    tanggal_lahir: formData.tanggalLahir,
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                const userData: UserProfile = JSON.parse(storedUser);
+
+                const updatedUser: UserProfile = {
+                    ...userData,
+                    ...result.user,
+                    nama_lengkap: formData.nama,
+                    email_sekolah: formData.email,
+                    niy: formData.niy,
+                    nuptk: formData.nuptk,
+                    jenis_kelamin: formData.jenisKelamin,
+                    no_telepon: formData.telepon,
+                    alamat: formData.alamat,
+                    tempat_lahir: formData.tempatLahir,
+                    tanggal_lahir: formData.tanggalLahir,
+                    profileImage: result.user?.profileImage || result.user?.foto_path || userData.profileImage,
+                };
+
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                window.dispatchEvent(new Event('userDataUpdated'));
+
+                initialFormDataRef.current = { ...formData };
+                showModal({ type: 'success', title: 'Profil Diperbarui!', message: 'Data profil Anda berhasil disimpan.' });
+            } else {
+                const error = await response.json();
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: error.message || 'Terjadi kesalahan saat memperbarui profil.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // ── Upload foto ────────────────────────────────────────────────────────────
+
     const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-            alert('Hanya file JPG, PNG, atau WebP yang diizinkan');
+            showModal({ type: 'warning', title: 'Format Tidak Didukung', message: 'Hanya file JPG, PNG, atau WebP yang diizinkan.' });
             return;
         }
         if (file.size > 5 * 1024 * 1024) {
-            alert('Ukuran file maksimal 5MB');
+            showModal({ type: 'warning', title: 'File Terlalu Besar', message: 'Ukuran file maksimal 5 MB.' });
             return;
         }
 
+        setSelectedFileName(file.name);
         const reader = new FileReader();
         reader.onloadend = () => setPreviewImage(reader.result as string);
         reader.readAsDataURL(file);
@@ -121,7 +365,7 @@ const ProfilClient = () => {
         setIsUploading(true);
         const token = localStorage.getItem('token');
         if (!token) {
-            alert('Sesi login tidak valid.');
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login tidak valid. Silakan login ulang.' });
             setIsUploading(false);
             return;
         }
@@ -137,391 +381,357 @@ const ProfilClient = () => {
             });
 
             const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.message || 'Upload gagal');
-            }
-
-            let updatedUser;
-            if (result.user) {
-                updatedUser = {
-                    ...result.user,
-                    profileImage: result.user.profileImage || result.user.foto_path || null,
-                    role: result.user.role || 'guru kelas'
-                };
-            } else if (result.fotoPath) {
+            if (response.ok && result.fotoPath) {
                 const storedUser = localStorage.getItem('currentUser');
                 if (storedUser) {
                     const userData = JSON.parse(storedUser);
                     userData.profileImage = result.fotoPath;
-                    updatedUser = userData;
-                } else {
-                    throw new Error('Sesi user tidak valid');
+                    localStorage.setItem('currentUser', JSON.stringify(userData));
                 }
+                window.dispatchEvent(new Event('profileImageUpdated'));
+                window.dispatchEvent(new Event('userDataUpdated'));
+
+                const imgUrl = result.fotoPath.startsWith('http')
+                    ? result.fotoPath
+                    : result.fotoPath.startsWith('/')
+                        ? `${API_URL}${result.fotoPath}`
+                        : `${API_URL}/${result.fotoPath}`;
+                setProfileImage(imgUrl);
+                setPreviewImage(null);
+                setSelectedFileName('');
+                showModal({ type: 'success', title: 'Foto Diperbarui!', message: 'Foto profil Anda berhasil diupload.' });
             } else {
-                throw new Error('Respons tidak berisi data foto atau user');
+                throw new Error(result.message || 'Upload gagal');
             }
-
-            localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-            window.dispatchEvent(new Event('userDataUpdated'));
-
-            const imgUrl = updatedUser.profileImage?.startsWith('/')
-                ? `${API_URL}${updatedUser.profileImage}`
-                : updatedUser.profileImage
-                    ? `${API_URL}/${updatedUser.profileImage}`
-                    : null;
-            setProfileImage(imgUrl);
-            setPreviewImage(null);
-            alert('✅ Foto profil berhasil diupload!');
         } catch (err: any) {
-            console.error('Upload error:', err);
-            alert('Gagal mengupload foto: ' + (err.message || 'Terjadi kesalahan'));
+            showModal({ type: 'error', title: 'Upload Gagal', message: err.message || 'Gagal mengupload foto profil. Silakan coba lagi.' });
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
-    // === Simpan Profil ===
-    const handleSubmitProfile = async (e: React.FormEvent) => {
-        e.preventDefault();
+    // ── Avatar initials ────────────────────────────────────────────────────────
 
-        if (initialFormData && JSON.stringify(initialFormData) === JSON.stringify(formData)) {
-            alert('Tidak ada perubahan data.');
-            return;
-        }
+    const initials = (formData.nama || '??')
+        .split(' ').slice(0, 2)
+        .map(w => w[0]?.toUpperCase() || '')
+        .join('') || '??';
 
-        if (!isConfirmed) {
-            alert('Harap centang konfirmasi terlebih dahulu!');
-            return;
-        }
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-            alert('Sesi login tidak valid. Silakan login ulang.');
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/api/guru-kelas/profil`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    nama_lengkap: formData.nama,
-                    email_sekolah: formData.email,
-                    niy: formData.niy,
-                    nuptk: formData.nuptk,
-                    jenis_kelamin: formData.jenisKelamin,
-                    no_telepon: formData.telepon,
-                    alamat: formData.alamat
-                })
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                alert(err.message || 'Gagal memperbarui profil');
-                return;
-            }
-
-            const result = await res.json();
-
-            if (!result.user) {
-                alert('Respons tidak berisi data user. Hubungi administrator.');
-                return;
-            }
-
-            const normalizedUser = {
-                ...result.user,
-                profileImage: result.user.profileImage || result.user.foto_path || null,
-                role: result.user.role || 'guru kelas'
-            };
-
-            localStorage.setItem('currentUser', JSON.stringify(normalizedUser));
-            window.dispatchEvent(new Event('userDataUpdated'));
-
-            alert('✅ Profil berhasil diperbarui!');
-            window.location.reload();
-        } catch (err: any) {
-            console.error('Error update profil:', err);
-            alert('Gagal terhubung ke server: ' + (err.message || ''));
-        }
-    };
-
-    // === Ganti Password ===
-    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setPasswordData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handlePasswordSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const { oldPassword, newPassword, confirmPassword } = passwordData;
-
-        if (!oldPassword || !newPassword || !confirmPassword) {
-            alert('Semua kolom wajib diisi');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            alert('Kata sandi baru dan konfirmasi tidak cocok');
-            return;
-        }
-        if (newPassword.length < 8) {
-            alert('Kata sandi baru minimal 8 karakter');
-            return;
-        }
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-            alert('Sesi login tidak valid');
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/api/guru-kelas/ganti-password`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({ oldPassword, newPassword })
-            });
-
-            const result = await res.json();
-            if (res.ok) {
-                alert('✅ Kata sandi berhasil diubah!');
-                setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-                localStorage.removeItem('token');
-                localStorage.removeItem('currentUser');
-                window.location.href = '/login';
-            } else {
-                alert(result.message || 'Gagal mengubah kata sandi');
-            }
-        } catch (err) {
-            console.error('Error ganti password:', err);
-            alert('Gagal terhubung ke server');
-        }
-    };
+    // ── RENDER ─────────────────────────────────────────────────────────────────
 
     return (
-        <div className="p-6 bg-gray-50 min-h-screen">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Profil</h1>
+        <div className="p-6 min-h-screen" style={PAGE_BG}>
+            <GlobalStyles />
+            {modal && <NotifModal modal={modal} onClose={closeModal} />}
+            {showSessionExpired && (
+                <SessionExpiredModal onConfirm={handleLogout} />
+            )}
+
+            {/* Page header - DENGAN ANIMASI */}
+            <div className="mb-6 anim-in d1">
+                <h1 className="text-2xl font-bold text-gray-900">Profil Saya</h1>
+                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola informasi akun dan foto profil Anda</p>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-6">
-                {/* Foto Profil */}
-                <div className="lg:w-56 flex-shrink-0">
-                    <div className="bg-white rounded-lg shadow-sm p-5">
-                        <div className="flex flex-col items-center text-center">
-                            <div className="relative w-20 h-20 rounded-full bg-gray-300 overflow-hidden mb-3">
-                                {previewImage ? (
-                                    <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
-                                ) : profileImage ? (
-                                    <img src={profileImage} alt="Foto Profil" className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-black text-lg font-semibold flex items-center justify-center w-full h-full">
-                                        {(formData.nama || '??')
-                                            .split(' ')
-                                            .slice(0, 2)
-                                            .map((word) => word[0]?.toUpperCase() || '')
-                                            .join('') || '??'}
-                                    </span>
-                                )}
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+
+                {/* ── Profile Card (kiri) - DENGAN ANIMASI ─────────────────────────────────────────── */}
+                <div className="lg:w-72 flex-shrink-0 w-full anim-in d2">
+                    <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+
+                        <div className="px-5 py-4" style={HEADER_GRAD}>
+                            <p className="text-sm font-bold text-white">Foto Profil</p>
+                        </div>
+
+                        <div className="p-6 flex flex-col items-center gap-4">
+
+                            {/* Avatar */}
+                            <div className="relative">
+                                <div className="w-28 h-28 rounded-full overflow-hidden flex items-center justify-center ring-4"
+                                    style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)', ringColor: '#fde0c8' }}>
+                                    {(previewImage || profileImage) ? (
+                                        <img
+                                            src={previewImage || profileImage!}
+                                            alt="Foto Profil"
+                                            className="w-full h-full object-cover"
+                                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                    ) : (
+                                        <span className="text-3xl font-bold" style={{ color: '#c95b08' }}>{initials}</span>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                    className="absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-all disabled:opacity-60"
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}
+                                    title="Ganti foto"
+                                >
+                                    <Camera size={14} className="text-white" />
+                                </button>
                             </div>
+
+                            {/* Nama & role */}
+                            <div className="text-center">
+                                <p className="font-bold text-gray-800 text-base">{formData.nama || 'Guru Kelas'}</p>
+                                <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block"
+                                    style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+                                    Guru Kelas
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">{formData.email || ''}</p>
+                            </div>
+
+                            <div className="w-full" style={{ borderTop: '1px solid #fde0c8' }} />
 
                             <button
                                 type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
-                                className="mt-1 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-70"
+                                onClick={() => router.push('/guru_kelas/ubah_password')}
+                                className="w-full flex items-center justify-center gap-2 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.25)' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
                             >
-                                <Camera size={14} />
-                                {isUploading ? 'Mengupload...' : 'Ganti Foto'}
+                                <KeyRound size={15} />
+                                Ubah Password
                             </button>
 
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleUploadPhoto}
-                                accept="image/*"
-                                className="hidden"
-                                disabled={isUploading}
-                            />
+                            <div className="w-full" style={{ borderTop: '1px solid #fde0c8' }} />
+
+                            {/* Ganti Foto */}
+                            <div className="w-full">
+                                <p className="text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>Ganti Foto Profil</p>
+
+                                <div
+                                    className="w-full flex items-center rounded-xl overflow-hidden cursor-pointer transition-all"
+                                    style={{ border: '1px solid #fde0c8', background: '#fffaf6' }}
+                                    onClick={() => !isUploading && fileInputRef.current?.click()}
+                                    onMouseEnter={e => { if (!isUploading) e.currentTarget.style.background = '#fff0e5'; }}
+                                    onMouseLeave={e => { if (!isUploading) e.currentTarget.style.background = '#fffaf6'; }}
+                                >
+                                    <span className="text-xs font-semibold px-3 py-2 whitespace-nowrap"
+                                        style={{ borderRight: '1px solid #fde0c8', color: '#7a3a0a', background: '#fff0e5' }}>
+                                        Pilih File
+                                    </span>
+                                    <span className="text-xs text-gray-400 px-3 py-2 truncate">
+                                        {selectedFileName || 'Belum ada file dipilih'}
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-gray-400 mt-1.5">Format .jpg | .jpeg | .png | .webp · Maks 5 MB</p>
+
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleUploadPhoto}
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="hidden"
+                                    disabled={isUploading}
+                                />
+
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                    className="mt-3 w-full flex items-center justify-center gap-2 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                    style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 2px 8px rgba(232,105,10,0.2)' }}
+                                    onMouseEnter={e => { if (!isUploading) e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
+                                    onMouseLeave={e => { if (!isUploading) e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
+                                >
+                                    {isUploading ? (
+                                        <>
+                                            <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                            Mengupload...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload size={14} />
+                                            Upload Foto
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Form Profil & Password */}
-                <div className="flex-1 space-y-8">
-                    {/* Edit Profil */}
-                    <div className="bg-white rounded-lg shadow-sm p-6">
-                        <h2 className="text-lg font-semibold mb-5">Edit Profil</h2>
-                        <form onSubmit={handleSubmitProfile}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Nama <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            name="nama"
-                                            value={formData.nama}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">NUPTK</label>
-                                        <input
-                                            type="text"
-                                            name="nuptk"
-                                            value={formData.nuptk}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">NIY</label>
-                                        <input
-                                            type="text"
-                                            name="niy"
-                                            value={formData.niy}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Jenis Kelamin <span className="text-red-500">*</span>
-                                        </label>
-                                        <select
-                                            name="jenisKelamin"
-                                            value={formData.jenisKelamin}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            required
-                                        >
-                                            <option value="Laki-laki">Laki-laki</option>
-                                            <option value="Perempuan">Perempuan</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Telepon</label>
-                                        <input
-                                            type="tel"
-                                            name="telepon"
-                                            value={formData.telepon}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                        <input
-                                            type="email"
-                                            name="email"
-                                            value={formData.email}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            readOnly
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="mt-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
-                                <textarea
-                                    name="alamat"
-                                    value={formData.alamat}
-                                    onChange={handleChange}
-                                    rows={2}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200">
-                                <input
-                                    type="checkbox"
-                                    id="confirm"
-                                    checked={isConfirmed}
-                                    onChange={(e) => setIsConfirmed(e.target.checked)}
-                                    className="w-4 h-4"
-                                />
-                                <label htmlFor="confirm" className="text-sm text-gray-700">
-                                    Saya yakin akan mengubah data tersebut
-                                </label>
-                            </div>
-                            <div className="mt-5">
-                                <button
-                                    type="submit"
-                                    disabled={isUploading}
-                                    className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded text-sm transition disabled:opacity-70"
-                                >
-                                    Simpan Profil
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                {/* ── Form Profil (kanan) - DENGAN ANIMASI ─────────────────────────────────────────── */}
+                <div className="flex-1 w-full anim-in d3">
+                    <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
 
-                    {/* Ganti Kata Sandi */}
-                    <div className="bg-white rounded-lg shadow-sm p-6">
-                        <h2 className="text-lg font-semibold mb-4">Ganti Kata Sandi</h2>
-                        <form onSubmit={handlePasswordSubmit}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kata Sandi Lama</label>
-                                    <input
-                                        type="password"
-                                        name="oldPassword"
-                                        value={passwordData.oldPassword}
-                                        onChange={handlePasswordChange}
-                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Masukkan kata sandi lama"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kata Sandi Baru</label>
-                                    <input
-                                        type="password"
-                                        name="newPassword"
-                                        value={passwordData.newPassword}
-                                        onChange={handlePasswordChange}
-                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Minimal 8 karakter"
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Konfirmasi Kata Sandi Baru</label>
-                                    <input
-                                        type="password"
-                                        name="confirmPassword"
-                                        value={passwordData.confirmPassword}
-                                        onChange={handlePasswordChange}
-                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Ulangi kata sandi baru"
-                                    />
+                        <div className="px-6 py-4" style={HEADER_GRAD}>
+                            <p className="text-base font-bold text-white">Edit Profil</p>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Nama <span className="text-red-500">*</span></label>
+                                <input type="text" name="nama" value={formData.nama} onChange={handleChange}
+                                    placeholder="Masukkan nama lengkap" className={inputCls} required />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Email Akun</label>
+                                <input type="email" name="email" value={formData.email}
+                                    className={readonlyCls} readOnly />
+                                <p className="text-xs text-gray-400">Email tidak dapat diubah</p>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>NUPTK</label>
+                                <input type="text" name="nuptk" value={formData.nuptk} onChange={handleChange}
+                                    placeholder="Nomor Unik Pendidik" className={inputCls} />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>NIY</label>
+                                <input type="text" name="niy" value={formData.niy} onChange={handleChange}
+                                    placeholder="Nomor Induk Yayasan" className={inputCls} />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Jenis Kelamin <span className="text-red-500">*</span></label>
+                                <select name="jenisKelamin" value={formData.jenisKelamin} onChange={handleChange}
+                                    className={inputCls} required>
+                                    <option value="Laki-laki">Laki-laki</option>
+                                    <option value="Perempuan">Perempuan</option>
+                                </select>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Telepon</label>
+                                <input type="tel" name="telepon" value={formData.telepon} onChange={handleChange}
+                                    placeholder="Misal: 081234567890" className={inputCls} />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>
+                                    Tempat Lahir <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="tempatLahir"
+                                    value={formData.tempatLahir}
+                                    onChange={handleChange}
+                                    placeholder="Masukkan tempat lahir"
+                                    className={inputCls}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>
+                                    Tanggal Lahir <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    name="tanggalLahir"
+                                    value={formData.tanggalLahir}
+                                    onChange={(e) => {
+                                        handleChange(e);
+                                        if (errors.tanggalLahir) {
+                                            setErrors(prev => {
+                                                const newErrors = { ...prev };
+                                                delete newErrors.tanggalLahir;
+                                                return newErrors;
+                                            });
+                                        }
+                                    }}
+                                    className={errors.tanggalLahir ? inputErrCls : inputCls}
+                                    required
+                                />
+                                {errors.tanggalLahir && (
+                                    <p className="text-red-500 text-xs flex items-center gap-1">
+                                        {errors.tanggalLahir}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="md:col-span-2 flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Alamat</label>
+                                <textarea name="alamat" value={formData.alamat} onChange={handleChange}
+                                    rows={3} placeholder="Masukkan alamat lengkap" className={inputCls} />
+                            </div>
+                        </div>
+
+                        <div className="px-6 pb-6">
+                            <div className="pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={openConfirmModal}
+                                        disabled={isSaving}
+                                        className="flex items-center gap-2 text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                        style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }}
+                                        onMouseEnter={e => { if (!isSaving) e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
+                                        onMouseLeave={e => { if (!isSaving) e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
+                                    >
+                                        {isSaving ? (
+                                            <>
+                                                <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                                Menyimpan...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <User size={15} />
+                                                Simpan Profil
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
-                            <div className="mt-4">
-                                <button
-                                    type="submit"
-                                    className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded text-sm transition"
-                                >
-                                    Simpan Kata Sandi
-                                </button>
-                            </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Modal Konfirmasi Sederhana */}
+            {showConfirmModal && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 pf-fadeIn"
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+                >
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 pf-scaleIn">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                                Konfirmasi Perubahan Profil
+                            </h3>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                            Apakah Anda yakin ingin menyimpan perubahan profil ini?
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowConfirmModal(false)}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
+                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    executeSubmitProfile();
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                            >
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
-export default ProfilClient;
+export default ProfilePage;

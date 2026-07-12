@@ -11,6 +11,6 @@ export const metadata: Metadata = {
     title: 'Kokurikuler',
 };
 
-export default function DataKokurikulerPage() {
+export default function kokurikulerPage() {
     return <KokurikulerClient />;
 }

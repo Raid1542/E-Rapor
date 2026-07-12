@@ -1,39 +1,38 @@
 /**
  * Nama File: index.ts
- * Fungsi: Mendefinisikan tipe data terpusat untuk aplikasi E-Rapor,
- *         mencakup tipe pengguna, item menu, dan props komponen layout.
+ * Fungsi: Type definitions terpusat (UserData, MenuItem, SidebarProps, HeaderProps)
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
+ * Tanggal: 1 Oktober 2025
  */
 
 import { LucideIcon } from 'lucide-react';
 
-// User Data Type
+// Interface: data user (name, email, role) untuk localStorage & header
 export interface UserData {
-  name: string;
-  email: string;
-  role: string;
+    name: string;
+    email: string;
+    role: string;
 }
 
-// Menu Item Type
+// Interface: item menu navigasi sidebar (id, label, icon)
 export interface MenuItem {
-  id: string;
-  label: string;
-  icon: LucideIcon;
+    id: string;
+    label: string;
+    icon: LucideIcon;
 }
 
-// Sidebar Props Type
+// Interface: props Sidebar (sidebarOpen, activeMenu + setters)
 export interface SidebarProps {
-  sidebarOpen: boolean;
-  setSidebarOpen: (value: boolean) => void;
-  activeMenu: string;
-  setActiveMenu: (value: string) => void;
+    sidebarOpen: boolean;
+    setSidebarOpen: (value: boolean) => void;
+    activeMenu: string;
+    setActiveMenu: (value: string) => void;
 }
 
-// Header Props Type
+// Interface: props Header (user data, profile dropdown, logout handler)
 export interface HeaderProps {
-  user: UserData;
-  profileOpen: boolean;
-  setProfileOpen: (value: boolean) => void;
-  handleLogout: () => void;
+    user: UserData;
+    profileOpen: boolean;
+    setProfileOpen: (value: boolean) => void;
+    handleLogout: () => void;
 }

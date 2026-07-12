@@ -1,8 +1,8 @@
 /**
  * Nama File: authRoutes.js
- * Fungsi: Mendefinisikan rute autentikasi pengguna, khususnya login.
+ * Fungsi: Route autentikasi untuk login pengguna
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 const express = require('express');

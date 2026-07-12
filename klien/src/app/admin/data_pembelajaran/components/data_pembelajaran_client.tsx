@@ -1,370 +1,1486 @@
 /**
  * Nama File: data_pembelajaran_client.tsx
- * Fungsi: Komponen client-side untuk mengelola data pembelajaran oleh admin.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
+ * Update: 
+ *   - ✅ FIXED: Race condition saat load dari localStorage
+ *   - ✅ FIXED: fetchDataPerKelas terima parameter semesterId
+ *   - ✅ FIXED: Disable dropdown kelas jika semester belum dipilih
+ *   - Dropdown Semester (TA → Semester → Kelas)
+ *   - Kirim semester_id ke semua endpoint
+ *   - Disamakan tampilan halaman utama (Card 1 compact berisi TA+Semester+Kelas,
+ *     PAGE_BG putih, tombol Batal/Reset standar) dengan Data Mata Pelajaran / Data Kelas
+ *   - Tambah sistem animasi fadeInUp (anim-in/d1-d6, section-card, item-hover,
+ *     btn-primary) agar selaras dengan Data Kelas & Data Mata Pelajaran
  */
 
 'use client';
-import { useState, useEffect, ChangeEvent, ReactNode } from 'react';
-import { Pencil, Plus, Search, X, Trash2, Filter } from 'lucide-react';
 
+import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
+import { Pencil, Plus, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, BookOpen, CheckSquare, Square, Lock, CalendarRange } from 'lucide-react';
+import { useSession } from '@/hooks/useSession';
+import SessionExpiredModal from '@/components/SessionExpiredModal';
+
+// ─── TYPES ────────────────────────────────────────────────────────────────────
+type ModalType = 'success' | 'error' | 'warning' | 'network';
+interface ModalConfig { type: ModalType; title: string; message: string; }
+
+// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+const GlobalStyles = () => (
+  <style jsx global>{`
+    @keyframes dp-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes dp-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes dp-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    .dp-fadeIn  { animation: dp-fadeIn  0.2s ease; }
+    .dp-scaleIn { animation: dp-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+    .dp-pulse   { animation: dp-pulse   0.6s ease 0.15s; }
+
+    /* ── Animasi "muncul dari bawah" ala Dashboard / Data Kelas / Data Mata Pelajaran ── */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+    .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+    .d1 { animation-delay: 0.05s; }
+    .d2 { animation-delay: 0.10s; }
+    .d3 { animation-delay: 0.15s; }
+    .d4 { animation-delay: 0.20s; }
+    .d5 { animation-delay: 0.25s; }
+    .d6 { animation-delay: 0.30s; }
+
+    /* ── Hover lift untuk card & row, konsisten dengan halaman lain ── */
+    .section-card {
+        transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                    box-shadow 0.25s ease;
+    }
+    .section-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
+    }
+    .item-hover {
+        transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1),
+                    box-shadow 0.18s ease;
+    }
+    .item-hover:hover {
+        transform: translateY(-1px) scale(1.002);
+    }
+    .btn-primary {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
+    .btn-primary:active { transform: translateY(0); }
+  `}</style>
+);
+
+// ─── HELPER: Filter Duplikat by ID ────────────────────────────────────────────
+const removeDuplicatesById = <T extends { id: number }>(arr: T[]): T[] => {
+  const seen = new Set<number>();
+  return arr.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
+// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
+  success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
+  error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
+  warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+  network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+};
+
+const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
+  const s = MODAL_STYLES[modal.type];
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 dp-fadeIn">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dp-scaleIn">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dp-pulse`}>{s.icon}</div>
+        <div className="text-center">
+          <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
+          <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+        </div>
+        <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+      </div>
+    </div>
+  );
+};
+
+// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
+const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+
+const PAGE_BG = { background: '#ffffff' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+
+const btnPrimary = {
+  base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
+  style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
+  hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
+  leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+};
+
+const labelCls = "block text-sm font-semibold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+const BtnBatal = ({ onClick, children = 'Batal', disabled }: { onClick: () => void; children?: React.ReactNode; disabled?: boolean }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+    onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; } }}
+    onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; } }}
+  >
+    {children}
+  </button>
+);
+
+const BtnReset = ({ onClick, children = 'Reset', disabled }: { onClick: () => void; children?: React.ReactNode; disabled?: boolean }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
+    onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; } }}
+    onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; } }}
+  >
+    {children}
+  </button>
+);
+
+// ─── CONFIRM MODAL (Hapus) ────────────────────────────────────────────────────
+const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 dp-fadeIn">
+    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dp-scaleIn">
+      <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dp-pulse">
+        <Trash2 size={36} className="text-red-500" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Hapus</h3>
+        <p className="text-sm text-gray-500 leading-relaxed mt-2">{message}</p>
+      </div>
+      <div className="flex gap-3 w-full">
+        <BtnBatal onClick={onCancel} />
+        <button onClick={onConfirm}
+          className="flex-1 py-3 rounded-xl text-white font-semibold text-sm bg-red-500 hover:bg-red-600 transition-colors">
+          Ya, Hapus
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// ─── INTERFACES ───────────────────────────────────────────────────────────────
 interface Pembelajaran {
-    id: number;
-    nama_mapel: string;
-    nama_kelas: string;
-    nama_guru: string;
-    user_id: number;
-    id_mapel: number;
-    id_kelas: number;
+  id: number;
+  tahun_ajaran_id: number;
+  kelas_id: number;
+  mapel_id: number;
+  user_id: number;
+  nama_mapel: string;
+  kode_mapel: string;
+  jenis_mapel: 'wajib' | 'pilihan';
+  nama_guru: string;
 }
 
-interface TahunAjaran {
-    id: number;
-    tahun_ajaran: string;
-    semester: string;
-    is_aktif: boolean;
+interface MapelTersedia {
+  id: number;
+  nama_mapel: string;
+  kode_mapel: string;
+}
+
+interface KelasInfo {
+  id: number;
+  nama_kelas: string;
+  tahun_ajaran_id: number;
+  tahun_ajaran: string;
+  semester: string;
+  is_aktif: boolean;
+}
+
+interface WaliKelas {
+  id: number;
+  nama: string;
+}
+
+interface DataPerKelas {
+  kelas: KelasInfo;
+  wali_kelas: WaliKelas | null;
+  mapel_wajib: Pembelajaran[];
+  mapel_pilihan: Pembelajaran[];
+  mapel_wajib_tersedia: MapelTersedia[];
+  mapel_pilihan_tersedia: MapelTersedia[];
+}
+
+interface TahunAjaranInduk {
+  id: number;
+  tahun_ajaran: string;
+  is_aktif: boolean;
+}
+
+interface SemesterOption {
+  id: number;
+  semester: string;
+  is_aktif: boolean;
 }
 
 interface DropdownItem {
-    id: number;
-    nama: string;
+  id: number;
+  nama: string;
 }
 
-interface FormDataType {
-    user_id: string;
-    id_mapel: string;
-    id_kelas: string;
-    confirmData: boolean;
+interface FormDataPilihan {
+  user_id: string;
+  mapel_id: string;
 }
 
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function DataPembelajaranPage() {
+  const { showSessionExpired, handleLogout } = useSession();
+  const [dataPerKelas, setDataPerKelas] = useState<DataPerKelas | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    const [dataList, setDataList] = useState<Pembelajaran[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [showTambah, setShowTambah] = useState(false);
-    const [showEdit, setShowEdit] = useState(false);
-    const [editId, setEditId] = useState<number | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [currentPage, setCurrentPage] = useState(1);
+  const [showFormEdit, setShowFormEdit] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Pembelajaran | null>(null);
 
-    const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
-    const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
-    const [selectedTahunAjaranAktif, setSelectedTahunAjaranAktif] = useState<boolean>(false);
+  const [showModalWajib, setShowModalWajib] = useState(false);
+  const [selectedMapelWajibIds, setSelectedMapelWajibIds] = useState<number[]>([]);
+  const [submittingWajib, setSubmittingWajib] = useState(false);
 
-    const [guruList, setGuruList] = useState<DropdownItem[]>([]);
-    const [mapelList, setMapelList] = useState<DropdownItem[]>([]);
-    const [kelasList, setKelasList] = useState<DropdownItem[]>([]);
-    const [dropdownLoading, setDropdownLoading] = useState(false);
+  const [showModalPilihan, setShowModalPilihan] = useState(false);
+  const [formDataPilihan, setFormDataPilihan] = useState<FormDataPilihan>({
+    user_id: '', mapel_id: ''
+  });
+  const [errorsPilihan, setErrorsPilihan] = useState<Record<string, string>>({});
+  const [submittingPilihan, setSubmittingPilihan] = useState(false);
 
-    const [showFilter, setShowFilter] = useState(false);
-    const [filterClosing, setFilterClosing] = useState(false);
-    const [filterValues, setFilterValues] = useState({ kelas: '', mapel: '' });
-    const [openedFilterValues, setOpenedFilterValues] = useState({ kelas: '', mapel: '' });
+  const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaranInduk[]>([]);
+  const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
 
-    const [formData, setFormData] = useState<FormDataType>({ user_id: '', id_mapel: '', id_kelas: '', confirmData: false });
-    const [errors, setErrors] = useState<Record<string, string>>({});
+  const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
+  const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
+  const [isSemesterActive, setIsSemesterActive] = useState<boolean>(false);
 
-    const focusClass = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+  const [kelasList, setKelasList] = useState<DropdownItem[]>([]);
+  const [selectedKelasId, setSelectedKelasId] = useState<number | null>(null);
 
-    const apiFetch = async (url: string, options: RequestInit = {}) => {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('Token tidak ditemukan');
-        const res = await fetch(url, { ...options, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!data.success) throw new Error(data.message || 'Operasi gagal');
-        return data;
-    };
+  const [guruList, setGuruList] = useState<DropdownItem[]>([]);
+  const [dropdownLoading, setDropdownLoading] = useState(false);
 
-    const fetchTahunAjaran = async () => {
-        try {
-            const data = await apiFetch("http://localhost:5000/api/admin/tahun-ajaran");
-            const options = data.data.map((ta: any) => ({ id: ta.id_tahun_ajaran, tahun_ajaran: ta.tahun_ajaran, semester: (ta.semester || 'ganjil').toLowerCase(), is_aktif: ta.status === 'aktif' }));
-            setTahunAjaranList(options);
-        } catch (err) { console.error('Gagal ambil tahun ajaran:', err); alert('Gagal memuat data tahun ajaran'); }
-    };
+  const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
-    const fetchAllDropdowns = async () => {
-        setDropdownLoading(true);
-        try {
-            const data = await apiFetch("http://localhost:5000/api/admin/pembelajaran/dropdown");
-            setGuruList(data.data.guru || []);
-            setKelasList(data.data.kelas || []);
-            setMapelList(data.data.mata_pelajaran || []);
-        } catch (err) { console.error('Gagal muat dropdown:', err); alert('Gagal memuat data dropdown'); }
-        finally { setDropdownLoading(false); }
-    };
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'add-pilihan' | 'edit-pilihan' | 'add-wajib' | null>(null);
 
-    const fetchData = async (taId: number) => {
-        setLoading(true);
-        try {
-            const data = await apiFetch("http://localhost:5000/api/admin/pembelajaran");
-            const list = (data.data || []).map((item: any) => ({ id: item.id, nama_mapel: item.nama_mapel || 'Mapel Tidak Ditemukan', nama_kelas: item.nama_kelas, nama_guru: item.nama_guru || 'Belum ditetapkan', user_id: item.user_id, id_mapel: item.mata_pelajaran_id, id_kelas: item.kelas_id }));
-            setDataList(list);
-        } catch (err) { console.error('Error fetch pembelajaran:', err); alert('Gagal memuat data pembelajaran'); }
-        finally { setLoading(false); }
-    };
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
+  const closeModal = useCallback(() => setModal(null), []);
+  const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
 
-    useEffect(() => { fetchTahunAjaran(); }, []);
-    useEffect(() => { if (selectedTahunAjaranId) { fetchData(selectedTahunAjaranId); if (selectedTahunAjaranAktif) { fetchAllDropdowns(); } } }, [selectedTahunAjaranId, selectedTahunAjaranAktif]);
+  const getToken = (): string | null => localStorage.getItem('token');
 
-    const closeFilterModal = () => { setFilterClosing(true); setTimeout(() => { setFilterValues(openedFilterValues); setShowFilter(false); setFilterClosing(false); }, 200); };
+  // ── Fetches ────────────────────────────────────────────────────────────────
 
-    const handleInputChange = (e: ChangeEvent<HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
+  const fetchTahunAjaran = useCallback(async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+      const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const uniqueTA = Array.from(
+          new Map(data.data.map((ta: any) => [ta.id_induk, {
+            id: ta.id_induk,
+            tahun_ajaran: ta.tahun_ajaran,
+            is_aktif: ta.status?.toLowerCase() === 'aktif',
+          }])).values()
+        ) as TahunAjaranInduk[];
+        setTahunAjaranList(uniqueTA);
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data tahun ajaran.' });
+    }
+  }, [showModal]);
 
-    const validate = (): boolean => {
-        const newErrors: Record<string, string> = {};
-        if (!formData.user_id) newErrors.user_id = 'Pilih guru';
-        if (!formData.id_mapel) newErrors.id_mapel = 'Pilih mata pelajaran';
-        if (!formData.id_kelas) newErrors.id_kelas = 'Pilih kelas';
-        if (!formData.confirmData) newErrors.confirmData = 'Harap konfirmasi data';
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
+  const fetchSemesterByTahunAjaran = useCallback(async (idInduk: number) => {
+    try {
+      const token = getToken();
+      if (!token) return [];
 
-    const handleSubmit = async (isEdit: boolean) => {
-        if (!validate()) { const missing = []; if (!formData.user_id) missing.push('Guru'); if (!formData.id_mapel) missing.push('Mata Pelajaran'); if (!formData.id_kelas) missing.push('Kelas'); if (!formData.confirmData) missing.push('Konfirmasi'); alert(`Belum lengkap! Mohon isi: ${missing.join(', ')}`); return; }
-        const payload = { user_id: Number(formData.user_id), mata_pelajaran_id: Number(formData.id_mapel), kelas_id: Number(formData.id_kelas) };
-        try {
-            const url = isEdit ? `http://localhost:5000/api/admin/pembelajaran/${editId}` : `http://localhost:5000/api/admin/pembelajaran`;
-            const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify(payload) });
-            if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || `Error ${res.status}`); }
-            alert(isEdit ? 'Data pembelajaran berhasil diperbarui' : 'Data pembelajaran berhasil ditambahkan');
-            if (selectedTahunAjaranId) { fetchData(selectedTahunAjaranId); }
-            setShowTambah(false); setShowEdit(false);
-            setFormData({ user_id: '', id_mapel: '', id_kelas: '', confirmData: false });
-        } catch (err) { console.error('Submit error:', err); alert('Gagal menyimpan: ' + (err instanceof Error ? err.message : 'Cek koneksi')); }
-    };
+      const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    const handleDelete = async (id: number) => {
-        if (!id) { alert('ID tidak valid'); return; }
-        if (!confirm('Yakin ingin menghapus data pembelajaran ini?')) return;
-        try {
-            const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-            if (!res.ok) { const err = await res.json(); throw new Error(err.message || `HTTP ${res.status}`); }
-            alert('Data pembelajaran berhasil dihapus');
-            if (selectedTahunAjaranId) { fetchData(selectedTahunAjaranId); }
-        } catch (err) { console.error('Delete error:', err); alert('Gagal menghapus: ' + (err instanceof Error ? err.message : 'Cek koneksi')); }
-    };
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const semesters = data.data
+          .filter((sem: any) => sem.id_induk === idInduk)
+          .map((sem: any) => ({
+            id: sem.id,
+            semester: sem.semester,
+            is_aktif: sem.is_aktif
+          }));
 
-    const filteredData = dataList.filter(item => {
-        const matchesSearch = !searchQuery || item.nama_mapel.toLowerCase().includes(searchQuery.toLowerCase()) || item.nama_kelas.toLowerCase().includes(searchQuery.toLowerCase()) || item.nama_guru.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesKelas = !filterValues.kelas || String(item.id_kelas) === filterValues.kelas;
-        const matchesMapel = !filterValues.mapel || String(item.id_mapel) === filterValues.mapel;
-        return matchesSearch && matchesKelas && matchesMapel;
-    });
+        setSemesterOptions(semesters);
+        return semesters;
+      }
+      return [];
+    } catch (err) {
+      console.error('Error fetch semester:', err);
+      return [];
+    }
+  }, []);
 
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentData = filteredData.slice(startIndex, endIndex);
+  const fetchKelasList = useCallback(async (idInduk: number) => {
+    try {
+      const token = getToken();
+      if (!token) return;
 
-    const renderPagination = () => {
-        const pages: ReactNode[] = [];
-        const maxVisible = 5;
-        if (currentPage > 1) pages.push(<button key="prev-page" onClick={() => setCurrentPage(currentPage - 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 transition">«</button>);
-        if (totalPages <= maxVisible) {
-            for (let i = 1; i <= totalPages; i++) pages.push(<button key={`page-${i}`} onClick={() => setCurrentPage(i)} className={`px-3 py-1 border border-gray-300 rounded transition ${currentPage === i ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}>{i}</button>);
-        } else {
-            pages.push(<button key="page-1" onClick={() => setCurrentPage(1)} className={`px-3 py-1 border border-gray-300 rounded transition ${currentPage === 1 ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}>1</button>);
-            if (currentPage > 3) pages.push(<span key="dots1" className="px-2 text-gray-600">...</span>);
-            const start = Math.max(2, currentPage - 1);
-            const end = Math.min(totalPages - 1, currentPage + 1);
-            for (let i = start; i <= end; i++) pages.push(<button key={`page-${i}`} onClick={() => setCurrentPage(i)} className={`px-3 py-1 border border-gray-300 rounded transition ${currentPage === i ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}>{i}</button>);
-            if (currentPage < totalPages - 2) pages.push(<span key="dots2" className="px-2 text-gray-600">...</span>);
-            pages.push(<button key={`page-${totalPages}`} onClick={() => setCurrentPage(totalPages)} className={`px-3 py-1 border border-gray-300 rounded transition ${currentPage === totalPages ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}>{totalPages}</button>);
+      // ✅ PERBAIKAN: Kirim sebagai query parameter
+      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setKelasList(removeDuplicatesById(
+          (data.data || []).map((k: any) => ({ id: k.id, nama: k.nama_kelas }))
+        ));
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data kelas.' });
+    }
+  }, [showModal]);
+
+  const fetchDropdowns = useCallback(async (semesterId: number) => {
+    setDropdownLoading(true);
+    try {
+      const token = getToken();
+      if (!token) return;
+      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/dropdown?semester_id=${semesterId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // ✅ BACKWARD COMPATIBLE: 
+        // - Backend baru: menggunakan guru_bidang_studi (hanya guru bidang studi)
+        // - Backend lama: fallback ke guru (semua guru)
+        const guruData = data.data.guru_bidang_studi || data.data.guru || [];
+        setGuruList(removeDuplicatesById(guruData));
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat memuat data dropdown.' });
+    } finally {
+      setDropdownLoading(false);
+    }
+  }, [showModal]);
+
+  // ✅ FIXED: Terima parameter semesterId opsional untuk hindari race condition
+  const fetchDataPerKelas = useCallback(async (kelasId: number, semesterIdParam?: number) => {
+    // ✅ Gunakan parameter jika ada, fallback ke state
+    const semId = semesterIdParam || selectedSemesterId;
+
+    if (!semId) {
+      // Silent return - tidak tampilkan modal
+      console.warn('Semester belum dipilih');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = getToken();
+      if (!token) return;
+      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/kelas/${kelasId}?semester_id=${semId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDataPerKelas(data.data);
+      } else {
+        setDataPerKelas(null);
+        showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan.' });
+      }
+    } catch {
+      setDataPerKelas(null);
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [showModal, selectedSemesterId]);
+
+  // ── useEffect: Load awal ───────────────────────────────────────────────────
+  useEffect(() => {
+    fetchTahunAjaran();
+  }, [fetchTahunAjaran]);
+
+  // ✅ FIXED: useEffect load dari localStorage - kirim semesterId langsung
+  useEffect(() => {
+    if (tahunAjaranList.length > 0 && selectedTahunAjaranId === null) {
+      const savedTA = localStorage.getItem('pembelajaran_selectedTA');
+      const savedSemester = localStorage.getItem('pembelajaran_selectedSemester');
+      const savedKelas = localStorage.getItem('pembelajaran_selectedKelas');
+
+      if (savedTA) {
+        const id = Number(savedTA);
+        const ta = tahunAjaranList.find(t => t.id === id);
+        if (ta) {
+          setSelectedTahunAjaranId(id);
+          fetchSemesterByTahunAjaran(id).then((semesters: SemesterOption[]) => {
+            if (savedSemester) {
+              const semesterId = Number(savedSemester);
+              const sem = semesters.find(s => s.id === semesterId);
+              if (sem) {
+                setSelectedSemesterId(semesterId);
+                setIsSemesterActive(sem.is_aktif);
+
+                // ✅ Kirim idInduk ke fetchKelasList
+                fetchKelasList(id);
+
+                if (savedKelas) {
+                  const kelasId = Number(savedKelas);
+                  setSelectedKelasId(kelasId);
+
+                  // ✅ KIRIM semesterId LANGSUNG sebagai parameter!
+                  // Ini menghindari race condition dengan state selectedSemesterId
+                  fetchDataPerKelas(kelasId, semesterId);
+
+                  if (sem.is_aktif) fetchDropdowns(semesterId);
+                }
+              }
+            }
+          });
         }
-        if (currentPage < totalPages) pages.push(<button key="next-page" onClick={() => setCurrentPage(currentPage + 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 transition">»</button>);
-        return pages;
-    };
+      }
+    }
+  }, [tahunAjaranList]);
 
-    const isFormValid = formData.user_id && formData.id_mapel && formData.id_kelas && formData.confirmData;
+  // ── Handler: Pilih Tahun Ajaran ────────────────────────────────────────────
+  const handleTahunAjaranChange = async (value: string) => {
+    if (value === '' || value === 'no-data') {
+      setSelectedTahunAjaranId(null);
+      setSelectedSemesterId(null);
+      setIsSemesterActive(false);
+      setSemesterOptions([]);
+      setSelectedKelasId(null);
+      setDataPerKelas(null);
+      setKelasList([]);
+      setGuruList([]);
+      localStorage.removeItem('pembelajaran_selectedTA');
+      localStorage.removeItem('pembelajaran_selectedSemester');
+      localStorage.removeItem('pembelajaran_selectedKelas');
+      return;
+    }
 
-    const renderForm = (title: string, isEdit: boolean) => (
-        <div className="flex-1 p-4 sm:p-6 bg-gray-50 min-h-screen">
-            <div className="w-full max-w-2xl mx-auto">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">{title}</h1>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
-                        <button onClick={() => { setShowTambah(false); setShowEdit(false); }} className="text-gray-500 hover:text-gray-700"><X size={24} /></button>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 sm:gap-5">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Guru Pengampu <span className="text-red-500">*</span></label>
-                            <select name="user_id" value={formData.user_id} onChange={handleInputChange} className={`w-full border ${errors.user_id ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 ${focusClass}`} disabled={dropdownLoading}>
-                                <option value="">-- Pilih --</option>
-                                {guruList.map((g) => <option key={g.id} value={g.id}>{g.nama}</option>)}
-                            </select>
-                            {errors.user_id && <p className="text-red-500 text-xs mt-1">{errors.user_id}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Mata Pelajaran <span className="text-red-500">*</span></label>
-                            <select name="id_mapel" value={formData.id_mapel} onChange={handleInputChange} className={`w-full border ${errors.id_mapel ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 ${focusClass}`} disabled={dropdownLoading}>
-                                <option value="">-- Pilih --</option>
-                                {mapelList.map((m) => <option key={m.id} value={m.id}>{m.nama}</option>)}
-                            </select>
-                            {errors.id_mapel && <p className="text-red-500 text-xs mt-1">{errors.id_mapel}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Kelas <span className="text-red-500">*</span></label>
-                            <select name="id_kelas" value={formData.id_kelas} onChange={handleInputChange} className={`w-full border ${errors.id_kelas ? 'border-red-500' : 'border-gray-300'} rounded-lg px-4 py-2.5 ${focusClass}`} disabled={dropdownLoading}>
-                                <option value="">-- Pilih --</option>
-                                {kelasList.map((k) => <option key={k.id} value={k.id}>{k.nama}</option>)}
-                            </select>
-                            {errors.id_kelas && <p className="text-red-500 text-xs mt-1">{errors.id_kelas}</p>}
-                        </div>
-                    </div>
-                    <div className="mt-6">
-                        <label className="flex items-start gap-2 cursor-pointer">
-                            <input type="checkbox" name="confirmData" checked={formData.confirmData} onChange={handleInputChange} className="mt-0.5 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" />
-                            <span className="text-sm text-gray-700">Saya yakin data yang diisi sudah benar</span>
-                        </label>
-                        {errors.confirmData && <p className="text-red-500 text-xs mt-1">{errors.confirmData}</p>}
-                    </div>
-                    <div className="mt-6 sm:mt-8">
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                            <button onClick={() => { setShowTambah(false); setShowEdit(false); }} className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 sm:px-6 py-2.5 sm:py-3 rounded text-xs sm:text-sm font-medium">Batal</button>
-                            <button onClick={() => setFormData({ user_id: '', id_mapel: '', id_kelas: '', confirmData: false })} className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 sm:px-6 py-2.5 sm:py-3 rounded text-xs sm:text-sm font-medium">Reset</button>
-                            <button onClick={() => handleSubmit(isEdit)} disabled={!isFormValid} className={`flex-1 py-2.5 rounded text-xs sm:text-sm font-medium ${!isFormValid ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>{isEdit ? 'Update' : 'Simpan'}</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    const id = Number(value);
+    setSelectedTahunAjaranId(id);
+    setSelectedSemesterId(null);
+    setIsSemesterActive(false);
+    setSelectedKelasId(null);
+    setDataPerKelas(null);
+    setKelasList([]);
+    setGuruList([]);
+    localStorage.setItem('pembelajaran_selectedTA', id.toString());
+    localStorage.removeItem('pembelajaran_selectedSemester');
+    localStorage.removeItem('pembelajaran_selectedKelas');
+
+    await fetchSemesterByTahunAjaran(id);
+  };
+
+  // ── Handler: Pilih Semester ────────────────────────────────────────────────
+  const handleSemesterChange = async (value: string) => {
+    if (value === '' || value === 'no-data') {
+      setSelectedSemesterId(null);
+      setIsSemesterActive(false);
+      setSelectedKelasId(null);
+      setDataPerKelas(null);
+      setKelasList([]);
+      setGuruList([]);
+      localStorage.removeItem('pembelajaran_selectedSemester');
+      localStorage.removeItem('pembelajaran_selectedKelas');
+      return;
+    }
+
+    const id = Number(value);
+    const selectedSem = semesterOptions.find(s => s.id === id);
+    setSelectedSemesterId(id);
+    setIsSemesterActive(selectedSem?.is_aktif || false);
+    setSelectedKelasId(null);
+    setDataPerKelas(null);
+    setGuruList([]);
+    localStorage.setItem('pembelajaran_selectedSemester', id.toString());
+    localStorage.removeItem('pembelajaran_selectedKelas');
+
+    if (selectedTahunAjaranId) {
+      await fetchKelasList(selectedTahunAjaranId);
+    }
+
+    if (selectedSem?.is_aktif) {
+      await fetchDropdowns(id);
+    }
+  };
+
+  // ✅ FIXED: Validasi semester sebelum pilih kelas
+  const handleKelasChange = (value: string) => {
+    if (!selectedSemesterId) {
+      showModal({
+        type: 'warning',
+        title: 'Semester Belum Dipilih',
+        message: 'Silakan pilih semester terlebih dahulu sebelum memilih kelas.'
+      });
+      return;
+    }
+
+    if (value === '' || value === 'no-data') {
+      setSelectedKelasId(null);
+      setDataPerKelas(null);
+      localStorage.removeItem('pembelajaran_selectedKelas');
+      return;
+    }
+
+    const id = Number(value);
+    setSelectedKelasId(id);
+    localStorage.setItem('pembelajaran_selectedKelas', id.toString());
+    fetchDataPerKelas(id);
+  };
+
+  const toggleMapelWajib = (mapelId: number) => {
+    setSelectedMapelWajibIds(prev =>
+      prev.includes(mapelId)
+        ? prev.filter(id => id !== mapelId)
+        : [...prev, mapelId]
     );
+  };
 
-    if (showTambah) return renderForm('Tambah Data Pembelajaran', false);
-    if (showEdit) return renderForm('Edit Data Pembelajaran', true);
+  const selectAllMapelWajib = () => {
+    if (!dataPerKelas?.mapel_wajib_tersedia) return;
+    if (selectedMapelWajibIds.length === dataPerKelas.mapel_wajib_tersedia.length) {
+      setSelectedMapelWajibIds([]);
+    } else {
+      setSelectedMapelWajibIds(dataPerKelas.mapel_wajib_tersedia.map(m => m.id));
+    }
+  };
 
+  const executeTambahWajib = async () => {
+    const token = getToken();
+    if (!token || !selectedKelasId || !selectedSemesterId) return;
+
+    setSubmittingWajib(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/pembelajaran/tambah-wajib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          kelas_id: selectedKelasId,
+          mapel_ids: selectedMapelWajibIds,
+          semester_id: selectedSemesterId
+        })
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setShowModalWajib(false);
+        setSelectedMapelWajibIds([]);
+        await fetchDataPerKelas(selectedKelasId);
+        showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: result.message });
+      } else {
+        showModal({ type: 'error', title: 'Gagal Menambahkan', message: result.message || 'Terjadi kesalahan.' });
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+    } finally {
+      setSubmittingWajib(false);
+    }
+  };
+
+  const openConfirmWajib = () => {
+    if (selectedMapelWajibIds.length === 0) {
+      showModal({ type: 'warning', title: 'Belum Ada Mapel Dipilih', message: 'Pilih minimal 1 mata pelajaran wajib.' });
+      return;
+    }
+    setConfirmAction('add-wajib');
+    setShowConfirmModal(true);
+  };
+
+  const handlePilihanChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormDataPilihan(prev => ({ ...prev, [name]: value }));
+    if (errorsPilihan[name]) setErrorsPilihan(prev => ({ ...prev, [name]: '' }));
+  };
+
+  const validateFormPilihan = (): boolean => {
+    const ne: Record<string, string> = {};
+    if (!formDataPilihan.mapel_id) ne.mapel_id = 'Pilih mata pelajaran';
+    if (!formDataPilihan.user_id) ne.user_id = 'Pilih guru pengampu';
+    setErrorsPilihan(ne);
+    if (Object.keys(ne).length > 0) {
+      showModal({ type: 'warning', title: 'Form Belum Lengkap', message: 'Harap lengkapi semua field.' });
+      return false;
+    }
+    return true;
+  };
+
+  const executeTambahPilihan = async () => {
+    const token = getToken();
+    if (!token || !selectedKelasId || !selectedSemesterId) return;
+
+    setSubmittingPilihan(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/pembelajaran/tambah-pilihan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          kelas_id: selectedKelasId,
+          mapel_id: Number(formDataPilihan.mapel_id),
+          user_id: Number(formDataPilihan.user_id),
+          semester_id: selectedSemesterId
+        })
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setShowModalPilihan(false);
+        setFormDataPilihan({ user_id: '', mapel_id: '' });
+        setErrorsPilihan({});
+        await fetchDataPerKelas(selectedKelasId);
+        showModal({ type: 'success', title: 'Berhasil Ditambahkan!', message: result.message });
+      } else {
+        showModal({ type: 'error', title: 'Gagal Menambahkan', message: result.message || 'Terjadi kesalahan.' });
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+    } finally {
+      setSubmittingPilihan(false);
+    }
+  };
+
+  const executeEditPilihan = async () => {
+    if (!editId || !selectedKelasId || !selectedSemesterId) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    setSubmittingPilihan(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          kelas_id: selectedKelasId,
+          mapel_id: Number(formDataPilihan.mapel_id),
+          user_id: Number(formDataPilihan.user_id),
+          semester_id: selectedSemesterId
+        })
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setShowFormEdit(false);
+        setEditId(null);
+        setEditData(null);
+        setFormDataPilihan({ user_id: '', mapel_id: '' });
+        await fetchDataPerKelas(selectedKelasId);
+        showModal({ type: 'success', title: 'Berhasil Diperbarui!', message: result.message });
+      } else {
+        showModal({ type: 'error', title: 'Gagal Memperbarui', message: result.message || 'Terjadi kesalahan.' });
+      }
+    } catch {
+      showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+    } finally {
+      setSubmittingPilihan(false);
+    }
+  };
+
+  const openConfirmPilihan = (action: 'add-pilihan' | 'edit-pilihan') => {
+    if (!validateFormPilihan()) return;
+
+    if (action === 'edit-pilihan' && editData) {
+      const hasChanged = editData.user_id !== Number(formDataPilihan.user_id);
+      if (!hasChanged) {
+        showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+        return;
+      }
+    }
+
+    setConfirmAction(action);
+    setShowConfirmModal(true);
+  };
+
+  const openFormEdit = (mp: Pembelajaran) => {
+    setEditId(mp.id);
+    setEditData(mp);
+    setFormDataPilihan({
+      user_id: String(mp.user_id),
+      mapel_id: String(mp.mapel_id),
+    });
+    setErrorsPilihan({});
+    setShowFormEdit(true);
+  };
+
+  const handleDelete = (id: number, namaMapel: string, namaGuru: string) => {
+    showConfirm(
+      `Yakin ingin menghapus "${namaMapel}" dari "${namaGuru}"?\n\nTindakan ini tidak dapat dibatalkan jika sudah ada data nilai rapor.`,
+      async () => {
+        const token = getToken();
+        if (!token || !selectedKelasId || !selectedSemesterId) return;
+        try {
+          const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              semester_id: selectedSemesterId
+            })
+          });
+          const result = await res.json();
+          if (res.ok && result.success) {
+            await fetchDataPerKelas(selectedKelasId);
+            showModal({ type: 'success', title: 'Berhasil Dihapus!', message: result.message || 'Data berhasil dihapus.' });
+          } else {
+            showModal({ type: 'error', title: 'Gagal Menghapus', message: result.message || 'Terjadi kesalahan.' });
+          }
+        } catch {
+          showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        }
+      }
+    );
+  };
+
+  // ── PAGE: Form EDIT Mapel Pilihan — dibiarkan ringkas (card kecil) ─────────
+  if (showFormEdit) {
     return (
-        <div className="flex-1 p-6 bg-gray-50 min-h-screen">
-            <div className="max-w-7xl mx-auto">
-                <h1 className="text-3xl font-bold text-gray-800 mb-6">Data Pembelajaran</h1>
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Tahun Ajaran</label>
-                        <select value={selectedTahunAjaranId ?? ''} onChange={(e) => { const value = e.target.value; if (value === '') { setSelectedTahunAjaranId(null); setSelectedTahunAjaranAktif(false); setLoading(false); setDataList([]); return; } const id = Number(value); const selectedTa = tahunAjaranList.find((ta) => ta.id === id); setSelectedTahunAjaranId(id); setSelectedTahunAjaranAktif(selectedTa?.is_aktif || false); setLoading(true); fetchData(id); }} className={`w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm ${focusClass}`}>
-                            <option value="">-- Pilih Tahun Ajaran --</option>
-                            {tahunAjaranList.map((ta) => { const semesterDisplay = ta.semester === 'ganjil' ? 'Ganjil' : 'Genap'; return (<option key={ta.id} value={ta.id}>{ta.tahun_ajaran} {semesterDisplay} {ta.is_aktif ? '(Aktif)' : ''}</option>); })}
-                        </select>
-                    </div>
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 dp-fadeIn" style={PAGE_BG}>
+        <GlobalStyles />
+        {modal && <NotifModal modal={modal} onClose={closeModal} />}
+        {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-                    {selectedTahunAjaranId === null ? (
-                        <div className="mt-8 text-center py-8 bg-orange-50 border border-dashed border-orange-300 rounded-lg">
-                            <p className="text-orange-800 text-lg font-medium">Pilih Tahun Ajaran Terlebih Dahulu.</p>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedTahunAjaranAktif && (
-                                        <button onClick={() => setShowTambah(true)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition whitespace-nowrap"><Plus size={20} /> Tambah Pembelajaran</button>
-                                    )}
-                                    <button onClick={() => { if (dropdownLoading) { alert('Mohon tunggu, data dropdown masih dimuat.'); return; } setOpenedFilterValues({ ...filterValues }); setShowFilter(true); setFilterClosing(false); }} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition whitespace-nowrap"><Filter size={20} /> Filter Pembelajaran</button>
-                                </div>
-                                <div className="relative min-w-[200px] sm:min-w-[240px] max-w-[400px]">
-                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Search className="w-4 h-4 text-gray-400" /></div>
-                                    <input type="text" placeholder="pencarian" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className={`w-full border border-gray-300 rounded pl-10 pr-10 py-2 text-sm ${focusClass}`} />
-                                    {searchQuery && (<button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }} className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"><X className="w-4 h-4" /></button>)}
-                                </div>
-                            </div>
-
-                            <div className="overflow-x-auto rounded-lg border border-gray-100 shadow-sm">
-                                <table className="w-full min-w-[600px] table-auto text-sm">
-                                    <thead>
-                                        <tr>
-                                            <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">No.</th>
-                                            <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Mata Pelajaran</th>
-                                            <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Kelas</th>
-                                            <th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Guru Pengampu</th>
-                                            {selectedTahunAjaranAktif && (<th className="px-4 py-3 text-center sticky top-0 bg-gray-800 text-white z-10 font-semibold">Aksi</th>)}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {loading ? (
-                                            <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">Memuat data...</td></tr>
-                                        ) : currentData.length === 0 ? (
-                                            <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">Tidak ada data pembelajaran</td></tr>
-                                        ) : (
-                                            currentData.map((item, index) => (
-                                                <tr key={item.id} className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition`}>
-                                                    <td className="px-4 py-3 text-center align-middle font-medium">{startIndex + index + 1}</td>
-                                                    <td className="px-4 py-3 text-center align-middle">{item.nama_mapel}</td>
-                                                    <td className="px-4 py-3 text-center align-middle">{item.nama_kelas}</td>
-                                                    <td className="px-4 py-3 text-center align-middle">{item.nama_guru}</td>
-                                                    {selectedTahunAjaranAktif && (
-                                                        <td className="px-4 py-3 text-center align-middle whitespace-nowrap">
-                                                            <div className="flex gap-1 justify-center">
-                                                                <button onClick={() => { setEditId(item.id); setFormData({ user_id: String(item.user_id), id_mapel: String(item.id_mapel), id_kelas: String(item.id_kelas), confirmData: false }); setShowEdit(true); }} className="bg-yellow-400 hover:bg-yellow-500 text-gray-800 px-2 sm:px-3 py-1.5 rounded flex items-center gap-1 transition text-xs sm:text-sm"><Pencil size={16} /><span className="hidden sm:inline">Edit</span></button>
-                                                                <button onClick={() => handleDelete(item.id)} className="bg-red-600 hover:bg-red-700 text-white px-2 sm:px-3 py-1.5 rounded flex items-center gap-1 transition text-xs sm:text-sm"><Trash2 size={16} /><span className="hidden sm:inline">Hapus</span></button>
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {filteredData.length > 0 && (
-                                <div className="flex flex-wrap justify-between items-center gap-3 mt-4">
-                                    <div className="text-sm text-gray-600">Menampilkan {startIndex + 1} - {Math.min(endIndex, filteredData.length)} dari {filteredData.length} data</div>
-                                    <div className="flex gap-1 flex-wrap justify-center">{renderPagination()}</div>
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    {/* Modal Filter */}
-                    {showFilter && (
-                        <div className={`fixed inset-0 flex items-center justify-center z-50 transition-opacity duration-200 ${filterClosing ? 'opacity-0' : 'opacity-100'} p-3 sm:p-4`} onClick={(e) => { if (e.target === e.currentTarget) { closeFilterModal(); } }}>
-                            <div className="absolute inset-0 bg-gray-900/70"></div>
-                            <div className={`relative bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto transform transition-all duration-200 ${filterClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-                                <div className="sticky top-0 bg-white border-b px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center">
-                                    <h2 className="text-lg sm:text-xl font-bold text-gray-800">Filter Pembelajaran</h2>
-                                    <button onClick={closeFilterModal} className="text-gray-500 hover:text-gray-700" aria-label="Tutup filter"><X size={20} /></button>
-                                </div>
-                                <div className="p-4 sm:p-6 space-y-4">
-                                    {dropdownLoading ? (
-                                        <div className="flex flex-col items-center justify-center py-6">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500 mb-3"></div>
-                                            <p className="text-sm text-gray-500">Memuat data...</p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Kelas</label>
-                                                <select value={filterValues.kelas} onChange={(e) => setFilterValues((prev) => ({ ...prev, kelas: e.target.value }))} className={`w-full border border-gray-300 rounded px-3 py-2 text-sm ${focusClass}`}>
-                                                    <option value="">Semua Kelas</option>
-                                                    {kelasList.map((k) => <option key={k.id} value={String(k.id)}>{k.nama}</option>)}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Mata Pelajaran</label>
-                                                <select value={filterValues.mapel} onChange={(e) => setFilterValues((prev) => ({ ...prev, mapel: e.target.value }))} className={`w-full border border-gray-300 rounded px-3 py-2 text-sm ${focusClass}`}>
-                                                    <option value="">Semua Mata Pelajaran</option>
-                                                    {mapelList.map((m) => <option key={m.id} value={String(m.id)}>{m.nama}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="flex gap-3 pt-2">
-                                                <button onClick={() => { setFilterValues({ kelas: '', mapel: '' }); setSearchQuery(''); setCurrentPage(1); }} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded hover:bg-gray-100 transition text-sm">Reset</button>
-                                                <button onClick={() => { setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200); }} className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded transition text-sm">Terapkan</button>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Data Pembelajaran</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
+            Edit Pembelajaran — Kelas {dataPerKelas?.kelas.nama_kelas}
+          </p>
         </div>
+
+        <div className="bg-white rounded-2xl overflow-hidden max-w-2xl mx-auto" style={CARD_STYLE}>
+          <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
+            <h2 className="text-base font-bold text-white">Edit Guru Pengampu</h2>
+            <button onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.2)' }}>
+              <X size={16} className="text-white" />
+            </button>
+          </div>
+
+          {dataPerKelas && (
+            <div className="px-6 pt-5">
+              <div className="rounded-xl p-4" style={{ background: '#fff8f2', border: '1px solid #fde0c8' }}>
+                <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: '#c95b08' }}>
+                  Informasi Mapel
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Mata Pelajaran</p>
+                    <p className="font-semibold text-gray-800">{editData?.nama_mapel}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Guru Lama</p>
+                    <p className="font-semibold text-gray-800">{editData?.nama_guru}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="p-6 space-y-5">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls} style={labelColor}>
+                Guru Pengampu Baru <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="user_id"
+                value={formDataPilihan.user_id}
+                onChange={handlePilihanChange}
+                className={errorsPilihan.user_id ? inputErrCls : inputCls}
+                disabled={dropdownLoading}
+              >
+                <option value="">-- Pilih Guru --</option>
+                {guruList.map(g => (
+                  <option key={g.id} value={g.id}>{g.nama}</option>
+                ))}
+              </select>
+              {errorsPilihan.user_id && <p className="text-red-500 text-xs">{errorsPilihan.user_id}</p>}
+            </div>
+          </div>
+
+          <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+            <button
+              onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => openConfirmPilihan('edit-pilihan')}
+              className={`btn-primary ${btnPrimary.base}`}
+              style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
+              onMouseEnter={btnPrimary.hover}
+              onMouseLeave={btnPrimary.leave}
+            >
+              Simpan Perubahan
+            </button>
+          </div>
+        </div>
+
+        {showConfirmModal && confirmAction === 'edit-pilihan' && (
+          <div
+            className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dp-fadeIn"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dp-scaleIn">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                  <ShieldAlert size={24} className="text-orange-500" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                  Konfirmasi Perubahan Data
+                </h3>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                Apakah Anda yakin ingin mengubah guru pengampu ini?
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c' }}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    executeEditPilihan();
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                  style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+                >
+                  Simpan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     );
+  }
+
+  // ── HALAMAN UTAMA ──────────────────────────────────────────────────────────
+  return (
+    <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
+      <GlobalStyles />
+      {modal && <NotifModal modal={modal} onClose={closeModal} />}
+      {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
+
+      {confirmCfg && (
+        <ConfirmModal
+          message={confirmCfg.message}
+          onConfirm={() => { confirmCfg.onConfirm(); setConfirmCfg(null); }}
+          onCancel={() => setConfirmCfg(null)}
+        />
+      )}
+
+      {/* ═══ MODAL TAMBAH MAPEL WAJIB ═══ */}
+      {showModalWajib && dataPerKelas && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 dp-fadeIn">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !submittingWajib && setShowModalWajib(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col dp-scaleIn" style={CARD_STYLE}>
+            <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
+              <div className="flex items-center gap-2">
+                <BookOpen size={18} className="text-white" />
+                <h2 className="text-base font-bold text-white">Tambah Mapel Wajib</h2>
+              </div>
+              <button onClick={() => !submittingWajib && setShowModalWajib(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.2)' }} disabled={submittingWajib}>
+                <X size={16} className="text-white" />
+              </button>
+            </div>
+
+            <div className="px-6 pt-4">
+              <div className="rounded-xl p-3" style={{ background: '#fff8f2', border: '1px solid #fde0c8' }}>
+                <p className="text-xs text-gray-600">
+                  Kelas <strong>{dataPerKelas.kelas.nama_kelas}</strong> • Guru Kelas: <strong>{dataPerKelas.wali_kelas?.nama || '—'}</strong>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  ℹ️ Mapel wajib otomatis ditugaskan ke guru kelas.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {dataPerKelas.mapel_wajib_tersedia.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-400">
+                  <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
+                  <p className="font-semibold text-green-700">Semua mapel wajib sudah ditugaskan!</p>
+                  <p className="text-xs mt-1">Tidak ada mapel wajib yang perlu ditambahkan.</p>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={selectAllMapelWajib}
+                    className="w-full mb-3 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+                    style={{ background: '#fff8f2', border: '1px solid #fde0c8', color: '#7a3a0a' }}
+                  >
+                    {selectedMapelWajibIds.length === dataPerKelas.mapel_wajib_tersedia.length ? (
+                      <CheckSquare size={16} className="text-orange-500" />
+                    ) : (
+                      <Square size={16} className="text-gray-400" />
+                    )}
+                    {selectedMapelWajibIds.length === dataPerKelas.mapel_wajib_tersedia.length
+                      ? 'Batal Pilih Semua'
+                      : `Pilih Semua (${dataPerKelas.mapel_wajib_tersedia.length} mapel)`}
+                  </button>
+
+                  <div className="space-y-2">
+                    {dataPerKelas.mapel_wajib_tersedia.map(mp => (
+                      <label
+                        key={mp.id}
+                        className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all hover:bg-orange-50/50"
+                        style={{
+                          border: selectedMapelWajibIds.includes(mp.id) ? '2px solid #f5a623' : '1px solid #fde0c8',
+                          background: selectedMapelWajibIds.includes(mp.id) ? '#fff8f2' : '#fff'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMapelWajibIds.includes(mp.id)}
+                          onChange={() => toggleMapelWajib(mp.id)}
+                          className="w-5 h-5 rounded accent-orange-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: '#fff0e5', color: '#c95b08' }}>
+                              {mp.kode_mapel}
+                            </span>
+                            <span className="font-semibold text-gray-800 text-sm">{mp.nama_mapel}</span>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+              <BtnBatal onClick={() => setShowModalWajib(false)} disabled={submittingWajib} />
+              <button
+                onClick={openConfirmWajib}
+                disabled={selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0}
+                className={`btn-primary ${btnPrimary.base} ${(selectedMapelWajibIds.length === 0 || submittingWajib || dataPerKelas.mapel_wajib_tersedia.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={btnPrimary.style}
+                onMouseEnter={btnPrimary.hover}
+                onMouseLeave={btnPrimary.leave}
+              >
+                {submittingWajib ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    Simpan {selectedMapelWajibIds.length > 0 ? `(${selectedMapelWajibIds.length})` : ''}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL TAMBAH MAPEL PILIHAN ═══ */}
+      {showModalPilihan && dataPerKelas && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 dp-fadeIn">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !submittingPilihan && setShowModalPilihan(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden dp-scaleIn" style={CARD_STYLE}>
+            <div className="flex items-center justify-between px-6 py-4" style={HEADER_GRAD}>
+              <div className="flex items-center gap-2">
+                <BookOpen size={18} className="text-white" />
+                <h2 className="text-base font-bold text-white">Tambah Mapel Pilihan</h2>
+              </div>
+              <button onClick={() => !submittingPilihan && setShowModalPilihan(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.2)' }} disabled={submittingPilihan}>
+                <X size={16} className="text-white" />
+              </button>
+            </div>
+
+            <div className="px-6 pt-4">
+              <div className="rounded-xl p-3" style={{ background: '#fff8f2', border: '1px solid #fde0c8' }}>
+                <p className="text-xs text-gray-600">
+                  Kelas <strong>{dataPerKelas.kelas.nama_kelas}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {dataPerKelas.mapel_pilihan_tersedia.length === 0 ? (
+                <div className="py-6 text-center text-sm text-gray-400">
+                  <CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
+                  <p className="font-semibold text-green-700">Semua mapel pilihan sudah ditugaskan!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls} style={labelColor}>
+                      Mata Pelajaran <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="mapel_id"
+                      value={formDataPilihan.mapel_id}
+                      onChange={handlePilihanChange}
+                      className={errorsPilihan.mapel_id ? inputErrCls : inputCls}
+                      disabled={dropdownLoading || submittingPilihan}
+                    >
+                      <option value="">-- Pilih Mata Pelajaran --</option>
+                      {dataPerKelas.mapel_pilihan_tersedia.map(m => (
+                        <option key={m.id} value={m.id}>{m.nama_mapel}</option>
+                      ))}
+                    </select>
+                    {errorsPilihan.mapel_id && <p className="text-red-500 text-xs">{errorsPilihan.mapel_id}</p>}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls} style={labelColor}>
+                      Guru Pengampu <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="user_id"
+                      value={formDataPilihan.user_id}
+                      onChange={handlePilihanChange}
+                      className={errorsPilihan.user_id ? inputErrCls : inputCls}
+                      disabled={dropdownLoading || submittingPilihan}
+                    >
+                      <option value="">-- Pilih Guru --</option>
+                      {guruList.map(g => (
+                        <option key={g.id} value={g.id}>{g.nama}</option>
+                      ))}
+                    </select>
+                    {errorsPilihan.user_id && <p className="text-red-500 text-xs">{errorsPilihan.user_id}</p>}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+              <BtnBatal onClick={() => setShowModalPilihan(false)} disabled={submittingPilihan} />
+              <button
+                onClick={() => openConfirmPilihan('add-pilihan')}
+                disabled={dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan}
+                className={`btn-primary ${btnPrimary.base} ${(dataPerKelas.mapel_pilihan_tersedia.length === 0 || submittingPilihan) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={btnPrimary.style}
+                onMouseEnter={btnPrimary.hover}
+                onMouseLeave={btnPrimary.leave}
+              >
+                {submittingPilihan ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    Simpan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL KONFIRMASI ═══ */}
+      {showConfirmModal && (confirmAction === 'add-wajib' || confirmAction === 'add-pilihan') && (
+        <div
+          className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dp-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dp-scaleIn">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert size={24} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                Konfirmasi Penambahan Data
+              </h3>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+              {confirmAction === 'add-wajib'
+                ? `Apakah Anda yakin ingin menambahkan ${selectedMapelWajibIds.length} mapel wajib ini?`
+                : 'Apakah Anda yakin ingin menambahkan mapel pilihan ini?'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  if (confirmAction === 'add-wajib') {
+                    executeTambahWajib();
+                  } else {
+                    executeTambahPilihan();
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ HALAMAN UTAMA ═══ */}
+      <div className="mb-6 anim-in d1">
+        <h1 className="text-2xl font-bold text-gray-900">Data Pembelajaran</h1>
+        <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
+          Kelola penugasan guru mengajar per kelas
+        </p>
+      </div>
+
+      {/* ====================================================================
+          CARD 1: Tahun Ajaran + Semester + Kelas — compact satu baris,
+          sama persis pola Card 1 di Data Mata Pelajaran.
+      ==================================================================== */}
+      <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center gap-5 anim-in d2" style={CARD_STYLE}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff0e5' }}>
+            <CalendarRange size={16} style={{ color: '#c95b08' }} />
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+              Tahun Ajaran
+            </label>
+            <select
+              value={selectedTahunAjaranId ?? ''}
+              onChange={(e) => handleTahunAjaranChange(e.target.value)}
+              className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]"
+            >
+              <option value="">-- Pilih Tahun Ajaran --</option>
+              {tahunAjaranList.map(ta => (
+                <option key={ta.id} value={ta.id}>
+                  {ta.tahun_ajaran} {ta.is_aktif ? '(Aktif)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {selectedTahunAjaranId !== null && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+              Semester
+            </label>
+            <select
+              value={selectedSemesterId ?? ''}
+              onChange={(e) => handleSemesterChange(e.target.value)}
+              className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]"
+            >
+              <option value="">-- Pilih Semester --</option>
+              {semesterOptions.map(sem => (
+                <option key={sem.id} value={sem.id}>
+                  {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
+                </option>
+              ))}
+            </select>
+
+            {selectedSemesterId && (
+              isSemesterActive ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                  style={{ background: '#d4f0dd', color: '#1a7a3a', border: '1px solid #86efac' }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                  Aktif
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                  style={{ background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db' }}>
+                  <Lock size={12} />
+                  Nonaktif
+                </span>
+              )
+            )}
+          </div>
+        )}
+
+        {selectedTahunAjaranId !== null && selectedSemesterId !== null && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>
+              Kelas
+            </label>
+            <select
+              value={selectedKelasId ?? ''}
+              onChange={(e) => handleKelasChange(e.target.value)}
+              className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]"
+            >
+              <option value="">-- Pilih Kelas --</option>
+              {kelasList.map(k => (
+                <option key={k.id} value={k.id}>{k.nama}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {selectedTahunAjaranId === null ? (
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+          <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+            <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Tahun Ajaran Terlebih Dahulu</p>
+          </div>
+        </div>
+      ) : selectedSemesterId === null ? (
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+          <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+            <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Semester Terlebih Dahulu</p>
+          </div>
+        </div>
+      ) : selectedKelasId === null ? (
+        <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+          <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+            <p className="text-base font-bold" style={{ color: '#c95b08' }}>Pilih Kelas Terlebih Dahulu</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ═══ KONTEN DATA ═══ */}
+          {loading ? (
+            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+              <div className="py-12 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
+                  <p className="text-sm text-gray-400">Memuat data...</p>
+                </div>
+              </div>
+            </div>
+          ) : !dataPerKelas ? (
+            <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+              <div className="m-6 py-10 text-center rounded-2xl" style={{ background: '#fffaf6', border: '2px dashed #fde0c8' }}>
+                <p className="text-base font-bold" style={{ color: '#c95b08' }}>Data tidak ditemukan</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* CARD: Info Kelas */}
+              <div className="section-card bg-white rounded-2xl px-5 py-4 anim-in d3" style={CARD_STYLE}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Kelas {dataPerKelas.kelas.nama_kelas}</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {dataPerKelas.kelas.tahun_ajaran} • {dataPerKelas.kelas.semester} • {dataPerKelas.kelas.is_aktif ? 'Aktif' : 'Non-Aktif'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400">Guru Kelas</p>
+                    <p className="font-semibold text-gray-800">{dataPerKelas.wali_kelas?.nama || '—'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD: MAPEL WAJIB */}
+              <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
+                <div className="px-5 py-3 flex items-center justify-between" style={TH_GRAD}>
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-white" />
+                    <h4 className="text-sm font-bold text-white">Mata Pelajaran Wajib</h4>
+                  </div>
+                  {isSemesterActive && (
+                    <button
+                      onClick={() => {
+                        setSelectedMapelWajibIds([]);
+                        setShowModalWajib(true);
+                      }}
+                      className="btn-primary inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                      style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+                    >
+                      <Plus size={14} />
+                      Tambah Mapel Wajib
+                    </button>
+                  )}
+                </div>
+
+                {dataPerKelas.mapel_wajib.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-gray-400 bg-white">
+                    Belum ada mapel wajib yang ditugaskan
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[600px] text-sm border-collapse bg-white">
+                      <thead>
+                        <tr style={{ background: '#fffaf6', borderBottom: '1px solid #fde0c8' }}>
+                          <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-12">No</th>
+                          <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 w-24">Kode</th>
+                          <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Mata Pelajaran</th>
+                          <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Guru Pengampu</th>
+                          {isSemesterActive && (
+                            <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-32">Aksi</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataPerKelas.mapel_wajib.map((mp, idx) => (
+                          <tr key={`wajib-${idx}-${mp.id}`}
+                            className="item-hover transition-colors anim-in"
+                            style={{
+                              borderBottom: '1px solid #fde0c8',
+                              animationDelay: `${Math.min(idx, 8) * 0.04}s`,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
+                            <td className="px-5 py-3 font-bold" style={{ color: '#c95b08' }}>{mp.kode_mapel}</td>
+                            <td className="px-5 py-3 font-semibold text-gray-800">{mp.nama_mapel}</td>
+                            <td className="px-5 py-3 text-gray-700">{mp.nama_guru}</td>
+                            {isSemesterActive && (
+                              <td className="px-5 py-3 text-center">
+                                <button
+                                  onClick={() => handleDelete(mp.id, mp.nama_mapel, mp.nama_guru)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
+                                  style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Hapus</span>
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* CARD: MAPEL PILIHAN */}
+              <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d5" style={CARD_STYLE}>
+                <div className="px-5 py-3 flex items-center justify-between" style={TH_GRAD}>
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-white" />
+                    <h4 className="text-sm font-bold text-white">Mata Pelajaran Pilihan</h4>
+                  </div>
+                  {isSemesterActive && (
+                    <button
+                      onClick={() => {
+                        setFormDataPilihan({ user_id: '', mapel_id: '' });
+                        setErrorsPilihan({});
+                        setShowModalPilihan(true);
+                      }}
+                      className="btn-primary inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all"
+                      style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.3)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+                    >
+                      <Plus size={14} />
+                      Tambah Mapel Pilihan
+                    </button>
+                  )}
+                </div>
+
+                {dataPerKelas.mapel_pilihan.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-gray-400 bg-white">
+                    Belum ada mapel pilihan yang ditugaskan
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[600px] text-sm border-collapse bg-white">
+                      <thead>
+                        <tr style={{ background: '#fffaf6', borderBottom: '1px solid #fde0c8' }}>
+                          <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-12">No</th>
+                          <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 w-24">Kode</th>
+                          <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Mata Pelajaran</th>
+                          <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600">Guru Pengampu</th>
+                          {isSemesterActive && (
+                            <th className="px-5 py-2.5 text-center text-xs font-bold text-gray-600 w-40">Aksi</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataPerKelas.mapel_pilihan.map((mp, idx) => (
+                          <tr key={`pilihan-${idx}-${mp.id}`}
+                            className="item-hover transition-colors anim-in"
+                            style={{
+                              borderBottom: '1px solid #fde0c8',
+                              animationDelay: `${Math.min(idx, 8) * 0.04}s`,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
+                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                            <td className="px-5 py-3 text-center text-gray-500 font-medium">{idx + 1}</td>
+                            <td className="px-5 py-3 font-bold" style={{ color: '#c95b08' }}>{mp.kode_mapel}</td>
+                            <td className="px-5 py-3 font-semibold text-gray-800">{mp.nama_mapel}</td>
+                            <td className="px-5 py-3 text-gray-700">{mp.nama_guru}</td>
+                            {isSemesterActive && (
+                              <td className="px-5 py-3 text-center">
+                                <div className="flex justify-center gap-1">
+                                  <button
+                                    onClick={() => openFormEdit(mp)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
+                                    style={{ background: '#fff0e5', border: '1px solid #f5a623', color: '#b35a08' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#ffe4c8')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff0e5')}
+                                  >
+                                    <Pencil size={12} />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(mp.id, mp.nama_mapel, mp.nama_guru)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all"
+                                    style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}
+                                  >
+                                    <Trash2 size={12} />
+                                    <span>Hapus</span>
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }

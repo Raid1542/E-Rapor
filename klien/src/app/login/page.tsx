@@ -1,7 +1,6 @@
 /**
  * Nama File: page.tsx
- * Fungsi: Halaman utama untuk proses autentikasi pengguna (login).
- *         Merender komponen klien LoginClient yang menangani formulir dan logika interaksi.
+ * Fungsi: Halaman login (server component wrapper untuk LoginClient)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 15 September 2025
  */

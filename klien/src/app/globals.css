@@ -1,35 +1,61 @@
 /**
- * Nama File: global.css
- * Fungsi: File stylesheet global untuk aplikasi E-Rapor.
- *         Mengatur font utama (Poppins), tema warna, dan dukungan dark mode.
+ * Nama File: globals.css
+ * Fungsi: Stylesheet global (font Poppins, tema light/dark, Tailwind config)
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 15 September 2025
  */
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 1. IMPORT EXTERNAL RESOURCES
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/* Import font Poppins dari Google Fonts (weight: 300-700) */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* Import Tailwind CSS framework */
 @import "tailwindcss";
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 2. CSS VARIABLES (LIGHT MODE)
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/* Variabel CSS untuk tema light mode (default) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #ffffff;
+    --foreground: #171717;
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 3. TAILWIND THEME CONFIGURATION
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/* Mapping variabel CSS ke Tailwind theme */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono);
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 4. DARK MODE SUPPORT
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/* Override variabel CSS untuk dark mode (otomatis berdasarkan preferensi OS) */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: black;
-  }
+    :root {
+        --background: #0a0a0a;
+        --foreground: black;
+    }
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+ * 5. BASE STYLES
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/* Style dasar untuk body (background, color, font-family) */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
 }

@@ -1,12 +1,9 @@
 /**
  * Nama File: Sidebar.tsx
- * Fungsi: Menyediakan navigasi sidebar untuk halaman guru kelas.
- *         Menampilkan menu utama seperti Dashboard, Kelola Data (dengan submenu),
- *         dan Rapor. Sidebar juga menampilkan logo dan nama sekolah yang diambil
- *         dari API backend. Mendukung mode collapsed/expanded dan mempertahankan
- *         state dropdown yang terbuka saat berpindah halaman.
- * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
+ * Fungsi: Komponen sidebar navigasi untuk guru kelas
+ * UPDATE: Tampilan disamakan dengan Sidebar Admin (badge ikon aktif, aksen bar,
+ *         label seksi bergaris, jarak antar menu identik). Tidak ada submenu.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
 'use client';
@@ -15,13 +12,116 @@ import { useState, useEffect } from 'react';
 import {
     Home,
     Users,
-    FileText,
     BookOpen,
-    Menu,
-    ChevronRight,
-    ChevronDown,
+    UserCircle,
+    X,
+    ClipboardList,
+    Award,
+    FileText,
+    Settings,
+    TrendingUp,
+    MessageSquare,
+    BarChart3,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+
+// ─── GLOBAL STYLES (disamakan dengan Sidebar Admin) ─────────────────────────
+const SidebarStyles = () => (
+    <style jsx global>{`
+        @keyframes sb_slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                max-height: 500px;
+            }
+        }
+        @keyframes sb_fadeIn {
+            from { opacity: 0; transform: translateX(-4px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes sb_badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .sb-slideDown { animation: sb_slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .sb-fadeIn { animation: sb_fadeIn 0.25s ease-out; }
+        .sb-badgePulse { animation: sb_badgePulse 2s ease-in-out infinite; }
+
+        .sb-nav-item {
+            position: relative;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sb-nav-item:hover:not(:disabled) {
+            transform: translateX(3px);
+        }
+
+        /* Aksen bar kecil di sisi kiri item yang aktif (sama seperti Admin) */
+        .sb-nav-item.sb-active::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 22px;
+            border-radius: 0 4px 4px 0;
+            background: #fff;
+            box-shadow: 0 0 8px rgba(255,255,255,0.6);
+        }
+
+        /* Wadah ikon: badge bulat/kotak lembut (sama seperti Admin) */
+        .sb-icon-wrap {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.22s ease, box-shadow 0.22s ease;
+        }
+        .sb-icon-wrap.sb-icon-active {
+            background: linear-gradient(135deg, #c95b08, #f5870a);
+            box-shadow: 0 3px 10px rgba(180,70,10,0.28);
+            color: #fff;
+        }
+        .sb-icon-wrap.sb-icon-inactive {
+            background: rgba(255,255,255,0.10);
+            color: rgba(255,255,255,0.9);
+        }
+        .sb-nav-item:hover:not(:disabled) .sb-icon-wrap.sb-icon-inactive {
+            background: rgba(255,255,255,0.18);
+        }
+
+        .sb-chevron {
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .sb-chevron-open {
+            transform: rotate(180deg);
+        }
+
+        /* Label seksi dengan garis pemisah tipis (sama seperti Admin) */
+        .sb-section-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sb-section-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, rgba(255,255,255,0.18), transparent);
+        }
+
+        .sb-scrollbar-none::-webkit-scrollbar { display: none; }
+        .sb-scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+    `}</style>
+);
 
 interface SidebarProps {
     user: {
@@ -36,15 +136,11 @@ export default function Sidebar({ user }: SidebarProps) {
     const router = useRouter();
     const pathname = usePathname();
     const [isExpanded, setIsExpanded] = useState(true);
-    const [openDropdowns, setOpenDropdowns] = useState({
-        kelolaData: false,
-    });
 
-    //  State untuk logo dan nama sekolah
     const [logoUrl, setLogoUrl] = useState<string>('/images/LogoUA.jpg');
     const [schoolName, setSchoolName] = useState<string>('SDIT Ulil Albab');
 
-    //  Fetch data sekolah
+    // ── Fetch data sekolah (logo + nama) ──────────────────────────────────
     const fetchSchoolData = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -57,37 +153,26 @@ export default function Sidebar({ user }: SidebarProps) {
             if (res.ok) {
                 const { data } = await res.json();
                 if (data) {
-                    if (data.logo_path) {
-                        setLogoUrl(`http://localhost:5000${data.logo_path}?t=${Date.now()}`);
-                    }
-                    if (data.nama_sekolah) {
-                        setSchoolName(data.nama_sekolah);
-                    }
+                    if (data.logo_path) setLogoUrl(`http://localhost:5000${data.logo_path}?t=${Date.now()}`);
+                    if (data.nama_sekolah) setSchoolName(data.nama_sekolah);
                 }
             }
         } catch (err) {
-            console.warn('Gagal fetch data sekolah di sidebar guru kelas', err);
+            console.warn('Gagal fetch data sekolah di sidebar guru kelas:', err);
         }
     };
 
-    //  Setup event listener
     useEffect(() => {
-        console.log("🔄 Sidebar guru kelas: fetchSchoolData dipanggil");
         fetchSchoolData();
 
         const handleLogoUpdate = (e: Event) => {
             const customEvent = e as CustomEvent;
             const logoPath = customEvent.detail?.logoPath;
-            if (logoPath) {
-                setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
-            } else {
-                fetchSchoolData();
-            }
+            if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
+            else fetchSchoolData();
         };
 
-        const handleSchoolUpdate = () => {
-            fetchSchoolData();
-        };
+        const handleSchoolUpdate = () => fetchSchoolData();
 
         window.addEventListener('logoUpdated', handleLogoUpdate);
         window.addEventListener('schoolUpdated', handleSchoolUpdate);
@@ -98,150 +183,179 @@ export default function Sidebar({ user }: SidebarProps) {
         };
     }, []);
 
-    const toggleSidebar = () => setIsExpanded(!isExpanded);
-    const toggleDropdown = (menu: string) => {
-        if (!isExpanded) setIsExpanded(true);
-        setOpenDropdowns((prev) => ({
-            kelolaData: menu === 'kelolaData' ? !prev.kelolaData : false,
-        }));
-    };
-
-    const handleNavigation = (url: string) => router.push(url);
-
-    // Submenu
-    const kelolaDataSubmenu = [
-        { name: 'Data Siswa', url: '/guru_kelas/data_siswa' },
-        { name: 'Atur Penilaian', url: '/guru_kelas/atur_penilaian' },
-        { name: 'Input Nilai', url: '/guru_kelas/input_nilai' },
-        { name: 'Rekapan Nilai', url: '/guru_kelas/rekapan_nilai' },
-        { name: 'Absensi', url: '/guru_kelas/absensi_siswa' },
-        { name: 'Kokurikuler', url: '/guru_kelas/kokurikuler' },
-        { name: 'Ekstrakurikuler', url: '/guru_kelas/ekstrakurikuler' },
-        { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_Wali_Kelas' },
+    // ── Menu Items ─────────────────────────────────────────────────────────
+    const menuUtama = [
+        { name: 'Dashboard', url: '/guru_kelas/dashboard', icon: Home },
     ];
 
-    
+    const dataSiswa = [
+        { name: 'Data Siswa', url: '/guru_kelas/data_siswa', icon: Users },
+    ];
 
-    // Active state
-    const isDashboardActive = pathname === '/guru_kelas/dashboard';
-    const isKelolaDataActive = kelolaDataSubmenu.some((item) => item.url === pathname);
-    const isRaporActive = pathname === '/guru_kelas/rapor';
+    const inputNilai = [
+        { name: 'Atur Penilaian', url: '/guru_kelas/atur_penilaian', icon: Settings },
+        { name: 'Input Nilai', url: '/guru_kelas/input_nilai', icon: ClipboardList },
+        { name: 'Kokurikuler', url: '/guru_kelas/kokurikuler', icon: TrendingUp },
+        { name: 'Absensi', url: '/guru_kelas/absensi_siswa', icon: FileText },
+        { name: 'Catatan Wali Kelas', url: '/guru_kelas/catatan_wali_kelas', icon: MessageSquare },
+    ];
 
-    useEffect(() => {
-        if (isKelolaDataActive) setOpenDropdowns((prev) => ({ ...prev, kelolaData: true }));
-    }, [isKelolaDataActive]);
+    const kegiatan = [
+        { name: 'Ekstrakurikuler', url: '/guru_kelas/ekstrakurikuler', icon: Award },
+    ];
+
+    const laporan = [
+        { name: 'Rekapan Nilai', url: '/guru_kelas/rekapan_nilai', icon: BarChart3 },
+        { name: 'Cetak Rapor', url: '/guru_kelas/rapor', icon: BookOpen },
+    ];
+
+    // ── Handlers ───────────────────────────────────────────────────────────
+    const toggleSidebar = () => setIsExpanded(!isExpanded);
+    const handleNavigation = (url: string) => router.push(url);
+
+    // ── Reusable nav item styles (disamakan dengan Admin) ──────────────────
+    const navBase = 'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
+    const navActive = 'sb-active bg-white text-orange-600 shadow-sm font-semibold';
+    const navInactive = 'text-white hover:bg-white/10 hover:text-white';
+
+    // Helper untuk render menu item dengan icon component (badge aktif sama seperti Admin)
+    const renderMenuItem = (item: any, isActive: boolean) => {
+        const IconComponent = item.icon;
+        return (
+            <button
+                key={item.url}
+                onClick={() => handleNavigation(item.url)}
+                className={`${navBase} ${isActive ? navActive : navInactive}`}
+            >
+                <span className={`sb-icon-wrap ${isActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+                    <IconComponent className="w-[18px] h-[18px]" />
+                </span>
+                {isExpanded && <span>{item.name}</span>}
+            </button>
+        );
+    };
 
     return (
         <div
-            className={`flex flex-col h-screen bg-white shadow-lg transition-all duration-300 ${isExpanded ? 'w-64' : 'w-20'
-                }`}
+            className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[72px]'}`}
+            style={{
+                background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
+            }}
         >
-            <div className="flex items-center justify-between p-4 border-b">
+            <SidebarStyles />
+
+            {/* ── Header: Logo + Nama Sekolah (sama seperti Admin) ───── */}
+            <div
+                className="flex items-center justify-between px-4 py-4"
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
+            >
                 {isExpanded ? (
                     <>
-                        <div className="flex items-center gap-3">
-                            <img
-                                src={logoUrl}
-                                alt="Logo Sekolah"
-                                className="w-10 h-10 object-contain"
-                                onError={() => setLogoUrl('/images/LogoUA.jpg')}
-                            />
-                            <div>
-                                <h2 className="text-sm font-bold text-gray-900">{schoolName}</h2>
-                                <p className="text-xs text-gray-500">E-Rapor</p>
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div
+                                className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-110 hover:rotate-6"
+                                style={{ background: 'rgba(255,255,255,0.18)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
+                            >
+                                <img
+                                    src={logoUrl}
+                                    alt="Logo Sekolah"
+                                    className="w-10 h-10 object-contain"
+                                    onError={() => setLogoUrl('/images/LogoUA.jpg')}
+                                />
+                            </div>
+                            <div className="min-w-0 sb-fadeIn">
+                                <h2 className="text-sm font-bold text-white leading-tight truncate">{schoolName}</h2>
+                                <p className="text-[11px] text-white/60 leading-tight tracking-wide uppercase mt-0.5">E-Rapor</p>
                             </div>
                         </div>
                         <button
                             onClick={toggleSidebar}
-                            className="p-2 hover:bg-orange-50 rounded-lg transition-colors"
+                            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:rotate-90"
+                            style={{ background: 'rgba(255,255,255,0.12)' }}
                         >
-                            <Menu className="w-5 h-5 text-orange-500" />
+                            <X className="w-4 h-4 text-white" />
                         </button>
                     </>
                 ) : (
                     <button
                         onClick={toggleSidebar}
-                        className="p-2 hover:bg-orange-50 rounded-lg transition-colors mx-auto"
+                        className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110"
+                        style={{ background: 'rgba(255,255,255,0.15)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
                     >
-                        <Menu className="w-6 h-6 text-orange-500" />
+                        <img
+                            src={logoUrl}
+                            alt="Logo Sekolah"
+                            className="w-10 h-10 object-contain"
+                            onError={() => setLogoUrl('/images/LogoUA.jpg')}
+                        />
                     </button>
                 )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            {/* ── Navigation (jarak antar menu disamakan dengan Admin) ───────────────────── */}
+            <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
+
+                {/* ── MENU UTAMA ── */}
+                {menuUtama.map((item) => renderMenuItem(item, pathname === item.url))}
+
+                {/* ── DATA SISWA ── */}
+                {isExpanded && (
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                        Data Siswa
+                    </p>
+                )}
+                {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
+
+                {dataSiswa.map((item) => renderMenuItem(item, pathname === item.url))}
+
+                {/* ── INPUT NILAI ── */}
+                {isExpanded && (
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                        Input Nilai
+                    </p>
+                )}
+                {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
+
+                {inputNilai.map((item) => renderMenuItem(item, pathname === item.url))}
+
+                {/* ── KEGIATAN ── */}
+                {isExpanded && (
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                        Kegiatan
+                    </p>
+                )}
+                {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
+
+                {kegiatan.map((item) => renderMenuItem(item, pathname === item.url))}
+
+                {/* ── LAPORAN ── */}
+                {isExpanded && (
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                        Laporan
+                    </p>
+                )}
+                {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
+
+                {laporan.map((item) => renderMenuItem(item, pathname === item.url))}
+
+                {/* ── SAYA ── */}
+                {isExpanded && (
+                    <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
+                        Saya
+                    </p>
+                )}
+                {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
+
                 <button
-                    onClick={() => handleNavigation('/guru_kelas/dashboard')}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg mb-2 transition-colors ${isDashboardActive
-                            ? 'bg-orange-500 text-white'
-                            : 'text-gray-700 hover:bg-orange-50 hover:text-orange-500'
-                        }`}
+                    onClick={() => handleNavigation('/guru_kelas/profil')}
+                    className={`${navBase} ${pathname === '/guru_kelas/profil' ? navActive : navInactive}`}
                 >
-                    <Home className="w-5 h-5 flex-shrink-0" />
-                    {isExpanded && <span className="font-medium">Dashboard</span>}
+                    <span className={`sb-icon-wrap ${pathname === '/guru_kelas/profil' ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+                        <UserCircle className="w-[18px] h-[18px]" />
+                    </span>
+                    {isExpanded && <span>Profil</span>}
                 </button>
 
-                {isExpanded && (
-                    <h3 className="text-xs font-semibold text-gray-500 mb-3 px-3 mt-4">MENU UTAMA</h3>
-                )}
-
-                <div className="mb-2">
-                    <button
-                        onClick={() => toggleDropdown('kelolaData')}
-                        className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${isKelolaDataActive
-                                ? 'bg-orange-500 text-white'
-                                : 'text-gray-700 hover:bg-orange-50 hover:text-orange-500'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <Users className="w-5 h-5 flex-shrink-0" />
-                            {isExpanded && <span className="font-medium">Kelola Data</span>}
-                        </div>
-                        {isExpanded &&
-                            (openDropdowns.kelolaData ? (
-                                <ChevronDown className="w-4 h-4" />
-                            ) : (
-                                <ChevronRight className="w-4 h-4" />
-                            ))}
-                    </button>
-                    {isExpanded && openDropdowns.kelolaData && (
-                        <div className="ml-6 mt-1 space-y-1">
-                            {kelolaDataSubmenu.map((item, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => handleNavigation(item.url)}
-                                    className={`w-full text-left p-2 pl-4 rounded-lg text-sm transition-colors ${item.url === pathname
-                                            ? 'bg-orange-400 text-white'
-                                            : 'text-gray-600 hover:bg-orange-50 hover:text-orange-500'
-                                        }`}
-                                >
-                                    {item.name}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <button
-    onClick={() => handleNavigation('/guru_kelas/rapor')}
-    className={`w-full flex items-center gap-3 p-3 rounded-lg mb-2 transition-colors ${isRaporActive
-        ? 'bg-orange-500 text-white'
-        : 'text-gray-700 hover:bg-orange-50 hover:text-orange-500'
-    }`}
->
-    <BookOpen className="w-5 h-5 flex-shrink-0" />
-    {isExpanded && <span className="font-medium">Cetak Rapor</span>}
-</button>
-            </div>
-
-            <div className="p-4 border-t">
-                {isExpanded && (
-                    <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                            <p className="text-sm text-gray-500">© 2025 E-Rapor</p>
-                            <p className="text-sm text-gray-500">{schoolName}</p>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

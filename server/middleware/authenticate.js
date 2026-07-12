@@ -1,48 +1,66 @@
 /**
  * Nama File: authenticate.js
- * Fungsi: Middleware untuk memverifikasi token JWT pada setiap request yang memerlukan autentikasi.
- *         Mendukung token dari header Authorization (Bearer) atau query string (?token=...).
+ * Fungsi: Middleware verifikasi JWT token (dari header Authorization atau query)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
 
 const jwt = require('jsonwebtoken');
 
-// Middleware autentikasi untuk memvalidasi token JWT
+// Middleware: verifikasi JWT token dan simpan payload user di req.user
 const authenticate = (req, res, next) => {
-  // Coba ambil token dari header Authorization (format: Bearer <token>)
-  let token = null;
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.split(' ')[1];
-  }
+    let token = null;
+    const authHeader = req.headers['authorization'];
 
-  // Jika token tidak ditemukan di header, coba ambil dari query string (?token=...)
-  if (!token && req.query && req.query.token) {
-    token = req.query.token;
-  }
-
-  // Jika token tetap tidak ditemukan, tolak permintaan
-  if (!token) {
-    return res.status(401).json({ message: 'Token tidak ditemukan' });
-  }
-
-  try {
-    // Verifikasi token menggunakan secret key dari environment
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Pastikan payload token berisi ID dan role pengguna
-    if (!decoded.id || !decoded.role) {
-      return res.status(403).json({ message: 'Token tidak valid: payload tidak lengkap' });
+    // Ambil token dari header Authorization (Bearer) atau query parameter
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+    }
+    if (!token && req.query && req.query.token) {
+        token = req.query.token;
     }
 
-    // Simpan data pengguna terverifikasi ke objek request
-    req.user = decoded;
-    next();
-  } catch (err) {
-    // Tangani error token tidak valid atau kadaluarsa
-    return res.status(403).json({ message: 'Token tidak valid' });
-  }
+    // Cek keberadaan token
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: 'Token tidak ditemukan',
+            code: 'NO_TOKEN',
+        });
+    }
+
+    try {
+        // Verifikasi token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Validasi payload token
+        if (!decoded.id || !decoded.role) {
+            return res.status(403).json({
+                success: false,
+                message: 'Token tidak valid: payload tidak lengkap',
+                code: 'INVALID_TOKEN',
+            });
+        }
+
+        // Simpan data user di request object
+        req.user = decoded;
+        next();
+    } catch (err) {
+        // Handle token expired
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                message: 'Token telah kadaluarsa',
+                code: 'TOKEN_EXPIRED',
+            });
+        }
+        // Handle invalid token
+        return res.status(403).json({
+            success: false,
+            message: 'Token tidak valid',
+            code: 'INVALID_TOKEN',
+        });
+    }
 };
 
 module.exports = authenticate;
