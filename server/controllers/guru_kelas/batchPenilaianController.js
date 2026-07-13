@@ -1,12 +1,15 @@
 /**
  * Nama File: batchPenilaianController.js
  * Fungsi: Controller batch save kategori kokurikuler (multiple grades)
+ *         Dengan auto-recompute nilai kokurikuler (Fleksibel edit meski ada nilai siswa)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 12 Juli 2026 - Hapus validasi CATEGORY_IN_USE agar fleksibel, fix transaction methods & bulk insert syntax
  */
 
 const db = require('../../config/db');
 const model = require('../../models/guru_kelas/aturPenilaianModel');
+const { recomputeNilaiKokurikulerForKelas } = require('./helpers');
 
 // Konstanta ID Aspek Mutaba'ah
 const ASPEK_MUTABAAH_ID = 5;
@@ -48,22 +51,24 @@ const getKelasId = (req) => req.infoKelasWali?.kelas_id;
 exports.saveBatchKategoriKokurikuler = async (req, res) => {
     const connection = await db.getConnection();
     try {
-        await connection.query('START TRANSACTION');
+        await connection.beginTransaction();
+        
         const { id_aspek_kokurikuler, grades } = req.body;
         const kelasId = getKelasId(req);
         const jenis_penilaian = getJenisPenilaian(req);
+        const userId = req.user.id;
 
         // Validasi input dasar
         if (!kelasId) {
-            await connection.query('ROLLBACK');
+            await connection.rollback();
             return res.status(403).json({ success: false, message: 'Anda belum ditugaskan sebagai guru kelas' });
         }
         if (!id_aspek_kokurikuler) {
-            await connection.query('ROLLBACK');
+            await connection.rollback();
             return res.status(400).json({ success: false, message: 'Aspek kokurikuler harus dipilih', code: 'MISSING_ASPEK' });
         }
         if (!grades || !Array.isArray(grades) || grades.length === 0) {
-            await connection.query('ROLLBACK');
+            await connection.rollback();
             return res.status(400).json({ success: false, message: 'Minimal harus ada 1 grade', code: 'EMPTY_GRADES' });
         }
 
@@ -79,7 +84,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
         );
 
         if (!accessCheck.allowed) {
-            await connection.query('ROLLBACK');
+            await connection.rollback();
             return res.status(403).json({
                 success: false,
                 code: 'ASPEK_LOCKED',
@@ -111,11 +116,11 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
         }
 
         // Cek tidak ada perubahan
-        const [existingGrades] = await connection.query(
+        const [existingGrades] = await connection.execute(
             `SELECT rentang_min, rentang_max, grade, deskripsi 
-        FROM kategori_grade_kokurikuler 
-        WHERE id_aspek_kokurikuler = ? AND tahun_ajaran_id = ? AND semester = ? AND kelas_id = ? AND jenis_penilaian = ? 
-        ORDER BY rentang_min DESC`,
+            FROM kategori_grade_kokurikuler 
+            WHERE id_aspek_kokurikuler = ? AND tahun_ajaran_id = ? AND semester = ? AND kelas_id = ? AND jenis_penilaian = ? 
+            ORDER BY rentang_min DESC`,
             [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, jenis_penilaian]
         );
 
@@ -139,7 +144,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             );
 
             if (isSame) {
-                await connection.query('ROLLBACK');
+                await connection.rollback();
                 return res.status(400).json({ success: false, code: 'NO_CHANGES', message: 'Tidak ada perubahan data.' });
             }
         }
@@ -158,41 +163,67 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             }
         }
 
-        // Hapus grade lama dan insert grade baru
-        await connection.query(
+        // ✅ PERBAIKAN: Hapus validasi CATEGORY_IN_USE agar fleksibel
+        // Sistem akan mengizinkan perubahan range, dan nilai siswa akan di-recompute otomatis di bawah.
+
+        // Hapus grade lama
+        await connection.execute(
             `DELETE FROM kategori_grade_kokurikuler 
-        WHERE id_aspek_kokurikuler = ? AND tahun_ajaran_id = ? AND semester = ? AND kelas_id = ? AND jenis_penilaian = ?`,
+            WHERE id_aspek_kokurikuler = ? AND tahun_ajaran_id = ? AND semester = ? AND kelas_id = ? AND jenis_penilaian = ?`,
             [id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, jenis_penilaian]
         );
 
-        const nilaiInsert = grades.map(g => [
-            taAktif.id_tahun_ajaran,
-            taAktif.semester,
-            kelasId,
-            id_aspek_kokurikuler,
-            Math.floor(parseFloat(g.min_nilai)),
-            Math.floor(parseFloat(g.max_nilai)),
-            g.grade.toUpperCase().trim(),
-            g.deskripsi.trim(),
-            0,
-            jenis_penilaian,
-        ]);
+        // ✅ PERBAIKAN: Gunakan loop execute untuk menghindari error syntax bulk insert di mysql2
+        let urutan = 1;
+        for (const g of grades) {
+            await connection.execute(
+                `INSERT INTO kategori_grade_kokurikuler 
+                (tahun_ajaran_id, semester, kelas_id, id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi, urutan, jenis_penilaian) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    taAktif.id_tahun_ajaran,
+                    taAktif.semester,
+                    kelasId,
+                    id_aspek_kokurikuler,
+                    Math.floor(parseFloat(g.min_nilai)),
+                    Math.floor(parseFloat(g.max_nilai)),
+                    g.grade.toUpperCase().trim(),
+                    g.deskripsi.trim(),
+                    urutan++,
+                    jenis_penilaian,
+                ]
+            );
+        }
 
-        await connection.query(
-            `INSERT INTO kategori_grade_kokurikuler 
-        (tahun_ajaran_id, semester, kelas_id, id_aspek_kokurikuler, rentang_min, rentang_max, grade, deskripsi, urutan, jenis_penilaian) 
-        VALUES ?`,
-            [nilaiInsert]
-        );
+        await connection.commit();
 
-        await connection.query('COMMIT');
+        // ✅ PERBAIKAN: Auto-recompute nilai kokurikuler setelah batch save
+        let warning = '';
+        try {
+            await recomputeNilaiKokurikulerForKelas(
+                id_aspek_kokurikuler,
+                kelasId,
+                userId,
+                req
+            );
+            warning = ' Nilai kokurikuler siswa telah diperbarui otomatis sesuai range baru.';
+        } catch (recalcErr) {
+            console.error('Error recompute nilai kokurikuler:', recalcErr);
+            warning = ' Peringatan: Gagal memperbarui nilai kokurikuler otomatis. Silakan cek kembali.';
+        }
+
         res.json({
             success: true,
-            message: `${grades.length} grade berhasil disimpan (${jenis_penilaian})`,
-            data: { jumlah_grade: grades.length, id_aspek_kokurikuler, jenis_penilaian },
+            message: `${grades.length} grade berhasil disimpan (${jenis_penilaian}).${warning}`,
+            data: { 
+                jumlah_grade: grades.length, 
+                id_aspek_kokurikuler, 
+                jenis_penilaian,
+                auto_recomputed: true,
+            },
         });
     } catch (error) {
-        await connection.query('ROLLBACK');
+        await connection.rollback();
         console.error('Error saveBatchKategoriKokurikuler:', error);
         res.status(400).json({
             success: false,

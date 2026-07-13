@@ -1,14 +1,15 @@
 /**
-* Nama File: atur_penilaian_client.tsx
-* Fungsi: Komponen klien untuk mengatur konfigurasi penilaian oleh guru kelas
-* UPDATE: ✅ Redesign UI - Modern, Simple, Clean dengan tema Oranye
-*         ✅ 4 Tab: Kokurikuler, Akademik, Deskripsi Rata-rata, Bobot
-*         ✅ Batch Edit Modal dengan validasi
-*         ✅ Coverage Warning untuk gap nilai
-*         ✅ Responsive & User-friendly
-*         ✅ Dropdown konsisten dengan Arsip Rapor
-*         ✅ FIX: Handle 403 NOT_ASSIGNED dari backend
-*/
+ * Nama File: atur_penilaian_client.tsx
+ * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian oleh guru kelas
+ * UPDATE: ✅ Redesign UI - Modern, Simple, Clean dengan tema Oranye
+ *         ✅ 4 Tab: Kokurikuler, Akademik, Deskripsi Rata-rata, Bobot
+ *         ✅ Batch Edit Modal dengan validasi
+ *         ✅ Coverage Warning untuk gap nilai (support array gaps)
+ *         ✅ Responsive & User-friendly
+ *         ✅ FIX: Handle 403 NOT_ASSIGNED dari backend
+ *         ✅ FIX: Support auto-recompute info dari backend
+ *         ✅ FIX: Bobot 0% diizinkan dengan validasi minimal 1 komponen > 0%
+ */
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -25,6 +26,7 @@ const ASPEK_MUTABAAH_ID = 5;
 
 // ====== HELPER ======
 const getJenisParam = (jenis: 'PTS' | 'PAS' | null): string => jenis ? `jenis=${jenis}` : '';
+
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
     try {
         const contentType = res.headers.get('content-type');
@@ -94,7 +96,7 @@ interface BobotItem {
 interface CoverageInfo {
     covered: boolean;
     gap?: string;
-    gaps?: Array<{ aspek: string; gap: string }>;
+    gaps?: Array<{ aspek: string; gap: string }> | string[];
 }
 
 interface BatchGradeItem {
@@ -109,16 +111,16 @@ interface BatchGradeItem {
 // ====== GLOBAL STYLES ======
 const GlobalStyles = () => (
     <style jsx global>{`
-@keyframes ap-fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes ap-scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-@keyframes ap-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-.ap-fadeIn { animation: ap-fadeIn 0.3s ease-out; }
-.ap-scaleIn { animation: ap-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-.ap-pulse { animation: ap-pulse 0.6s ease; }
-.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 10px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: #fff7ed; }
-`}</style>
+    @keyframes ap-fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes ap-scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    @keyframes ap-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    .ap-fadeIn { animation: ap-fadeIn 0.3s ease-out; }
+    .ap-scaleIn { animation: ap-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+    .ap-pulse { animation: ap-pulse 0.6s ease; }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 10px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: #fff7ed; }
+  `}</style>
 );
 
 // ====== NOTIF MODAL ======
@@ -163,12 +165,27 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     );
 };
 
-// ====== COVERAGE WARNING ======
+// ✅ PERBAIKAN: CoverageWarning support array gaps (string[])
 const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     if (!coverage || coverage.covered) return null;
 
-    const gaps = coverage.gaps || (coverage.gap ? [{ aspek: 'Nilai', gap: coverage.gap }] : []);
-    if (gaps.length === 0) return null;
+    let gapsList: string[] = [];
+    if (coverage.gaps) {
+        if (Array.isArray(coverage.gaps)) {
+            if (coverage.gaps.length > 0) {
+                const first = coverage.gaps[0];
+                if (typeof first === 'string') {
+                    gapsList = coverage.gaps as string[];
+                } else {
+                    gapsList = (coverage.gaps as Array<{ aspek: string; gap: string }>).map(g => `${g.aspek}: ${g.gap}`);
+                }
+            }
+        }
+    } else if (coverage.gap) {
+        gapsList = [coverage.gap];
+    }
+
+    if (gapsList.length === 0) return null;
 
     return (
         <div className="mb-4 p-4 rounded-xl flex items-start gap-3 ap-fadeIn" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
@@ -177,34 +194,33 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
             </div>
             <div className="flex-1">
                 <p className="text-sm font-bold mb-1" style={{ color: '#9a3412' }}>Range Nilai 0-100 Belum Lengkap</p>
-                {gaps.length === 1 ? (
+                {gapsList.length === 1 ? (
                     <p className="text-xs" style={{ color: '#c2410c' }}>
-                        Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <span className="px-2 py-0.5 rounded-md bg-orange-200 font-semibold">{gaps[0].gap}</span>
+                        Ada gap pada rentang <span className="px-2 py-0.5 rounded-md bg-orange-200 font-semibold">{gapsList[0]}</span>
                     </p>
                 ) : (
-                    <ul className="text-xs space-y-1 ml-4 list-disc" style={{ color: '#c2410c' }}>
-                        {gaps.map((g, i) => (
-                            <li key={i}><strong>{g.aspek}:</strong> gap pada rentang <span className="px-1.5 py-0.5 rounded bg-orange-200 font-semibold">{g.gap}</span></li>
-                        ))}
-                    </ul>
+                    <div className="text-xs" style={{ color: '#c2410c' }}>
+                        <p className="mb-2">Ada <strong>{gapsList.length} gap</strong> yang belum dibuat:</p>
+                        <ul className="space-y-1 ml-4 list-disc">
+                            {gapsList.map((gap, i) => (
+                                <li key={i}>
+                                    Rentang <span className="px-1.5 py-0.5 rounded bg-orange-200 font-semibold">{gap}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 )}
             </div>
         </div>
     );
 };
 
-// ====== STYLE CONSTANTS (UPDATED - Konsisten dengan Arsip Rapor) ======
+// ====== STYLE CONSTANTS ======
 const PAGE_BG = { background: '#faf8f5' };
 const CARD_STYLE = { border: '1px solid #fed7aa', boxShadow: '0 4px 20px rgba(234, 88, 12, 0.08)', background: '#ffffff' };
 const HEADER_GRAD = { background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%)' };
-const TH_GRAD = { background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 60%, #f97316 100%)' };
-
-// ✅ UPDATED: Konsisten dengan Arsip Rapor
 const inputCls = "w-full border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200";
-
-// ✅ UPDATED: Konsisten dengan Arsip Rapor
 const selectCls = "border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]";
-
 const btnPrimary = {
     base: "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-sm hover:shadow-md active:scale-95",
     style: { background: 'linear-gradient(135deg, #ea580c, #f97316)', boxShadow: '0 4px 12px rgba(234, 88, 12, 0.25)' } as React.CSSProperties,
@@ -279,14 +295,11 @@ export default function AturPenilaianGuruKelasClient() {
     const [bobotLoading, setBobotLoading] = useState(false);
     const initialBobotListRef = useRef<BobotItem[]>([]);
     const [isSavingBobot, setIsSavingBobot] = useState(false);
-
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmAction, setConfirmAction] = useState<'save-bobot' | 'save-batch' | 'save-batch-akademik' | 'save-batch-deskripsi' | null>(null);
-
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
-
     const [isNotAssigned, setIsNotAssigned] = useState(false);
 
     // ── Helper functions ──
@@ -325,7 +338,6 @@ export default function AturPenilaianGuruKelasClient() {
     }, [jenisPenilaianAktif, isReadOnly, readOnlyReason]);
 
     // ── Fetch Functions ──
-    // ✅ PERBAIKAN: Tambahkan pengecekan 403 NOT_ASSIGNED
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -338,7 +350,6 @@ export default function AturPenilaianGuruKelasClient() {
                 }
 
                 const headers = { Authorization: `Bearer ${token}` };
-
                 const [taRes, komponenRes, mapelRes, aspekRes] = await Promise.all([
                     fetch(`${API}/tahun-ajaran/aktif`, { headers }),
                     fetch(`${API}/atur-penilaian/komponen`, { headers }),
@@ -346,7 +357,6 @@ export default function AturPenilaianGuruKelasClient() {
                     fetch(`${API}/atur-penilaian/aspek-kokurikuler`, { headers }),
                 ]);
 
-                // ✅ PERBAIKAN: Cek jika ada response 403 NOT_ASSIGNED
                 const responses = [
                     { res: taRes, name: 'tahun-ajaran' },
                     { res: komponenRes, name: 'komponen' },
@@ -358,7 +368,7 @@ export default function AturPenilaianGuruKelasClient() {
                     if (res.status === 403) {
                         const errData = await res.json().catch(() => ({}));
                         if (errData.code === 'NOT_ASSIGNED') {
-                            console.log(`🔒 [atur-penilaian] Akses ditolak dari endpoint /${name}`);
+                            console.log(` [atur-penilaian] Akses ditolak dari endpoint /${name}`);
                             setIsNotAssigned(true);
                             setLoading(false);
                             return;
@@ -381,26 +391,22 @@ export default function AturPenilaianGuruKelasClient() {
                 const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
                 setJenisPenilaianAktif(jenisAktif);
 
-                if (status_pts === 'aktif' || status_pas === 'aktif') { 
-                    setIsReadOnly(false); 
-                    setReadOnlyReason(null); 
-                } else if (status_pts === 'selesai' || status_pas === 'selesai') { 
-                    setIsReadOnly(true); 
-                    setReadOnlyReason('locked'); 
-                } else { 
-                    setIsReadOnly(true); 
-                    setReadOnlyReason('not_open'); 
+                if (status_pts === 'aktif' || status_pas === 'aktif') {
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else if (status_pts === 'selesai' || status_pas === 'selesai') {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('locked');
+                } else {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('not_open');
                 }
 
                 setKomponenList(komponenData.data || []);
-
                 const mapelWajib = mapelData.data?.wajib || mapelData.wajib || [];
                 const mapelPilihan = mapelData.data?.pilihan || mapelData.pilihan || [];
                 setMapelList([...mapelWajib, ...mapelPilihan]);
-
                 setAspekList(aspekData.data || []);
-
-                // ✅ Reset isNotAssigned jika fetch berhasil
                 setIsNotAssigned(false);
             } catch (err: any) {
                 showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
@@ -412,8 +418,6 @@ export default function AturPenilaianGuruKelasClient() {
         fetchData();
     }, [showModal]);
 
-    // Fetch kategori
-    // ✅ PERBAIKAN: Handle NOT_ASSIGNED di fetchKategori juga
     useEffect(() => {
         if (loading || activeTab === 'bobot' || isNotAssigned) return;
 
@@ -437,8 +441,7 @@ export default function AturPenilaianGuruKelasClient() {
                 if (!endpoint) { setKategoriList([]); setCoverageInfo(null); setKategoriLoading(false); return; }
 
                 const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
-                
-                // ✅ PERBAIKAN: Cek NOT_ASSIGNED di fetchKategori
+
                 if (res.status === 403) {
                     const errData = await res.json().catch(() => ({}));
                     if (errData.code === 'NOT_ASSIGNED') {
@@ -447,21 +450,28 @@ export default function AturPenilaianGuruKelasClient() {
                         return;
                     }
                 }
-                
+
                 if (!res.ok) throw new Error('Gagal memuat kategori');
 
                 const data = await res.json();
-
                 const formattedData = activeTab === 'deskripsi-rata-rata'
-                    ? (data.data || []).map((item: any) => ({ ...item, min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)), max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)) }))
-                    : (data.data || []).map((item: any) => ({ ...item, min_nilai: Math.floor(parseFloat(item.min_nilai)), max_nilai: Math.floor(parseFloat(item.max_nilai)) }));
+                    ? (data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+                        max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2))
+                    }))
+                    : (data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                        max_nilai: Math.floor(parseFloat(item.max_nilai))
+                    }));
 
-                if (activeTab === 'deskripsi-rata-rata') { 
-                    setDeskripsiRataRataList(formattedData); 
-                    setDeskripsiRataRataCoverage(data.coverage || null); 
-                } else { 
-                    setKategoriList(formattedData); 
-                    setCoverageInfo(data.coverage || null); 
+                if (activeTab === 'deskripsi-rata-rata') {
+                    setDeskripsiRataRataList(formattedData);
+                    setDeskripsiRataRataCoverage(data.coverage || null);
+                } else {
+                    setKategoriList(formattedData);
+                    setCoverageInfo(data.coverage || null);
                 }
             } catch (err: any) {
                 if (!err.message?.includes('belum ditugaskan')) {
@@ -475,13 +485,11 @@ export default function AturPenilaianGuruKelasClient() {
         fetchKategori();
     }, [activeTab, selectedMapelAkademik, jenisPenilaianAktif, loading, showModal, isNotAssigned]);
 
-    // Fetch bobot
-    // ✅ PERBAIKAN: Handle NOT_ASSIGNED di fetchBobot juga
     useEffect(() => {
-        if (selectedMapelId === null || activeTab !== 'bobot' || isNotAssigned) { 
-            setBobotList([]); 
-            initialBobotListRef.current = []; 
-            return; 
+        if (selectedMapelId === null || activeTab !== 'bobot' || isNotAssigned) {
+            setBobotList([]);
+            initialBobotListRef.current = [];
+            return;
         }
 
         const fetchBobot = async () => {
@@ -489,11 +497,10 @@ export default function AturPenilaianGuruKelasClient() {
             try {
                 const token = localStorage.getItem('token');
                 const jenisParam = getJenisParam(jenisPenilaianAktif);
-                const res = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`, { 
-                    headers: { Authorization: `Bearer ${token}` } 
+                const res = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`, {
+                    headers: { Authorization: `Bearer ${token}` }
                 });
-                
-                // ✅ PERBAIKAN: Cek NOT_ASSIGNED di fetchBobot
+
                 if (res.status === 403) {
                     const errData = await res.json().catch(() => ({}));
                     if (errData.code === 'NOT_ASSIGNED') {
@@ -502,12 +509,11 @@ export default function AturPenilaianGuruKelasClient() {
                         return;
                     }
                 }
-                
+
                 if (!res.ok) throw new Error('Gagal mengambil bobot');
 
                 const result = await res.json();
                 const bobotData: any[] = result.data || [];
-
                 const bobotMap = new Map<number, number>();
                 bobotData.forEach((b: any) => {
                     const numBobot = typeof b.bobot === 'number' ? b.bobot : parseFloat(b.bobot);
@@ -527,7 +533,6 @@ export default function AturPenilaianGuruKelasClient() {
         fetchBobot();
     }, [selectedMapelId, komponenList, activeTab, showModal, jenisPenilaianAktif, isNotAssigned]);
 
-    // ── Tab change ──
     const handleTabChange = (tab: typeof activeTab) => {
         if (tab !== 'akademik') { setSelectedMapelAkademik(null); setCoverageInfo(null); }
         if (tab !== 'bobot') { setSelectedMapelId(null); }
@@ -546,15 +551,25 @@ export default function AturPenilaianGuruKelasClient() {
                 { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                 { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
             ];
-            setBatchGrades(defaults); setOriginalBatchGrades([]);
+            setBatchGrades(defaults);
+            setOriginalBatchGrades([]);
         } else {
             const existing = kategoriList
                 .filter(k => (k as KategoriKokurikuler).id_aspek_kokurikuler === aspekId)
-                .map(k => ({ id: k.id, grade: (k as KategoriKokurikuler).grade, min_nilai: Math.floor(k.min_nilai), max_nilai: Math.floor(k.max_nilai), deskripsi: k.deskripsi, isNew: false }))
+                .map(k => ({
+                    id: k.id,
+                    grade: (k as KategoriKokurikuler).grade,
+                    min_nilai: Math.floor(k.min_nilai),
+                    max_nilai: Math.floor(k.max_nilai),
+                    deskripsi: k.deskripsi,
+                    isNew: false
+                }))
                 .sort((a, b) => b.min_nilai - a.min_nilai);
 
-            if (existing.length > 0) { setBatchGrades(existing); setOriginalBatchGrades([...existing]); }
-            else {
+            if (existing.length > 0) {
+                setBatchGrades(existing);
+                setOriginalBatchGrades([...existing]);
+            } else {
                 const defaults = [
                     { grade: 'A', min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                     { grade: 'B', min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -562,7 +577,8 @@ export default function AturPenilaianGuruKelasClient() {
                     { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                     { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
                 ];
-                setBatchGrades(defaults); setOriginalBatchGrades([]);
+                setBatchGrades(defaults);
+                setOriginalBatchGrades([]);
             }
         }
     };
@@ -577,12 +593,19 @@ export default function AturPenilaianGuruKelasClient() {
         setShowBatchEdit(true);
     };
 
-    const closeBatchEdit = () => { setBatchEditClosing(true); setTimeout(() => { setShowBatchEdit(false); setBatchEditClosing(false); setBatchEditAspekId(null); setBatchGrades([]); setOriginalBatchGrades([]); }, 200); };
+    const closeBatchEdit = () => {
+        setBatchEditClosing(true);
+        setTimeout(() => {
+            setShowBatchEdit(false);
+            setBatchEditClosing(false);
+            setBatchEditAspekId(null);
+            setBatchGrades([]);
+            setOriginalBatchGrades([]);
+        }, 200);
+    };
 
     const addBatchGradeRow = () => setBatchGrades(prev => [...prev, { grade: '', min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
-
     const removeBatchGradeRow = (index: number) => setBatchGrades(prev => prev.filter((_, i) => i !== index));
-
     const updateBatchGrade = (index: number, field: keyof BatchGradeItem, value: any) => setBatchGrades(prev => prev.map((g, i) => i === index ? { ...g, [field]: value } : g));
 
     const validateBatchGrades = (): { valid: boolean; errors: string[] } => {
@@ -593,13 +616,11 @@ export default function AturPenilaianGuruKelasClient() {
         batchGrades.forEach((g, i) => {
             if (!g.grade || g.grade.trim().length === 0) errors.push(`Grade baris ${i + 1} tidak boleh kosong.`);
             if (g.grade && g.grade.length !== 1) errors.push(`Grade baris ${i + 1} harus tepat 1 karakter.`);
-
             if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) errors.push(`Grade ${g.grade || i + 1}: Nilai min/max harus angka.`);
             else {
                 if (g.min_nilai < 0 || g.max_nilai > 100) errors.push(`Grade ${g.grade}: Nilai harus antara 0-100.`);
                 if (g.min_nilai >= g.max_nilai) errors.push(`Grade ${g.grade}: Min (${g.min_nilai}) harus < Max (${g.max_nilai}).`);
             }
-
             if (!g.deskripsi || g.deskripsi.trim().length < 3) errors.push(`Grade ${g.grade || i + 1}: Deskripsi minimal 3 karakter.`);
         });
 
@@ -608,8 +629,14 @@ export default function AturPenilaianGuruKelasClient() {
         if (duplicates.length > 0) errors.push(`Grade duplikat: ${[...new Set(duplicates)].join(', ')}`);
 
         const sorted = [...batchGrades].sort((a, b) => a.min_nilai - b.min_nilai);
-        let covered = new Set<number>(); let hasOverlap = false;
-        sorted.forEach(g => { for (let i = g.min_nilai; i <= g.max_nilai; i++) { if (covered.has(i)) hasOverlap = true; covered.add(i); } });
+        let covered = new Set<number>();
+        let hasOverlap = false;
+        sorted.forEach(g => {
+            for (let i = g.min_nilai; i <= g.max_nilai; i++) {
+                if (covered.has(i)) hasOverlap = true;
+                covered.add(i);
+            }
+        });
         if (hasOverlap) errors.push('Ada overlap pada range nilai.');
 
         return { valid: errors.length === 0, errors };
@@ -644,25 +671,41 @@ export default function AturPenilaianGuruKelasClient() {
         try {
             const token = localStorage.getItem('token');
             const payload = {
-                id_aspek_kokurikuler: batchEditAspekId, jenis: jenisPenilaianAktif,
-                grades: batchGrades.map(g => ({ id: g.id, grade: g.grade?.toUpperCase(), min_nilai: Math.floor(g.min_nilai), max_nilai: Math.floor(g.max_nilai), deskripsi: g.deskripsi.trim(), isNew: g.isNew }))
+                id_aspek_kokurikuler: batchEditAspekId,
+                jenis: jenisPenilaianAktif,
+                grades: batchGrades.map(g => ({
+                    id: g.id,
+                    grade: g.grade?.toUpperCase(),
+                    min_nilai: Math.floor(g.min_nilai),
+                    max_nilai: Math.floor(g.max_nilai),
+                    deskripsi: g.deskripsi.trim(),
+                    isNew: g.isNew
+                }))
             };
 
             const res = await fetch(`${API}/atur-penilaian/kategori-kokurikuler-batch`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload)
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(payload)
             });
 
             const result = await res.json();
 
             if (res.ok) {
-                setShowConfirmModal(false); closeBatchEdit();
-                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchGrades.length} grade berhasil disimpan.` });
+                setShowConfirmModal(false);
+                closeBatchEdit();
+                const successMessage = result.message || `${batchGrades.length} grade berhasil disimpan. Nilai siswa telah disesuaikan otomatis.`;
+                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: successMessage });
 
                 const jenisParam = getJenisParam(jenisPenilaianAktif);
                 const reloadRes = await fetch(`${API}/atur-penilaian/kategori-kokurikuler?${jenisParam}`, { headers: { Authorization: `Bearer ${token}` } });
                 if (reloadRes.ok) {
                     const data = await reloadRes.json();
-                    setKategoriList((data.data || []).map((item: any) => ({ ...item, min_nilai: Math.floor(parseFloat(item.min_nilai)), max_nilai: Math.floor(parseFloat(item.max_nilai)) })));
+                    setKategoriList((data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                        max_nilai: Math.floor(parseFloat(item.max_nilai))
+                    })));
                     setCoverageInfo(data.coverage || null);
                 }
             } else {
@@ -672,15 +715,26 @@ export default function AturPenilaianGuruKelasClient() {
         } catch (err: any) {
             setShowConfirmModal(false);
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
-        } finally { setIsSavingBatch(false); }
+        } finally {
+            setIsSavingBatch(false);
+        }
     };
 
     // ── Batch Edit - Akademik ──
     const loadBatchAkademik = () => {
-        const existing = kategoriList.map(k => ({ id: k.id, min_nilai: Math.floor(k.min_nilai), max_nilai: Math.floor(k.max_nilai), deskripsi: k.deskripsi, isNew: false })).sort((a, b) => b.min_nilai - a.min_nilai);
+        const existing = kategoriList.map(k => ({
+            id: k.id,
+            min_nilai: Math.floor(k.min_nilai),
+            max_nilai: Math.floor(k.max_nilai),
+            deskripsi: k.deskripsi,
+            isNew: false
+        })).sort((a, b) => b.min_nilai - a.min_nilai);
 
-        if (existing.length > 0) { setBatchAkademik(existing); setOriginalBatchAkademik([...existing]); }
-        else {
+        if (existing.length > 0) {
+            setBatchAkademik(existing);
+            // ✅ PERBAIKAN: Gunakan deep copy dengan JSON parse/stringify
+            setOriginalBatchAkademik(JSON.parse(JSON.stringify(existing)));
+        } else {
             const defaults = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                 { min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -688,22 +742,36 @@ export default function AturPenilaianGuruKelasClient() {
                 { min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                 { min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
             ];
-            setBatchAkademik(defaults); setOriginalBatchAkademik([]);
+            setBatchAkademik(defaults);
+            setOriginalBatchAkademik([]);
         }
     };
 
     const openBatchEditAkademik = () => {
-        if (!canEditAkademik()) { showModal({ type: 'warning', title: 'Kategori Terkunci', message: 'Kategori akademik tidak dapat dikelola saat ini.' }); return; }
-        if (!selectedMapelAkademik) { showModal({ type: 'warning', title: 'Pilih Mapel', message: 'Silakan pilih mata pelajaran terlebih dahulu.' }); return; }
-        loadBatchAkademik(); setShowBatchEditAkademik(true);
+        if (!canEditAkademik()) {
+            showModal({ type: 'warning', title: 'Kategori Terkunci', message: 'Kategori akademik tidak dapat dikelola saat ini.' });
+            return;
+        }
+        if (!selectedMapelAkademik) {
+            showModal({ type: 'warning', title: 'Pilih Mapel', message: 'Silakan pilih mata pelajaran terlebih dahulu.' });
+            return;
+        }
+        loadBatchAkademik();
+        setShowBatchEditAkademik(true);
     };
 
-    const closeBatchEditAkademik = () => { setBatchEditAkademikClosing(true); setTimeout(() => { setShowBatchEditAkademik(false); setBatchEditAkademikClosing(false); setBatchAkademik([]); setOriginalBatchAkademik([]); }, 200); };
+    const closeBatchEditAkademik = () => {
+        setBatchEditAkademikClosing(true);
+        setTimeout(() => {
+            setShowBatchEditAkademik(false);
+            setBatchEditAkademikClosing(false);
+            setBatchAkademik([]);
+            setOriginalBatchAkademik([]);
+        }, 200);
+    };
 
     const addBatchAkademikRow = () => setBatchAkademik(prev => [...prev, { min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
-
     const removeBatchAkademikRow = (index: number) => setBatchAkademik(prev => prev.filter((_, i) => i !== index));
-
     const updateBatchAkademik = (index: number, field: keyof BatchGradeItem, value: any) => setBatchAkademik(prev => prev.map((g, i) => i === index ? { ...g, [field]: value } : g));
 
     const validateBatchAkademik = (): { valid: boolean; errors: string[] } => {
@@ -721,8 +789,14 @@ export default function AturPenilaianGuruKelasClient() {
         });
 
         const sorted = [...batchAkademik].sort((a, b) => a.min_nilai - b.min_nilai);
-        let covered = new Set<number>(); let hasOverlap = false;
-        sorted.forEach(g => { for (let i = g.min_nilai; i <= g.max_nilai; i++) { if (covered.has(i)) hasOverlap = true; covered.add(i); } });
+        let covered = new Set<number>();
+        let hasOverlap = false;
+        sorted.forEach(g => {
+            for (let i = g.min_nilai; i <= g.max_nilai; i++) {
+                if (covered.has(i)) hasOverlap = true;
+                covered.add(i);
+            }
+        });
         if (hasOverlap) errors.push('Ada overlap pada range nilai.');
 
         return { valid: errors.length === 0, errors };
@@ -732,14 +806,27 @@ export default function AturPenilaianGuruKelasClient() {
         if (originalBatchAkademik.length === 0) return true;
         if (batchAkademik.length !== originalBatchAkademik.length) return true;
 
-        const sc = [...batchAkademik].sort((a, b) => a.min_nilai - b.min_nilai);
-        const so = [...originalBatchAkademik].sort((a, b) => a.min_nilai - b.min_nilai);
+        // Buat map untuk comparison berdasarkan ID
+        const originalMap = new Map(originalBatchAkademik.map(item => [item.id, item]));
 
-        for (let i = 0; i < sc.length; i++) {
-            if (Number(sc[i].min_nilai) !== Number(so[i].min_nilai)) return true;
-            if (Number(sc[i].max_nilai) !== Number(so[i].max_nilai)) return true;
-            if (sc[i].deskripsi.trim() !== so[i].deskripsi.trim()) return true;
+        for (const currentItem of batchAkademik) {
+            if (!currentItem.id) {
+                // Ini item baru
+                return true;
+            }
+
+            const originalItem = originalMap.get(currentItem.id);
+            if (!originalItem) {
+                // Item ini tidak ada di original
+                return true;
+            }
+
+            // Bandingkan field-fieldnya
+            if (Math.floor(currentItem.min_nilai) !== Math.floor(originalItem.min_nilai)) return true;
+            if (Math.floor(currentItem.max_nilai) !== Math.floor(originalItem.max_nilai)) return true;
+            if (currentItem.deskripsi.trim() !== originalItem.deskripsi.trim()) return true;
         }
+
         return false;
     };
 
@@ -747,47 +834,125 @@ export default function AturPenilaianGuruKelasClient() {
         const v = validateBatchAkademik();
         if (!v.valid) { showModal({ type: 'warning', title: 'Validasi Gagal', message: v.errors.join('\n') }); return; }
         if (!hasBatchAkademikChanges()) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Data yang Anda masukkan sama dengan data yang sudah ada.' }); return; }
-        setConfirmAction('save-batch-akademik'); setShowConfirmModal(true);
+        setConfirmAction('save-batch-akademik');
+        setShowConfirmModal(true);
     };
 
+    // ✅ PERBAIKAN: executeSaveBatchAkademik dengan UPDATE strategy
     const executeSaveBatchAkademik = async () => {
         setIsSavingBatchAkademik(true);
         try {
             const token = localStorage.getItem('token');
+            // ✅ PERBAIKAN: Gunakan UPDATE untuk kategori yang sudah ada
+            // dan INSERT untuk yang baru, hindari DELETE
+            const promises = [];
 
-            const deletePromises = originalBatchAkademik.filter(g => g.id).map(g => fetch(`${API}/atur-penilaian/kategori-akademik/${g.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }));
-            await Promise.all(deletePromises);
+            // Update existing categories
+            originalBatchAkademik.forEach((orig) => {
+                const updated = batchAkademik.find(b => b.id === orig.id);
+                if (updated && orig.id) {
+                    // UPDATE kategori yang sudah ada
+                    promises.push(
+                        fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                min_nilai: Math.floor(updated.min_nilai),
+                                max_nilai: Math.floor(updated.max_nilai),
+                                deskripsi: updated.deskripsi.trim()
+                            })
+                        })
+                    );
+                }
+            });
 
-            const insertPromises = batchAkademik.map(g => fetch(`${API}/atur-penilaian/kategori-akademik`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ min_nilai: Math.floor(g.min_nilai), max_nilai: Math.floor(g.max_nilai), deskripsi: g.deskripsi.trim(), urutan: 0, mapel_id: selectedMapelAkademik, jenis: jenisPenilaianAktif })
-            }));
+            // Insert new categories (yang tidak punya id)
+            batchAkademik.filter(b => !b.id).forEach(newCat => {
+                promises.push(
+                    fetch(`${API}/atur-penilaian/kategori-akademik`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            min_nilai: Math.floor(newCat.min_nilai),
+                            max_nilai: Math.floor(newCat.max_nilai),
+                            deskripsi: newCat.deskripsi.trim(),
+                            urutan: 0,
+                            mapel_id: selectedMapelAkademik,
+                            jenis: jenisPenilaianAktif
+                        })
+                    })
+                );
+            });
 
-            const results = await Promise.all(insertPromises);
+            const results = await Promise.all(promises);
             const allSuccess = results.every(r => r.ok);
 
             if (allSuccess) {
-                setShowConfirmModal(false); closeBatchEditAkademik();
-                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchAkademik.length} kategori berhasil disimpan.` });
+                setShowConfirmModal(false);
+                closeBatchEditAkademik();
+                showModal({
+                    type: 'success',
+                    title: 'Berhasil Disimpan!',
+                    message: `${batchAkademik.length} kategori berhasil disimpan. Nilai rapor siswa telah dihitung ulang otomatis.`
+                });
 
+                // Refresh data
                 const jenisParam = getJenisParam(jenisPenilaianAktif);
-                const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, { headers: { Authorization: `Bearer ${token}` } });
+                const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
                 if (reloadRes.ok) {
                     const data = await reloadRes.json();
-                    setKategoriList((data.data || []).map((item: any) => ({ ...item, min_nilai: Math.floor(parseFloat(item.min_nilai)), max_nilai: Math.floor(parseFloat(item.max_nilai)) })));
+                    setKategoriList((data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                        max_nilai: Math.floor(parseFloat(item.max_nilai))
+                    })));
                     setCoverageInfo(data.coverage || null);
                 }
-            } else { setShowConfirmModal(false); showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' }); }
-        } catch (err: any) { setShowConfirmModal(false); showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message }); }
-        finally { setIsSavingBatchAkademik(false); }
+            } else {
+                setShowConfirmModal(false);
+                // ✅ PERBAIKAN: Baca error detail dari backend
+                const failedResult = results.find(r => !r.ok);
+                if (failedResult) {
+                    const errData = await failedResult.json().catch(() => ({}));
+                    showModal({
+                        type: 'error',
+                        title: 'Gagal Menyimpan',
+                        message: errData.message || 'Beberapa kategori gagal disimpan.'
+                    });
+                } else {
+                    showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
+                }
+            }
+        } catch (err: any) {
+            setShowConfirmModal(false);
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
+        } finally {
+            setIsSavingBatchAkademik(false);
+        }
     };
 
     // ── Batch Edit - Deskripsi Rata-rata ──
     const loadBatchDeskripsi = () => {
-        const existing = deskripsiRataRataList.map(k => ({ id: k.id, min_nilai: parseFloat(k.min_nilai), max_nilai: parseFloat(k.max_nilai), deskripsi: k.deskripsi, isNew: false })).sort((a, b) => b.min_nilai - a.min_nilai);
+        const existing = deskripsiRataRataList.map(k => ({
+            id: k.id,
+            min_nilai: parseFloat(k.min_nilai),
+            max_nilai: parseFloat(k.max_nilai),
+            deskripsi: k.deskripsi,
+            isNew: false
+        })).sort((a, b) => b.min_nilai - a.min_nilai);
 
-        if (existing.length > 0) { setBatchDeskripsi(existing); setOriginalBatchDeskripsi([...existing]); }
-        else {
+        if (existing.length > 0) {
+            setBatchDeskripsi(existing);
+            setOriginalBatchDeskripsi([...existing]);
+        } else {
             const defaults = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                 { min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -795,21 +960,32 @@ export default function AturPenilaianGuruKelasClient() {
                 { min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                 { min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
             ];
-            setBatchDeskripsi(defaults); setOriginalBatchDeskripsi([]);
+            setBatchDeskripsi(defaults);
+            setOriginalBatchDeskripsi([]);
         }
     };
 
     const openBatchEditDeskripsi = () => {
-        if (!canEditDeskripsiRataRata()) { showModal({ type: 'warning', title: 'Deskripsi Terkunci', message: getDeskripsiRataRataLockReason() + '\nDeskripsi rata-rata hanya dapat diatur saat periode PTS aktif.' }); return; }
-        loadBatchDeskripsi(); setShowBatchEditDeskripsi(true);
+        if (!canEditDeskripsiRataRata()) {
+            showModal({ type: 'warning', title: 'Deskripsi Terkunci', message: getDeskripsiRataRataLockReason() + '\nDeskripsi rata-rata hanya dapat diatur saat periode PTS aktif.' });
+            return;
+        }
+        loadBatchDeskripsi();
+        setShowBatchEditDeskripsi(true);
     };
 
-    const closeBatchEditDeskripsi = () => { setBatchEditDeskripsiClosing(true); setTimeout(() => { setShowBatchEditDeskripsi(false); setBatchEditDeskripsiClosing(false); setBatchDeskripsi([]); setOriginalBatchDeskripsi([]); }, 200); };
+    const closeBatchEditDeskripsi = () => {
+        setBatchEditDeskripsiClosing(true);
+        setTimeout(() => {
+            setShowBatchEditDeskripsi(false);
+            setBatchEditDeskripsiClosing(false);
+            setBatchDeskripsi([]);
+            setOriginalBatchDeskripsi([]);
+        }, 200);
+    };
 
     const addBatchDeskripsiRow = () => setBatchDeskripsi(prev => [...prev, { min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
-
     const removeBatchDeskripsiRow = (index: number) => setBatchDeskripsi(prev => prev.filter((_, i) => i !== index));
-
     const updateBatchDeskripsi = (index: number, field: keyof BatchGradeItem, value: any) => setBatchDeskripsi(prev => prev.map((g, i) => i === index ? { ...g, [field]: value } : g));
 
     const validateBatchDeskripsi = (): { valid: boolean; errors: string[] } => {
@@ -828,7 +1004,12 @@ export default function AturPenilaianGuruKelasClient() {
 
         const sorted = [...batchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
         let hasOverlap = false;
-        for (let i = 0; i < sorted.length - 1; i++) { if (sorted[i].max_nilai >= sorted[i + 1].min_nilai) { hasOverlap = true; break; } }
+        for (let i = 0; i < sorted.length - 1; i++) {
+            if (sorted[i].max_nilai >= sorted[i + 1].min_nilai) {
+                hasOverlap = true;
+                break;
+            }
+        }
         if (hasOverlap) errors.push('Ada overlap pada range nilai.');
 
         return { valid: errors.length === 0, errors };
@@ -842,8 +1023,13 @@ export default function AturPenilaianGuruKelasClient() {
         const so = [...originalBatchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
 
         for (let i = 0; i < sc.length; i++) {
-            if (Number(sc[i].min_nilai) !== Number(so[i].min_nilai)) return true;
-            if (Number(sc[i].max_nilai) !== Number(so[i].max_nilai)) return true;
+            const currMin = parseFloat(sc[i].min_nilai.toFixed(2));
+            const currMax = parseFloat(sc[i].max_nilai.toFixed(2));
+            const origMin = parseFloat(so[i].min_nilai.toFixed(2));
+            const origMax = parseFloat(so[i].max_nilai.toFixed(2));
+
+            if (currMin !== origMin) return true;
+            if (currMax !== origMax) return true;
             if (sc[i].deskripsi.trim() !== so[i].deskripsi.trim()) return true;
         }
         return false;
@@ -853,7 +1039,8 @@ export default function AturPenilaianGuruKelasClient() {
         const v = validateBatchDeskripsi();
         if (!v.valid) { showModal({ type: 'warning', title: 'Validasi Gagal', message: v.errors.join('\n') }); return; }
         if (!hasBatchDeskripsiChanges()) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Data yang Anda masukkan sama dengan data yang sudah ada.' }); return; }
-        setConfirmAction('save-batch-deskripsi'); setShowConfirmModal(true);
+        setConfirmAction('save-batch-deskripsi');
+        setShowConfirmModal(true);
     };
 
     const executeSaveBatchDeskripsi = async () => {
@@ -861,30 +1048,60 @@ export default function AturPenilaianGuruKelasClient() {
         try {
             const token = localStorage.getItem('token');
 
-            const deletePromises = originalBatchDeskripsi.filter(g => g.id).map(g => fetch(`${API}/atur-penilaian/deskripsi-rata-rata/${g.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }));
+            // Delete all existing
+            const deletePromises = originalBatchDeskripsi.filter(g => g.id).map(g =>
+                fetch(`${API}/atur-penilaian/deskripsi-rata-rata/${g.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            );
             await Promise.all(deletePromises);
 
-            const insertPromises = batchDeskripsi.map(g => fetch(`${API}/atur-penilaian/deskripsi-rata-rata`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ min_nilai: parseFloat(g.min_nilai.toFixed(2)), max_nilai: parseFloat(g.max_nilai.toFixed(2)), deskripsi: g.deskripsi.trim() })
-            }));
+            // Insert all new
+            const insertPromises = batchDeskripsi.map(g =>
+                fetch(`${API}/atur-penilaian/deskripsi-rata-rata`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                        min_nilai: parseFloat(g.min_nilai.toFixed(2)),
+                        max_nilai: parseFloat(g.max_nilai.toFixed(2)),
+                        deskripsi: g.deskripsi.trim()
+                    })
+                })
+            );
 
             const results = await Promise.all(insertPromises);
             const allSuccess = results.every(r => r.ok);
 
             if (allSuccess) {
-                setShowConfirmModal(false); closeBatchEditDeskripsi();
-                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchDeskripsi.length} kategori berhasil disimpan.` });
+                setShowConfirmModal(false);
+                closeBatchEditDeskripsi();
+                showModal({
+                    type: 'success',
+                    title: 'Berhasil Disimpan!',
+                    message: `${batchDeskripsi.length} kategori berhasil disimpan. Deskripsi rata-rata siswa telah diperbarui otomatis.`
+                });
 
                 const reloadRes = await fetch(`${API}/atur-penilaian/deskripsi-rata-rata`, { headers: { Authorization: `Bearer ${token}` } });
                 if (reloadRes.ok) {
                     const data = await reloadRes.json();
-                    setDeskripsiRataRataList((data.data || []).map((item: any) => ({ ...item, min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)), max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)) })));
+                    setDeskripsiRataRataList((data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+                        max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2))
+                    })));
                     setDeskripsiRataRataCoverage(data.coverage || null);
                 }
-            } else { setShowConfirmModal(false); showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' }); }
-        } catch (err: any) { setShowConfirmModal(false); showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message }); }
-        finally { setIsSavingBatchDeskripsi(false); }
+            } else {
+                setShowConfirmModal(false);
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
+            }
+        } catch (err: any) {
+            setShowConfirmModal(false);
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
+        } finally {
+            setIsSavingBatchDeskripsi(false);
+        }
     };
 
     // ── Bobot handlers ──
@@ -907,19 +1124,49 @@ export default function AturPenilaianGuruKelasClient() {
             return initial && Math.abs(b.bobot - initial.bobot) < 0.01;
         });
 
-        if (isUnchanged) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' }); return false; }
+        if (isUnchanged) {
+            showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+            return false;
+        }
 
-        if (bobotList.some(b => b.bobot < 0)) { showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' }); return false; }
+        if (bobotList.some(b => b.bobot < 0)) {
+            showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' });
+            return false;
+        }
+
+        const hasNonZeroBobot = bobotList.some(b => b.bobot > 0);
+        if (!hasNonZeroBobot) {
+            showModal({
+                type: 'warning',
+                title: 'Bobot Tidak Valid',
+                message: 'Minimal harus ada 1 komponen dengan bobot > 0%.'
+            });
+            return false;
+        }
 
         const total = bobotList.reduce((sum, b) => sum + b.bobot, 0);
-        if (Math.abs(total - 100) > 0.01) { showModal({ type: 'warning', title: 'Total Bobot Salah', message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%` }); return false; }
+        if (Math.abs(total - 100) > 0.01) {
+            showModal({
+                type: 'warning',
+                title: 'Total Bobot Salah',
+                message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%`
+            });
+            return false;
+        }
 
-        if (isPTSActive) { showModal({ type: 'warning', title: 'Periode PTS Aktif', message: 'Bobot tidak dapat diubah saat periode PTS aktif.' }); return false; }
+        if (isPTSActive) {
+            showModal({ type: 'warning', title: 'Periode PTS Aktif', message: 'Bobot tidak dapat diubah saat periode PTS aktif.' });
+            return false;
+        }
 
         return true;
     };
 
-    const openConfirmSaveBobot = () => { if (!validateBobot()) return; setConfirmAction('save-bobot'); setShowConfirmModal(true); };
+    const openConfirmSaveBobot = () => {
+        if (!validateBobot()) return;
+        setConfirmAction('save-bobot');
+        setShowConfirmModal(true);
+    };
 
     const executeSaveBobot = async () => {
         if (!selectedMapelId) return;
@@ -930,18 +1177,34 @@ export default function AturPenilaianGuruKelasClient() {
             const jenisParam = getJenisParam(jenisPenilaianAktif);
 
             const res = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ bobot: bobotList, jenis: jenisPenilaianAktif })
             });
 
             const result = await res.json();
 
             if (res.ok) {
-                showModal({ type: 'success', title: 'Bobot Disimpan!', message: result.message || 'Bobot penilaian berhasil disimpan.' });
+                const successMessage = result.message || 'Bobot penilaian berhasil disimpan. Nilai rapor siswa telah dihitung ulang otomatis.';
+                showModal({ type: 'success', title: 'Bobot Disimpan!', message: successMessage });
                 initialBobotListRef.current = JSON.parse(JSON.stringify(bobotList));
-            } else { showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Gagal menyimpan bobot.' }); }
-        } catch (err) { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan bobot.' }); }
-        finally { setIsSavingBobot(false); setShowConfirmModal(false); }
+            } else {
+                if (result.code === 'BOBOT_NOT_100') {
+                    showModal({
+                        type: 'error',
+                        title: 'Total Bobot Salah',
+                        message: result.message || 'Total bobot harus tepat 100%.'
+                    });
+                } else {
+                    showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Gagal menyimpan bobot.' });
+                }
+            }
+        } catch (err) {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan bobot.' });
+        } finally {
+            setIsSavingBobot(false);
+            setShowConfirmModal(false);
+        }
     };
 
     const totalBobot = bobotList.reduce((sum, b) => {
@@ -971,7 +1234,6 @@ export default function AturPenilaianGuruKelasClient() {
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ap-scaleIn">
@@ -1133,7 +1395,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                         {isEditable ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
                                                     </BtnEdit>
                                                 </div>
-
                                                 {grades.length > 0 ? (
                                                     <div className="overflow-x-auto scrollbar-thin">
                                                         <table className="w-full text-sm">
@@ -1192,7 +1453,6 @@ export default function AturPenilaianGuruKelasClient() {
                             {selectedMapelAkademik ? (
                                 <>
                                     <CoverageWarning coverage={coverageInfo} />
-
                                     {kategoriLoading ? (
                                         <div className="py-16 text-center">
                                             <div className="w-10 h-10 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />
@@ -1216,7 +1476,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                     {canEditAkademik() ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
                                                 </BtnEdit>
                                             </div>
-
                                             {(kategoriList as KategoriAkademik[]).length > 0 ? (
                                                 <div className="overflow-x-auto scrollbar-thin">
                                                     <table className="w-full text-sm">
@@ -1306,7 +1565,6 @@ export default function AturPenilaianGuruKelasClient() {
                                             {canEditDeskripsiRataRata() ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
                                         </BtnEdit>
                                     </div>
-
                                     {deskripsiRataRataList.length > 0 ? (
                                         <div className="overflow-x-auto scrollbar-thin">
                                             <table className="w-full text-sm">
@@ -1354,6 +1612,20 @@ export default function AturPenilaianGuruKelasClient() {
                                 </div>
                             )}
 
+                            {!isPTSActive && !isReadOnly && selectedMapelId && (
+                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: '#eff6ff', border: '1.5px solid #93c5fd' }}>
+                                    <Info size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-bold text-blue-900 mb-1">Info Bobot</p>
+                                        <p className="text-xs text-blue-800">
+                                            Bobot <strong>0% diizinkan</strong> untuk komponen yang tidak digunakan (misal: UH3 jika mapel hanya punya UH1, UH2, UH4, UH5).
+                                            <br />
+                                            Total bobot harus tetap <strong>100%</strong> dan minimal ada <strong>1 komponen dengan bobot &gt; 0%</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="mb-5 max-w-md">
                                 <label className="block text-sm font-bold mb-2" style={{ color: '#7a3a0a' }}>Mata Pelajaran</label>
                                 <select value={selectedMapelId || ''}
@@ -1397,7 +1669,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                             <p className="text-xs" style={{ color: '#a89a8c' }}>Komponen Penilaian</p>
                                                         </div>
                                                     </div>
-
                                                     <div className="flex items-center gap-2">
                                                         <input
                                                             type="text" inputMode="decimal" pattern="[0-9]*" value={displayBobot}
@@ -1492,14 +1763,12 @@ export default function AturPenilaianGuruKelasClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
                                 <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
                                     <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Isi semua grade sekaligus untuk aspek ini. Sistem akan menyimpan semua grade dalam 1 aksi.</p>
                                 </div>
-
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Grade ({batchGrades.length})</h3>
@@ -1511,7 +1780,6 @@ export default function AturPenilaianGuruKelasClient() {
                                             <Plus size={14} /> Tambah Baris
                                         </button>
                                     </div>
-
                                     {batchGrades.map((grade, index) => (
                                         <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
                                             <div className="flex items-start gap-3">
@@ -1541,7 +1809,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                             className={inputCls} placeholder="Sangat Baik" />
                                                     </div>
                                                 </div>
-
                                                 {batchGrades.length > 1 && (
                                                     <button onClick={() => removeBatchGradeRow(index)}
                                                         className="mt-7 p-2 rounded-lg transition-all"
@@ -1552,7 +1819,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                     </button>
                                                 )}
                                             </div>
-
                                             {(() => {
                                                 const errors: string[] = [];
                                                 if (!grade.grade) errors.push('Grade kosong');
@@ -1573,7 +1839,6 @@ export default function AturPenilaianGuruKelasClient() {
                                         </div>
                                     ))}
                                 </div>
-
                                 {(() => {
                                     const validation = validateBatchGrades();
                                     return (
@@ -1589,7 +1854,6 @@ export default function AturPenilaianGuruKelasClient() {
                                 })()}
                             </div>
                         </div>
-
                         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
                             <BtnBatal onClick={closeBatchEdit} disabled={isSavingBatch}>Batal</BtnBatal>
                             <button onClick={openConfirmSaveBatch} disabled={isSavingBatch}
@@ -1617,14 +1881,12 @@ export default function AturPenilaianGuruKelasClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
                                 <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
                                     <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Isi semua kategori sekaligus. Sistem akan menyimpan semua kategori dalam 1 aksi.</p>
                                 </div>
-
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchAkademik.length})</h3>
@@ -1636,7 +1898,6 @@ export default function AturPenilaianGuruKelasClient() {
                                             <Plus size={14} /> Tambah Baris
                                         </button>
                                     </div>
-
                                     {batchAkademik.map((kategori, index) => (
                                         <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
                                             <div className="flex items-start gap-3">
@@ -1660,7 +1921,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                             className={inputCls} placeholder="Sangat Baik" />
                                                     </div>
                                                 </div>
-
                                                 {batchAkademik.length > 1 && (
                                                     <button onClick={() => removeBatchAkademikRow(index)}
                                                         className="mt-7 p-2 rounded-lg transition-all"
@@ -1671,7 +1931,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                     </button>
                                                 )}
                                             </div>
-
                                             {(() => {
                                                 const errors: string[] = [];
                                                 if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
@@ -1690,7 +1949,6 @@ export default function AturPenilaianGuruKelasClient() {
                                         </div>
                                     ))}
                                 </div>
-
                                 {(() => {
                                     const validation = validateBatchAkademik();
                                     return (
@@ -1706,7 +1964,6 @@ export default function AturPenilaianGuruKelasClient() {
                                 })()}
                             </div>
                         </div>
-
                         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
                             <BtnBatal onClick={closeBatchEditAkademik} disabled={isSavingBatchAkademik}>Batal</BtnBatal>
                             <button onClick={openConfirmSaveBatchAkademik} disabled={isSavingBatchAkademik}
@@ -1734,14 +1991,12 @@ export default function AturPenilaianGuruKelasClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
                                 <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
                                     <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Nilai menggunakan desimal (2 digit). Contoh: 85.50</p>
                                 </div>
-
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchDeskripsi.length})</h3>
@@ -1753,7 +2008,6 @@ export default function AturPenilaianGuruKelasClient() {
                                             <Plus size={14} /> Tambah Baris
                                         </button>
                                     </div>
-
                                     {batchDeskripsi.map((kategori, index) => (
                                         <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
                                             <div className="flex items-start gap-3">
@@ -1777,7 +2031,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                             className={inputCls} placeholder="Sangat Baik" />
                                                     </div>
                                                 </div>
-
                                                 {batchDeskripsi.length > 1 && (
                                                     <button onClick={() => removeBatchDeskripsiRow(index)}
                                                         className="mt-7 p-2 rounded-lg transition-all"
@@ -1788,7 +2041,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                     </button>
                                                 )}
                                             </div>
-
                                             {(() => {
                                                 const errors: string[] = [];
                                                 if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
@@ -1807,7 +2059,6 @@ export default function AturPenilaianGuruKelasClient() {
                                         </div>
                                     ))}
                                 </div>
-
                                 {(() => {
                                     const validation = validateBatchDeskripsi();
                                     return (
@@ -1823,7 +2074,6 @@ export default function AturPenilaianGuruKelasClient() {
                                 })()}
                             </div>
                         </div>
-
                         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
                             <BtnBatal onClick={closeBatchEditDeskripsi} disabled={isSavingBatchDeskripsi}>Batal</BtnBatal>
                             <button onClick={openConfirmSaveBatchDeskripsi} disabled={isSavingBatchDeskripsi}

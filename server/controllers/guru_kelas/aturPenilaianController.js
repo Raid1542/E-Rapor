@@ -2,13 +2,21 @@
  * Nama File: aturPenilaianController.js
  * Fungsi: Controller konfigurasi penilaian guru kelas (akademik, kokurikuler, bobot)
  *         Menangani CRUD kategori akademik, kokurikuler, deskripsi rata-rata, dan bobot
+ *         Dengan auto-recompute nilai rapor/kokurikuler/deskripsi setelah perubahan
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 12 Juli 2026 - Tambah auto-recompute & bobot 0%
  */
 
 const db = require('../../config/db');
 const model = require('../../models/guru_kelas/aturPenilaianModel');
-const { updateAllNilaiRaporForMapel, validateGradeOrder } = require('./helpers');
+const { 
+    updateAllNilaiRaporForMapel, 
+    validateGradeOrder,
+    recomputeNilaiRaporForKelas,
+    recomputeNilaiKokurikulerForKelas,
+    recomputeDeskripsiRataRataForKelas
+} = require('./helpers');
 
 // ═════════════════════════════════════════════════════════════════════════════
 // KONSTANTA
@@ -360,7 +368,7 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
     }
 };
 
-// Update kategori nilai akademik
+// Update kategori nilai akademik - ✅ DENGAN AUTO-RECOMPUTE
 exports.updateKategoriNilaiAkademik = async (req, res) => {
     try {
         const { id } = req.params;
@@ -465,7 +473,20 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
         // Update kategori
         await model.updateKategoriAkademik(id, minNilai, maxNilai, deskripsi.trim());
 
-        res.json({ success: true, message: `Kategori akademik ${jenis} berhasil diperbarui` });
+        // ✅ PERBAIKAN: Auto-recompute nilai rapor setelah update kategori
+        let warning = '';
+        try {
+            await recomputeNilaiRaporForKelas(existing.mapel_id, kelasId, userId, req);
+            warning = ' Nilai rapor siswa telah dihitung ulang otomatis.';
+        } catch (recalcErr) {
+            console.error('Error recompute nilai rapor:', recalcErr);
+            warning = ' Peringatan: Gagal menghitung ulang nilai rapor otomatis.';
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Kategori akademik ${jenis} berhasil diperbarui.${warning}` 
+        });
     } catch (err) {
         console.error('Error updateKategoriNilaiAkademik:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
@@ -761,13 +782,14 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
     }
 };
 
-// Update kategori nilai kokurikuler
+// Update kategori nilai kokurikuler - ✅ DENGAN AUTO-RECOMPUTE
 exports.updateKategoriNilaiKokurikuler = async (req, res) => {
     try {
         const { id } = req.params;
         const { min_nilai, max_nilai, grade, deskripsi } = req.body;
         const kelasId = getKelasId(req);
         const jenis = getJenisPenilaian(req);
+        const userId = req.user.id;
 
         // Sanitasi dan validasi nilai
         const minNilai = parseFloat(min_nilai);
@@ -916,7 +938,25 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
         // Update kategori
         await model.updateKategoriKokurikuler(id, minNilai, maxNilai, gradeClean, deskripsi.trim());
 
-        res.json({ success: true, message: `Kategori kokurikuler ${jenis} berhasil diperbarui` });
+        // ✅ PERBAIKAN: Auto-recompute nilai kokurikuler setelah update grade
+        let warning = '';
+        try {
+            await recomputeNilaiKokurikulerForKelas(
+                existing.id_aspek_kokurikuler,
+                kelasId,
+                userId,
+                req
+            );
+            warning = ' Grade & deskripsi nilai kokurikuler siswa telah diperbarui otomatis.';
+        } catch (recalcErr) {
+            console.error('Error recompute nilai kokurikuler:', recalcErr);
+            warning = ' Peringatan: Gagal memperbarui nilai kokurikuler otomatis.';
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Kategori kokurikuler ${jenis} berhasil diperbarui.${warning}` 
+        });
     } catch (err) {
         console.error('Error updateKategoriNilaiKokurikuler:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
@@ -990,7 +1030,7 @@ exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 4. BOBOT AKADEMIK
+// 4. BOBOT AKADEMIK - ✅ DENGAN BOBOT 0% & VALIDASI MINIMAL 1 KOMPONEN
 // ═════════════════════════════════════════════════════════════════════════════
 
 // Ambil bobot penilaian akademik
@@ -1057,7 +1097,7 @@ exports.getBobotAkademikByMapel = async (req, res) => {
     }
 };
 
-// Update bobot penilaian akademik
+// Update bobot penilaian akademik - ✅ BOBOT 0% DIIZINKAN
 exports.updateBobotAkademikByMapel = async (req, res) => {
     try {
         const { mapelId } = req.params;
@@ -1086,7 +1126,7 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
             });
         }
 
-        // Validasi setiap bobot
+        // ✅ PERBAIKAN: Validasi setiap bobot - BOBOT 0% DIIZINKAN
         for (const b of bobotList) {
             if (!b.komponen_id || b.bobot === undefined) {
                 return res.status(400).json({
@@ -1101,12 +1141,25 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
                     message: `Bobot komponen ID ${b.komponen_id} harus berupa angka`,
                 });
             }
-            if (numBobot <= 0) {
-                return res.status(400).json({ success: false, message: 'Bobot tidak boleh 0% atau negatif' });
+            // ✅ PERBAIKAN: Ubah dari <= 0 menjadi < 0 (izinkan 0%)
+            if (numBobot < 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Bobot tidak boleh negatif' 
+                });
             }
             if (numBobot > 100) {
                 return res.status(400).json({ success: false, message: 'Bobot tidak boleh lebih dari 100' });
             }
+        }
+
+        // ✅ PERBAIKAN: Validasi minimal 1 komponen dengan bobot > 0%
+        const hasNonZeroBobot = bobotList.some(b => parseFloat(b.bobot) > 0);
+        if (!hasNonZeroBobot) {
+            return res.status(400).json({
+                success: false,
+                message: 'Minimal harus ada 1 komponen dengan bobot > 0%',
+            });
         }
 
         // Validasi total bobot harus 100%
@@ -1144,13 +1197,14 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
         let warning = '';
         try {
             await updateAllNilaiRaporForMapel(mapelId, userId, req);
+            warning = ' Nilai rapor siswa telah dihitung ulang otomatis.';
         } catch (recalcErr) {
             console.error('Error hitung ulang nilai rapor:', recalcErr);
             warning =
                 ' Peringatan: Gagal menghitung ulang nilai rapor otomatis. Silakan input ulang nilai untuk memperbarui.';
         }
 
-        res.json({ success: true, message: `Bobot penilaian ${jenis} berhasil disimpan` + warning });
+        res.json({ success: true, message: `Bobot penilaian ${jenis} berhasil disimpan.${warning}` });
     } catch (err) {
         console.error('Error updateBobotAkademikByMapel:', err);
         res.status(500).json({ success: false, message: 'Gagal menyimpan bobot: ' + err.message });
@@ -1158,7 +1212,7 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 5. KATEGORI DESKRIPSI RATA-RATA
+// 5. KATEGORI DESKRIPSI RATA-RATA - ✅ DENGAN AUTO-RECOMPUTE
 // ═════════════════════════════════════════════════════════════════════════════
 
 // Ambil kategori deskripsi rata-rata
@@ -1302,12 +1356,13 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
     }
 };
 
-// Update kategori deskripsi rata-rata
+// Update kategori deskripsi rata-rata - ✅ DENGAN AUTO-RECOMPUTE
 exports.updateKategoriDeskripsiRataRata = async (req, res) => {
     try {
         const { id } = req.params;
         const { min_nilai, max_nilai, deskripsi } = req.body;
         const kelasId = getKelasId(req);
+        const userId = req.user.id;
 
         // Ambil tahun ajaran aktif
         const taAktif = await model.getTahunAjaranAktif();
@@ -1395,7 +1450,20 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
         // Update kategori
         await model.updateKategoriDeskripsiRataRata(id, minNilai, maxNilai, deskripsi.trim());
 
-        res.json({ success: true, message: 'Kategori deskripsi rata-rata (PTS) berhasil diperbarui' });
+        // ✅ PERBAIKAN: Auto-recompute deskripsi rata-rata setelah update
+        let warning = '';
+        try {
+            await recomputeDeskripsiRataRataForKelas(kelasId, userId, req);
+            warning = ' Deskripsi rata-rata siswa telah diperbarui otomatis.';
+        } catch (recalcErr) {
+            console.error('Error recompute deskripsi rata-rata:', recalcErr);
+            warning = ' Peringatan: Gagal memperbarui deskripsi rata-rata otomatis.';
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Kategori deskripsi rata-rata (PTS) berhasil diperbarui.${warning}` 
+        });
     } catch (err) {
         console.error('Error updateKategoriDeskripsiRataRata:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
@@ -1441,7 +1509,7 @@ exports.deleteKategoriDeskripsiRataRata = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 5.1 BATCH SAVE DESKRIPSI RATA-RATA
+// 5.1 BATCH SAVE DESKRIPSI RATA-RATA - ✅ DENGAN AUTO-RECOMPUTE
 // ═════════════════════════════════════════════════════════════════════════════
 
 // Batch save kategori deskripsi rata-rata
@@ -1449,6 +1517,7 @@ exports.saveBatchKategoriDeskripsiRataRata = async (req, res) => {
     try {
         const { categories } = req.body;
         const kelasId = getKelasId(req);
+        const userId = req.user.id;
 
         // Validasi
         if (!Array.isArray(categories) || categories.length === 0) {
@@ -1558,9 +1627,19 @@ exports.saveBatchKategoriDeskripsiRataRata = async (req, res) => {
             }))
         );
 
+        // ✅ PERBAIKAN: Auto-recompute deskripsi rata-rata setelah batch save
+        let warning = '';
+        try {
+            await recomputeDeskripsiRataRataForKelas(kelasId, userId, req);
+            warning = ' Deskripsi rata-rata siswa telah diperbarui otomatis.';
+        } catch (recalcErr) {
+            console.error('Error recompute deskripsi rata-rata:', recalcErr);
+            warning = ' Peringatan: Gagal memperbarui deskripsi rata-rata otomatis.';
+        }
+
         res.json({
             success: true,
-            message: `${categories.length} kategori deskripsi rata-rata berhasil disimpan`,
+            message: `${categories.length} kategori deskripsi rata-rata berhasil disimpan.${warning}`,
         });
     } catch (err) {
         console.error('Error saveBatchKategoriDeskripsiRataRata:', err);
