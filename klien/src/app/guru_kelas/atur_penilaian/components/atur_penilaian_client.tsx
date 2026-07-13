@@ -728,12 +728,12 @@ export default function AturPenilaianGuruKelasClient() {
             max_nilai: Math.floor(k.max_nilai),
             deskripsi: k.deskripsi,
             isNew: false
-        })).sort((a, b) => b.min_nilai - a.min_nilai);
+        })).sort((a, b) => b.min_nilai - a.min_nilai); // Sort HANYA untuk tampilan UI
 
         if (existing.length > 0) {
             setBatchAkademik(existing);
-            // ✅ PERBAIKAN: Gunakan deep copy dengan JSON parse/stringify
-            setOriginalBatchAkademik(JSON.parse(JSON.stringify(existing)));
+            // ✅ PERBAIKAN: Deep copy agar referensi objek benar-benar terpisah dari state aktif
+            setOriginalBatchAkademik(existing.map(item => ({ ...item })));
         } else {
             const defaults = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
@@ -802,29 +802,35 @@ export default function AturPenilaianGuruKelasClient() {
         return { valid: errors.length === 0, errors };
     };
 
+    // ✅ PERBAIKAN FINAL: Gunakan Map berdasarkan ID, JANGAN sort untuk perbandingan
     const hasBatchAkademikChanges = (): boolean => {
         if (originalBatchAkademik.length === 0) return true;
         if (batchAkademik.length !== originalBatchAkademik.length) return true;
 
-        // Buat map untuk comparison berdasarkan ID
-        const originalMap = new Map(originalBatchAkademik.map(item => [item.id, item]));
+        // 1. Buat peta (Map) dari data asli berdasarkan ID untuk pencocokan yang akurat
+        const origMap = new Map<number, BatchGradeItem>();
+        originalBatchAkademik.forEach(item => {
+            if (item.id) origMap.set(item.id, item);
+        });
 
-        for (const currentItem of batchAkademik) {
-            if (!currentItem.id) {
-                // Ini item baru
-                return true;
-            }
+        // 2. Bandingkan setiap item di batch saat ini dengan item aslinya berdasarkan ID
+        for (const curr of batchAkademik) {
+            // Jika ini item baru, pasti ada perubahan
+            if (!curr.id || curr.isNew) return true;
 
-            const originalItem = originalMap.get(currentItem.id);
-            if (!originalItem) {
-                // Item ini tidak ada di original
-                return true;
-            }
+            const orig = origMap.get(curr.id);
+            // Jika ID tidak ditemukan di data asli, ada perubahan
+            if (!orig) return true;
 
-            // Bandingkan field-fieldnya
-            if (Math.floor(currentItem.min_nilai) !== Math.floor(originalItem.min_nilai)) return true;
-            if (Math.floor(currentItem.max_nilai) !== Math.floor(originalItem.max_nilai)) return true;
-            if (currentItem.deskripsi.trim() !== originalItem.deskripsi.trim()) return true;
+            // Bandingkan nilai dengan konversi tipe yang aman
+            const currMin = Math.floor(Number(curr.min_nilai));
+            const currMax = Math.floor(Number(curr.max_nilai));
+            const origMin = Math.floor(Number(orig.min_nilai));
+            const origMax = Math.floor(Number(orig.max_nilai));
+
+            if (currMin !== origMin) return true;
+            if (currMax !== origMax) return true;
+            if (curr.deskripsi.trim() !== orig.deskripsi.trim()) return true;
         }
 
         return false;
@@ -838,39 +844,59 @@ export default function AturPenilaianGuruKelasClient() {
         setShowConfirmModal(true);
     };
 
-    // ✅ PERBAIKAN: executeSaveBatchAkademik dengan UPDATE strategy
+    // ✅ PERBAIKAN: executeSaveBatchAkademik dengan UPDATE strategy yang lebih aman
     const executeSaveBatchAkademik = async () => {
         setIsSavingBatchAkademik(true);
         try {
             const token = localStorage.getItem('token');
-            // ✅ PERBAIKAN: Gunakan UPDATE untuk kategori yang sudah ada
-            // dan INSERT untuk yang baru, hindari DELETE
             const promises = [];
 
-            // Update existing categories
-            originalBatchAkademik.forEach((orig) => {
-                const updated = batchAkademik.find(b => b.id === orig.id);
-                if (updated && orig.id) {
-                    // UPDATE kategori yang sudah ada
-                    promises.push(
-                        fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`
-                            },
-                            body: JSON.stringify({
-                                min_nilai: Math.floor(updated.min_nilai),
-                                max_nilai: Math.floor(updated.max_nilai),
-                                deskripsi: updated.deskripsi.trim()
-                            })
-                        })
-                    );
-                }
+            // Buat Map untuk quick lookup
+            const currentBatchMap = new Map<number, BatchGradeItem>();
+            batchAkademik.forEach(item => {
+                if (item.id) currentBatchMap.set(item.id, item);
             });
 
-            // Insert new categories (yang tidak punya id)
-            batchAkademik.filter(b => !b.id).forEach(newCat => {
+            // 1. UPDATE hanya kategori yang masih ada DAN berubah
+            originalBatchAkademik.forEach((orig) => {
+                if (!orig.id) return;
+
+                const current = currentBatchMap.get(orig.id);
+                if (!current) {
+                    // Kategori ini dihapus dari batch, skip update
+                    return;
+                }
+
+                // Cek apakah ada perubahan
+                const origMin = Math.floor(Number(orig.min_nilai));
+                const origMax = Math.floor(Number(orig.max_nilai));
+                const currMin = Math.floor(Number(current.min_nilai));
+                const currMax = Math.floor(Number(current.max_nilai));
+
+                if (origMin === currMin && origMax === currMax && orig.deskripsi.trim() === current.deskripsi.trim()) {
+                    // Tidak ada perubahan, skip update
+                    return;
+                }
+
+                // Ada perubahan, lakukan UPDATE
+                promises.push(
+                    fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            min_nilai: currMin,
+                            max_nilai: currMax,
+                            deskripsi: current.deskripsi.trim()
+                        })
+                    })
+                );
+            });
+
+            // 2. INSERT kategori baru (yang tidak punya id)
+            batchAkademik.filter(b => !b.id || b.isNew).forEach(newCat => {
                 promises.push(
                     fetch(`${API}/atur-penilaian/kategori-akademik`, {
                         method: 'POST',
@@ -890,10 +916,22 @@ export default function AturPenilaianGuruKelasClient() {
                 );
             });
 
-            const results = await Promise.all(promises);
-            const allSuccess = results.every(r => r.ok);
+            if (promises.length === 0) {
+                showModal({
+                    type: 'warning',
+                    title: 'Tidak Ada Perubahan',
+                    message: 'Tidak ada data yang perlu disimpan.'
+                });
+                setIsSavingBatchAkademik(false);
+                return;
+            }
 
-            if (allSuccess) {
+            const results = await Promise.all(promises);
+            const successCount = results.filter(r => r.ok).length;
+            const failedCount = results.length - successCount;
+
+            if (failedCount === 0) {
+                // Semua berhasil
                 setShowConfirmModal(false);
                 closeBatchEditAkademik();
                 showModal({
@@ -917,18 +955,24 @@ export default function AturPenilaianGuruKelasClient() {
                     setCoverageInfo(data.coverage || null);
                 }
             } else {
+                // Ada yang gagal
                 setShowConfirmModal(false);
-                // ✅ PERBAIKAN: Baca error detail dari backend
-                const failedResult = results.find(r => !r.ok);
-                if (failedResult) {
-                    const errData = await failedResult.json().catch(() => ({}));
+
+                // Cari request yang gagal dan ambil error detail
+                const failedIndex = results.findIndex(r => !r.ok);
+                if (failedIndex !== -1) {
+                    const errData = await results[failedIndex].json().catch(() => ({}));
                     showModal({
                         type: 'error',
                         title: 'Gagal Menyimpan',
-                        message: errData.message || 'Beberapa kategori gagal disimpan.'
+                        message: errData.message || `Beberapa kategori gagal disimpan. (${failedCount} error)`
                     });
                 } else {
-                    showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
+                    showModal({
+                        type: 'error',
+                        title: 'Gagal Menyimpan',
+                        message: 'Beberapa kategori gagal disimpan.'
+                    });
                 }
             }
         } catch (err: any) {
@@ -951,7 +995,8 @@ export default function AturPenilaianGuruKelasClient() {
 
         if (existing.length > 0) {
             setBatchDeskripsi(existing);
-            setOriginalBatchDeskripsi([...existing]);
+            // ✅ PERBAIKAN: Deep copy
+            setOriginalBatchDeskripsi(existing.map(item => ({ ...item })));
         } else {
             const defaults = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
@@ -1015,23 +1060,33 @@ export default function AturPenilaianGuruKelasClient() {
         return { valid: errors.length === 0, errors };
     };
 
+    // ✅ PERBAIKAN FINAL: Gunakan Map berdasarkan ID
     const hasBatchDeskripsiChanges = (): boolean => {
         if (originalBatchDeskripsi.length === 0) return true;
         if (batchDeskripsi.length !== originalBatchDeskripsi.length) return true;
 
-        const sc = [...batchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
-        const so = [...originalBatchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
+        const origMap = new Map<number, BatchGradeItem>();
+        originalBatchDeskripsi.forEach(item => {
+            if (item.id) origMap.set(item.id, item);
+        });
 
-        for (let i = 0; i < sc.length; i++) {
-            const currMin = parseFloat(sc[i].min_nilai.toFixed(2));
-            const currMax = parseFloat(sc[i].max_nilai.toFixed(2));
-            const origMin = parseFloat(so[i].min_nilai.toFixed(2));
-            const origMax = parseFloat(so[i].max_nilai.toFixed(2));
+        for (const curr of batchDeskripsi) {
+            if (!curr.id || curr.isNew) return true;
+
+            const orig = origMap.get(curr.id);
+            if (!orig) return true;
+
+            // Bandingkan dengan toFixed(2) untuk akurasi desimal
+            const currMin = parseFloat(Number(curr.min_nilai).toFixed(2));
+            const currMax = parseFloat(Number(curr.max_nilai).toFixed(2));
+            const origMin = parseFloat(Number(orig.min_nilai).toFixed(2));
+            const origMax = parseFloat(Number(orig.max_nilai).toFixed(2));
 
             if (currMin !== origMin) return true;
             if (currMax !== origMax) return true;
-            if (sc[i].deskripsi.trim() !== so[i].deskripsi.trim()) return true;
+            if (curr.deskripsi.trim() !== orig.deskripsi.trim()) return true;
         }
+
         return false;
     };
 
