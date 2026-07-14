@@ -56,7 +56,7 @@ exports.cekGuruMengajarMapelDiKelas = async (userId, mapelId, kelasId, tahunAjar
 };
 
 exports.cekOverlapAkademik = async (mapelId, tahunAjaranId, kelasId, minNilai, maxNilai, jenis = 'PTS', excludeId = null) => {
-    let query = 'SELECT id_config, min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE tahun_ajaran_id = ? AND kelas_id = ? AND jenis_penilaian = ? AND (? <= max_nilai AND ? >= min_nilai)';
+    let query = 'SELECT id_config, min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor WHERE tahun_ajaran_id = ? AND kelas_id = ? AND jenis_penilaian = ? AND is_active = 1 AND (? <= max_nilai AND ? >= min_nilai)';
     const params = [tahunAjaranId, kelasId, jenis, minNilai, maxNilai];
 
     if (mapelId === null) {

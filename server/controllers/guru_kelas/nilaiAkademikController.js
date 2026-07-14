@@ -5,6 +5,7 @@
  *         ekspor data ke Excel, dan import nilai dari Excel
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 14 Juli 2026 - Penegakan validasi bilangan bulat ketat & proteksi data lama saat import (skip blank)
  */
 
 const db = require('../../config/db');
@@ -535,10 +536,25 @@ exports.updateNilaiKomponen = async (req, res) => {
             if (jenis === 'PTS' && pasKomponen && komponenId === pasKomponen.id_komponen) continue;
 
             let nilaiBulat = null;
-            if (nilaiSiswa != null && nilaiSiswa !== '' && !isNaN(nilaiSiswa)) {
-                nilaiBulat = Math.round(parseFloat(nilaiSiswa));
-                if (nilaiBulat < 0) nilaiBulat = 0;
-                if (nilaiBulat > 100) nilaiBulat = 100;
+            if (nilaiSiswa != null && nilaiSiswa !== '') {
+                const strNilai = String(nilaiSiswa).trim();
+                
+                // ✅ PENCEGAHAN HUMAN ERROR: Validasi ketat bilangan bulat
+                if (strNilai.includes('.') || strNilai.includes(',')) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `Nilai harus berupa bilangan bulat. Diterima: ${nilaiSiswa}` 
+                    });
+                }
+                
+                const parsedNilai = parseInt(strNilai, 10);
+                if (isNaN(parsedNilai)) {
+                    return res.status(400).json({ success: false, message: 'Nilai harus berupa angka valid.' });
+                }
+                if (parsedNilai < 0 || parsedNilai > 100) {
+                    return res.status(400).json({ success: false, message: 'Nilai harus antara 0 dan 100.' });
+                }
+                nilaiBulat = parsedNilai;
             }
 
             await db.execute(
@@ -666,8 +682,15 @@ exports.simpanNilai = async (req, res) => {
         if (!siswa_id || !mapel_id || !komponen_id || nilai === undefined) {
             return res.status(400).json({ success: false, message: 'Semua field wajib diisi' });
         }
-        if (nilai < 0 || nilai > 100) {
-            return res.status(400).json({ success: false, message: 'Nilai harus antara 0 dan 100' });
+        
+        // ✅ PENCEGAHAN HUMAN ERROR: Validasi ketat bilangan bulat
+        const strNilai = String(nilai).trim();
+        if (strNilai.includes('.') || strNilai.includes(',')) {
+            return res.status(400).json({ success: false, message: 'Nilai harus berupa bilangan bulat.' });
+        }
+        const parsedNilai = parseInt(strNilai, 10);
+        if (isNaN(parsedNilai) || parsedNilai < 0 || parsedNilai > 100) {
+            return res.status(400).json({ success: false, message: 'Nilai harus berupa angka bulat antara 0 dan 100.' });
         }
 
         const [siswaStatus] = await db.execute(`SELECT status FROM siswa WHERE id_siswa = ?`, [siswa_id]);
@@ -700,7 +723,7 @@ exports.simpanNilai = async (req, res) => {
             siswa_id,
             mapel_id,
             komponen_id,
-            nilai,
+            nilai: parsedNilai, // Gunakan nilai yang sudah divalidasi
             kelas_id,
             tahun_ajaran_id: semesterId,
             user_id,
@@ -1496,8 +1519,6 @@ exports.importNilaiExcel = async (req, res) => {
         let skippedCount = 0;
         let totalNilaiDisimpan = 0;
 
-        let nilaiDiRound = 0;
-
         // Track duplikasi NIS
         const nisDiproses = new Set();
         const nisDuplikat = [];
@@ -1617,62 +1638,69 @@ exports.importNilaiExcel = async (req, res) => {
 
             let semuaNilaiNol = true;
 
-            // Validasi semua nilai
+            // 1. Validasi semua nilai
             for (const kv of komponenValid) {
                 const headerIdx = headers.indexOf(kv.header);
                 if (headerIdx < 0) continue;
 
                 const nilaiStr = String(row[headerIdx] || '').trim();
-                if (nilaiStr === '' || nilaiStr === '-') continue;
+                
+                // ✅ PENCEGAHAN HUMAN ERROR: Skip jika kosong (jangan timpa data lama)
+                if (nilaiStr === '' || nilaiStr === '-' || nilaiStr.toLowerCase() === 'null') continue;
 
-                const nilai = parseFloat(nilaiStr);
-
-                if (isNaN(nilai)) {
+                // ✅ PENCEGAHAN HUMAN ERROR: Tolak desimal/koma
+                if (nilaiStr.includes('.') || nilaiStr.includes(',')) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${kv.header}": "${nilaiStr}" bukan angka yang valid`,
+                        message: `Baris ${i + 1}, Kolom "${kv.header}": "${nilaiStr}" tidak valid. Nilai wajib bilangan bulat (contoh: 85, bukan 85.5).`
                     });
                     rowHasError = true;
                     continue;
                 }
 
-                if (nilai < 0 || nilai > 100) {
+                const nilaiInt = parseInt(nilaiStr, 10);
+                if (isNaN(nilaiInt)) {
                     errors.push({
                         row: i + 1,
-                        message: `Baris ${i + 1}, Kolom "${kv.header}": Nilai ${nilai} di luar rentang 0-100`,
+                        message: `Baris ${i + 1}, Kolom "${kv.header}": "${nilaiStr}" bukan angka yang valid.`
+                    });
+                    rowHasError = true;
+                    continue;
+                }
+
+                if (nilaiInt < 0 || nilaiInt > 100) {
+                    errors.push({
+                        row: i + 1,
+                        message: `Baris ${i + 1}, Kolom "${kv.header}": Nilai ${nilaiInt} di luar rentang 0-100.`
                     });
                     rowHasError = true;
                     continue;
                 }
             }
 
-            // Simpan nilai yang valid
+            // 2. Simpan nilai yang valid
             for (const kv of komponenBolehUpdate) {
                 const headerIdx = headers.indexOf(kv.header);
                 if (headerIdx < 0) continue;
 
                 const nilaiStr = String(row[headerIdx] || '').trim();
-                if (nilaiStr === '' || nilaiStr === '-') continue;
+                
+                // ✅ Skip lagi di sini untuk memastikan tidak ada eksekusi query jika kosong
+                if (nilaiStr === '' || nilaiStr === '-' || nilaiStr.toLowerCase() === 'null') continue;
 
-                const nilai = parseFloat(nilaiStr);
-                if (isNaN(nilai) || nilai < 0 || nilai > 100) continue;
+                const nilaiInt = parseInt(nilaiStr, 10);
+                if (isNaN(nilaiInt) || nilaiInt < 0 || nilaiInt > 100) continue;
 
-                const nilaiBulat = Math.round(nilai);
-
-                if (nilai !== nilaiBulat) {
-                    nilaiDiRound++;
-                }
-
-                if (nilaiBulat !== 0) {
+                if (nilaiInt !== 0) {
                     semuaNilaiNol = false;
                 }
 
                 await connection.execute(
                     `INSERT INTO nilai_detail 
-            (siswa_id, mapel_id, komponen_id, nilai, tahun_ajaran_id, created_by_user_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE nilai = VALUES(nilai), updated_at = NOW()`,
-                    [siswaId, mapelId, kv.id, nilaiBulat, semesterId, userId]
+                    (siswa_id, mapel_id, komponen_id, nilai, tahun_ajaran_id, created_by_user_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE nilai = VALUES(nilai), updated_at = NOW()`,
+                    [siswaId, mapelId, kv.id, nilaiInt, semesterId, userId]
                 );
                 rowSavedCount++;
                 totalNilaiDisimpan++;
@@ -1725,10 +1753,6 @@ exports.importNilaiExcel = async (req, res) => {
             message += `\n\nKolom [${komponenDiabaikan.map(kv => kv.header).join(', ')}] diabaikan karena periode ${jenis_penilaian} sedang aktif.`;
         }
 
-        if (nilaiDiRound > 0) {
-            message += `\n\n${nilaiDiRound} nilai desimal di-round ke bilangan bulat terdekat (contoh: 85.7 menjadi 86).`;
-        }
-
         // Info duplikasi NIS
         if (nisDuplikat.length > 0) {
             const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
@@ -1757,7 +1781,7 @@ exports.importNilaiExcel = async (req, res) => {
             `- Kolom yang diimport: ${komponenBolehUpdate.map(kv => kv.header).join(', ')}\n` +
             `- Kolom yang diabaikan: ${komponenDiabaikan.length > 0 ? komponenDiabaikan.map(kv => kv.header).join(', ') : 'Tidak ada'}\n` +
             `- Periode aktif: ${jenis_penilaian}\n` +
-            `- Format nilai: Angka bulat 0-100`;
+            `- Format nilai: Angka bulat 0-100 (Desimal/Koma akan ditolak)`;
 
         res.json({
             success: success,
@@ -1775,7 +1799,6 @@ exports.importNilaiExcel = async (req, res) => {
                 komponen_tidak_dikenali: komponenInvalid,
                 periode_aktif: jenis_penilaian,
                 ada_error: errors.length > 0,
-                nilai_di_round: nilaiDiRound,
                 nis_duplikat_count: nisDuplikat.length,
                 nis_duplikat_detail: nisDuplikat,
                 nisn_duplikat_count: nisnDuplikat.length,

@@ -1,10 +1,10 @@
 /**
  * Nama File: helpers.js
  * Fungsi: Helper functions untuk validasi, hitung grade, dan recompute nilai rapor
- *         Menangani auto-recompute saat kategori berubah
+ *         Menangani auto-recompute saat kategori atau nilai berubah
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 12 Juli 2026 - Tambah recompute untuk kategori akademik, kokurikuler, deskripsi rata-rata
+ * Update: 14 Juli 2026 - Fix Transaction Isolation Bug (menggunakan connection yang sama) & Math.round
  */
 
 const db = require('../../config/db');
@@ -13,7 +13,6 @@ const db = require('../../config/db');
 // 1. VALIDASI MAPEL WAJIB
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Cek apakah mapel wajib yang diampu guru kelas
 exports.isMapelWajibGuruKelas = async (userId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(
@@ -35,7 +34,6 @@ exports.isMapelWajibGuruKelas = async (userId, mapelId, semesterId) => {
 // 2. HITUNG GRADE KOKURIKULER
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Hitung grade & deskripsi dari konfigurasi
 exports.getGradeFromConfig = (configList, nilai, idAspek) => {
     if (nilai == null) return { grade: null, deskripsi: null };
     const configForAspek = configList.filter(c => c.id_aspek_kokurikuler === idAspek);
@@ -51,7 +49,6 @@ exports.getGradeFromConfig = (configList, nilai, idAspek) => {
 // 3. HITUNG DESKRIPSI AKADEMIK
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Hitung deskripsi dari kategori nilai
 exports.getDeskripsiFromKategori = (nilai, kategoriList) => {
     if (nilai == null || nilai < 0) return 'Belum ada deskripsi';
     for (const k of kategoriList) {
@@ -61,12 +58,15 @@ exports.getDeskripsiFromKategori = (nilai, kategoriList) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 4. RECOMPUTE NILAI RAPOR PAS
+// 4. RECOMPUTE NILAI RAPOR (Dipanggil setelah Import/Update Nilai)
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Recompute nilai rapor setelah import nilai
-exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
+// ✅ PERBAIKAN: Tambahkan parameter 'connection' opsional agar bisa membaca data dalam transaksi yang sama
+exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req, connection = null) => {
     try {
+        // Gunakan connection transaksi jika ada, jika tidak gunakan pool global
+        const dbToUse = connection || db;
+
         const tahunAjaranIndukId = req?.idTahunAjaranInduk;
         const semesterId = req?.idSemesterAktif;
         const { semester, jenis: jenisPenilaianAktif } = req?.penilaianContext || {};
@@ -75,33 +75,29 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             throw new Error('Data tahun ajaran tidak ditemukan');
         }
 
-        // Deteksi periode aktif (PTS atau PAS)
         const jenisPenilaian = jenisPenilaianAktif || 'PAS';
 
-        // Ambil kelas & siswa
-        const [gkRows] = await db.execute(
+        const [gkRows] = await dbToUse.execute(
             `SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?`,
             [userId, semesterId]
         );
         if (gkRows.length === 0) throw new Error('Kelas tidak ditemukan');
         const { kelas_id } = gkRows[0];
 
-        const [siswaRows] = await db.execute(
+        const [siswaRows] = await dbToUse.execute(
             `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelas_id, tahunAjaranIndukId]
         );
 
-        // Ambil komponen & bobot
-        const [komponenRows] = await db.execute(
+        const [komponenRows] = await dbToUse.execute(
             `SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`
         );
-        const [bobotRows] = await db.execute(
+        const [bobotRows] = await dbToUse.execute(
             `SELECT komponen_id, bobot, kelas_id FROM konfigurasi_mapel_komponen 
             WHERE mapel_id = ? AND is_active = 1 AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY kelas_id DESC`,
             [mapelId, kelas_id]
         );
 
-        // Build bobot map
         const bobotMap = new Map();
         bobotRows.forEach(b => {
             if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
@@ -115,7 +111,8 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
         const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
         const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
 
-        const [nilaiDetailRows] = await db.execute(
+        // ✅ PERBAIKAN: Sekarang ini akan membaca data yang BARU SAJA di-insert dalam transaksi yang sama
+        const [nilaiDetailRows] = await dbToUse.execute(
             `SELECT siswa_id, komponen_id, nilai FROM nilai_detail WHERE mapel_id = ? AND tahun_ajaran_id = ?`,
             [mapelId, semesterId]
         );
@@ -126,7 +123,6 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             nilaiDetailMap.get(row.siswa_id)[row.komponen_id] = row.nilai;
         });
 
-        // Hitung & simpan per siswa
         for (const siswa of siswaRows) {
             const siswaId = siswa.siswa_id;
             const nilai = nilaiDetailMap.get(siswaId) || {};
@@ -134,14 +130,11 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
             let nilaiRapor = 0;
             let deskripsi = 'Belum ada deskripsi';
 
-            // Hitung nilai rapor sesuai periode
             if (jenisPenilaian === 'PTS') {
-                // Formula PTS: nilai_rapor = nilai PTS langsung
                 const nilaiPTS = ptsKomponen ? (nilai[ptsKomponen.id_komponen] || 0) : 0;
                 nilaiRapor = nilaiPTS;
 
-                // Ambil deskripsi dari konfigurasi PTS
-                const [kategoriPTSRows] = await db.execute(
+                const [kategoriPTSRows] = await dbToUse.execute(
                     `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND jenis_penilaian = 'PTS' AND is_active = 1 ORDER BY min_nilai DESC`,
                     [mapelId, semesterId]
@@ -154,19 +147,17 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
                     }
                 }
             } else {
-                // Formula PAS: (rataUH × bobotUH) + (PTS × bobotPTS) + (PAS × bobotPAS)
                 let nilaiPTSFinal = 0;
                 if (ptsKomponen) {
-                    const [ptsRow] = await db.execute(
+                    const [ptsRow] = await dbToUse.execute(
                         `SELECT nilai_rapor FROM nilai_rapor WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = 'PTS'`,
                         [siswaId, mapelId, semesterId, semester]
                     );
-                    nilaiPTSFinal = ptsRow.length > 0 ? ptsRow[0].nilai_rapor : 0;
+                    nilaiPTSFinal = ptsRow.length > 0 ? parseFloat(ptsRow[0].nilai_rapor) : 0;
                 }
 
                 const nilaiUH = uhKomponenIds.map(id => nilai[id]).filter(v => v != null && !isNaN(v));
-                const rataUH =
-                    nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
+                const rataUH = nilaiUH.length > 0 ? nilaiUH.reduce((a, b) => a + b, 0) / nilaiUH.length : 0;
                 const nilaiPAS = pasKomponen ? (nilai[pasKomponen.id_komponen] || 0) : 0;
 
                 const totalBobotUH = uhKomponenIds.reduce((sum, id) => sum + (bobotMap.get(id) || 0), 0);
@@ -175,13 +166,12 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
                 const totalBobot = totalBobotUH + bobotPTS + bobotPAS;
 
                 if (totalBobot > 0) {
-                    nilaiRapor =
-                        (rataUH * totalBobotUH + nilaiPTSFinal * bobotPTS + nilaiPAS * bobotPAS) / totalBobot;
+                    nilaiRapor = (rataUH * totalBobotUH + nilaiPTSFinal * bobotPTS + nilaiPAS * bobotPAS) / totalBobot;
                 }
-                nilaiRapor = Math.floor(nilaiRapor);
+                
+                nilaiRapor = Math.round(nilaiRapor);
 
-                // Ambil deskripsi dari konfigurasi PAS
-                const [kategoriPASRows] = await db.execute(
+                const [kategoriPASRows] = await dbToUse.execute(
                     `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND jenis_penilaian = 'PAS' AND is_active = 1 ORDER BY min_nilai DESC`,
                     [mapelId, semesterId]
@@ -195,8 +185,7 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
                 }
             }
 
-            // Simpan dengan jenis_penilaian yang benar
-            await db.execute(
+            await dbToUse.execute(
                 `INSERT INTO nilai_rapor (siswa_id, mapel_id, kelas_id, tahun_ajaran_id, semester, jenis_penilaian, nilai_rapor, deskripsi, created_by_user_id, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE nilai_rapor = VALUES(nilai_rapor), deskripsi = VALUES(deskripsi), updated_at = NOW()`,
@@ -210,13 +199,12 @@ exports.updateAllNilaiRaporForMapel = async (mapelId, userId, req) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 5. RECOMPUTE NILAI RAPOR UNTUK KELAS TERTENTU (BARU)
+// 5. RECOMPUTE NILAI RAPOR UNTUK KELAS TERTENTU
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Recompute nilai rapor untuk satu kelas + mapel
-// Digunakan saat kategori akademik berubah
-exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
+exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req, connection = null) => {
     try {
+        const dbToUse = connection || db;
         const tahunAjaranIndukId = req?.idTahunAjaranInduk;
         const semesterId = req?.idSemesterAktif;
         const { semester, jenis: jenisPenilaianAktif } = req?.penilaianContext || {};
@@ -227,25 +215,22 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
 
         const jenisPenilaian = jenisPenilaianAktif || 'PAS';
 
-        // Ambil semua siswa di kelas
-        const [siswaRows] = await db.execute(
+        const [siswaRows] = await dbToUse.execute(
             `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelasId, tahunAjaranIndukId]
         );
 
         if (siswaRows.length === 0) return;
 
-        // Ambil komponen & bobot
-        const [komponenRows] = await db.execute(
+        const [komponenRows] = await dbToUse.execute(
             `SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan`
         );
-        const [bobotRows] = await db.execute(
+        const [bobotRows] = await dbToUse.execute(
             `SELECT komponen_id, bobot, kelas_id FROM konfigurasi_mapel_komponen 
             WHERE mapel_id = ? AND is_active = 1 AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY kelas_id DESC`,
             [mapelId, kelasId]
         );
 
-        // Build bobot map
         const bobotMap = new Map();
         bobotRows.forEach(b => {
             if (!bobotMap.has(b.komponen_id) || b.kelas_id !== null) {
@@ -259,12 +244,10 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
         const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
         const pasKomponen = komponenRows.find(k => /^PAS$/i.test(k.nama_komponen));
 
-        // Loop setiap siswa
         for (const siswa of siswaRows) {
             const siswaId = siswa.siswa_id;
 
-            // Ambil nilai detail
-            const [nilaiRows] = await db.execute(
+            const [nilaiRows] = await dbToUse.execute(
                 `SELECT komponen_id, nilai FROM nilai_detail WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?`,
                 [siswaId, mapelId, semesterId]
             );
@@ -277,13 +260,11 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
             let nilaiRapor = 0;
             let deskripsi = 'Belum ada deskripsi';
 
-            // Hitung nilai rapor sesuai periode
             if (jenisPenilaian === 'PTS') {
                 const nilaiPTS = ptsKomponen ? (nilaiMap.get(ptsKomponen.id_komponen) || 0) : 0;
-                nilaiRapor = Math.floor(nilaiPTS);
+                nilaiRapor = Math.round(nilaiPTS);
 
-                // Ambil deskripsi dari konfigurasi PTS
-                const [kategoriPTSRows] = await db.execute(
+                const [kategoriPTSRows] = await dbToUse.execute(
                     `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND jenis_penilaian = 'PTS' AND is_active = 1 ORDER BY min_nilai DESC`,
                     [mapelId, semesterId]
@@ -296,14 +277,13 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
                     }
                 }
             } else {
-                // Formula PAS
                 let nilaiPTSFinal = 0;
                 if (ptsKomponen) {
-                    const [ptsRow] = await db.execute(
+                    const [ptsRow] = await dbToUse.execute(
                         `SELECT nilai_rapor FROM nilai_rapor WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran_id = ? AND semester = ? AND jenis_penilaian = 'PTS'`,
                         [siswaId, mapelId, semesterId, semester]
                     );
-                    nilaiPTSFinal = ptsRow.length > 0 ? ptsRow[0].nilai_rapor : 0;
+                    nilaiPTSFinal = ptsRow.length > 0 ? parseFloat(ptsRow[0].nilai_rapor) : 0;
                 }
 
                 const nilaiUH = uhKomponenIds
@@ -320,10 +300,10 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
                 if (totalBobot > 0) {
                     nilaiRapor = (rataUH * totalBobotUH + nilaiPTSFinal * bobotPTS + nilaiPAS * bobotPAS) / totalBobot;
                 }
-                nilaiRapor = Math.floor(nilaiRapor);
+                
+                nilaiRapor = Math.round(nilaiRapor);
 
-                // Ambil deskripsi dari konfigurasi PAS
-                const [kategoriPASRows] = await db.execute(
+                const [kategoriPASRows] = await dbToUse.execute(
                     `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
                     WHERE (mapel_id = ? OR mapel_id IS NULL) AND tahun_ajaran_id = ? AND jenis_penilaian = 'PAS' AND is_active = 1 ORDER BY min_nilai DESC`,
                     [mapelId, semesterId]
@@ -337,8 +317,7 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
                 }
             }
 
-            // Simpan nilai rapor
-            await db.execute(
+            await dbToUse.execute(
                 `INSERT INTO nilai_rapor (siswa_id, mapel_id, kelas_id, tahun_ajaran_id, semester, jenis_penilaian, nilai_rapor, deskripsi, created_by_user_id, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE nilai_rapor = VALUES(nilai_rapor), deskripsi = VALUES(deskripsi), updated_at = NOW()`,
@@ -355,7 +334,6 @@ exports.recomputeNilaiRaporForKelas = async (mapelId, kelasId, userId, req) => {
 // 6. RECOMPUTE NILAI KOKURIKULER
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Recompute grade & deskripsi kokurikuler setelah kategori berubah
 exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req) => {
     try {
         const tahunAjaranIndukId = req?.idTahunAjaranInduk;
@@ -368,7 +346,6 @@ exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req
 
         const jenisPenilaian = jenisPenilaianAktif || 'PAS';
 
-        // Ambil semua siswa di kelas
         const [siswaRows] = await db.execute(
             `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelasId, tahunAjaranIndukId]
@@ -376,7 +353,6 @@ exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req
 
         if (siswaRows.length === 0) return;
 
-        // Ambil konfigurasi kategori kokurikuler terbaru
         const [kategoriRows] = await db.execute(
             `SELECT rentang_min, rentang_max, grade, deskripsi 
             FROM kategori_grade_kokurikuler 
@@ -387,11 +363,9 @@ exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req
 
         if (kategoriRows.length === 0) return;
 
-        // Loop setiap siswa
         for (const siswa of siswaRows) {
             const siswaId = siswa.siswa_id;
 
-            // ✅ PERBAIKAN: Gunakan nama kolom yang sesuai schema (id_siswa, id_tahun_ajaran, id_aspek_kokurikuler)
             const [nilaiRows] = await db.execute(
                 `SELECT nilai FROM nilai_kokurikuler 
                  WHERE id_siswa = ? 
@@ -404,8 +378,6 @@ exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req
             if (nilaiRows.length === 0 || nilaiRows[0].nilai === null) continue;
 
             const nilai = parseFloat(nilaiRows[0].nilai);
-
-            // Cari grade yang sesuai
             let grade = null;
             let deskripsi = null;
 
@@ -418,7 +390,6 @@ exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req
             }
 
             if (grade) {
-                // ✅ PERBAIKAN: Gunakan nama kolom yang sesuai schema (id_siswa, id_tahun_ajaran)
                 await db.execute(
                     `UPDATE nilai_kokurikuler 
                     SET grade = ?, deskripsi = ?, updated_at = NOW()
@@ -437,10 +408,9 @@ exports.recomputeNilaiKokurikulerForKelas = async (idAspek, kelasId, userId, req
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 7. RECOMPUTE DESKRIPSI RATA-RATA (BARU)
+// 7. RECOMPUTE DESKRIPSI RATA-RATA
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Recompute deskripsi rata-rata setelah kategori berubah
 exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
     try {
         const tahunAjaranIndukId = req?.idTahunAjaranInduk;
@@ -451,7 +421,6 @@ exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
             throw new Error('Data tahun ajaran tidak ditemukan');
         }
 
-        // Ambil semua siswa di kelas
         const [siswaRows] = await db.execute(
             `SELECT siswa_id FROM siswa_kelas WHERE kelas_id = ? AND id_tahun_ajaran_induk = ?`,
             [kelasId, tahunAjaranIndukId]
@@ -459,7 +428,6 @@ exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
 
         if (siswaRows.length === 0) return;
 
-        // Ambil konfigurasi deskripsi rata-rata terbaru
         const [kategoriRows] = await db.execute(
             `SELECT rentang_min, rentang_max, deskripsi 
             FROM kategori_deskripsi_rata_rata 
@@ -470,11 +438,9 @@ exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
 
         if (kategoriRows.length === 0) return;
 
-        // Loop setiap siswa
         for (const siswa of siswaRows) {
             const siswaId = siswa.siswa_id;
 
-            // Hitung rata-rata nilai rapor siswa
             const [nilaiRaporRows] = await db.execute(
                 `SELECT AVG(nilai_rapor) as rata_rata 
                 FROM nilai_rapor 
@@ -485,8 +451,6 @@ exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
             if (nilaiRaporRows.length === 0 || nilaiRaporRows[0].rata_rata === null) continue;
 
             const rataRata = parseFloat(nilaiRaporRows[0].rata_rata);
-
-            // Cari deskripsi yang sesuai
             let deskripsi = null;
 
             for (const k of kategoriRows) {
@@ -497,7 +461,6 @@ exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
             }
 
             if (deskripsi) {
-                // Update deskripsi rata-rata di catatan_wali_kelas
                 await db.execute(
                     `UPDATE catatan_wali_kelas 
                     SET deskripsi_rata_rata = ?, updated_at = NOW()
@@ -516,7 +479,6 @@ exports.recomputeDeskripsiRataRataForKelas = async (kelasId, userId, req) => {
 // 8. REKAPAN DATA UNTUK EKSPOR
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Ambil rekap nilai + rata-rata + ranking untuk ekspor Excel
 exports.getRekapanData = async (userId, req) => {
     const tahunAjaranIndukId = req?.idTahunAjaranInduk;
     const semesterId = req?.idSemesterAktif;
@@ -571,7 +533,6 @@ exports.getRekapanData = async (userId, req) => {
         };
     });
 
-    // Ranking
     siswa
         .filter(s => s.rata_rata !== null)
         .sort((a, b) => b.rata_rata - a.rata_rata)
@@ -589,7 +550,6 @@ exports.getRekapanData = async (userId, req) => {
 // 9. VALIDASI URUTAN GRADE
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Validasi urutan grade: A(4) > B(3) > C(2) > D(1) > E(0)
 exports.validateGradeOrder = async (
     idAspek,
     tahunAjaranId,
