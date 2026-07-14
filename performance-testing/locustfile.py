@@ -2,7 +2,7 @@ from locust import HttpUser, task, between
 import random
 
 # ════════════════════════════════════════════════════════════════════════════
-# KONFIGURASI DATA UJI (SUDAH SESUAI DATABASE 100%)
+# KONFIGURASI DATA UJI 
 # ═════════════════════════════════════════════════════════════════════════════
 DATA_UJI = {
     "guru_kelas": {
@@ -20,13 +20,13 @@ DATA_UJI = {
         "password": "sekolah123",
         "role": "guru_bidang_studi"
     },
-    # ✅ DATA VALID DARI DATABASE:
+    # DATA VALID DARI DATABASE:
     "siswa_id": 1,              # Sudah di-assign ke kelas 1A
     "mapel_id": 8,              # Bahasa Inggris - yang diajar raid@sekolah.id
     "kelas_id": 1,              # 1 A
-    "tahun_ajaran_id": 3,       # ✅ 2025/2026 Ganjil (TA AKTIF SEKARANG!)
-    "semester": ["Ganjil"],     # ✅ HANYA Ganjil (sesuai TA aktif)
-    "jenis_penilaian": ["PTS"]  # ✅ HANYA PTS (status_pts = aktif)
+    "tahun_ajaran_id": 3,       #  2025/2026 Ganjil (TA AKTIF SEKARANG!)
+    "semester": ["Ganjil"],     # HANYA Ganjil (sesuai TA aktif)
+    "jenis_penilaian": ["PTS"]  # HANYA PTS (status_pts = aktif)
 }
 
 # Timeout untuk semua request (mencegah ConnectionResetError)
