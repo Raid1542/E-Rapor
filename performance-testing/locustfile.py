@@ -22,7 +22,7 @@ DATA_UJI = {
     },
     # DATA VALID DARI DATABASE:
     "siswa_id": 1,              # Sudah di-assign ke kelas 1A
-    "mapel_id": 8,              # Bahasa Inggris - yang diajar raid@sekolah.id
+    "mapel_id": 2,              # Bahasa Inggris - yang diajar raid@sekolah.id
     "kelas_id": 1,              # 1 A
     "tahun_ajaran_id": 3,       #  2025/2026 Ganjil (TA AKTIF SEKARANG!)
     "semester": ["Ganjil"],     # HANYA Ganjil (sesuai TA aktif)

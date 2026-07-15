@@ -5,7 +5,7 @@
  *         dan import nilai dari Excel dengan validasi konfigurasi penilaian
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 14 Juli 2026 - Penegakan validasi bilangan bulat ketat & proteksi data lama saat import (skip blank)
+ * Update: 15 Juli 2026 - Sinkronisasi dengan template dinamis backend & pesan user yang lebih jelas
  */
 'use client';
 
@@ -335,7 +335,7 @@ export default function InputNilaiClient() {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // FETCH NILAI SAAT MAPEL DIPILIH
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
     useEffect(() => {
         if (mapelList.length === 0 || selectedMapelId === null) {
             setSiswaList([]);
@@ -534,8 +534,8 @@ export default function InputNilaiClient() {
 
     // ✅ HANYA IZINKAN ANGKA (Mencegah desimal/koma dari awal)
     const handleNilaiChange = (komponenId: number, value: string) => {
-        if (value === '' || /^\d+$/.test(value)) {
-            // Cegah input > 100 saat mengetik (kecuali sedang mengetik '100')
+        if (value === '' || /^\d*$/.test(value)) {
+            // Cegah input > 3 digit (karena max 100)
             if (value.length > 3) return;
 
             const newValue = value === '' ? null : parseInt(value, 10);
@@ -694,17 +694,28 @@ export default function InputNilaiClient() {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
+            const periode = jenisPenilaianAktif || 'Aktif';
             a.href = url;
-            a.download = `Template_Import_Nilai_${currentMapel?.nama_mapel || 'Mapel'}.xlsx`;
+            a.download = `Template_Import_Nilai_${currentMapel?.nama_mapel || 'Mapel'}_Periode_${periode}.xlsx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
+            // ✅ PERBAIKAN: Pesan yang menjelaskan bahwa template hanya berisi kolom relevan
+            let kolomInfo = '';
+            if (jenisPenilaianAktif === 'PTS') {
+                kolomInfo = 'Hanya kolom PTS yang tersedia di template ini.';
+            } else if (jenisPenilaianAktif === 'PAS') {
+                kolomInfo = 'Hanya kolom UH dan PAS yang tersedia di template ini.';
+            } else {
+                kolomInfo = 'Semua kolom komponen tersedia.';
+            }
+
             showModal({
                 type: 'success',
                 title: 'Template Berhasil Diunduh',
-                message: 'Template Excel berhasil diunduh.\n\nLangkah selanjutnya:\n1. Buka file Excel\n2. Isi nilai pada kolom komponen (UH1-5, PTS, PAS)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Nilai"',
+                message: `Template Excel berhasil diunduh.\n\n⚠️ CATATAN PENTING:\n• ${kolomInfo}\n• Kolom periode lain sengaja tidak ditampilkan agar tidak membingungkan.\n\nLangkah selanjutnya:\n1. Buka file Excel\n2. Isi nilai pada kolom yang tersedia\n3. Simpan file\n4. Upload kembali melalui tombol "Import Nilai"`,
             });
         } catch (err: any) {
             showModal({ type: 'error', title: 'Gagal Mengunduh Template', message: err.message || 'Terjadi kesalahan saat mengunduh template.' });
@@ -876,8 +887,6 @@ export default function InputNilaiClient() {
             }
 
             const infoTambahan: string[] = [];
-            // ✅ Backend sekarang menolak desimal, jadi pesan pembulatan dihapus untuk menghindari kebingungan
-
             if (nisDuplikat > 0) infoTambahan.push(`• ${nisDuplikat} NIS duplikat ditemukan (hanya data pertama yang diproses)`);
             if (komponenDiabaikan.length > 0) infoTambahan.push(`• Kolom [${komponenDiabaikan.join(', ')}] diabaikan karena periode ${data.data?.periode_aktif || '-'} sedang aktif`);
             if (komponenTidakDikenali.length > 0) infoTambahan.push(`• Kolom [${komponenTidakDikenali.join(', ')}] tidak dikenali sebagai komponen penilaian`);
@@ -1559,7 +1568,7 @@ export default function InputNilaiClient() {
                             </p>
                             <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
                                 <li>Download template Excel (sudah berisi daftar siswa)</li>
-                                <li>Isi nilai pada kolom komponen (UH1-5, PTS, PAS)</li>
+                                <li>Isi nilai pada kolom komponen yang tersedia</li>
                                 <li>Simpan file Excel</li>
                                 <li>Upload file Excel yang sudah diisi</li>
                                 <li>Klik "Import Nilai" untuk memproses</li>

@@ -4,7 +4,7 @@
  *         Menangani CRUD nilai detail per komponen penilaian dengan validasi ketat
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 10 Juli 2026
- * Update: 14 Juli 2026 - Penegakan bilangan bulat (integer) & penanganan null/undefined yang lebih ketat
+ * Update: 15 Juli 2026 - Penyesuaian dengan logika Guru Bidang Studi (izin null untuk reset nilai, validasi integer ketat)
  */
 
 const db = require('../../config/db');
@@ -27,7 +27,7 @@ const QUERY_CHECK_STATUS_SISWA = `
   SELECT status FROM siswa WHERE id_siswa = ?
 `;
 
-// ON DUPLICATE KEY UPDATE menangani overwrite dengan aman (idempotent)
+// ✅ PERBAIKAN: Mendukung nilai NULL untuk mereset/menghapus nilai yang salah input
 const QUERY_SIMPAN_NILAI = `
   INSERT INTO nilai_detail (siswa_id, mapel_id, komponen_id, nilai, tahun_ajaran_id) 
   VALUES (?, ?, ?, ?, ?) 
@@ -82,28 +82,32 @@ const nilaiModel = {
   async simpanNilaiDetail(data) {
     const { siswa_id, mapel_id, komponen_id, nilai, kelas_id, tahun_ajaran_id, user_id } = data;
 
-    // 1. Validasi parameter wajib (penolakan eksplisit terhadap null/undefined)
-    if (!siswa_id || !mapel_id || !komponen_id || nilai === undefined || nilai === null || !kelas_id || !tahun_ajaran_id || !user_id) {
-      throw new Error('Data tidak lengkap. Semua parameter wajib diisi dan tidak boleh null.');
+    // 1. Validasi parameter wajib (izinkan nilai null/'' untuk reset/hapus nilai)
+    if (!siswa_id || !mapel_id || !komponen_id || nilai === undefined || !kelas_id || !tahun_ajaran_id || !user_id) {
+      throw new Error('Data tidak lengkap. Semua parameter wajib diisi.');
     }
 
     try {
-      // 2. ✅ PERBAIKAN: Validasi ketat BILANGAN BULAT (Integer) 0-100
-      const strNilai = String(nilai).trim();
-      
-      // Cek manual apakah ada tanda desimal (titik atau koma)
-      if (strNilai.includes('.') || strNilai.includes(',')) {
-        throw new Error(`Nilai harus berupa bilangan bulat. Diterima: "${nilai}" (desimal tidak diizinkan)`);
-      }
+      let parsedNilai = null;
 
-      const parsedNilai = parseInt(strNilai, 10);
+      // 2. ✅ PERBAIKAN: Validasi ketat BILANGAN BULAT (Integer) 0-100, tapi izinkan null untuk reset
+      if (nilai !== null && nilai !== '') {
+        const strNilai = String(nilai).trim();
+        
+        // Cek manual apakah ada tanda desimal (titik atau koma)
+        if (strNilai.includes('.') || strNilai.includes(',')) {
+          throw new Error(`Nilai harus berupa bilangan bulat. Diterima: "${nilai}" (desimal tidak diizinkan)`);
+        }
 
-      if (isNaN(parsedNilai)) {
-        throw new Error(`Format nilai tidak valid: "${nilai}". Harus berupa angka.`);
-      }
+        parsedNilai = parseInt(strNilai, 10);
 
-      if (parsedNilai < 0 || parsedNilai > 100) {
-        throw new Error(`Nilai harus berada di antara 0 sampai 100. Diterima: ${parsedNilai}`);
+        if (isNaN(parsedNilai)) {
+          throw new Error(`Format nilai tidak valid: "${nilai}". Harus berupa angka.`);
+        }
+
+        if (parsedNilai < 0 || parsedNilai > 100) {
+          throw new Error(`Nilai harus berada di antara 0 sampai 100. Diterima: ${parsedNilai}`);
+        }
       }
 
       // 3. Cek siswa terdaftar di kelas
@@ -127,7 +131,7 @@ const nilaiModel = {
         throw new Error('Akses ditolak: Anda tidak mengajar mata pelajaran ini di kelas tersebut.');
       }
 
-      // 6. Simpan nilai
+      // 6. Simpan nilai (parsedNilai bisa berupa angka 0-100 atau null untuk reset)
       await db.execute(QUERY_SIMPAN_NILAI, [siswa_id, mapel_id, komponen_id, parsedNilai, tahun_ajaran_id]);
       
       return { siswa_id, mapel_id, komponen_id, nilai: parsedNilai, tahun_ajaran_id };

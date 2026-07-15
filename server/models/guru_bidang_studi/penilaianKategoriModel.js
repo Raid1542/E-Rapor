@@ -3,6 +3,7 @@
  * Fungsi: Model kategori nilai akademik (filter jenis_penilaian, cek coverage)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 14 Juli 2026 - Fix robust comparison di isUnchanged & fix parameter mismatch di updateKategori
  */
 
 const db = require('../../config/db');
@@ -56,9 +57,10 @@ const QUERY_CREATE_KATEGORI = `
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
+// ✅ PERBAIKAN: Hapus 'urutan' dari query update karena controller tidak mengirimnya saat edit
 const QUERY_UPDATE_KATEGORI = `
     UPDATE konfigurasi_nilai_rapor 
-    SET min_nilai = ?, max_nilai = ?, deskripsi = ?, urutan = ? 
+    SET min_nilai = ?, max_nilai = ?, deskripsi = ? 
     WHERE id_config = ?
 `;
 
@@ -186,17 +188,14 @@ const cekCoverage0to100 = async (mapelId, semesterId, kelasId, jenisPenilaian = 
         const [kategoriRows] = await db.execute(query, params);
         const gaps = [];
         
-        // Cek apakah ada kategori sama sekali
         if (kategoriRows.length === 0) {
             return { covered: false, gaps: [{ aspek: 'Akademik', gap: '0-100' }] };
         }
         
-        // Cek celah di awal (0 sampai min_nilai pertama)
         if (kategoriRows[0].min_nilai > 0) {
             gaps.push({ aspek: 'Akademik', gap: `0-${kategoriRows[0].min_nilai - 1}` });
         }
         
-        // Cek celah antar kategori
         for (let i = 0; i < kategoriRows.length - 1; i++) {
             const currentMax = kategoriRows[i].max_nilai;
             const nextMin = kategoriRows[i + 1].min_nilai;
@@ -205,7 +204,6 @@ const cekCoverage0to100 = async (mapelId, semesterId, kelasId, jenisPenilaian = 
             }
         }
         
-        // Cek celah di akhir (max_nilai terakhir sampai 100)
         const lastMax = kategoriRows[kategoriRows.length - 1].max_nilai;
         if (lastMax < 100) {
             gaps.push({ aspek: 'Akademik', gap: `${lastMax + 1}-100` });
@@ -236,12 +234,12 @@ const createKategori = async (data) => {
     }
 };
 
-// Update kategori nilai
+// ✅ PERBAIKAN: Update kategori nilai (menyesuaikan dengan payload controller yang tidak mengirim 'urutan')
 const updateKategori = async (id, data) => {
     try {
-        const { min_nilai, max_nilai, deskripsi, urutan } = data;
+        const { min_nilai, max_nilai, deskripsi } = data; 
         const [result] = await db.execute(QUERY_UPDATE_KATEGORI, [
-            min_nilai, max_nilai, deskripsi, urutan, id
+            min_nilai, max_nilai, deskripsi, id
         ]);
         return result.affectedRows;
     } catch (err) {
@@ -280,17 +278,33 @@ const cekNilaiSiswaInRange = async (mapelId, semesterId, minNilai, maxNilai, kel
     }
 };
 
-// Cek apakah data tidak berubah (untuk validasi update)
+// ✅ PERBAIKAN: Fungsi perbandingan yang ROBUST untuk mencegah false positive "Tidak ada perubahan"
 const isUnchanged = (oldData, newData) => {
-    return (
-        oldData.min_nilai === newData.min_nilai &&
-        oldData.max_nilai === newData.max_nilai &&
-        oldData.deskripsi.trim() === newData.deskripsi.trim()
-    );
+    // Normalisasi ke Number untuk menghindari bug "80" (string) === 80 (number) -> false
+    const oldMin = Number(oldData.min_nilai);
+    const newMin = Number(newData.min_nilai);
+    const oldMax = Number(oldData.max_nilai);
+    const newMax = Number(newData.max_nilai);
+    
+    // Normalisasi string dan handle jika null/undefined
+    const oldDesc = String(oldData.deskripsi || '').trim();
+    const newDesc = String(newData.deskripsi || '').trim();
+
+    return oldMin === newMin && oldMax === newMax && oldDesc === newDesc;
 };
 
 module.exports = {
-    getTahunAjaranAktif, validateGuruMapel, getKategoriByMapel, getKategoriById, getLastUrutan,
-    cekRangeOverlap, formatOverlapInfo, cekCoverage0to100, isUnchanged, createKategori,
-    updateKategori, deleteKategori, cekNilaiSiswaInRange,
+    getTahunAjaranAktif, 
+    validateGuruMapel, 
+    getKategoriByMapel, 
+    getKategoriById, 
+    getLastUrutan,
+    cekRangeOverlap, 
+    formatOverlapInfo, 
+    cekCoverage0to100, 
+    isUnchanged, 
+    createKategori,
+    updateKategori, 
+    deleteKategori, 
+    cekNilaiSiswaInRange,
 };

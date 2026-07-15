@@ -18,7 +18,7 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 200,        // ✅ Penting untuk load testing
+    connectionLimit: 30,        
     connectTimeout: 30000,       // ✅ Timeout saat connect (pengganti acquireTimeout)
     idleTimeout: 60000,          // ✅ Timeout koneksi idle (pengganti timeout)
     queueLimit: 0,               // ✅ Antrian tidak terbatas
