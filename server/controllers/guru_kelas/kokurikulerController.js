@@ -5,7 +5,7 @@
  *         + Import nilai kokurikuler dari Excel
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 15 Juli 2026 - Template dinamis (hanya Mutaba'ah saat PTS, semua aspek saat PAS) + Pre-fill data existing
+ * Update: 15 Juli 2026 - Fix: Menghapus panggilan ke model yang tidak ada, menggunakan query langsung
  */
 
 const db = require('../../config/db');
@@ -34,6 +34,15 @@ const DAFTAR_ASPEK = [
 const ERROR_MESSAGES = {
     KATEGORI_BELUM_DIATUR: 'KATEGORI_BELUM_DIATUR',
     GRADE_TIDAK_DITEMUKAN: 'GRADE_TIDAK_DITEMUKAN',
+};
+
+// ✅ FIX: Helper function untuk mengambil tahun ajaran aktif langsung dari DB
+const getTahunAjaranAktif = async () => {
+    const [rows] = await db.execute(
+        `SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status_pts, status_pas 
+         FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1`
+    );
+    return rows.length > 0 ? rows[0] : null;
 };
 
 // Tentukan jenis penilaian aktif berdasarkan status PTS/PAS
@@ -189,7 +198,8 @@ exports.getNilaiKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
@@ -290,7 +300,8 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
         const { siswaId } = req.params;
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
@@ -329,7 +340,8 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
@@ -499,8 +511,9 @@ exports.updateNilaiKokurikuler = async (req, res) => {
 exports.getJudulProyek = async (req, res) => {
     try {
         const userId = req.user.id;
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
-
+        
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
 
         const kelasId = await getKelasIdByGuru(userId, taAktif.id_tahun_ajaran);
@@ -523,7 +536,8 @@ exports.saveJudulProyek = async (req, res) => {
         const { judul } = req.body;
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
 
         const status_pas = taAktif.status_pas;
@@ -569,7 +583,8 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
@@ -778,7 +793,8 @@ exports.importNilaiKokurikuler = async (req, res) => {
 
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
         }
@@ -1341,7 +1357,8 @@ exports.cekStatusKategoriKokurikuler = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const taAktif = await kokurikulerModel.getTahunAjaranAktif();
+        // ✅ FIX: Gunakan helper function
+        const taAktif = await getTahunAjaranAktif();
         if (!taAktif) {
             return res.status(400).json({
                 success: false,
@@ -1385,7 +1402,7 @@ exports.cekStatusKategoriKokurikuler = async (req, res) => {
         if (kategoriCheck.exists) {
             message = 'Semua kategori sudah diatur dengan lengkap';
         } else {
-            const totalMasalah = kategoriCheck.aspekTanpaKategori.length + kategoriCheck.aspekDenganCelah.length;
+            const totalMasalah = kategoriCheck.aspekTanpaKategori.length + (kategoriCheck.aspekDenganCelah ? kategoriCheck.aspekDenganCelah.length : 0);
             message = `Ditemukan ${totalMasalah} masalah pada kategori grade`;
         }
 
@@ -1394,7 +1411,7 @@ exports.cekStatusKategoriKokurikuler = async (req, res) => {
             data: {
                 configured: kategoriCheck.exists,
                 aspek_tanpa_kategori: kategoriCheck.aspekTanpaKategori,
-                aspek_dengan_celah: kategoriCheck.aspekDenganCelah,
+                aspek_dengan_celah: kategoriCheck.aspekDenganCelah || [],
                 jenis_penilaian,
                 semester,
                 message: message,
