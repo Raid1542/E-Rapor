@@ -2,20 +2,21 @@
  * Nama File: atur_penilaian_gbs_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian guru bidang studi
  * UPDATE:
- *   ✅ FIX: Perbaiki struktur JSX (fragment & ternary)
- *   ✅ HAPUS: Kolom Aksi di tabel
+ *   ✅ FIX: Perbaiki struktur JSX, validasi, dan logika read-only
+ *   ✅ FIX: Tambah validasi range minimal 3 poin di frontend
+ *   ✅ HAPUS: Filter mapel 'pilihan' (guru bisa mengajar mapel wajib)
  *   ✅ UBAH: Tombol "Tambah Kategori" jadi "Edit Semua" (batch edit)
  *   - Sorting kategori dari nilai terbesar ke terkecil
- *   - Perbaiki border radius modal
+ *   - Perbaiki border radius modal dan konsistensi UI
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    Pencil, Eye, X, Search, CheckCircle2, AlertCircle,
+    Pencil, X, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, LogOut, Lock, BookOpen,
-    Users, GraduationCap, Trash2, Plus, FileText, TrendingUp,
+    Trash2, Plus, FileText, TrendingUp,
     Save, AlertTriangle, Info
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
@@ -112,7 +113,6 @@ interface CoverageInfo {
     gaps?: Array<{ aspek: string; gap: string }>;
 }
 
-// ✅ BARU: Tipe untuk batch edit
 interface BatchKategoriItem {
     id?: number;
     min_nilai: number;
@@ -239,9 +239,10 @@ export default function AturPenilaianGBSClient() {
     const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
 
-    const isPeriodNotActive = statusPTS !== 'aktif' && statusPAS !== 'aktif';
-    const isPeriodLocked = statusPTS === 'selesai' && statusPAS === 'selesai';
-    const isReadOnly = isPeriodNotActive || isPeriodLocked;
+    // ✅ PERBAIKAN: Logika read-only yang konsisten
+    const isPeriodLocked = statusPTS === 'selesai' || statusPAS === 'selesai';
+    const isPeriodNotOpen = statusPTS === 'nonaktif' && statusPAS === 'nonaktif';
+    const isReadOnly = isPeriodLocked || isPeriodNotOpen;
 
     const [activeTab, setActiveTab] = useState<'akademik' | 'bobot'>('akademik');
     const [loading, setLoading] = useState(true);
@@ -257,7 +258,6 @@ export default function AturPenilaianGBSClient() {
     const [kategoriLoading, setKategoriLoading] = useState(false);
     const [coverageInfo, setCoverageInfo] = useState<CoverageInfo | null>(null);
 
-    // ✅ BARU: State untuk Batch Edit
     const [showBatchEdit, setShowBatchEdit] = useState(false);
     const [batchEditClosing, setBatchEditClosing] = useState(false);
     const [batchKategori, setBatchKategori] = useState<BatchKategoriItem[]>([]);
@@ -270,7 +270,6 @@ export default function AturPenilaianGBSClient() {
     const [bobotList, setBobotList] = useState<BobotItem[]>([]);
     const [bobotLoading, setBobotLoading] = useState(false);
     const initialBobotListRef = useRef<BobotItem[]>([]);
-
     const [isSavingBobot, setIsSavingBobot] = useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -294,7 +293,6 @@ export default function AturPenilaianGBSClient() {
                 }
 
                 const headers = { Authorization: `Bearer ${token}` };
-
                 const [taRes, komponenRes, mapelRes] = await Promise.all([
                     fetch(`${API}/tahun-ajaran/aktif`, { headers }),
                     fetch(`${API}/atur-penilaian/komponen`, { headers }),
@@ -313,9 +311,7 @@ export default function AturPenilaianGBSClient() {
                 }
 
                 const [taData, komponenData, mapelData] = await Promise.all([
-                    taRes.json(),
-                    komponenRes.json(),
-                    mapelRes.json(),
+                    taRes.json(), komponenRes.json(), mapelRes.json(),
                 ]);
 
                 const { status_pts, status_pas } = taData.data;
@@ -327,7 +323,7 @@ export default function AturPenilaianGBSClient() {
                 setKomponenList(komponenData.data || []);
                 setMapelList(mapelData.data || []);
 
-                if (mapelData.data?.length === 0) {
+                if (!mapelData.data || mapelData.data.length === 0) {
                     setIsNotAssigned(true);
                 }
             } catch (err: any) {
@@ -352,29 +348,24 @@ export default function AturPenilaianGBSClient() {
                 const token = localStorage.getItem('token');
                 if (!token) return;
 
-                const res = await fetch(
-                    `${API}/atur-penilaian/kelas-by-mapel?mapel_id=${selectedMapelAkademik}`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
+                const res = await fetch(`${API}/atur-penilaian/kelas-by-mapel?mapel_id=${selectedMapelAkademik}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
 
                 if (res.ok) {
                     const data = await res.json();
                     const kelasData = data.data || [];
                     setKelasListAkademik(kelasData);
-                    if (kelasData.length > 0) {
-                        setSelectedKelasAkademik(kelasData[0].kelas_id);
-                    }
+                    if (kelasData.length > 0) setSelectedKelasAkademik(kelasData[0].kelas_id);
                 } else {
                     setKelasListAkademik([]);
                     setSelectedKelasAkademik(null);
                 }
             } catch (err) {
-                console.error('Error fetch kelas:', err);
                 setKelasListAkademik([]);
                 setSelectedKelasAkademik(null);
             }
         };
-
         fetchKelas();
     }, [selectedMapelAkademik]);
 
@@ -390,29 +381,24 @@ export default function AturPenilaianGBSClient() {
                 const token = localStorage.getItem('token');
                 if (!token) return;
 
-                const res = await fetch(
-                    `${API}/atur-penilaian/kelas-by-mapel?mapel_id=${selectedMapelBobot}`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
+                const res = await fetch(`${API}/atur-penilaian/kelas-by-mapel?mapel_id=${selectedMapelBobot}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
 
                 if (res.ok) {
                     const data = await res.json();
                     const kelasData = data.data || [];
                     setKelasListBobot(kelasData);
-                    if (kelasData.length > 0) {
-                        setSelectedKelasBobot(kelasData[0].kelas_id);
-                    }
+                    if (kelasData.length > 0) setSelectedKelasBobot(kelasData[0].kelas_id);
                 } else {
                     setKelasListBobot([]);
                     setSelectedKelasBobot(null);
                 }
             } catch (err) {
-                console.error('Error fetch kelas:', err);
                 setKelasListBobot([]);
                 setSelectedKelasBobot(null);
             }
         };
-
         fetchKelas();
     }, [selectedMapelBobot]);
 
@@ -441,17 +427,12 @@ export default function AturPenilaianGBSClient() {
 
                 if (!res.ok) {
                     let errorData;
-                    try {
-                        errorData = await res.json();
-                    } catch {
-                        errorData = { message: await res.text(), code: null };
-                    }
+                    try { errorData = await res.json(); } catch { errorData = { message: await res.text(), code: null }; }
 
                     if (res.status === 403 || errorData.code === 'NO_ACCESS_TO_MAPEL') {
                         showModal({ type: 'error', title: 'Akses Ditolak', message: 'Anda tidak memiliki akses ke mata pelajaran ini.' });
                         return;
                     }
-
                     throw new Error(errorData.message || `HTTP ${res.status}`);
                 }
 
@@ -493,17 +474,12 @@ export default function AturPenilaianGBSClient() {
 
                 if (!res.ok) {
                     let errorData;
-                    try {
-                        errorData = await res.json();
-                    } catch {
-                        errorData = { message: await res.text(), code: null };
-                    }
+                    try { errorData = await res.json(); } catch { errorData = { message: await res.text(), code: null }; }
 
                     if (res.status === 403 || errorData.code === 'NO_ACCESS_TO_MAPEL') {
                         showModal({ type: 'error', title: 'Akses Ditolak', message: 'Anda tidak memiliki akses ke mata pelajaran ini.' });
                         return;
                     }
-
                     throw new Error(errorData.message || `HTTP ${res.status}`);
                 }
 
@@ -541,7 +517,7 @@ export default function AturPenilaianGBSClient() {
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ✅ BARU: BATCH EDIT KATEGORI HANDLERS
+    // BATCH EDIT KATEGORI HANDLERS
     // ═══════════════════════════════════════════════════════════════════════════
 
     const openBatchEdit = () => {
@@ -554,7 +530,6 @@ export default function AturPenilaianGBSClient() {
             return;
         }
 
-        // Load existing kategori ke batch
         const existing = kategoriList
             .map(k => ({
                 id: k.id,
@@ -569,7 +544,6 @@ export default function AturPenilaianGBSClient() {
             setBatchKategori(existing);
             setOriginalBatchKategori([...existing]);
         } else {
-            // Default: 5 kategori standar (A, B, C, D, E)
             const defaults: BatchKategoriItem[] = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                 { min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -606,7 +580,7 @@ export default function AturPenilaianGBSClient() {
         setBatchKategori(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
     };
 
-    // ✅ Validasi batch: cek overlap, range 0-100, deskripsi
+    // ✅ PERBAIKAN: Tambah validasi range minimal 3 poin
     const validateBatchKategori = (): { valid: boolean; errors: string[] } => {
         const errors: string[] = [];
 
@@ -616,7 +590,6 @@ export default function AturPenilaianGBSClient() {
         }
 
         batchKategori.forEach((k, i) => {
-            // Validasi nilai
             if (isNaN(k.min_nilai) || isNaN(k.max_nilai)) {
                 errors.push(`Baris ${i + 1}: Nilai min/max harus angka.`);
             } else {
@@ -626,20 +599,21 @@ export default function AturPenilaianGBSClient() {
                 if (k.min_nilai >= k.max_nilai) {
                     errors.push(`Baris ${i + 1}: Min (${k.min_nilai}) harus < Max (${k.max_nilai}).`);
                 }
+                if ((k.max_nilai - k.min_nilai) < 3) {
+                    errors.push(`Baris ${i + 1}: Range nilai minimal 3 poin.`);
+                }
             }
 
-            // Validasi deskripsi
             if (!k.deskripsi || k.deskripsi.trim().length < 3) {
                 errors.push(`Baris ${i + 1}: Deskripsi minimal 3 karakter.`);
             }
         });
 
-        // Cek overlap
         const sorted = [...batchKategori].sort((a, b) => a.min_nilai - b.min_nilai);
         let covered = new Set<number>();
         let hasOverlap = false;
         sorted.forEach(k => {
-            for (let i = k.min_nilai; i <= k.max_nilai; i++) {
+            for (let i = Math.floor(k.min_nilai); i <= Math.floor(k.max_nilai); i++) {
                 if (covered.has(i)) hasOverlap = true;
                 covered.add(i);
             }
@@ -649,7 +623,6 @@ export default function AturPenilaianGBSClient() {
         return { valid: errors.length === 0, errors };
     };
 
-    // ✅ Cek apakah ada perubahan
     const hasBatchChanges = (): boolean => {
         if (originalBatchKategori.length === 0) return true;
         if (batchKategori.length !== originalBatchKategori.length) return true;
@@ -685,7 +658,6 @@ export default function AturPenilaianGBSClient() {
             const token = localStorage.getItem('token');
             if (!token) throw new Error('Sesi berakhir');
 
-            // ✅ Strategi: Delete semua existing, lalu insert semua baru
             const deletePromises = originalBatchKategori
                 .filter(k => k.id)
                 .map(k => fetch(`${API}/atur-penilaian/kategori/${k.id}`, {
@@ -694,7 +666,6 @@ export default function AturPenilaianGBSClient() {
                 }));
             await Promise.all(deletePromises);
 
-            // Insert semua kategori baru
             const insertPromises = batchKategori.map(k => fetch(`${API}/atur-penilaian/kategori`, {
                 method: 'POST',
                 headers: {
@@ -705,9 +676,9 @@ export default function AturPenilaianGBSClient() {
                     min_nilai: Math.floor(k.min_nilai),
                     max_nilai: Math.floor(k.max_nilai),
                     deskripsi: k.deskripsi.trim(),
-                    urutan: 0,
                     mapel_id: selectedMapelAkademik,
                     kelas_id: selectedKelasAkademik,
+                    jenis_penilaian: jenisPenilaianAktif || 'PAS'
                 })
             }));
 
@@ -723,7 +694,6 @@ export default function AturPenilaianGBSClient() {
                     message: `${batchKategori.length} kategori berhasil disimpan.`
                 });
 
-                // Reload data
                 const reloadRes = await fetch(
                     `${API}/atur-penilaian/kategori?mapel_id=${selectedMapelAkademik}&kelas_id=${selectedKelasAkademik}`,
                     { headers: { Authorization: `Bearer ${token}` } }
@@ -810,7 +780,6 @@ export default function AturPenilaianGBSClient() {
         setIsSavingBobot(true);
         try {
             const token = localStorage.getItem('token');
-
             const payload = {
                 kelas_id: selectedKelasBobot,
                 bobot_list: bobotList
@@ -900,18 +869,18 @@ export default function AturPenilaianGBSClient() {
             {isReadOnly && (
                 <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up"
                     style={{
-                        background: isPeriodLocked ? '#fef2f2' : '#fef3c7',
-                        border: `1px solid ${isPeriodLocked ? '#fca5a5' : '#fcd34d'}`
+                        background: isPeriodLocked ? '#fef2f2' : '#fff7ed',
+                        border: `1px solid ${isPeriodLocked ? '#fca5a5' : '#fdba74'}`
                     }}>
-                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isPeriodLocked ? 'text-red-600' : 'text-yellow-600'}`} />
+                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isPeriodLocked ? 'text-red-600' : 'text-orange-600'}`} />
                     <div className="flex-1">
-                        <p className={`text-sm font-bold mb-1 ${isPeriodLocked ? 'text-red-900' : 'text-yellow-900'}`}>
+                        <p className={`text-sm font-bold mb-1 ${isPeriodLocked ? 'text-red-900' : 'text-orange-900'}`}>
                             {isPeriodLocked ? '🔒 Periode Penilaian Selesai' : '⏳ Periode Penilaian Belum Aktif'}
                         </p>
-                        <p className={`text-xs ${isPeriodLocked ? 'text-red-800' : 'text-yellow-800'}`}>
+                        <p className={`text-xs ${isPeriodLocked ? 'text-red-800' : 'text-orange-800'}`}>
                             {isPeriodLocked
                                 ? 'Konfigurasi kategori dan bobot sudah dikunci dan tidak dapat diubah.'
-                                : 'Anda dapat menyiapkan kategori dan bobot penilaian sebagai persiapan.'}
+                                : 'Periode penilaian belum aktif. Silakan hubungi admin.'}
                         </p>
                     </div>
                 </div>
@@ -954,12 +923,9 @@ export default function AturPenilaianGBSClient() {
                     {/* ====== TAB: AKADEMIK ====== */}
                     {activeTab === 'akademik' && (
                         <div>
-                            {/* Dropdown Mapel & Kelas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                                 <div>
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                        Mata Pelajaran
-                                    </label>
+                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Mata Pelajaran</label>
                                     <select
                                         value={selectedMapelAkademik || ''}
                                         onChange={(e) => {
@@ -969,7 +935,8 @@ export default function AturPenilaianGBSClient() {
                                         className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
                                     >
                                         <option value="">-- Pilih Mata Pelajaran --</option>
-                                        {mapelList.filter(m => m.jenis === 'pilihan').map((mapel) => (
+                                        {/* ✅ PERBAIKAN: Hapus filter 'pilihan' agar menampilkan semua mapel yang ditugaskan */}
+                                        {mapelList.map((mapel) => (
                                             <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>{mapel.nama_mapel}</option>
                                         ))}
                                     </select>
@@ -977,9 +944,7 @@ export default function AturPenilaianGBSClient() {
 
                                 {selectedMapelAkademik && kelasListAkademik.length > 0 && (
                                     <div>
-                                        <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                            Kelas
-                                        </label>
+                                        <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Kelas</label>
                                         <select
                                             value={selectedKelasAkademik || ''}
                                             onChange={(e) => setSelectedKelasAkademik(e.target.value ? Number(e.target.value) : null)}
@@ -998,7 +963,6 @@ export default function AturPenilaianGBSClient() {
                                 <>
                                     <CoverageWarning coverage={coverageInfo} />
 
-                                    {/* ✅ PERBAIKAN: Toolbar dengan tombol "Edit Semua" */}
                                     <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
                                         <div className="flex items-center gap-2">
                                             <FileText size={14} style={{ color: THEME.colors.primary }} />
@@ -1017,21 +981,10 @@ export default function AturPenilaianGBSClient() {
                                             onMouseEnter={(e) => { if (!isReadOnly) e.currentTarget.style.background = THEME.gradients.primary; }}
                                             onMouseLeave={(e) => { if (!isReadOnly) e.currentTarget.style.background = THEME.gradients.secondary; }}
                                         >
-                                            {isReadOnly ? (
-                                                <>
-                                                    <Lock size={16} />
-                                                    Terkunci
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Pencil size={16} />
-                                                    Edit Semua
-                                                </>
-                                            )}
+                                            {isReadOnly ? (<><Lock size={16} /> Terkunci</>) : (<><Pencil size={16} /> Edit Semua</>)}
                                         </button>
                                     </div>
 
-                                    {/* ✅ PERBAIKAN: Table tanpa kolom Aksi */}
                                     <div className="overflow-x-auto scrollbar-thin rounded-xl" style={{ border: `1px solid ${THEME.colors.border}` }}>
                                         <div className="min-w-[640px]">
                                             <table className="w-full text-sm border-collapse">
@@ -1054,12 +1007,9 @@ export default function AturPenilaianGBSClient() {
                                                         </tr>
                                                     ) : kategoriList.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan={3} className="py-12 text-center text-gray-400 text-sm">
-                                                                Belum ada kategori
-                                                            </td>
+                                                            <td colSpan={3} className="py-12 text-center text-gray-400 text-sm">Belum ada kategori</td>
                                                         </tr>
                                                     ) : (
-                                                        // ✅ SORTING: Urutkan dari nilai tertinggi (max_nilai) ke terendah
                                                         kategoriList
                                                             .slice()
                                                             .sort((a, b) => b.max_nilai - a.max_nilai)
@@ -1098,12 +1048,9 @@ export default function AturPenilaianGBSClient() {
                     {/* ====== TAB: BOBOT ====== */}
                     {activeTab === 'bobot' && (
                         <div>
-                            {/* Dropdown Mapel & Kelas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                                 <div>
-                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                        Mata Pelajaran
-                                    </label>
+                                    <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Mata Pelajaran</label>
                                     <select
                                         value={selectedMapelBobot || ''}
                                         onChange={(e) => {
@@ -1113,7 +1060,7 @@ export default function AturPenilaianGBSClient() {
                                         className="w-full border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
                                     >
                                         <option value="">-- Pilih Mata Pelajaran --</option>
-                                        {mapelList.filter(m => m.jenis === 'pilihan').map((mapel) => (
+                                        {mapelList.map((mapel) => (
                                             <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>{mapel.nama_mapel}</option>
                                         ))}
                                     </select>
@@ -1121,9 +1068,7 @@ export default function AturPenilaianGBSClient() {
 
                                 {selectedMapelBobot && kelasListBobot.length > 0 && (
                                     <div>
-                                        <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                            Kelas
-                                        </label>
+                                        <label className="block text-sm font-semibold mb-1.5" style={{ color: '#7a3a0a' }}>Kelas</label>
                                         <select
                                             value={selectedKelasBobot || ''}
                                             onChange={(e) => setSelectedKelasBobot(e.target.value ? Number(e.target.value) : null)}
@@ -1187,11 +1132,8 @@ export default function AturPenilaianGBSClient() {
                                                                 onBlur={(e) => {
                                                                     const val = parseFloat(e.target.value);
                                                                     if (!isNaN(val)) {
-                                                                        if (val < 0) {
-                                                                            handleBobotChange(bobot.komponen_id, '0');
-                                                                        } else if (val > 100) {
-                                                                            handleBobotChange(bobot.komponen_id, '100');
-                                                                        }
+                                                                        if (val < 0) handleBobotChange(bobot.komponen_id, '0');
+                                                                        else if (val > 100) handleBobotChange(bobot.komponen_id, '100');
                                                                     }
                                                                 }}
                                                                 disabled={!isEditable}
@@ -1222,15 +1164,9 @@ export default function AturPenilaianGBSClient() {
                                                     onMouseEnter={(e) => { if (!isSavingBobot && isBobotValid) e.currentTarget.style.background = THEME.gradients.primary; }}
                                                     onMouseLeave={(e) => { if (!isSavingBobot && isBobotValid) e.currentTarget.style.background = THEME.gradients.secondary; }}>
                                                     {isSavingBobot ? (
-                                                        <>
-                                                            <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                                            Menyimpan...
-                                                        </>
+                                                        <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Menyimpan...</>
                                                     ) : (
-                                                        <>
-                                                            <Save size={16} />
-                                                            Simpan Bobot
-                                                        </>
+                                                        <><Save size={16} /> Simpan Bobot</>
                                                     )}
                                                 </button>
                                             </div>
@@ -1250,9 +1186,7 @@ export default function AturPenilaianGBSClient() {
                 </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════════════════ */}
-            {/* ✅ BARU: MODAL BATCH EDIT KATEGORI */}
-            {/* ═══════════════════════════════════════════════════════════════════════════ */}
+            {/* ====== MODAL BATCH EDIT KATEGORI ====== */}
             {showBatchEdit && (
                 <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeBatchEdit(); }}>
@@ -1260,7 +1194,6 @@ export default function AturPenilaianGBSClient() {
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${batchEditClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={{ border: `1px solid ${THEME.colors.border}` }}>
 
-                        {/* Header */}
                         <div className="flex items-center justify-between px-6 py-4" style={{ background: THEME.gradients.header }}>
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
@@ -1271,29 +1204,22 @@ export default function AturPenilaianGBSClient() {
                                     <p className="text-xs text-orange-100 mt-0.5">Kelola semua kategori sekaligus</p>
                                 </div>
                             </div>
-                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
 
-                        {/* Content */}
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                {/* Info Box */}
                                 <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
                                     <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}>
-                                        <strong>💡 Tips:</strong> Isi semua kategori sekaligus. Sistem akan menyimpan semua kategori dalam 1 aksi.
-                                        Pastikan range nilai 0-100 lengkap tanpa overlap.
+                                        <strong>💡 Tips:</strong> Isi semua kategori sekaligus. Pastikan range nilai 0-100 lengkap tanpa overlap dan minimal 3 poin per kategori.
                                     </p>
                                 </div>
 
-                                {/* Header List */}
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>
-                                        Kategori ({batchKategori.length})
-                                    </h3>
+                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchKategori.length})</h3>
                                     <button onClick={addBatchRow}
                                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                                         style={{ background: '#fff7ed', border: '1.5px solid #fb923c', color: '#c2410c' }}
@@ -1303,67 +1229,43 @@ export default function AturPenilaianGBSClient() {
                                     </button>
                                 </div>
 
-                                {/* List Kategori */}
                                 <div className="space-y-3">
                                     {batchKategori.map((kategori, index) => {
-                                        // Validasi real-time per baris
                                         const errors: string[] = [];
                                         if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
                                         else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
+                                        else if ((kategori.max_nilai - kategori.min_nilai) < 3) errors.push('Range minimal 3 poin');
                                         if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
 
                                         return (
                                             <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
                                                 <div className="flex items-start gap-3">
-                                                    {/* Nomor */}
                                                     <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
                                                         style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)' }}>
                                                         {index + 1}
                                                     </div>
 
-                                                    {/* Inputs */}
                                                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                         <div>
-                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                                                Min <span className="text-red-500">*</span>
-                                                            </label>
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                max="100"
-                                                                value={kategori.min_nilai}
+                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Min <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" value={kategori.min_nilai}
                                                                 onChange={(e) => updateBatchRow(index, 'min_nilai', parseInt(e.target.value) || 0)}
-                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200"
-                                                            />
+                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200" />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                                                Max <span className="text-red-500">*</span>
-                                                            </label>
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                max="100"
-                                                                value={kategori.max_nilai}
+                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Max <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" value={kategori.max_nilai}
                                                                 onChange={(e) => updateBatchRow(index, 'max_nilai', parseInt(e.target.value) || 0)}
-                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200"
-                                                            />
+                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200" />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>
-                                                                Deskripsi <span className="text-red-500">*</span>
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={kategori.deskripsi}
+                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Deskripsi <span className="text-red-500">*</span></label>
+                                                            <input type="text" value={kategori.deskripsi}
                                                                 onChange={(e) => updateBatchRow(index, 'deskripsi', e.target.value)}
-                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200"
-                                                                placeholder="Sangat Baik"
-                                                            />
+                                                                className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-white border-orange-200" placeholder="Sangat Baik" />
                                                         </div>
                                                     </div>
 
-                                                    {/* Tombol Hapus */}
                                                     {batchKategori.length > 1 && (
                                                         <button onClick={() => removeBatchRow(index)}
                                                             className="mt-7 p-2 rounded-lg transition-all"
@@ -1375,10 +1277,8 @@ export default function AturPenilaianGBSClient() {
                                                     )}
                                                 </div>
 
-                                                {/* Error per baris */}
                                                 {errors.length > 0 && (
-                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2"
-                                                        style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
                                                         <AlertCircle size={12} /> {errors.join(' | ')}
                                                     </div>
                                                 )}
@@ -1387,7 +1287,6 @@ export default function AturPenilaianGBSClient() {
                                     })}
                                 </div>
 
-                                {/* Status Validasi */}
                                 {(() => {
                                     const validation = validateBatchKategori();
                                     return (
@@ -1406,7 +1305,6 @@ export default function AturPenilaianGBSClient() {
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
                             <button onClick={closeBatchEdit} disabled={isSavingBatch}
                                 className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1421,15 +1319,9 @@ export default function AturPenilaianGBSClient() {
                                 onMouseEnter={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.gradients.primary; }}
                                 onMouseLeave={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.gradients.secondary; }}>
                                 {isSavingBatch ? (
-                                    <>
-                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                        Menyimpan...
-                                    </>
+                                    <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Menyimpan...</>
                                 ) : (
-                                    <>
-                                        <Save size={16} />
-                                        Simpan {batchKategori.length} Kategori
-                                    </>
+                                    <><Save size={16} /> Simpan {batchKategori.length} Kategori</>
                                 )}
                             </button>
                         </div>

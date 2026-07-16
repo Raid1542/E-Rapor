@@ -13,8 +13,6 @@ const cekGuruKelasDitugaskan = async (req, res, next) => {
         const userId = req.user.id;
         let idInduk = req.idTahunAjaranInduk;
 
-        console.log(`[cekGuruKelasDitugaskan] userId: ${userId}, idInduk awal: ${idInduk}`);
-
         // Ambil tahun ajaran aktif jika belum ada di request
         if (!idInduk) {
             const [taRows] = await db.execute(
@@ -31,29 +29,21 @@ const cekGuruKelasDitugaskan = async (req, res, next) => {
             idInduk = taRows[0].id_tahun_ajaran_induk;
             req.idTahunAjaranInduk = idInduk;
             req.idSemesterAktif = taRows[0].id_tahun_ajaran;
-
-            console.log(`[cekGuruKelasDitugaskan] idInduk dari DB: ${idInduk}`);
         }
 
         // Cek penugasan guru kelas dengan JOIN ke tahun_ajaran
         const [rows] = await db.execute(
             `SELECT gk.id_guru_kelas, gk.kelas_id, k.nama_kelas 
-        FROM guru_kelas gk
-        INNER JOIN kelas k ON gk.kelas_id = k.id_kelas
-        INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-        WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-        LIMIT 1`,
+            FROM guru_kelas gk
+            INNER JOIN kelas k ON gk.kelas_id = k.id_kelas
+            INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+            WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+            LIMIT 1`,
             [userId, idInduk]
         );
 
-        console.log(`[cekGuruKelasDitugaskan] Hasil query:`, rows);
-
         // Validasi penugasan
         if (rows.length === 0) {
-            console.warn(
-                `[cekGuruKelasDitugaskan] User ${userId} tidak punya penugasan di tahun ajaran ${idInduk}`
-            );
-
             return res.status(403).json({
                 success: false,
                 message: 'Anda belum ditugaskan sebagai wali kelas di tahun ajaran ini. Silakan hubungi Admin.',
@@ -67,8 +57,6 @@ const cekGuruKelasDitugaskan = async (req, res, next) => {
             kelas_id: rows[0].kelas_id,
             nama_kelas: rows[0].nama_kelas,
         };
-
-        console.log(`[cekGuruKelasDitugaskan] Set req.infoKelasWali:`, req.infoKelasWali);
 
         next();
     } catch (error) {

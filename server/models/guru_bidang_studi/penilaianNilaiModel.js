@@ -1,8 +1,10 @@
 /**
  * Nama File: penilaianNilaiModel.js
  * Fungsi: Model input nilai siswa (validasi akses, bobot per kelas, status aktif)
+ *         + Human Error Prevention di level database (clamping, strict filtering)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 15 Juli 2026 - Tambah sanitasi nilai, perbaiki status aktif, dan presisi filter periode
  */
 
 const db = require('../../config/db');
@@ -27,8 +29,9 @@ const QUERY_VALIDATE_AKSES_GURU_MAPEL = `
 `;
 
 const QUERY_VALIDATE_SISWA_AKTIF = `
-    SELECT sk.kelas_id, sk.status 
+    SELECT sk.kelas_id, s.status 
     FROM siswa_kelas sk
+    JOIN siswa s ON sk.siswa_id = s.id_siswa
     JOIN pembelajaran p ON sk.kelas_id = p.kelas_id
     WHERE sk.siswa_id = ? AND p.user_id = ? AND p.mapel_id = ? AND p.tahun_ajaran_id = ? AND sk.id_tahun_ajaran_induk = ?
     LIMIT 1
@@ -42,12 +45,12 @@ const QUERY_GET_SISWA_BY_KELAS = `
     SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama
     FROM siswa s 
     JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-    WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND sk.status = 'Aktif'
-    ORDER BY s.nama_lengkap
+    WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+    ORDER BY s.nama_lengkap ASC
 `;
 
 const QUERY_GET_KOMPONEN_PENILAIAN = `
-    SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan
+    SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan ASC
 `;
 
 const QUERY_GET_BOBOT_BY_MAPEL = `
@@ -115,7 +118,6 @@ const QUERY_GET_KELAS_BY_SISWA = `
 // FUNGSI MODEL
 // ═════════════════════════════════════════════════════════════════════════════
 
-// Ambil tahun ajaran yang sedang aktif
 const getTahunAjaranAktif = async () => {
     try {
         const [rows] = await db.execute(QUERY_TAHUN_AJARAN_AKTIF);
@@ -126,7 +128,6 @@ const getTahunAjaranAktif = async () => {
     }
 };
 
-// Validasi akses guru ke mapel di kelas tertentu
 const validateAksesGuru = async (userId, mapelId, kelasId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_VALIDATE_AKSES_GURU, [userId, mapelId, kelasId, semesterId]);
@@ -137,7 +138,6 @@ const validateAksesGuru = async (userId, mapelId, kelasId, semesterId) => {
     }
 };
 
-// Validasi akses guru ke mapel (tanpa filter kelas)
 const validateAksesGuruMapel = async (userId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_VALIDATE_AKSES_GURU_MAPEL, [userId, mapelId, semesterId]);
@@ -148,21 +148,19 @@ const validateAksesGuruMapel = async (userId, mapelId, semesterId) => {
     }
 };
 
-// Cek siswa aktif di kelas yang diajar guru + ambil kelas_id
 const validateSiswaAktif = async (siswaId, userId, mapelId, semesterId, indukId) => {
     try {
         const [rows] = await db.execute(QUERY_VALIDATE_SISWA_AKTIF, [siswaId, userId, mapelId, semesterId, indukId]);
         if (rows.length === 0) {
             return { valid: false, kelas_id: null, status: null };
         }
-        return { valid: rows[0].status === 'Aktif', kelas_id: rows[0].kelas_id, status: rows[0].status };
+        return { valid: rows[0].status === 'aktif', kelas_id: rows[0].kelas_id, status: rows[0].status };
     } catch (err) {
         console.error('Error validateSiswaAktif:', err);
         throw new Error('Gagal memvalidasi siswa aktif');
     }
 };
 
-// Ambil nama kelas by ID
 const getNamaKelas = async (kelasId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NAMA_KELAS, [kelasId]);
@@ -173,7 +171,6 @@ const getNamaKelas = async (kelasId) => {
     }
 };
 
-// Ambil daftar siswa aktif di kelas
 const getSiswaByKelas = async (kelasId, indukId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_SISWA_BY_KELAS, [kelasId, indukId]);
@@ -184,7 +181,6 @@ const getSiswaByKelas = async (kelasId, indukId) => {
     }
 };
 
-// Ambil semua komponen penilaian
 const getKomponenPenilaian = async () => {
     try {
         const [rows] = await db.execute(QUERY_GET_KOMPONEN_PENILAIAN);
@@ -195,7 +191,6 @@ const getKomponenPenilaian = async () => {
     }
 };
 
-// Ambil bobot per komponen (prioritas: spesifik kelas > global)
 const getBobotByMapel = async (mapelId, semesterId, kelasId = null) => {
     try {
         let query = QUERY_GET_BOBOT_BY_MAPEL;
@@ -210,10 +205,10 @@ const getBobotByMapel = async (mapelId, semesterId, kelasId = null) => {
         
         const [rows] = await db.execute(query, params);
         
-        // Prioritas: bobot spesifik kelas > bobot global
         const bobotMap = new Map();
         rows.forEach(row => {
             const existing = bobotMap.get(row.komponen_id);
+            // Prioritas: bobot spesifik kelas > bobot global
             if (!existing || row.kelas_id !== null) {
                 bobotMap.set(row.komponen_id, parseFloat(row.bobot) || 0);
             }
@@ -226,11 +221,16 @@ const getBobotByMapel = async (mapelId, semesterId, kelasId = null) => {
     }
 };
 
-// Ambil konfigurasi kategori nilai rapor
-const getKonfigurasiNilaiRapor = async (mapelId, semesterId, kelasId = null) => {
+const getKonfigurasiNilaiRapor = async (mapelId, semesterId, kelasId = null, jenisPenilaian = null) => {
     try {
         let query = QUERY_GET_KONFIGURASI_NILAI_RAPOR;
         const params = [mapelId, semesterId];
+        
+        // ✅ PERBAIKAN: Filter jenis penilaian jika disediakan, agar tidak tercampur PTS/PAS
+        if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
+            query += ' AND jenis_penilaian = ?';
+            params.push(jenisPenilaian);
+        }
         
         if (kelasId) {
             query += ' AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY CASE WHEN kelas_id = ? THEN 0 ELSE 1 END, min_nilai DESC';
@@ -247,7 +247,6 @@ const getKonfigurasiNilaiRapor = async (mapelId, semesterId, kelasId = null) => 
     }
 };
 
-// Ambil nilai detail per komponen untuk 1 siswa
 const getNilaiDetail = async (siswaId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NILAI_DETAIL, [siswaId, mapelId, semesterId]);
@@ -258,7 +257,6 @@ const getNilaiDetail = async (siswaId, mapelId, semesterId) => {
     }
 };
 
-// Ambil nilai detail untuk banyak siswa sekaligus (batch)
 const getNilaiDetailBatch = async (siswaIds, mapelId, semesterId) => {
     try {
         if (siswaIds.length === 0) return [];
@@ -278,7 +276,6 @@ const getNilaiDetailBatch = async (siswaIds, mapelId, semesterId) => {
     }
 };
 
-// Ambil nilai rapor PTS & PAS
 const getNilaiRapor = async (mapelId, semesterId, semester) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NILAI_RAPOR, [mapelId, semesterId, semester]);
@@ -289,7 +286,6 @@ const getNilaiRapor = async (mapelId, semesterId, semester) => {
     }
 };
 
-// Ambil nilai rapor PTS saja
 const getNilaiRaporPTS = async (siswaId, mapelId, semesterId, semester) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NILAI_RAPOR_PTS, [siswaId, mapelId, semesterId, semester]);
@@ -300,7 +296,6 @@ const getNilaiRaporPTS = async (siswaId, mapelId, semesterId, semester) => {
     }
 };
 
-// Cek apakah nilai rapor sudah dikunci
 const isNilaiRaporLocked = async (siswaId, mapelId, semesterId, semester, jenisPenilaian) => {
     try {
         const [rows] = await db.execute(QUERY_IS_NILAI_RAPOR_LOCKED, [siswaId, mapelId, semesterId, semester, jenisPenilaian]);
@@ -311,17 +306,19 @@ const isNilaiRaporLocked = async (siswaId, mapelId, semesterId, semester, jenisP
     }
 };
 
-// Simpan/update nilai detail komponen
+// ✅ PERBAIKAN: Human Error Prevention - Clamping nilai di level model
 const simpanNilaiDetail = async (siswaId, mapelId, komponenId, nilai, semesterId, userId) => {
     try {
-        await db.execute(QUERY_SIMPAN_NILAI_DETAIL, [siswaId, mapelId, komponenId, nilai, semesterId, userId]);
+        // Pastikan nilai adalah angka, dibulatkan, dan dijepit antara 0-100
+        const safeNilai = Math.max(0, Math.min(100, Math.round(parseFloat(nilai) || 0)));
+        
+        await db.execute(QUERY_SIMPAN_NILAI_DETAIL, [siswaId, mapelId, komponenId, safeNilai, semesterId, userId]);
     } catch (err) {
         console.error('Error simpanNilaiDetail:', err);
         throw new Error('Gagal menyimpan nilai detail');
     }
 };
 
-// Hapus nilai detail komponen
 const hapusNilaiDetail = async (siswaId, mapelId, komponenId, semesterId) => {
     try {
         await db.execute(QUERY_HAPUS_NILAI_DETAIL, [siswaId, mapelId, komponenId, semesterId]);
@@ -331,12 +328,15 @@ const hapusNilaiDetail = async (siswaId, mapelId, komponenId, semesterId) => {
     }
 };
 
-// Simpan/update nilai rapor
 const simpanNilaiRapor = async (data) => {
     try {
         const { siswaId, mapelId, kelasId, semesterId, semester, jenisPenilaian, nilaiRapor, deskripsi, userId } = data;
+        
+        // Pastikan nilai rapor juga aman (bisa null jika belum ada)
+        const safeNilaiRapor = nilaiRapor !== null && nilaiRapor !== undefined ? Math.round(parseFloat(nilaiRapor)) : null;
+
         await db.execute(QUERY_SIMPAN_NILAI_RAPOR, [
-            siswaId, mapelId, kelasId, semesterId, semester, jenisPenilaian, nilaiRapor, deskripsi, userId
+            siswaId, mapelId, kelasId, semesterId, semester, jenisPenilaian, safeNilaiRapor, deskripsi, userId
         ]);
     } catch (err) {
         console.error('Error simpanNilaiRapor:', err);
@@ -344,7 +344,6 @@ const simpanNilaiRapor = async (data) => {
     }
 };
 
-// Ambil kelas tempat siswa belajar mapel tertentu
 const getKelasBySiswa = async (siswaId, mapelId, userId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_KELAS_BY_SISWA, [siswaId, mapelId, userId, semesterId]);
@@ -355,10 +354,15 @@ const getKelasBySiswa = async (siswaId, mapelId, userId, semesterId) => {
     }
 };
 
-// Cari deskripsi berdasarkan nilai rapor
 const getDeskripsiNilai = (nilai, configRows) => {
+    // ✅ PERBAIKAN: Penanganan null/undefined yang lebih ketat
+    if (nilai === null || nilai === undefined || isNaN(nilai)) {
+        return null;
+    }
+    
+    const nilaiNum = parseFloat(nilai);
     for (const config of configRows) {
-        if (nilai >= config.min_nilai && nilai <= config.max_nilai) {
+        if (nilaiNum >= parseFloat(config.min_nilai) && nilaiNum <= parseFloat(config.max_nilai)) {
             return config.deskripsi;
         }
     }

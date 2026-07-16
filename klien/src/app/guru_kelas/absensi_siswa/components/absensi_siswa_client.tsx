@@ -1,21 +1,3 @@
-/**
- * Nama File: absensi_client.tsx
- * Fungsi: Komponen klien untuk mengelola absensi siswa (PTS & PAS)
- * UPDATE: 
- *   ✅ FIX: Hapus pengecekan NOT_ASSIGNED di fetchTahunAjaran
- *   ✅ FIX: Perbaiki operator precedence di useEffect refetch
- *   ✅ FIX: Handle setLoading(false) di semua case fetchAbsensi
- *   🆕 BARU: Fitur Import Absensi dari Excel
- *   🆕 BARU: Auto-download CSV error report jika error > 4
- *   ✅ FIX: Modal import konsisten dengan input nilai & kokurikuler
- *   ✅ FIX: Notifikasi hanya muncul setelah klik import
- *   ✅ FIX: Hapus duplikasi fungsi
- *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
- *   - Kondisi 2: Read-Only mode jika jenis penilaian belum aktif
- *   - Tab PTS/PAS menunjukkan status (Aktif/Menunggu/Selesai)
- *   - Semester otomatis dari tahun ajaran aktif
- */
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -113,7 +95,7 @@ const inputCls = "w-full border rounded-lg px-3 py-2 text-sm text-center text-gr
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function AbsensiClient() {
-    const API_BASE = 'http://localhost:5000/api/guru-kelas';
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/guru-kelas';
     const { showSessionExpired, handleLogout } = useSession();
 
     // ── State ──────────────────────────────────────────────────────────────
@@ -184,6 +166,10 @@ export default function AbsensiClient() {
                     setJenisPenilaian('PAS');
                     setIsReadOnly(false);
                     setReadOnlyReason(null);
+                } else if (ptsStatus === 'selesai' || pasStatus === 'selesai') {
+                    setJenisPenilaian(pasStatus === 'selesai' ? 'PAS' : 'PTS');
+                    setIsReadOnly(true);
+                    setReadOnlyReason('locked');
                 } else {
                     setJenisPenilaian('PTS');
                     setIsReadOnly(true);
@@ -301,14 +287,15 @@ export default function AbsensiClient() {
             }
         };
         init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── Refetch saat jenis penilaian berubah ───────────────────────────────
     useEffect(() => {
         if (isNotAssigned) return;
-        if (loading && !absensiData) return;
         fetchAbsensi();
-    }, [jenisPenilaian]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [jenisPenilaian, fetchAbsensi, isNotAssigned]);
 
     // ── Warning sebelum unload jika ada perubahan ──────────────────────────
     useEffect(() => {
@@ -402,18 +389,17 @@ export default function AbsensiClient() {
             return `Total absensi (${totalHari} hari) tidak boleh lebih dari ${MAX_ABSEN} hari`;
         }
 
+        // ✅ VALIDASI PENTING: PAS tidak boleh kurang dari PTS
         if (jenisPenilaian === 'PAS') {
             const siswa = absensiData?.absensi?.find(s => s.id_siswa === siswaId);
-            if (siswa && siswa.sudah_diinput) {
-                if (data.sakit < (siswa.pts_sakit || 0)) {
-                    return `Total sakit (${data.sakit}) tidak boleh kurang dari PTS (${siswa.pts_sakit})`;
-                }
-                if (data.izin < (siswa.pts_izin || 0)) {
-                    return `Total izin (${data.izin}) tidak boleh kurang dari PTS (${siswa.pts_izin})`;
-                }
-                if (data.alpha < (siswa.pts_alpha || 0)) {
-                    return `Total alpha (${data.alpha}) tidak boleh kurang dari PTS (${siswa.pts_alpha})`;
-                }
+            if (siswa) {
+                const ptsSakit = siswa.pts_sakit || 0;
+                const ptsIzin = siswa.pts_izin || 0;
+                const ptsAlpha = siswa.pts_alpha || 0;
+                
+                if (data.sakit < ptsSakit) return `Total sakit (${data.sakit}) tidak boleh kurang dari data PTS (${ptsSakit})`;
+                if (data.izin < ptsIzin) return `Total izin (${data.izin}) tidak boleh kurang dari data PTS (${ptsIzin})`;
+                if (data.alpha < ptsAlpha) return `Total alpha (${data.alpha}) tidak boleh kurang dari data PTS (${ptsAlpha})`;
             }
         }
 
@@ -467,7 +453,6 @@ export default function AbsensiClient() {
                 return;
             }
 
-            const semester = semesterAktif;
             const res = await fetch(`${API_BASE}/absensi`, {
                 method: 'POST',
                 headers: {
@@ -476,7 +461,6 @@ export default function AbsensiClient() {
                 },
                 body: JSON.stringify({
                     siswa_id: siswaId,
-                    kelas_id: absensiData?.kelas_id,
                     sakit: data.sakit,
                     izin: data.izin,
                     alpha: data.alpha,
@@ -531,7 +515,7 @@ export default function AbsensiClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: IMPORT ABSENSI HANDLERS (KONSISTEN DENGAN INPUT NILAI)
+    // 🆕 BARU: IMPORT ABSENSI HANDLERS
     // ═════════════════════════════════════════════════════════════════════════
 
     const openImportModal = () => {
@@ -625,39 +609,20 @@ export default function AbsensiClient() {
     };
 
     const downloadErrorReportAbsensi = (errors: any[]) => {
-        const headers = ['No', 'Baris', 'Sakit', 'Izin', 'Alpha', 'Alasan Error'];
+        const headers = ['No', 'Baris', 'Alasan Error'];
         const rows = errors.map((err, index) => {
             const message = err.message || '';
             const rowMatch = message.match(/Baris\s+(\d+)/i);
             const rowNumber = rowMatch ? rowMatch[1] : '-';
-            const sakitMatch = message.match(/(?:Sakit|Total sakit)\s*[\(:]\s*(\d+)/i);
-            const sakit = sakitMatch ? sakitMatch[1] : '-';
-            const izinMatch = message.match(/(?:Izin|Total izin)\s*[\(:]\s*(\d+)/i);
-            const izin = izinMatch ? izinMatch[1] : '-';
-            const alphaMatch = message.match(/(?:Alpha|Total alpha)\s*[\(:]\s*(\d+)/i);
-            const alpha = alphaMatch ? alphaMatch[1] : '-';
             const escapedMessage = message.replace(/"/g, '""');
-
-            return [
-                index + 1,
-                rowNumber,
-                sakit,
-                izin,
-                alpha,
-                `"${escapedMessage}"`
-            ].join(',');
+            return [index + 1, rowNumber, `"${escapedMessage}"`].join(',');
         });
 
         const BOM = '\uFEFF';
-        const csvContent = BOM + [
-            headers.join(','),
-            ...rows
-        ].join('\n');
-
+        const csvContent = BOM + [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
-
         const timestamp = new Date().toISOString().split('T')[0];
         const filename = `error_import_absensi_${jenisPenilaian}_${timestamp}.csv`;
 
@@ -705,7 +670,6 @@ export default function AbsensiClient() {
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // 🆕 AUTO-DOWNLOAD CSV jika error > 4
             const errors = data.data?.errors || [];
             const totalErrors = errors.length;
 
@@ -713,21 +677,11 @@ export default function AbsensiClient() {
                 downloadErrorReportAbsensi(errors);
             }
 
-            // ✅ Build notifikasi SIMPEL setelah import
             let notifMessage = '';
-
             if (totalErrors === 0) {
-                // SUKSES TOTAL
-                notifMessage = `✅ Import berhasil!\n\n` +
-                    `👥 ${data.data?.berhasil || 0} siswa berhasil diimport\n` +
-                    `📊 ${data.data?.total_records_saved || 0} data absensi disimpan`;
+                notifMessage = `✅ Import berhasil!\n\n👥 ${data.data?.berhasil || 0} siswa berhasil diimport\n📊 ${data.data?.total_records_saved || 0} data absensi disimpan`;
             } else {
-                // ADA ERROR
-                notifMessage = `⚠️ Import selesai dengan catatan\n\n` +
-                    `✅ Berhasil: ${data.data?.berhasil || 0} siswa\n` +
-                    `❌ Gagal: ${totalErrors} baris\n`;
-
-                // Tampilkan detail error (max 3)
+                notifMessage = `⚠️ Import selesai dengan catatan\n\n✅ Berhasil: ${data.data?.berhasil || 0} siswa\n❌ Gagal: ${totalErrors} baris\n`;
                 if (totalErrors <= 4) {
                     notifMessage += `\n📋 Detail Error:\n`;
                     errors.slice(0, 3).forEach((e: any, i: number) => {
@@ -742,7 +696,6 @@ export default function AbsensiClient() {
                 }
             }
 
-            // Info periode
             if (data.data?.periode) {
                 notifMessage += `\n\n📊 Periode: ${data.data.periode}`;
             }
@@ -784,12 +737,14 @@ export default function AbsensiClient() {
     const handleTabChange = (jenis: 'PTS' | 'PAS') => {
         const status = getTabStatus(jenis);
 
-        console.log(`🔄 [Tab Change] Pindah ke ${jenis}, status: ${status}`);
-
+        // ✅ Cegah pindah tab jika ada perubahan belum disimpan
         if (editingRows.size > 0) {
-            setEditingRows(new Set());
-            setEditedData({});
-            console.log('🗑️ [Tab Change] Clear editing rows');
+            showModal({
+                type: 'warning',
+                title: 'Perubahan Belum Disimpan',
+                message: 'Anda memiliki perubahan yang belum disimpan. Silakan simpan atau batalkan perubahan sebelum pindah tab.'
+            });
+            return;
         }
 
         if (status === 'nonaktif') {
@@ -813,7 +768,6 @@ export default function AbsensiClient() {
             return;
         }
 
-        console.log(`✅ [Tab Change] ${jenis} aktif, enable edit mode`);
         setJenisPenilaian(jenis);
         setIsReadOnly(false);
         setReadOnlyReason(null);
@@ -1118,9 +1072,10 @@ export default function AbsensiClient() {
                                             <td className="px-4 py-3">
                                                 <div>
                                                     <p className="font-bold text-gray-800">{siswa.nama}</p>
+                                                    {/* ✅ Tampilkan baseline PTS saat di mode PAS */}
                                                     {jenisPenilaian === 'PAS' && siswa.pts_sakit !== undefined && (
                                                         <p className="text-xs text-gray-500 mt-0.5">
-                                                            PTS: S:{siswa.pts_sakit} I:{siswa.pts_izin} A:{siswa.pts_alpha}
+                                                            Baseline PTS: S:{siswa.pts_sakit} I:{siswa.pts_izin} A:{siswa.pts_alpha}
                                                         </p>
                                                     )}
                                                 </div>
@@ -1319,7 +1274,7 @@ export default function AbsensiClient() {
                 </div>
             )}
 
-            {/* 🆕 BARU: Modal Import Absensi (KONSISTEN DENGAN INPUT NILAI) */}
+            {/* 🆕 BARU: Modal Import Absensi */}
             {showImportModal && (
                 <div
                     className="fixed inset-0 z-[120] flex items-center justify-center p-4 ab-fadeIn"
@@ -1364,7 +1319,7 @@ export default function AbsensiClient() {
                             </ol>
                         </div>
 
-                        {/* Info Periode - DIPERBAIKI dengan info lebih detail */}
+                        {/* Info Periode */}
                         <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
                             <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
                             <div className="text-xs text-orange-800 space-y-1">
