@@ -1,15 +1,3 @@
-/**
- * Nama File: kokurikuler_client.tsx
- * Fungsi: Input nilai kokurikuler siswa untuk guru kelas
- *         Menangani input nilai, perhitungan grade otomatis, dan import Excel
- *         + Peringatan kategori kokurikuler belum diatur
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
- * Update: 10 Juli 2026 - Tambah peringatan kategori kokurikuler belum diatur
- * Update: 10 Juli 2026 - Disable tombol Edit & Import jika kategori belum diatur
- * Update: 10 Juli 2026 - Hapus emoji dari komentar (sesuai coding convention)
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
@@ -22,7 +10,7 @@ import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // Konstanta untuk API base URL
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://localhost:5000/api/guru-kelas';
 
 // Konstanta untuk kode error
 const ERROR_CODES = {
@@ -70,15 +58,16 @@ interface JudulProyek {
   deskripsi?: string;
 }
 
-// Interface untuk status kategori kokurikuler
 interface AspekInfo {
   id: number;
   nama: string;
+  celah?: string[];
 }
 
 interface KategoriStatus {
   configured: boolean;
   aspek_tanpa_kategori: AspekInfo[];
+  aspek_dengan_celah?: AspekInfo[];
   jenis_penilaian: string | null;
   semester?: string;
   message: string;
@@ -86,10 +75,10 @@ interface KategoriStatus {
 
 // Mapping ID aspek (sesuai database)
 const ASPEK_ID = {
-  bpi: 2,
-  proyek: 3,
-  literasi: 4,
   mutabaah: 5,
+  bpi: 2,
+  literasi: 4,
+  proyek: 3,
 };
 
 // Daftar aspek kokurikuler
@@ -116,6 +105,8 @@ const GlobalStyles = () => (
     .dg-fadeIn { animation: dg-fadeIn 0.2s ease; }
     .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
     .dg-pulse { animation: dg-pulse 0.6s ease 0.15s; }
+    .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #f0c9a0; border-radius: 10px; }
   `}</style>
 );
 
@@ -156,7 +147,7 @@ const MODAL_STYLES: Record<ModalType, {
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
   const s = MODAL_STYLES[modal.type];
   return (
-    <div className="fixed inset-0 z-200 flex items-center justify-center p-4 dg-fadeIn">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dg-scaleIn">
         <button
@@ -294,7 +285,7 @@ export default function KokurikulerClient() {
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
-  // State kategori kokurikuler (BARU)
+  // State kategori kokurikuler
   const [kategoriStatus, setKategoriStatus] = useState<KategoriStatus | null>(null);
   const [kategoriLoading, setKategoriLoading] = useState(false);
 
@@ -316,7 +307,7 @@ export default function KokurikulerClient() {
     return '';
   }, [jenisPenilaianAktif]);
 
-  // Cek status kategori kokurikuler dari backend (BARU)
+  // Cek status kategori kokurikuler dari backend
   const cekStatusKategori = useCallback(async () => {
     setKategoriLoading(true);
     try {
@@ -324,7 +315,7 @@ export default function KokurikulerClient() {
       if (!token) return;
 
       const res = await fetch(
-        `${API_BASE_URL}/api/guru-kelas/kokurikuler/cek-status-kategori`,
+        `${API_BASE_URL}/kokurikuler/cek-status-kategori`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -360,7 +351,7 @@ export default function KokurikulerClient() {
         const headers = { Authorization: `Bearer ${token}` };
 
         const taRes = await fetch(
-          `${API_BASE_URL}/api/guru-kelas/tahun-ajaran/aktif`,
+          `${API_BASE_URL}/tahun-ajaran/aktif`,
           { headers }
         );
 
@@ -425,11 +416,11 @@ export default function KokurikulerClient() {
 
         const [gradeRes, proyekRes] = await Promise.all([
           fetch(
-            `${API_BASE_URL}/api/guru-kelas/atur-penilaian/kategori-kokurikuler`,
+            `${API_BASE_URL}/atur-penilaian/kategori-kokurikuler`,
             { headers }
           ),
           fetch(
-            `${API_BASE_URL}/api/guru-kelas/kokurikuler/judul-proyek`,
+            `${API_BASE_URL}/kokurikuler/judul-proyek`,
             { headers }
           ),
         ]);
@@ -448,7 +439,7 @@ export default function KokurikulerClient() {
           }
         }
 
-        // Panggil cek status kategori (BARU)
+        // Panggil cek status kategori
         cekStatusKategori();
       } catch (err: any) {
         showModal({
@@ -473,7 +464,7 @@ export default function KokurikulerClient() {
         const headers = { Authorization: `Bearer ${token}` };
 
         const res = await fetch(
-          `${API_BASE_URL}/api/guru-kelas/kokurikuler`,
+          `${API_BASE_URL}/kokurikuler`,
           { headers }
         );
 
@@ -647,7 +638,7 @@ export default function KokurikulerClient() {
     }, 200);
   };
 
-  // Handler edit (BARU: tambah cek kategori)
+  // Handler edit
   const handleEdit = (siswa: SiswaKokurikuler) => {
     if (isReadOnly) {
       if (readOnlyReason === 'locked') {
@@ -682,7 +673,7 @@ export default function KokurikulerClient() {
       return;
     }
 
-    // Cek apakah kategori sudah diatur (BARU)
+    // Cek apakah kategori sudah diatur
     if (kategoriStatus && !kategoriStatus.configured) {
       const namaAspek = kategoriStatus.aspek_tanpa_kategori
         .map(a => a.nama)
@@ -838,7 +829,7 @@ export default function KokurikulerClient() {
     setShowConfirmModal(true);
   };
 
-  // Handler import (BARU: tambah cek kategori)
+  // Handler import
   const openImportModal = () => {
     if (!jenisPenilaianAktif) {
       showModal({
@@ -864,7 +855,7 @@ export default function KokurikulerClient() {
       return;
     }
 
-    // Cek apakah kategori sudah diatur (BARU)
+    // Cek apakah kategori sudah diatur
     if (kategoriStatus && !kategoriStatus.configured) {
       const namaAspek = kategoriStatus.aspek_tanpa_kategori
         .map(a => a.nama)
@@ -893,7 +884,7 @@ export default function KokurikulerClient() {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${API_BASE_URL}/api/guru-kelas/kokurikuler/import-template`,
+        `${API_BASE_URL}/kokurikuler/import-template`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -1018,7 +1009,7 @@ export default function KokurikulerClient() {
       formData.append('file', importFile);
 
       const response = await fetch(
-        `${API_BASE_URL}/api/guru-kelas/kokurikuler/import`,
+        `${API_BASE_URL}/kokurikuler/import`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
@@ -1034,7 +1025,7 @@ export default function KokurikulerClient() {
 
       // Refresh data nilai
       const refreshRes = await fetch(
-        `${API_BASE_URL}/api/guru-kelas/kokurikuler`,
+        `${API_BASE_URL}/kokurikuler`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -1167,7 +1158,7 @@ export default function KokurikulerClient() {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(
-        `${API_BASE_URL}/api/guru-kelas/kokurikuler/judul-proyek`,
+        `${API_BASE_URL}/kokurikuler/judul-proyek`,
         {
           method: 'POST',
           headers: {
@@ -1257,7 +1248,7 @@ export default function KokurikulerClient() {
         const { grade, deskripsi } = getGradeByNilai(nilai, aspek.id);
 
         const res = await fetch(
-          `${API_BASE_URL}/api/guru-kelas/kokurikuler/${selectedSiswa.id}`,
+          `${API_BASE_URL}/kokurikuler/${selectedSiswa.id}`,
           {
             method: 'PUT',
             headers: {
@@ -1414,7 +1405,7 @@ export default function KokurikulerClient() {
   const isPtsActive = jenisPenilaianAktif === 'PTS';
   const kategoriBelumDiatur = kategoriStatus && !kategoriStatus.configured;
 
-  // Render banner info - versi lengkap dengan cek celah rentang
+  // Render banner info
   const renderBannerInfo = () => {
     // Banner warning kategori belum diatur atau ada celah rentang
     if (
@@ -1424,7 +1415,7 @@ export default function KokurikulerClient() {
       !kategoriStatus.configured
     ) {
       const aspekBelumDiatur = kategoriStatus.aspek_tanpa_kategori || [];
-      const aspekCelah = kategoriStatus.aspek_dengan_celah || [];
+      const aspekCelah = (kategoriStatus as any).aspek_dengan_celah || [];
       const totalMasalah = aspekBelumDiatur.length + aspekCelah.length;
 
       return (
@@ -1435,7 +1426,6 @@ export default function KokurikulerClient() {
             background: '#fef2f2'
           }}
         >
-          {/* Header banner */}
           <div className="px-5 py-4">
             <div className="flex items-start gap-3 mb-4">
               <div
@@ -1455,7 +1445,6 @@ export default function KokurikulerClient() {
               </div>
             </div>
 
-            {/* Aspek yang belum ada kategori sama sekali */}
             {aspekBelumDiatur.length > 0 && (
               <div className="bg-white rounded-lg p-4 mb-3">
                 <p className="text-sm font-semibold text-gray-700 mb-3">
@@ -1500,14 +1489,13 @@ export default function KokurikulerClient() {
               </div>
             )}
 
-            {/* Aspek yang memiliki celah dalam rentang */}
             {aspekCelah.length > 0 && (
               <div className="bg-white rounded-lg p-4 mb-3">
                 <p className="text-sm font-semibold text-gray-700 mb-3">
                   Aspek dengan rentang nilai tidak lengkap:
                 </p>
                 <div className="space-y-2">
-                  {aspekCelah.map((aspek, index) => (
+                  {aspekCelah.map((aspek: any, index: number) => (
                     <div
                       key={aspek.id ?? `celah-${index}`}
                       className="flex items-start gap-3 p-3 rounded-lg border"
@@ -1530,7 +1518,7 @@ export default function KokurikulerClient() {
                           Rentang yang belum tercover:
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {aspek.celah.map((range, idx) => (
+                          {aspek.celah.map((range: string, idx: number) => (
                             <span
                               key={idx}
                               className="px-2 py-1 rounded text-xs font-semibold"
@@ -1560,7 +1548,6 @@ export default function KokurikulerClient() {
               </div>
             )}
 
-            {/* Info message */}
             <div
               className="p-4 rounded-lg"
               style={{
@@ -1638,7 +1625,7 @@ export default function KokurikulerClient() {
       );
     }
 
-    // Banner periode aktif (tanpa kategori warning)
+    // Banner periode aktif
     if (!jenisPenilaianAktif) return null;
 
     const editableAspek = DAFTAR_ASPEK.filter(a => canEditAspek(a.id));
@@ -1677,7 +1664,7 @@ export default function KokurikulerClient() {
                 }`}
             >
               {isPtsActive
-                ? 'Hanya aspek Mutaba\'ah Yaumiyah yang dapat diinput'
+                ? "Hanya aspek Mutaba'ah Yaumiyah yang dapat diinput"
                 : 'Semua aspek kokurikuler dapat diinput'}
             </p>
           </div>
@@ -1716,7 +1703,6 @@ export default function KokurikulerClient() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Tombol Import Nilai (BARU: disable jika kategori belum diatur) */}
             {canEditNilai && (
               <button
                 onClick={openImportModal}
@@ -1874,7 +1860,7 @@ export default function KokurikulerClient() {
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm border-collapse" style={{ minWidth: '900px' }}>
             <thead>
               <tr style={TH_GRAD}>

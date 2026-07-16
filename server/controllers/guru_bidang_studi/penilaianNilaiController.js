@@ -4,7 +4,7 @@
  *         + Import nilai dari Excel dengan validasi konfigurasi & human error prevention
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 15 Juli 2026 - Perbaikan human error prevention (info overwrite, skip kolom kosong, validasi minimal nilai, filtering periode aktif)
+ * Update: 15 Juli 2026 - Perbaikan human error prevention (info overwrite, skip kolom kosong, validasi minimal nilai, filtering periode aktif, pre-fill data)
  */
 
 const db = require('../../config/db');
@@ -575,6 +575,24 @@ exports.downloadTemplateNilaiGBS = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Periode penilaian belum aktif' });
         }
 
+        // ✅ PERBAIKAN: Ambil nilai yang sudah ada di database untuk di-pre-fill ke template
+        const siswaIds = siswaRows.map(s => s.id_siswa);
+        let existingNilaiMap = {};
+        if (siswaIds.length > 0) {
+            const placeholders = siswaIds.map(() => '?').join(',');
+            const [existingNilaiRows] = await db.execute(
+                `SELECT siswa_id, komponen_id, nilai FROM nilai_detail WHERE mapel_id = ? AND tahun_ajaran_id = ? AND siswa_id IN (${placeholders})`,
+                [mapelId, semesterId, ...siswaIds]
+            );
+            
+            existingNilaiRows.forEach(row => {
+                if (!existingNilaiMap[row.siswa_id]) {
+                    existingNilaiMap[row.siswa_id] = {};
+                }
+                existingNilaiMap[row.siswa_id][row.komponen_id] = row.nilai;
+            });
+        }
+
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'E-Rapor SDIT Ulil Albab Batam';
         workbook.created = new Date();
@@ -617,7 +635,11 @@ exports.downloadTemplateNilaiGBS = async (req, res) => {
 
             komponenUntukTemplate.forEach((komp, kompIdx) => {
                 const cell = dataRow.getCell(5 + kompIdx);
-                cell.value = '';
+                
+                // ✅ PRE-FILL: Masukkan nilai yang sudah ada dari database. Jika belum ada, biarkan kosong ('')
+                const existingNilai = existingNilaiMap[siswa.id_siswa]?.[komp.id_komponen];
+                cell.value = existingNilai !== undefined ? existingNilai : ''; 
+                
                 cell.font = { name: 'Calibri', size: 11 };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
                 cell.border = thinBorder;
@@ -655,12 +677,13 @@ exports.downloadTemplateNilaiGBS = async (req, res) => {
             { text: '' },
             { text: 'ATURAN WAJIB:', bold: true, size: 12, color: colors.primaryDark },
             { text: '1. JANGAN mengubah kolom No, NIS, NISN, dan Nama Siswa (Kolom terkunci).', bold: true },
-            { text: '2. KOLOM KOSONG = TIDAK MENGUBAH NILAI LAMA. Sistem akan mengabaikan sel yang kosong.', bold: true, color: 'FF166534' },
-            { text: '3. NILAI BARU AKAN MENIMPA (OVERWRITE) nilai yang sudah ada di database.', bold: true, color: 'FF991B1B' },
-            { text: '4. Pastikan minimal ada 1 nilai yang diisi di seluruh file. File tanpa nilai akan ditolak.', bold: true },
+            { text: '2. Data angka yang sudah ada di template adalah nilai saat ini di database.', bold: true, color: 'FF166534' },
+            { text: '3. Ubah nilai sesuai kebutuhan. KOLOM KOSONG = TIDAK MENGUBAH NILAI LAMA.', bold: true, color: 'FF166534' },
+            { text: '4. NILAI BARU AKAN MENIMPA (OVERWRITE) nilai yang sudah ada di database.', bold: true, color: 'FF991B1B' },
+            { text: '5. Pastikan minimal ada 1 nilai yang diubah/diisi di seluruh file.', bold: true },
             { text: '' },
             { text: 'CARA IMPORT:', bold: true, size: 12 },
-            { text: '1. Isi template ini dengan nilai siswa.', size: 11 },
+            { text: '1. Ubah nilai pada template ini sesuai kebutuhan.', size: 11 },
             { text: '2. Simpan file (jangan ubah format .xlsx atau nama sheet).', size: 11 },
             { text: '3. Upload kembali melalui menu "Import Nilai" di aplikasi.', size: 11 },
             { text: '' },

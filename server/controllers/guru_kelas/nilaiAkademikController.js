@@ -491,7 +491,7 @@ exports.eksporNilaiExcel = async (req, res) => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 7. DOWNLOAD TEMPLATE IMPORT NILAI (DINAMIS BERDASARKAN PERIODE)
+// 7. DOWNLOAD TEMPLATE IMPORT NILAI (DINAMIS + PRE-FILL DATA DATABASE)
 // ═════════════════════════════════════════════════════════════════════════════
 
 exports.downloadTemplateNilai = async (req, res) => {
@@ -523,7 +523,7 @@ exports.downloadTemplateNilai = async (req, res) => {
         const [kelasNamaRow] = await db.execute(`SELECT nama_kelas FROM kelas WHERE id_kelas = ?`, [kelas_id]);
         const namaKelas = kelasNamaRow[0]?.nama_kelas || 'Kelas';
 
-        // ✅ PERBAIKAN: Filter komponen berdasarkan periode aktif agar template tidak membingungkan
+        // ✅ PERBAIKAN 1: Filter komponen berdasarkan periode aktif agar template tidak membingungkan
         let komponenUntukTemplate = [];
         if (jenis_penilaian === 'PTS') {
             komponenUntukTemplate = komponenRows.filter(k => k.nama_komponen.toUpperCase() === 'PTS');
@@ -534,6 +534,24 @@ exports.downloadTemplateNilai = async (req, res) => {
             });
         } else {
             komponenUntukTemplate = komponenRows; // Fallback
+        }
+
+        // ✅ PERBAIKAN 2: Ambil nilai yang sudah ada di database untuk di-pre-fill ke template
+        const siswaIds = siswaRows.map(s => s.id_siswa);
+        let existingNilaiMap = {};
+        if (siswaIds.length > 0) {
+            const placeholders = siswaIds.map(() => '?').join(',');
+            const [existingNilaiRows] = await db.execute(
+                `SELECT siswa_id, komponen_id, nilai FROM nilai_detail WHERE mapel_id = ? AND tahun_ajaran_id = ? AND siswa_id IN (${placeholders})`,
+                [mapelId, semesterId, ...siswaIds]
+            );
+            
+            existingNilaiRows.forEach(row => {
+                if (!existingNilaiMap[row.siswa_id]) {
+                    existingNilaiMap[row.siswa_id] = {};
+                }
+                existingNilaiMap[row.siswa_id][row.komponen_id] = row.nilai;
+            });
         }
 
         const workbook = new ExcelJS.Workbook();
@@ -576,7 +594,11 @@ exports.downloadTemplateNilai = async (req, res) => {
 
             komponenUntukTemplate.forEach((komp, kompIdx) => {
                 const cell = dataRow.getCell(5 + kompIdx);
-                cell.value = '';
+                
+                // ✅ PRE-FILL: Masukkan nilai yang sudah ada dari database. Jika belum ada, biarkan kosong ('')
+                const existingNilai = existingNilaiMap[siswa.id_siswa]?.[komp.id_komponen];
+                cell.value = existingNilai !== undefined ? existingNilai : ''; 
+                
                 cell.font = { name: 'Calibri', size: 11 };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
                 cell.border = thinBorder;
@@ -584,7 +606,7 @@ exports.downloadTemplateNilai = async (req, res) => {
                 cell.dataValidation = {
                     type: 'whole', operator: 'between', formulae: [0, 100],
                     showErrorMessage: true, errorTitle: 'Nilai Tidak Valid', error: 'Nilai harus berupa angka antara 0 sampai 100',
-                    showInputMessage: true, promptTitle: 'Input Nilai', prompt: 'Masukkan nilai antara 0-100. Kosongkan jika belum ada nilai.'
+                    showInputMessage: true, promptTitle: 'Input Nilai', prompt: 'Masukkan nilai antara 0-100. Kosongkan jika tidak ingin mengubah nilai lama.'
                 };
             });
         });
@@ -606,6 +628,7 @@ exports.downloadTemplateNilai = async (req, res) => {
         const petunjukSheet = workbook.addWorksheet('PENTING_BACA_INI');
         petunjukSheet.columns = [{ width: 100 }];
 
+        // ✅ PERBAIKAN 3: Update petunjuk agar guru tahu bahwa data sudah terisi
         const petunjukContent = [
             { text: `⚠️ PETUNJUK PENGISIAN TEMPLATE - PERIODE ${jenis_penilaian || 'PTS'}`, bold: true, size: 14, color: colors.primary },
             { text: '' },
@@ -613,12 +636,13 @@ exports.downloadTemplateNilai = async (req, res) => {
             { text: '' },
             { text: 'ATURAN WAJIB:', bold: true, size: 12, color: colors.primaryDark },
             { text: '1. JANGAN mengubah kolom No, NIS, NISN, dan Nama Siswa (Kolom terkunci).', bold: true },
-            { text: '2. KOLOM KOSONG = TIDAK MENGUBAH NILAI LAMA. Sistem akan mengabaikan sel yang kosong.', bold: true, color: 'FF166534' },
-            { text: '3. NILAI BARU AKAN MENIMPA (OVERWRITE) nilai yang sudah ada di database.', bold: true, color: 'FF991B1B' },
-            { text: '4. Pastikan minimal ada 1 nilai yang diisi di seluruh file. File tanpa nilai akan ditolak.', bold: true },
+            { text: '2. Data angka yang sudah ada di template adalah nilai saat ini di database.', bold: true, color: 'FF166534' },
+            { text: '3. Ubah nilai sesuai kebutuhan. KOLOM KOSONG = TIDAK MENGUBAH NILAI LAMA.', bold: true, color: 'FF166534' },
+            { text: '4. NILAI BARU AKAN MENIMPA (OVERWRITE) nilai yang sudah ada di database.', bold: true, color: 'FF991B1B' },
+            { text: '5. Pastikan minimal ada 1 nilai yang diubah/diisi di seluruh file.', bold: true },
             { text: '' },
             { text: 'CARA IMPORT:', bold: true, size: 12 },
-            { text: '1. Isi template ini dengan nilai siswa.', size: 11 },
+            { text: '1. Ubah nilai pada template ini sesuai kebutuhan.', size: 11 },
             { text: '2. Simpan file (jangan ubah format .xlsx atau nama sheet).', size: 11 },
             { text: '3. Upload kembali melalui menu "Import Nilai" di aplikasi.', size: 11 },
             { text: '' },
@@ -636,7 +660,7 @@ exports.downloadTemplateNilai = async (req, res) => {
         const buffer = await workbook.xlsx.writeBuffer();
         const fileName = `Template_Nilai_${namaMapel.replace(/[^a-z0-9]/gi, '_')}_${namaKelas.replace(/[^a-z0-9]/gi, '_')}_Periode_${jenis_penilaian || 'Aktif'}.xlsx`;
 
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument/spreadsheetml.sheet');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
