@@ -3,9 +3,53 @@
  * Fungsi: Controller bobot penilaian per mapel (validasi 100%, recompute rapor)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 18 Juli 2026 - Ekstrak fungsi validasi (pure function) untuk keperluan unit testing
  */
 
 const bobotModel = require('../../models/guru_bidang_studi/penilaianBobotModel');
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS (PURE - tanpa database, mudah di-unit-test)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Validasi kelas_id dari request
+const validateKelasId = (kelas_id) => {
+    if (!kelas_id) {
+        return { valid: false, message: 'Parameter kelas_id wajib diisi' };
+    }
+    const kelasIdNum = parseInt(kelas_id, 10);
+    if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
+        return { valid: false, message: 'kelas_id tidak valid' };
+    }
+    return { valid: true, kelasIdNum };
+};
+
+// Validasi satu item bobot (komponen_id ada, bobot berupa angka 0-100)
+const validateSingleBobot = (b) => {
+    if (!b.komponen_id || b.bobot === undefined) {
+        return { valid: false, message: 'Data bobot tidak lengkap.' };
+    }
+    const numBobot = parseFloat(b.bobot);
+    if (isNaN(numBobot) || numBobot < 0 || numBobot > 100) {
+        return { valid: false, message: `Bobot komponen ID ${b.komponen_id} tidak valid (0-100).` };
+    }
+    return { valid: true };
+};
+
+// Validasi total seluruh bobot dalam list harus 100%
+const validateTotalBobot = (bobotList) => {
+    const total = bobotList.reduce((sum, b) => sum + parseFloat(b.bobot), 0);
+    const valid = Math.abs(total - 100) <= 0.01;
+    return {
+        valid,
+        total,
+        message: valid ? '' : `Total bobot harus 100%. Saat ini: ${total.toFixed(2)}%`,
+    };
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS
+// ═════════════════════════════════════════════════════════════════════════════
 
 // Ambil konfigurasi bobot penilaian untuk mapel dan kelas tertentu
 exports.getBobotPenilaian = async (req, res) => {
@@ -14,21 +58,14 @@ exports.getBobotPenilaian = async (req, res) => {
         const { kelas_id } = req.query;
         const userId = req.user.id;
 
-        // Validasi parameter kelas_id
-        if (!kelas_id) {
+        const kelasIdCheck = validateKelasId(kelas_id);
+        if (!kelasIdCheck.valid) {
             return res.status(400).json({
                 success: false,
-                message: 'Parameter kelas_id wajib diisi (via query string)',
+                message: kelasIdCheck.message,
             });
         }
-
-        const kelasIdNum = parseInt(kelas_id, 10);
-        if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'kelas_id tidak valid',
-            });
-        }
+        const kelasIdNum = kelasIdCheck.kelasIdNum;
 
         // Ambil tahun ajaran aktif
         const taAktif = await bobotModel.getTahunAjaranAktif();
@@ -116,21 +153,14 @@ exports.updateBobotPenilaian = async (req, res) => {
         const { kelas_id, bobot_list } = req.body;
         const userId = req.user.id;
 
-        // Validasi parameter kelas_id
-        if (!kelas_id) {
+        const kelasIdCheck = validateKelasId(kelas_id);
+        if (!kelasIdCheck.valid) {
             return res.status(400).json({
                 success: false,
-                message: 'Parameter kelas_id wajib diisi di body',
+                message: kelasIdCheck.message,
             });
         }
-
-        const kelasIdNum = parseInt(kelas_id, 10);
-        if (isNaN(kelasIdNum) || kelasIdNum <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'kelas_id tidak valid',
-            });
-        }
+        const kelasIdNum = kelasIdCheck.kelasIdNum;
 
         // Ambil bobot list dari body
         const bobotList = bobot_list || req.body;
@@ -162,27 +192,21 @@ exports.updateBobotPenilaian = async (req, res) => {
 
         // Validasi setiap bobot
         for (const b of bobotList) {
-            if (!b.komponen_id || b.bobot === undefined) {
+            const check = validateSingleBobot(b);
+            if (!check.valid) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Data bobot tidak lengkap.',
-                });
-            }
-            const numBobot = parseFloat(b.bobot);
-            if (isNaN(numBobot) || numBobot < 0 || numBobot > 100) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Bobot komponen ID ${b.komponen_id} tidak valid (0-100).`,
+                    message: check.message,
                 });
             }
         }
 
         // Validasi total bobot harus 100%
-        const total = bobotList.reduce((sum, b) => sum + parseFloat(b.bobot), 0);
-        if (Math.abs(total - 100) > 0.01) {
+        const totalCheck = validateTotalBobot(bobotList);
+        if (!totalCheck.valid) {
             return res.status(400).json({
                 success: false,
-                message: `Total bobot harus 100%. Saat ini: ${total.toFixed(2)}%`,
+                message: totalCheck.message,
             });
         }
 
@@ -228,3 +252,8 @@ exports.updateBobotPenilaian = async (req, res) => {
         });
     }
 };
+
+// Export untuk keperluan unit testing
+exports._validateKelasId = validateKelasId;
+exports._validateSingleBobot = validateSingleBobot;
+exports._validateTotalBobot = validateTotalBobot;

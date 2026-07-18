@@ -813,3 +813,9 @@ exports.saveBatchKategoriDeskripsiRataRata = async (req, res) => {
         res.status(500).json({ success: false, message: 'Gagal menyimpan: ' + err.message });
     }
 };
+
+// Export untuk keperluan unit testing
+exports._validateAspekKokurikulerAccess = validateAspekKokurikulerAccess;
+exports._validateDeskripsiRataRataAccess = validateDeskripsiRataRataAccess;
+exports._getJenisPenilaian = getJenisPenilaian;
+exports._getKelasId = getKelasId;

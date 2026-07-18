@@ -1056,3 +1056,6 @@ exports.cekStatusKategoriAkademikGBS = async (req, res) => {
         res.status(500).json({ success: false, message: 'Gagal mengecek status konfigurasi: ' + err.message });
     }
 };
+
+// Export untuk keperluan unit testing
+exports._calculateSimilarity = calculateSimilarity;
