@@ -5,6 +5,8 @@
  *         Deskripsi rapor dihitung real-time dari konfigurasi_nilai_rapor
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: 19 Juli 2026 - Tambah antrian (queue) untuk mencegah race condition
+ *         saat 2+ request generate rapor diproses bersamaan
  */
 
 const db = require('../../config/db');
@@ -17,11 +19,26 @@ const fs = require('fs');
 // Konstanta path template rapor
 const TEMPLATE_DIR = path.join(__dirname, '..', '..', 'templates', 'rapor');
 
-// Konstanta delimiter template
-const TEMPLATE_DELIMITERS = { start: '<<', end: '>>' };
-
 // Konstanta kompresi ZIP
 const ZIP_COMPRESSION_LEVEL = 9;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ANTRIAN SEDERHANA — pastikan hanya 1 proses render docx yang jalan
+// dalam satu waktu (mencegah race condition antar request yang tumpang tindih)
+// ═════════════════════════════════════════════════════════════════════════════
+
+let antrianRender = Promise.resolve();
+
+function jalankanBerurutan(fn) {
+    const hasil = antrianRender.then(() => fn());
+    // Tetap lanjut ke antrian berikutnya walau fn() gagal/error,
+    // supaya 1 kegagalan tidak membuat semua request setelahnya macet
+    antrianRender = hasil.then(
+        () => {},
+        () => {}
+    );
+    return hasil;
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -54,6 +71,20 @@ const formatTanggalIndonesia = (dateString) => {
         year: 'numeric',
     }).format(new Date(dateString));
 };
+
+// Render 1 dokumen docx dari template + data (dipanggil lewat antrian)
+function renderDocx(templatePath, data) {
+    const content = fs.readFileSync(templatePath, 'binary');
+    const zip = new PizZip(content);
+    const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        delimiters: { start: '<<', end: '>>' }, // objek baru tiap render, tidak dipakai bersama
+        nullGetter: () => '–',
+    });
+    doc.render(data);
+    return doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. GENERATE RAPOR PER SISWA (DOCX)
@@ -223,18 +254,8 @@ exports.generateRaporPDF = async (req, res) => {
             return res.status(404).json({ success: false, message: `Template ${templateFile} tidak ditemukan` });
         }
 
-        // Render template dengan data rapor
-        const content = fs.readFileSync(templatePath, 'binary');
-        const zip = new PizZip(content);
-        const doc = new Docxtemplater(zip, {
-            paragraphLoop: true,
-            linebreaks: true,
-            delimiters: TEMPLATE_DELIMITERS,
-            nullGetter: () => '–',
-        });
-        doc.render(raporData);
-
-        const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+        // ✅ Render lewat antrian, supaya tidak tabrakan dengan request lain yang jalan bersamaan
+        const buf = await jalankanBerurutan(() => renderDocx(templatePath, raporData));
 
         // Format nama file rapor
         const cleanTahunAjaran = sanitizeFileName(tahun_ajaran || '');
@@ -394,17 +415,8 @@ exports.generateRaporBulk = async (req, res) => {
                     tanggal_pembagian_pas
                 );
 
-                const content = fs.readFileSync(templatePath, 'binary');
-                const zip = new PizZip(content);
-                const doc = new Docxtemplater(zip, {
-                    paragraphLoop: true,
-                    linebreaks: true,
-                    delimiters: TEMPLATE_DELIMITERS,
-                    nullGetter: () => '–',
-                });
-
-                doc.render(raporData);
-                const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+                // ✅ Render lewat antrian juga di sini
+                const buf = await jalankanBerurutan(() => renderDocx(templatePath, raporData));
 
                 // Format nama file DOCX dalam ZIP
                 const cleanNisn = (siswa.nisn || String(siswa.id_siswa)).replace(/[^0-9]/g, '');
