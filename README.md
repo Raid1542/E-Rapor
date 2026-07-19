@@ -1,4 +1,4 @@
-# 📚 E-Rapor SDIT Ulil Albab Batam — Web-Based Student Report Management Information System
+# E-Rapor SDIT Ulil Albab Batam — Web Based Student Report Management Information System
 
 E-Rapor SDIT Ulil Albab Batam is a web-based information system developed to support the management of student report cards digitally. The application assists schools in managing academic data, teacher assignments, student assessments, attendance, extracurricular activities, report generation, and report archiving in an integrated system.
 
@@ -87,55 +87,45 @@ System quality is evaluated through functional and non-functional testing to ens
 
 # Functional Requirements
 
-The E-Rapor system provides integrated functionalities to support academic administration activities at SDIT Ulil Albab Batam. The application consists of three user roles: **Administrator**, **Homeroom Teacher**, and **Subject Teacher**, each with different access rights and responsibilities.
+The functional requirements define the primary capabilities of the E-Rapor system in supporting academic administration activities at SDIT Ulil Albab Batam. The application provides different functionalities based on user roles to ensure efficient and secure management of academic data.
 
-### Administrator
-- User Authentication
-- Dashboard
-- Academic Year Management
-- Administrator Management
-- Teacher Management
-- Student Management
-- Class Management
-- Subject Management
-- Teaching Assignment Management
-- Homeroom Teacher Assignment
-- Extracurricular Management
-- Extracurricular Supervisor Assignment
-- School Profile Management
-- Report Archive Management
-- Database Backup & Restore
+| ID | Requirement | User Role |
+|----|-------------|-----------|
+| FR-01 | User Authentication (Login & Logout) | All Users |
+| FR-02 | Dashboard Management | All Users |
+| FR-03 | Academic Year Management | Administrator |
+| FR-04 | User & Teacher Management | Administrator |
+| FR-05 | Student Management | Administrator |
+| FR-06 | Class & Subject Management | Administrator |
+| FR-07 | Teaching Assignment Management | Administrator |
+| FR-08 | School Configuration | Administrator |
+| FR-09 | Assessment Configuration | Homeroom Teacher, Subject Teacher |
+| FR-10 | Student Score Management | Homeroom Teacher, Subject Teacher |
+| FR-11 | Attendance Management | Homeroom Teacher |
+| FR-12 | Cocurricular & Extracurricular Assessment | Homeroom Teacher |
+| FR-13 | Report Card Generation & Archive | Homeroom Teacher, Administrator |
+| FR-14 | Database Backup & Restore | Administrator |
 
-### Homeroom Teacher
-- Dashboard
-- Assessment Configuration
-- Student Attendance Management
-- Subject Score Management
-- Cocurricular Assessment
-- Extracurricular Assessment
-- Homeroom Teacher Notes
-- Student Report Preview
-- Student Report Generation
-
-### Subject Teacher
-- Dashboard
-- Assessment Configuration
-- Student Score Management
-- Learning Progress Monitoring
+> **Note:** The complete list of **44 Functional Requirements (FR-01 to FR-44)** is available in the Software Requirements Specification (SRS) and Project Documentation.
 
 ---
 
 # Non-Functional Requirements
 
-The E-Rapor system is designed to meet several non-functional requirements to ensure quality, reliability, and usability.
+The non-functional requirements define the quality attributes that ensure the E-Rapor system operates efficiently, securely, and reliably during daily academic activities.
 
-| Category | Description |
-|----------|-------------|
-| Performance | The system should provide stable response times under normal user activity. |
-| Security | User authentication is implemented using JSON Web Token (JWT) with role-based access control. |
-| Reliability | Academic data should be stored consistently and protected from data loss through backup and restore features. |
-| Usability | The user interface is designed to be simple, responsive, and easy to understand by school staff. |
-| Compatibility | The application can be accessed through modern web browsers on desktop and laptop devices. |
+| ID | Category | Description |
+|----|----------|-------------|
+| NFR-01 | Performance | The system should maintain an average response time of no more than **3 seconds** under normal operating conditions. |
+| NFR-02 | Security | Passwords are encrypted using hashing mechanisms, while API access is secured using **JSON Web Token (JWT)** authentication. |
+| NFR-03 | Authorization | Access to academic data is restricted based on user roles (Administrator, Homeroom Teacher, and Subject Teacher). |
+| NFR-04 | Usability | The interface is designed to be intuitive and easy to learn by school staff with minimal training. |
+| NFR-05 | Consistency | The application maintains a consistent user interface across all modules and user roles. |
+| NFR-06 | Compatibility | The system is compatible with modern web browsers including Google Chrome, Microsoft Edge, Mozilla Firefox, and Safari. |
+| NFR-07 | Scalability | The system is designed to support up to **100 concurrent users** without significant performance degradation. |
+| NFR-08 | Data Integrity | Student academic records and assessment data are maintained consistently without duplication. |
+| NFR-09 | Reliability | Backup and restore mechanisms are provided to ensure data availability and recovery. |
+| NFR-10 | Error Handling | The system provides clear and informative error messages instead of technical exceptions. |
 
 ---
 
@@ -324,4 +314,4 @@ This project supports **Sustainable Development Goal (SDG) 4: Quality Education*
 
 This project was developed for educational purposes as part of the **Project-Based Learning (PBL)** course at the **Bachelor of Applied Informatics Engineering Study Program, Politeknik Negeri Batam**.
 
-© 2026 E-Rapor SDIT Ulil Albab Batam. All rights reserved.
+© 2026 E-Rapor SDIT Ulil Albab Batam. Developed by Raid Aqil Athallah and Frima Rizky Lianda, Politeknik Negeri Batam.
