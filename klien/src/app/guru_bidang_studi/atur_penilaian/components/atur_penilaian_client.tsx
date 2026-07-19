@@ -301,10 +301,17 @@ export default function AturPenilaianGBSClient() {
     const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
 
-    // ✅ Logika read-only yang konsisten (TIDAK diubah)
-    const isPeriodLocked = statusPTS === 'selesai' || statusPAS === 'selesai';
+    // ✅ PERBAIKAN LOGIKA READ-ONLY
+    // 1. Sistem terkunci jika KEDUA periode belum dibuka
     const isPeriodNotOpen = statusPTS === 'nonaktif' && statusPAS === 'nonaktif';
-    const isReadOnly = isPeriodLocked || isPeriodNotOpen;
+
+    // 2. Sistem terkunci HANYA JIKA periode yang SEDANG AKTIF berstatus 'selesai'
+    const isPeriodLocked =
+        (jenisPenilaianAktif === 'PTS' && statusPTS === 'selesai') ||
+        (jenisPenilaianAktif === 'PAS' && statusPAS === 'selesai');
+
+    // 3. Gabungkan kedua kondisi di atas
+    const isReadOnly = isPeriodNotOpen || isPeriodLocked;
 
     const [activeTab, setActiveTab] = useState<'akademik' | 'bobot'>('akademik');
     const [loading, setLoading] = useState(true);
