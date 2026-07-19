@@ -1,140 +1,165 @@
-# E-Rapor SDIT Ulil Albab Batam — Web Based Student Report Management Information System
+# E-Rapor SDIT Ulil Albab Batam — Sistem Informasi Manajemen Rapor Siswa Berbasis Web
 
-E-Rapor SDIT Ulil Albab Batam is a web-based information system developed to support the management of student report cards digitally. The application assists schools in managing academic data, teacher assignments, student assessments, attendance, extracurricular activities, report generation, and report archiving in an integrated system.
+E-Rapor SDIT Ulil Albab Batam adalah sistem informasi berbasis web yang dikembangkan untuk mendukung pengelolaan rapor siswa secara digital. Aplikasi ini membantu sekolah dalam mengelola data akademik, penugasan guru, penilaian siswa, absensi, kegiatan ekstrakurikuler, pembuatan rapor, dan pengarsipan rapor dalam satu sistem terpadu.
 
-This application was developed as part of the **Project-Based Learning (PBL)** course in the **Bachelor of Applied Informatics Engineering Study Program**, Politeknik Negeri Batam.
-
----
-
-# Background
-
-Student report management at many elementary schools is still carried out using manual or semi-digital methods, resulting in duplicated work, inconsistent data, and inefficient report preparation. Administrative processes such as teacher assignments, assessment input, attendance recording, extracurricular management, and report generation require a centralized system that is accurate, secure, and easy to use.
-
-E-Rapor SDIT Ulil Albab Batam was developed to digitalize these academic administration processes through an integrated web-based information system. The application enables administrators, homeroom teachers, and subject teachers to collaborate within one platform, ensuring that report generation becomes faster, more efficient, and minimizes data entry errors.
+Aplikasi ini dikembangkan sebagai bagian dari mata kuliah **Project-Based Learning (PBL)** pada program studi **D3 Teknik Informatika**, Politeknik Negeri Batam.
 
 ---
 
-# Key Features
+# Latar Belakang
 
-## Administrator
+Pengelolaan rapor siswa di banyak sekolah dasar masih dilakukan secara manual atau semi-digital, sehingga menyebabkan kerja yang berulang, data yang tidak konsisten, dan proses pembuatan rapor yang kurang efisien. Proses administrasi seperti penugasan guru, input penilaian, pencatatan absensi, pengelolaan ekstrakurikuler, dan pembuatan rapor membutuhkan sistem terpusat yang akurat, aman, dan mudah digunakan.
 
-- Authentication (Login & Logout)
+E-Rapor SDIT Ulil Albab Batam dikembangkan untuk mendigitalisasi proses administrasi akademik tersebut melalui sebuah sistem informasi berbasis web terintegrasi. Aplikasi ini memungkinkan admin, guru kelas, dan guru bidang studi untuk berkolaborasi dalam satu platform, memastikan pembuatan rapor menjadi lebih cepat, efisien, dan meminimalkan kesalahan entri data.
+
+---
+
+# Fitur Utama
+
+## Admin
+
+- Autentikasi (Login & Logout)
 - Dashboard
-- Academic Year Management
-- Administrator Management
-- Teacher Management
-- Student Management
-- Class Management
-- Subject Management
-- Teaching Assignment Management
-- Homeroom Teacher Assignment
-- Extracurricular Management
-- Extracurricular Supervisor Assignment
-- School Profile Management
-- Report Archive Management
-- Database Backup & Restore
+- Manajemen Tahun Ajaran
+- Manajemen Administrator
+- Manajemen Guru
+- Manajemen Siswa
+- Manajemen Kelas
+- Manajemen Mata Pelajaran
+- Manajemen Penugasan Mengajar
+- Penugasan Guru Kelas
+- Manajemen Ekstrakurikuler
+- Penugasan Pembina Ekstrakurikuler
+- Manajemen Profil Sekolah
+- Manajemen Arsip rapor
+- Backup & Restore Database
 
 ---
 
-## Homeroom Teacher
-
-- Dashboard
-- Assessment Configuration
-- Student Attendance Management
-- Subject Score Management
-- Cocurricular Assessment
-- Extracurricular Assessment
-- Homeroom Teacher Notes
-- Student Report Preview
-- Student Report Generation
-
----
-
-## Subject Teacher
+## Guru Kelas
 
 - Dashboard
-- Assessment Configuration
-- Student Score Management
-- Learning Progress Monitoring
+- Konfigurasi Penilaian
+- Manajemen Absensi Siswa
+- Manajemen Nilai Mata Pelajaran
+- Penilaian Kokurikuler
+- Penilaian Ekstrakurikuler
+- Catatan Wali Kelas
+- Pratinjau rapor Siswa
+- Pembuatan rapor Siswa
 
 ---
 
-# Tech Stack
+## Guru Bidang Studi
 
-| Category | Technology |
+- Dashboard
+- Konfigurasi Penilaian
+- Manajemen Nilai Siswa
+- Monitoring Kemajuan Pembelajaran
+
+---
+
+# Teknologi
+
+| Kategori | Teknologi |
 |----------|------------|
 | Frontend | Next.js 16, React 19, TypeScript |
-| Backend | Express.js 5, Node.js |
+| Backend  | Express.js 5, Node.js |
 | Database | MariaDB |
-| Styling | Tailwind CSS 4 |
-| Authentication | JSON Web Token (JWT) |
+| Styling  | Tailwind CSS 4 |
+| Autentikasi | JSON Web Token (JWT) |
 | Version Control | Git & GitHub |
-| Development Tools | Visual Studio Code, Postman |
+| Alat Pengembangan | Visual Studio Code, Postman |
 
 ---
 
-# Development Method
+# Metode Pengembangan
 
-This project applies the **Agile Software Development** methodology, emphasizing iterative development, collaboration among team members, and continuous system improvement throughout the Project-Based Learning process.
+Proyek ini menerapkan metode **Agile Software Development**, yang menekankan pengembangan iteratif, kolaborasi antar anggota tim, dan perbaikan berkelanjutan sepanjang proses Project-Based Learning.
 
-The development process begins with **Requirement Analysis**, where functional and non-functional requirements are identified based on the academic administration workflow at SDIT Ulil Albab Batam. These requirements are translated into database design, system architecture, and user interface prototypes during the **System Design** phase.
+Proses pengembangan dimulai dengan **Analisis Kebutuhan**, di mana kebutuhan fungsional dan non-fungsional diidentifikasi berdasarkan alur kerja administrasi akademik di SDIT Ulil Albab Batam. Kebutuhan tersebut diterjemahkan ke desain basis data, arsitektur sistem, dan prototipe antarmuka pengguna pada fase **Desain Sistem**.
 
-The implementation phase is carried out incrementally using **Next.js** for frontend development, **Express.js** for backend REST API services, and **MariaDB** as the relational database management system.
+Fase implementasi dilakukan secara bertahap menggunakan **Next.js** untuk frontend, **Express.js** untuk layanan REST API backend, dan **MariaDB** sebagai sistem manajemen basis data relasional.
 
-System quality is evaluated through functional and non-functional testing to ensure that every feature operates according to user requirements. After successful testing, the application is deployed for demonstration and evaluation as the final outcome of the Project-Based Learning (PBL).
-
----
-
-# Functional Requirements
-
-The functional requirements define the primary capabilities of the E-Rapor system in supporting academic administration activities at SDIT Ulil Albab Batam. The application provides different functionalities based on user roles to ensure efficient and secure management of academic data.
-
-| ID | Requirement | User Role |
-|----|-------------|-----------|
-| FR-01 | User Authentication (Login & Logout) | All Users |
-| FR-02 | Dashboard Management | All Users |
-| FR-03 | Academic Year Management | Administrator |
-| FR-04 | User & Teacher Management | Administrator |
-| FR-05 | Student Management | Administrator |
-| FR-06 | Class & Subject Management | Administrator |
-| FR-07 | Teaching Assignment Management | Administrator |
-| FR-08 | School Configuration | Administrator |
-| FR-09 | Assessment Configuration | Homeroom Teacher, Subject Teacher |
-| FR-10 | Student Score Management | Homeroom Teacher, Subject Teacher |
-| FR-11 | Attendance Management | Homeroom Teacher |
-| FR-12 | Cocurricular & Extracurricular Assessment | Homeroom Teacher |
-| FR-13 | Report Card Generation & Archive | Homeroom Teacher, Administrator |
-| FR-14 | Database Backup & Restore | Administrator |
-
-> **Note:** The complete list of **44 Functional Requirements (FR-01 to FR-44)** is available in the Software Requirements Specification (SRS) and Project Documentation.
+Kualitas sistem dievaluasi melalui pengujian fungsional dan non-fungsional untuk memastikan setiap fitur beroperasi sesuai kebutuhan pengguna. Setelah pengujian berhasil, aplikasi dideploy untuk demonstrasi dan evaluasi sebagai hasil akhir PBL.
 
 ---
 
-# Non-Functional Requirements
+# Kebutuhan Fungsional
 
-The non-functional requirements define the quality attributes that ensure the E-Rapor system operates efficiently, securely, and reliably during daily academic activities.
+Kebutuhan fungsional mendefinisikan kemampuan utama sistem E-Rapor dalam mendukung kegiatan administrasi akademik di SDIT Ulil Albab Batam. Aplikasi menyediakan fungsi berbeda berdasarkan peran pengguna untuk memastikan pengelolaan data akademik yang efisien dan aman.
 
-| ID | Category | Description |
-|----|----------|-------------|
-| NFR-01 | Performance | The system should maintain an average response time of no more than **3 seconds** under normal operating conditions. |
-| NFR-02 | Security | Passwords are encrypted using hashing mechanisms, while API access is secured using **JSON Web Token (JWT)** authentication. |
-| NFR-03 | Authorization | Access to academic data is restricted based on user roles (Administrator, Homeroom Teacher, and Subject Teacher). |
-| NFR-04 | Usability | The interface is designed to be intuitive and easy to learn by school staff with minimal training. |
-| NFR-05 | Consistency | The application maintains a consistent user interface across all modules and user roles. |
-| NFR-06 | Compatibility | The system is compatible with modern web browsers including Google Chrome, Microsoft Edge, Mozilla Firefox, and Safari. |
-| NFR-07 | Scalability | The system is designed to support up to **100 concurrent users** without significant performance degradation. |
-| NFR-08 | Data Integrity | Student academic records and assessment data are maintained consistently without duplication. |
-| NFR-09 | Reliability | Backup and restore mechanisms are provided to ensure data availability and recovery. |
-| NFR-10 | Error Handling | The system provides clear and informative error messages instead of technical exceptions. |
+| Kode | Keterangan | Aktor |
+|----|-----------|----------------|
+| FR-01 | Melakukan Login dan Logout | Semua Pengguna |
+| FR-02 | Edit Profil Pengguna | Semua Pengguna |
+| FR-03 | Ubah Kata Sandi | Semua Pengguna |
+| FR-04 | Tambah Tahun Ajaran | Admin |
+| FR-05 | Ganti Semester di Tahun Ajaran | Admin |
+| FR-06 | Melihat Detail Informasi Data Guru | Admin |
+| FR-07 | Menambah Data Guru | Admin |
+| FR-08 | Mengedit Data Guru | Admin |
+| FR-09 | Import Data Guru | Admin |
+| FR-10 | Filter Data Guru | Admin |
+| FR-11 | Mengatur Kelas dan Guru Kelas | Admin |
+| FR-12 | Atur Data Mata Pelajaran | Admin |
+| FR-13 | Atur Data Pembelajaran | Admin |
+| FR-14 | Kelola Status Penilaian | Admin |
+| FR-15 | Melihat Detail Informasi Data Siswa | Admin |
+| FR-16 | Menambah Data Siswa | Admin |
+| FR-17 | Mengedit Data Siswa | Admin |
+| FR-18 | Import Data Siswa | Admin |
+| FR-19 | Tambah Data Pembina Ektrakurikuler | Admin |
+| FR-20 | Import Data Pembina Ekstrakurikuler | Admin |
+| FR-21 | Edit Data Pembina Ekstrakurikuler | Admin |
+| FR-22 | Kelola Data Ekstrakurikuler | Admin |
+| FR-23 | Melihat Detail Informasi Data Admin | Admin |
+| FR-24 | Menambah Data Admin | Admin |
+| FR-25 | Mengedit Data Admin | Admin |
+| FR-26 | Mengisi Data Sekolah | Admin |
+| FR-27 | Aktifkan Penilaian yang akan Dilaksanakan | Admin |
+| FR-28 | Arsip Rapor | Admin |
+| FR-29 | Backup & Restore Data Rapor | Admin |
+| FR-30 | Mengatur Penilaian (Kokurikulerm Deskripsi Rata-Rata, Akademik, dan Bobot) | Guru Kelas |
+| FR-31 | Melihat Data Siswa | Guru Kelas |
+| FR-32 | Input Nilai Siswa (Mapel Wajib) | Guru Kelas |
+| FR-33 | Input Penilaian Kokurikuler | Guru Kelas |
+| FR-34 | Kelola Absensi Siswa | Guru Kelas |
+| FR-35 | Input Catatan Wali Kelas | Guru Kelas |
+| FR-36 | Kelola Ekstrakurikuler Siswa | Guru Kelas |
+| FR-37 | Cetak/Unduh Rapor Siswa | Guru Kelas |
+| FR-38 | Rekapan Nilai Rapor | Guru Kelas |
+| FR-39 | Mengatur Penilaian Akademik | Guru Bidang Studi |
+| FR-40 | Menginput Nilai (Mapel Pilihan) | Guru Bidang Studi |
+
 
 ---
 
-# System Architecture
+# Kebutuhan Non-Fungsional
 
-The application follows a three-tier architecture consisting of the presentation layer, application layer, and database layer.
+Kebutuhan non-fungsional mendefinisikan atribut kualitas yang memastikan sistem E-Rapor beroperasi efisien, aman, dan handal dalam kegiatan akademik sehari-hari.
+
+| Kode | Keterangan | 
+|----|----------|
+| NFR-01 | Sistem harus mempertahankan rata-rata waktu respons tidak lebih dari **3 detik** dalam kondisi operasi normal. |
+| NFR-02 | Kata sandi dienkripsi menggunakan mekanisme hashing, sementara akses API diamankan menggunakan autentikasi **JSON Web Token (JWT)**. |
+| NFR-03 | Akses ke data akademik dibatasi berdasarkan peran pengguna (Administrator, Wali Kelas, Guru Mata Pelajaran). |
+| NFR-04 | Antarmuka dirancang intuitif dan mudah dipelajari oleh staf sekolah dengan pelatihan minimal. |
+| NFR-05 | Aplikasi mempertahankan tampilan antarmuka yang konsisten di seluruh modul dan peran pengguna. |
+| NFR-06 | Sistem kompatibel dengan browser modern seperti Google Chrome, Microsoft Edge, Mozilla Firefox, dan Safari. |
+| NFR-07 | Sistem dirancang untuk mendukung hingga **100 pengguna konkuren** tanpa degradasi performa signifikan. |
+| NFR-08 | Rekam akademik siswa dan data penilaian dipertahankan konsisten tanpa duplikasi. |
+| NFR-09 | Disediakan mekanisme backup dan restore untuk memastikan ketersediaan dan pemulihan data. |
+| NFR-10 | Sistem memberikan pesan kesalahan yang jelas dan informatif alih-alih menampilkan exception teknis. |
+
+---
+
+# Arsitektur Sistem
+
+Aplikasi mengikuti arsitektur tiga lapis yang terdiri dari lapisan presentasi, lapisan aplikasi, dan lapisan basis data.
 
 ```text
-+----------------------+
++----------------------+ 
 |      Frontend        |
 |  Next.js + React.js  |
 +----------+-----------+
@@ -150,45 +175,45 @@ The application follows a three-tier architecture consisting of the presentation
 +----------v-----------+
 |      MariaDB         |
 | Relational Database  |
-+----------------------+
++----------------------+ 
 ```
 
 ---
 
-# Database
+# Basis Data
 
-The application uses **MariaDB** as the primary relational database management system.
+Aplikasi menggunakan **MariaDB** sebagai sistem manajemen basis data relasional utama.
 
-Some of the main entities include:
+Beberapa entitas utama meliputi:
 
 - Administrator
-- Teacher
-- Student
-- Class
-- Subject
-- Teaching Assignment
-- Academic Year
-- Attendance
-- Student Assessment
-- Cocurricular Assessment
-- Extracurricular Assessment
-- Homeroom Teacher Notes
-- Report Archive
+- Guru
+- Siswa
+- Kelas
+- Mata Pelajaran
+- Penugasan Mengajar
+- Tahun Ajaran
+- Absensi
+- Penilaian Siswa
+- Penilaian Kokurikuler
+- Penilaian Ekstrakurikuler
+- Catatan Wali Kelas
+- Arsip rapor
 
-The database is designed using relational tables with primary keys and foreign keys to maintain data consistency and integrity throughout the system.
+Basis data dirancang menggunakan tabel relasional dengan primary key dan foreign key untuk menjaga konsistensi dan integritas data di seluruh sistem.
 
 ---
 
-# Installation Guide
+# Panduan Instalasi
 
-## Prerequisites
+## Prasyarat
 
-Before running the project, make sure the following software is installed on your computer:
+Sebelum menjalankan proyek, pastikan perangkat lunak berikut terpasang di komputer Anda:
 
-- Node.js (v18 or newer)
+- Node.js (v18 atau lebih baru)
 - MariaDB
 - Git
-- Visual Studio Code (recommended)
+- Visual Studio Code (direkomendasikan)
 
 ---
 
@@ -201,16 +226,16 @@ cd E-Rapor
 
 ---
 
-## Backend Installation
+## Instalasi Backend
 
 ```bash
 cd server
 npm install
 ```
 
-Configure the database connection by editing the `.env` file.
+Konfigurasikan koneksi basis data dengan mengedit file `.env`.
 
-Example:
+Contoh:
 
 ```env
 DB_HOST=localhost
@@ -223,19 +248,19 @@ JWT_SECRET=your_secret_key
 PORT=5000
 ```
 
-Run the backend server:
+Jalankan server backend:
 
 ```bash
 npm start
 ```
 
-or using PM2
+atau menggunakan PM2
 
 ```bash
 pm2 start server.js --name erapor
 ```
 
-The backend server will run at:
+Server backend akan berjalan di:
 
 ```
 http://localhost:5000
@@ -243,9 +268,9 @@ http://localhost:5000
 
 ---
 
-## Frontend Installation
+## Instalasi Frontend
 
-Open a new terminal.
+Buka terminal baru.
 
 ```bash
 cd klien
@@ -253,7 +278,7 @@ npm install
 npm run dev
 ```
 
-The frontend application will run at:
+Aplikasi frontend akan berjalan di:
 
 ```
 http://localhost:3000
@@ -261,57 +286,45 @@ http://localhost:3000
 
 ---
 
-## Database
+## Basis Data
 
-Create a MariaDB database named:
+Buat database MariaDB dengan nama:
 
 ```
 erapor_db
 ```
 
-Import the SQL database file into MariaDB before running the application.
+Impor file database SQL sebelum menjalankan aplikasi.
 
 ---
 
-# Documentation
+# Dokumentasi
 
-The complete project documentation can be accessed through the following links.
+Dokumentasi proyek lengkap dapat diakses melalui tautan berikut.
 
-| Document | Link |
-|----------|------|
-| 📄 Final Report | *(Add Google Drive Link)* |
-| 📑 Software Requirements Specification (SRS) | *(Add Google Drive Link)* |
-| 📊 Presentation Slides | *(Add Google Drive Link)* |
-| 🎥 Demo Video | *(Add YouTube Link)* |
-| 🎬 Presentation Video | *(Add YouTube Link)* |
-| 🖼️ Poster | *(Add Google Drive Link)* |
-| 📜 Copyright / HKI | *(Add Link if available)* |
+| Dokumen | Tautan |
+|---------|--------|
+| 📄 File Lengkap | https://drive.google.com/drive/folders/1WUbDMMhyndlvOXV16d4t670WnA5f_YIL?usp=sharing |
+| 🎥 Video Demo | https://www.youtube.com/watch?v=pmvVWjnRKTA |
+| 🎬 Video Presentasi | https://www.youtube.com/watch?v=0hRU_DxJIYA |
 
 ---
 
-# Development Team
+# Tim Pengembang
 
 Project-Based Learning (PBL)
 
-Bachelor of Applied Informatics Engineering
+D3 Teknik Informatika
 
-Politeknik Negeri Batam
-
-| Name | Role |
-|------|------|
+| Nama | Peran |
+|------|-------|
 | Raid Aqil Athallah - 3312401022 | Fullstack |
 | Frima Rizky Lianda - 3312401016 | Fullstack |
 
 ---
 
-# SDGs Contribution
+# Lisensi
 
-This project supports **Sustainable Development Goal (SDG) 4: Quality Education** by providing a digital academic information system that improves the efficiency, accuracy, and accessibility of student report management at SDIT Ulil Albab Batam.
+Proyek ini dikembangkan untuk keperluan pendidikan sebagai bagian dari mata kuliah **Project-Based Learning (PBL)** pada program studi **D3 Teknik Informatika, Politeknik Negeri Batam**.
 
----
-
-# License
-
-This project was developed for educational purposes as part of the **Project-Based Learning (PBL)** course at the **Bachelor of Applied Informatics Engineering Study Program, Politeknik Negeri Batam**.
-
-© 2026 E-Rapor SDIT Ulil Albab Batam. Developed by Raid Aqil Athallah and Frima Rizky Lianda, Politeknik Negeri Batam.
+© 2026 E-Rapor SDIT Ulil Albab Batam. Dikembangkan oleh Raid Aqil Athallah dan Frima Rizky Lianda, Politeknik Negeri Batam.
