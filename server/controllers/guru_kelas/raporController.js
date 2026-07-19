@@ -232,7 +232,7 @@ exports.generateRaporPDF = async (req, res) => {
             delimiters: TEMPLATE_DELIMITERS,
             nullGetter: () => '–',
         });
-        doc.render(raporData);
+        doc.render(raporData); 
 
         const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
