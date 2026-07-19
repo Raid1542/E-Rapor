@@ -3,7 +3,7 @@
  * Fungsi: Controller catatan wali kelas per siswa (sanitasi XSS, validasi naik tingkat, pre-fill data)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 15 Juli 2026 - Kolom Naik Tingkat HANYA muncul saat PAS Semester Genap + Fix exceljs column error + Update header template
+ * Update: 15 Juli 2026 - Kolom Naik Tingkat HANYA muncul saat PAS Semester Genap + Fix exceljs column error + Fix findColIndex untuk header dinamis
  */
 
 const db = require('../../config/db');
@@ -239,7 +239,7 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
         const headers = ['No', 'NIS', 'NISN', 'Nama Siswa', 'Catatan Wali Kelas'];
         
         if (showNaikTingkat) {
-            headers.push('Naik Tingkat (ya/tidak)'); // <-- DIUBAH SESUAI PERMINTAAN
+            headers.push('Naik Tingkat (ya/tidak)');
         }
 
         headers.forEach((header, colIdx) => {
@@ -470,7 +470,13 @@ exports.importCatatanWaliExcel = async (req, res) => {
             });
         }
 
-        const findColIndex = name => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+        // ✅ PERBAIKAN UTAMA: Gunakan includes agar bisa mendeteksi header seperti "Naik Tingkat (ya/tidak)"
+        const findColIndex = name => {
+            const exactMatch = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+            if (exactMatch !== -1) return exactMatch;
+            return headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+        };
+
         const idxNIS = findColIndex('NIS');
         const idxNISN = findColIndex('NISN');
         const idxNama = findColIndex('Nama Siswa');
@@ -671,7 +677,7 @@ exports.importCatatanWaliExcel = async (req, res) => {
                         continue;
                     }
                 } else {
-                    errors.push({ row: i + 1, message: `Baris ${i + 1}: Kolom "Naik Tingkat" wajib diisi untuk PAS Genap` });
+                    errors.push({ row: i + 1, message: `Baris ${i + 1}: Kolom "Naik Tingkat" tidak ditemukan di file Excel` });
                     skippedCount++;
                     continue;
                 }
