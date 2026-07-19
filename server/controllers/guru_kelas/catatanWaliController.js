@@ -3,7 +3,7 @@
  * Fungsi: Controller catatan wali kelas per siswa (sanitasi XSS, validasi naik tingkat, pre-fill data)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 15 Juli 2026 - Kolom Naik Tingkat HANYA muncul saat PAS Semester Genap
+ * Update: 15 Juli 2026 - Kolom Naik Tingkat HANYA muncul saat PAS Semester Genap + Fix exceljs column error + Update header template
  */
 
 const db = require('../../config/db');
@@ -234,12 +234,12 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
         const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
 
-        // ✅ PERBAIKAN 2: Kolom Naik Tingkat HANYA muncul jika PAS Genap
+        // ✅ PERBAIKAN 2: Kolom Naik Tingkat HANYA muncul jika PAS Genap dengan petunjuk (ya/tidak)
         const showNaikTingkat = (jenisPenilaian === 'PAS' && semesterName === 'Genap');
         const headers = ['No', 'NIS', 'NISN', 'Nama Siswa', 'Catatan Wali Kelas'];
         
         if (showNaikTingkat) {
-            headers.push('Naik Tingkat (Wajib Diisi)');
+            headers.push('Naik Tingkat (ya/tidak)'); // <-- DIUBAH SESUAI PERMINTAAN
         }
 
         headers.forEach((header, colIdx) => {
@@ -344,17 +344,20 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
             emptyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
         }
 
-        // ✅ PERBAIKAN 5: Lebar kolom dinamis sesuai jumlah header
-        worksheet.columns = [
-            { width: 6 }, 
-            { width: 15 }, 
-            { width: 15 }, 
-            { width: 30 }, 
-            { width: 60 } // Lebar untuk Catatan
+        // ✅ PERBAIKAN 5 (FIX ERROR): Bangun array definisi kolom terlebih dahulu, lalu assign sekaligus.
+        const columnDefinitions = [
+            { key: 'no', width: 6 },
+            { key: 'nis', width: 15 },
+            { key: 'nisn', width: 15 },
+            { key: 'nama', width: 30 },
+            { key: 'catatan', width: 60 }
         ];
+
         if (showNaikTingkat) {
-            worksheet.columns.push({ width: 20 }); // Lebar untuk Naik Tingkat
+            columnDefinitions.push({ key: 'naik_tingkat', width: 20 });
         }
+
+        worksheet.columns = columnDefinitions;
 
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
