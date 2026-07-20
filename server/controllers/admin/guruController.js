@@ -2,6 +2,7 @@
  * Nama File: guruController.js
  * Fungsi: Controller CRUD guru + import Excel
  * UPDATE: ✅ Import sekarang skip error per baris (tidak stop seluruh proses)
+ *           ✅ Fix: Menambahkan helper URL absolut agar foto profil muncul di frontend
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -10,6 +11,21 @@ const XLSX = require('xlsx');
 const guruModel = require('../../models/admin/guruModel');
 const db = require('../../config/db');
 const fs = require('fs');
+
+// ==========================================================================
+// HELPER: Mengubah path relatif menjadi URL absolut agar bisa dibaca frontend
+// ==========================================================================
+const getFullPhotoUrl = (fotoPath) => {
+    if (!fotoPath) return null;
+    // Jika sudah URL lengkap (http/https), kembalikan apa adanya
+    if (fotoPath.startsWith('http')) return fotoPath;
+    // Jika path dimulai dengan '/uploads/', tambahkan base URL server backend
+    if (fotoPath.startsWith('/uploads/')) {
+        return `http://localhost:${process.env.PORT || 5000}${fotoPath}`;
+    }
+    // Jika hanya nama file atau path tanpa slash di awal, tambahkan base URL dan '/uploads/'
+    return `http://localhost:${process.env.PORT || 5000}/uploads/${fotoPath.replace(/^\/+/, '')}`;
+};
 
 // GET: Ambil daftar semua guru dengan data profil dan role
 const getGuru = async (req, res) => {
@@ -24,9 +40,14 @@ const getGuru = async (req, res) => {
             WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')
             GROUP BY u.id_user ORDER BY u.nama_lengkap ASC
         `);
+        
         const guruList = rows.map(row => ({
-            ...row, roles: row.roles ? row.roles.split(',') : [], profileImage: row.foto_path || null
+            ...row, 
+            roles: row.roles ? row.roles.split(',') : [], 
+            // PERBAIKAN: Gunakan helper untuk mengubah path jadi URL lengkap
+            profileImage: getFullPhotoUrl(row.foto_path) 
         }));
+        
         res.json({ success: true, data: guruList });
     } catch (err) {
         console.error('Error get guru:', err);
@@ -40,7 +61,15 @@ const getGuruById = async (req, res) => {
         const { id } = req.params;
         const guru = await guruModel.getGuruById(id);
         if (!guru) return res.status(404).json({ message: 'Guru tidak ditemukan' });
-        res.json({ success: true, data: guru });
+        
+        res.json({ 
+            success: true, 
+            data: {
+                ...guru,
+                // PERBAIKAN: Pastikan profileImage di detail juga URL lengkap
+                profileImage: getFullPhotoUrl(guru.foto_path || guru.profileImage)
+            } 
+        });
     } catch (err) {
         console.error('Error get guru by ID:', err);
         res.status(500).json({ message: 'Gagal mengambil detail guru' });
