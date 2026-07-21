@@ -1,6 +1,6 @@
 /**
  * Nama File: rekapanController.js
- * Fungsi: Controller rekapan nilai guru kelas (view + export Excel)
+ * Fungsi: Controller rekapan nilai guru kelas (view dan export Excel).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
@@ -9,8 +9,8 @@ const db = require('../../config/db');
 const ExcelJS = require('exceljs');
 
 /**
- * GET /rekapan-nilai - Ambil rekapan nilai siswa sesuai periode aktif
- * Hitung rata-rata, ranking, dan deskripsi untuk setiap siswa
+ * GET /rekapan-nilai - Ambil rekapan nilai siswa sesuai periode aktif.
+ * Hitung rata-rata, ranking, dan deskripsi untuk setiap siswa.
  */
 exports.getRekapanNilai = async (req, res) => {
     try {
@@ -23,11 +23,11 @@ exports.getRekapanNilai = async (req, res) => {
         if (!tahunAjaranIndukId || !semesterId || !semester) {
             return res.status(400).json({
                 success: false,
-                message: 'Data tahun ajaran tidak ditemukan',
+                message: 'Data tahun ajaran tidak ditemukan'
             });
         }
 
-        // Tentukan jenis penilaian aktif (PTS/PAS)
+        // Tentukan jenis penilaian aktif (PTS atau PAS)
         const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
 
         // Validasi info kelas wali
@@ -35,7 +35,7 @@ exports.getRekapanNilai = async (req, res) => {
         if (!infoKelas || !infoKelas.kelas_id) {
             return res.status(404).json({
                 success: false,
-                message: 'Anda belum mengampu kelas',
+                message: 'Anda belum mengampu kelas'
             });
         }
         const kelasId = infoKelas.kelas_id;
@@ -69,7 +69,7 @@ exports.getRekapanNilai = async (req, res) => {
                 success: true,
                 jenis_penilaian: jenisAktif,
                 siswa: [],
-                mapel_list: mapelList,
+                mapel_list: mapelList
             });
         }
 
@@ -106,12 +106,12 @@ exports.getRekapanNilai = async (req, res) => {
                 nis: siswa.nis,
                 nilai_mapel: {},
                 total: 0,
-                count: 0,
+                count: 0
             });
         });
 
         // Inisialisasi nilai mapel dengan null
-        siswaMap.forEach((siswa) => {
+        siswaMap.forEach(siswa => {
             mapelList.forEach(kodeMapel => {
                 siswa.nilai_mapel[kodeMapel] = null;
             });
@@ -144,13 +144,16 @@ exports.getRekapanNilai = async (req, res) => {
         const sorted = siswaArray
             .filter(s => s.rata_rata != null)
             .sort((a, b) => b.rata_rata - a.rata_rata);
+
         sorted.forEach((siswa, idx) => {
             siswa.ranking = idx + 1;
         });
 
         // Set ranking null untuk siswa tanpa nilai
         siswaArray.forEach(siswa => {
-            if (siswa.rata_rata == null) siswa.ranking = null;
+            if (siswa.rata_rata == null) {
+                siswa.ranking = null;
+            }
         });
 
         // Helper: Cari deskripsi berdasarkan range nilai
@@ -173,27 +176,26 @@ exports.getRekapanNilai = async (req, res) => {
             nilai_mapel: siswa.nilai_mapel,
             rata_rata: siswa.rata_rata,
             deskripsi: getDeskripsiRataRata(siswa.rata_rata),
-            ranking: siswa.ranking,
+            ranking: siswa.ranking
         }));
 
         res.json({
             success: true,
             jenis_penilaian: jenisAktif,
             siswa: siswaList,
-            mapel_list: mapelList,
+            mapel_list: mapelList
         });
     } catch (error) {
-        console.error('Error getRekapanNilai:', error);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat rekapan: ' + error.message,
+            message: 'Gagal memuat rekapan: ' + error.message
         });
     }
 };
 
 /**
- * GET /rekapan-nilai/export-excel - Export rekapan nilai ke file Excel
- * Generate file xlsx dengan format tabel lengkap
+ * GET /rekapan-nilai/export-excel - Export rekapan nilai ke file Excel.
+ * Generate file xlsx dengan format tabel lengkap.
  */
 exports.exportRekapanNilaiExcel = async (req, res) => {
     try {
@@ -273,12 +275,12 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
                 nis: siswa.nis,
                 nilai_mapel: {},
                 total: 0,
-                count: 0,
+                count: 0
             });
         });
 
         // Inisialisasi nilai mapel dengan null
-        siswaMap.forEach((siswa) => {
+        siswaMap.forEach(siswa => {
             mapelList.forEach(kodeMapel => {
                 siswa.nilai_mapel[kodeMapel] = null;
             });
@@ -306,12 +308,15 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
         const sorted = siswaArray
             .filter(s => s.rata_rata != null)
             .sort((a, b) => b.rata_rata - a.rata_rata);
+
         sorted.forEach((siswa, idx) => {
             siswa.ranking = idx + 1;
         });
 
         siswaArray.forEach(siswa => {
-            if (siswa.rata_rata == null) siswa.ranking = null;
+            if (siswa.rata_rata == null) {
+                siswa.ranking = null;
+            }
         });
 
         // Helper: Cari deskripsi berdasarkan range nilai
@@ -341,7 +346,7 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
         row1.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFE8690A' },
+            fgColor: { argb: 'FFE8690A' }
         };
         row1.alignment = { horizontal: 'center', vertical: 'middle' };
         row1.height = 25;
@@ -377,7 +382,7 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
                     ...nilaiCols,
                     siswa.rata_rata != null ? siswa.rata_rata.toFixed(2) : '-',
                     getDeskripsiRataRata(siswa.rata_rata) || '-',
-                    siswa.ranking != null ? siswa.ranking : '-',
+                    siswa.ranking != null ? siswa.ranking : '-'
                 ]
                 : [
                     siswa.ranking || '-',
@@ -385,7 +390,7 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
                     siswa.nis,
                     ...nilaiCols,
                     siswa.rata_rata != null ? siswa.rata_rata.toFixed(2) : '-',
-                    siswa.ranking != null ? siswa.ranking : '-',
+                    siswa.ranking != null ? siswa.ranking : '-'
                 ];
 
             const dataRow = worksheet.addRow(rowData);
@@ -396,7 +401,7 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
                     cell.fill = {
                         type: 'pattern',
                         pattern: 'solid',
-                        fgColor: { argb: 'FFFFF7ED' },
+                        fgColor: { argb: 'FFFFF7ED' }
                     };
                 });
             }
@@ -409,9 +414,9 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
             else if (idx === 2) col.width = 12;
             else if (jenisAktif === 'PTS' && idx === headerRow.length - 2) col.width = 12;
             else if (jenisAktif === 'PTS' && idx === headerRow.length - 1) col.width = 25;
-            else if (jenisAktif === 'PTS' && idx === headerRow.length) col.width = 10;
+            else if (jenisAktif === 'PTS' && idx >= headerRow.length) col.width = 10;
             else if (jenisAktif === 'PAS' && idx === headerRow.length - 2) col.width = 12;
-            else if (jenisAktif === 'PAS' && idx === headerRow.length - 1) col.width = 10;
+            else if (jenisAktif === 'PAS' && idx >= headerRow.length - 1) col.width = 10;
             else col.width = 10;
         });
 
@@ -429,10 +434,9 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
         await workbook.xlsx.write(res);
         res.end();
     } catch (err) {
-        console.error('Error exportRekapanNilaiExcel:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal export Excel: ' + err.message,
+            message: 'Gagal export Excel: ' + err.message
         });
     }
 };

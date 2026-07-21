@@ -1,18 +1,16 @@
 /**
  * Nama File: kelasController.js
- * Fungsi: Controller untuk guru kelas - data kelas, siswa, dan progress penilaian
+ * Fungsi: Controller untuk guru kelas - data kelas, siswa, dan progress penilaian.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. GET KELAS SAYA
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Ambil data kelas yang diampu guru (1 kelas per guru)
-const getKelasSaya = async (req, res) => {
+/**
+ * GET /kelas-saya - Ambil data kelas yang diampu guru (1 kelas per guru).
+ */
+exports.getKelasSaya = async (req, res) => {
     try {
         const userId = req.user.id;
         const idInduk = req.idTahunAjaranInduk;
@@ -35,7 +33,7 @@ const getKelasSaya = async (req, res) => {
         if (rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Anda belum ditugaskan sebagai guru kelas pada tahun ajaran ini.',
+                message: 'Anda belum ditugaskan sebagai guru kelas pada tahun ajaran ini.'
             });
         }
 
@@ -44,23 +42,21 @@ const getKelasSaya = async (req, res) => {
             data: {
                 id_kelas: rows[0].id_kelas,
                 nama_kelas: rows[0].nama_kelas,
-                jumlah_siswa: rows[0].jumlah_siswa || 0,
-            },
+                jumlah_siswa: rows[0].jumlah_siswa || 0
+            }
         });
     } catch (err) {
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil data kelas: ' + err.message,
+            message: 'Gagal mengambil data kelas: ' + err.message
         });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. GET SISWA BY KELAS
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Ambil daftar siswa di kelas yang diampu guru
-const getSiswaByKelas = async (req, res) => {
+/**
+ * GET /siswa - Ambil daftar siswa di kelas yang diampu guru.
+ */
+exports.getSiswaByKelas = async (req, res) => {
     try {
         const userId = req.user.id;
         const idInduk = req.idTahunAjaranInduk;
@@ -69,7 +65,7 @@ const getSiswaByKelas = async (req, res) => {
         if (!idInduk || !semesterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Data tahun ajaran tidak lengkap',
+                message: 'Data tahun ajaran tidak lengkap'
             });
         }
 
@@ -85,7 +81,7 @@ const getSiswaByKelas = async (req, res) => {
         if (guruKelasRows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Anda tidak memiliki kelas yang diampu pada semester ini.',
+                message: 'Anda tidak memiliki kelas yang diampu pada semester ini.'
             });
         }
 
@@ -111,20 +107,18 @@ const getSiswaByKelas = async (req, res) => {
             kelas_nama: nama_kelas,
             data: siswaRows.map(row => ({
                 ...row,
-                statusSiswa: row.status || 'aktif',
-            })),
+                statusSiswa: row.status || 'aktif'
+            }))
         });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. GET PROGRESS PENILAIAN
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Ambil progress penilaian per mata pelajaran (total vs sudah dinilai)
-const getProgressPenilaian = async (req, res) => {
+/**
+ * GET /progress-penilaian - Ambil progress penilaian per mata pelajaran.
+ */
+exports.getProgressPenilaian = async (req, res) => {
     try {
         const userId = req.user.id;
         const idInduk = req.idTahunAjaranInduk;
@@ -165,7 +159,7 @@ const getProgressPenilaian = async (req, res) => {
             return res.json({
                 success: true,
                 data: [],
-                message: 'Belum ada periode penilaian yang aktif',
+                message: 'Belum ada periode penilaian yang aktif'
             });
         }
 
@@ -198,7 +192,7 @@ const getProgressPenilaian = async (req, res) => {
                 kelasId, idInduk,
                 semesterId, semesterAktif, jenisPenilaianAktif,
                 kelasId, idInduk,
-                kelasId, semesterId,
+                kelasId, semesterId
             ]
         );
 
@@ -208,25 +202,15 @@ const getProgressPenilaian = async (req, res) => {
             total_siswa: parseInt(row.total_siswa) || 0,
             sudah_dinilai: parseInt(row.sudah_dinilai) || 0,
             belum_dinilai: (parseInt(row.total_siswa) || 0) - (parseInt(row.sudah_dinilai) || 0),
-            jenis: row.jenis,
+            jenis: row.jenis
         }));
 
         res.json({
             success: true,
             data,
-            jenis_penilaian: jenisPenilaianAktif,
+            jenis_penilaian: jenisPenilaianAktif
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
-};
-
-// ═════════════════════════════════════════════════════════════════════════════
-// EXPORT
-// ═════════════════════════════════════════════════════════════════════════════
-
-module.exports = {
-    getKelasSaya,
-    getSiswaByKelas,
-    getProgressPenilaian,
 };

@@ -1,31 +1,33 @@
 /**
  * Nama File: pembinaEkskulModel.js
- * Fungsi: Model CRUD pembina ekstrakurikuler
+ * Fungsi: Model CRUD pembina ekstrakurikuler.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
-// Model pembina ekstrakurikuler
 const pembinaEkskulModel = {
-    // Ambil semua pembina
+    /**
+     * Ambil semua data pembina ekstrakurikuler.
+     */
     async getAll() {
         try {
             const [rows] = await db.execute(`
-        SELECT id_pembina_ekstrakurikuler as id, nama_lengkap, niy, nuptk, tempat_lahir, tanggal_lahir,
+        SELECT id_pembina_ekstrakurikuler AS id, nama_lengkap, niy, nuptk, tempat_lahir, tanggal_lahir,
                 jenis_kelamin, alamat, no_telepon, status, created_at, updated_at
         FROM pembina_ekstrakurikuler
         ORDER BY nama_lengkap ASC
         `);
             return rows;
         } catch (err) {
-            console.error('Error getAll:', err);
-            throw err;
+            throw new Error('Gagal mengambil data pembina ekstrakurikuler');
         }
     },
 
-    // Ambil pembina by ID
+    /**
+     * Ambil detail pembina berdasarkan ID.
+     */
     async getById(id) {
         try {
             const [rows] = await db.execute(
@@ -34,12 +36,13 @@ const pembinaEkskulModel = {
             );
             return rows[0] || null;
         } catch (err) {
-            console.error('Error getById:', err);
-            throw err;
+            throw new Error('Gagal mengambil detail pembina');
         }
     },
 
-    // Tambah pembina baru
+    /**
+     * Tambah data pembina baru.
+     */
     async create(data, connection = null) {
         try {
             const query = `
@@ -56,7 +59,7 @@ const pembinaEkskulModel = {
                 data.jenis_kelamin,
                 data.alamat || null,
                 data.no_telepon || null,
-                data.status || 'aktif',
+                data.status || 'aktif'
             ];
 
             if (connection) {
@@ -67,12 +70,13 @@ const pembinaEkskulModel = {
             const [result] = await db.execute(query, values);
             return result.insertId;
         } catch (err) {
-            console.error('Error create:', err);
-            throw err;
+            throw new Error('Gagal membuat data pembina');
         }
     },
 
-    // Update pembina
+    /**
+     * Update data pembina.
+     */
     async update(id, data, connection = null) {
         try {
             const query = `
@@ -91,7 +95,7 @@ const pembinaEkskulModel = {
                 data.alamat || null,
                 data.no_telepon || null,
                 data.status || 'aktif',
-                id,
+                id
             ];
 
             if (connection) {
@@ -102,26 +106,26 @@ const pembinaEkskulModel = {
             const [result] = await db.execute(query, values);
             return result.affectedRows > 0;
         } catch (err) {
-            console.error('Error update:', err);
-            throw err;
+            throw new Error('Gagal mengupdate data pembina');
         }
     },
 
-    // Ambil pembina aktif untuk dropdown
+    /**
+     * Ambil daftar pembina aktif untuk kebutuhan dropdown.
+     */
     async getActivePembina() {
         try {
             const [rows] = await db.execute(`
-        SELECT id_pembina_ekstrakurikuler as id, nama_lengkap, niy, nuptk
+        SELECT id_pembina_ekstrakurikuler AS id, nama_lengkap, niy, nuptk
         FROM pembina_ekstrakurikuler
         WHERE status = 'aktif'
         ORDER BY nama_lengkap ASC
         `);
             return rows;
         } catch (err) {
-            console.error('Error getActivePembina:', err);
-            throw err;
+            throw new Error('Gagal mengambil daftar pembina aktif');
         }
-    },
+    }
 };
 
 module.exports = pembinaEkskulModel;

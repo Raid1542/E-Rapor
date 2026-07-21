@@ -1,6 +1,6 @@
 /**
  * Nama File: authController.js
- * Fungsi: Controller autentikasi (login) dengan JWT token
+ * Fungsi: Controller autentikasi (login) dengan JWT token.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
@@ -10,12 +10,12 @@ const { comparePassword } = require('../utils/hash');
 const db = require('../config/db');
 const userModel = require('../models/authModel');
 
-// Konstanta untuk JWT token expiration
+// Konstanta untuk masa berlaku JWT token
 const TOKEN_EXPIRY = '8h';
 
 /**
- * POST /login - Autentikasi user dan generate JWT token
- * Validasi kredensial, verifikasi role, dan return data profil lengkap
+ * POST /login - Autentikasi user dan generate JWT token.
+ * Validasi kredensial, verifikasi role, dan return data profil lengkap.
  */
 const login = async (req, res) => {
     const { email_sekolah, password, role: selectedRole } = req.body;
@@ -24,7 +24,7 @@ const login = async (req, res) => {
     if (!email_sekolah || !password || !selectedRole) {
         return res.status(400).json({
             success: false,
-            message: 'Email, password, dan role wajib diisi',
+            message: 'Email, password, dan role wajib diisi'
         });
     }
 
@@ -43,7 +43,7 @@ const login = async (req, res) => {
             return res.status(401).json({
                 success: false,
                 message: 'Email atau password salah',
-                code: 'INVALID_CREDENTIALS',
+                code: 'INVALID_CREDENTIALS'
             });
         }
 
@@ -54,7 +54,7 @@ const login = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: 'Akun tidak aktif. Silakan hubungi administrator.',
-                code: 'ACCOUNT_INACTIVE',
+                code: 'ACCOUNT_INACTIVE'
             });
         }
 
@@ -64,7 +64,7 @@ const login = async (req, res) => {
             return res.status(401).json({
                 success: false,
                 message: 'Password salah',
-                code: 'WRONG_PASSWORD',
+                code: 'WRONG_PASSWORD'
             });
         }
 
@@ -74,7 +74,7 @@ const login = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: `Anda tidak memiliki akses sebagai ${selectedRole}`,
-                code: 'ROLE_NOT_ALLOWED',
+                code: 'ROLE_NOT_ALLOWED'
             });
         }
 
@@ -111,13 +111,13 @@ const login = async (req, res) => {
                 alamat: guruData.alamat || '',
                 no_telepon: guruData.no_telepon || '',
                 tempat_lahir: guruData.tempat_lahir || '',
-                tanggal_lahir: guruData.tanggal_lahir || null,
-            },
+                tanggal_lahir: guruData.tanggal_lahir || null
+            }
         });
     } catch (err) {
         return res.status(500).json({
             success: false,
-            message: 'Terjadi kesalahan server: ' + err.message,
+            message: 'Terjadi kesalahan server: ' + err.message
         });
     }
 };

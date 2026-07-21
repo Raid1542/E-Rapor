@@ -1,7 +1,7 @@
 /**
  * Nama File: profilController.js
- * Fungsi: Controller manajemen profil guru kelas (edit profil, ganti password, upload foto)
- *         Menangani operasi CRUD untuk data profil guru di tabel user dan guru
+ * Fungsi: Controller manajemen profil guru kelas (edit profil, ganti password, upload foto).
+ *         Menangani operasi CRUD untuk data profil guru di tabel user dan guru.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
@@ -10,11 +10,9 @@ const db = require('../../config/db');
 const bcrypt = require('bcrypt');
 const guruModel = require('../../models/admin/guruModel');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. EDIT PROFIL
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Update profil guru (tabel user + guru)
+/**
+ * Update profil guru (tabel user + guru).
+ */
 exports.editProfil = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -65,20 +63,17 @@ exports.editProfil = async (req, res) => {
                 jenis_kelamin: guruRows[0].jenis_kelamin,
                 no_telepon: guruRows[0].no_telepon,
                 alamat: guruRows[0].alamat,
-                profileImage: guruRows[0].foto_path || null,
-            },
+                profileImage: guruRows[0].foto_path || null
+            }
         });
     } catch (err) {
-        console.error('Error edit profil:', err);
         res.status(500).json({ message: 'Gagal memperbarui profil' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. GANTI PASSWORD
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Ganti password user (minimal 8 karakter)
+/**
+ * Ganti password user (minimal 8 karakter).
+ */
 exports.gantiPassword = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -87,7 +82,7 @@ exports.gantiPassword = async (req, res) => {
         // Validasi input password
         if (!oldPassword || !newPassword || newPassword.length < 8) {
             return res.status(400).json({
-                message: 'Password lama & baru wajib, minimal 8 karakter',
+                message: 'Password lama & baru wajib, minimal 8 karakter'
             });
         }
 
@@ -110,21 +105,18 @@ exports.gantiPassword = async (req, res) => {
         const newHashedPassword = await bcrypt.hash(newPassword, 10);
         await db.execute('UPDATE user SET password = ? WHERE id_user = ?', [
             newHashedPassword,
-            userId,
+            userId
         ]);
 
         res.json({ message: 'Kata sandi berhasil diubah' });
     } catch (err) {
-        console.error('Error ganti password:', err);
         res.status(500).json({ message: 'Gagal mengubah kata sandi' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. UPLOAD FOTO
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Upload foto profil guru
+/**
+ * Upload foto profil guru.
+ */
 exports.uploadFotoProfil = async (req, res) => {
     try {
         // Validasi file foto
@@ -144,10 +136,9 @@ exports.uploadFotoProfil = async (req, res) => {
         res.json({
             success: true,
             message: 'Foto profil berhasil diupload',
-            fotoPath,
+            fotoPath
         });
     } catch (err) {
-        console.error('Error upload foto:', err);
         res.status(500).json({ message: 'Gagal mengupload foto' });
     }
 };

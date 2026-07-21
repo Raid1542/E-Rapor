@@ -1,7 +1,7 @@
 /**
  * Nama File: konfigurasiNilaiRaporModel.js
- * Fungsi: Model konfigurasi nilai rapor akademik (deskripsi per rentang nilai)
- *         Menangani CRUD kategori nilai rapor dan deskripsi otomatis
+ * Fungsi: Model konfigurasi nilai rapor akademik (deskripsi per rentang nilai).
+ *         Menangani CRUD kategori nilai rapor dan deskripsi otomatis.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 10 Juli 2026
  */
@@ -45,7 +45,9 @@ const QUERY_DELETE_KATEGORI = `
 `;
 
 const konfigurasiNilaiRaporModel = {
-  // Dapatkan deskripsi berdasarkan nilai numerik dan mata pelajaran
+  /**
+   * Dapatkan deskripsi berdasarkan nilai numerik dan mata pelajaran.
+   */
   async getDeskripsiByNilai(nilai, mapelId, tahunAjaranId = null, jenisPenilaian = 'PAS') {
     if (nilai == null || mapelId == null) {
       return 'Belum ada deskripsi';
@@ -55,7 +57,6 @@ const konfigurasiNilaiRaporModel = {
       let query = QUERY_GET_DESKRIPSI_BASE;
       const params = [mapelId, nilai];
 
-      // Tambah filter tahun ajaran jika ada
       if (tahunAjaranId) {
         query += ' AND tahun_ajaran_id = ?';
         params.push(tahunAjaranId);
@@ -68,12 +69,13 @@ const konfigurasiNilaiRaporModel = {
       const [rows] = await db.execute(query, params);
       return rows.length > 0 ? rows[0].deskripsi : 'Belum ada deskripsi';
     } catch (err) {
-      console.error('Error getDeskripsiByNilai:', err);
       throw new Error('Gagal mengambil deskripsi');
     }
   },
 
-  // Ambil semua kategori/rentang nilai berdasarkan mata pelajaran (atau rata-rata)
+  /**
+   * Ambil semua kategori atau rentang nilai berdasarkan mata pelajaran atau rata-rata.
+   */
   async getAllKategori(mapelId = null, isRataRata = false, tahunAjaranId) {
     if (!tahunAjaranId) {
       throw new Error('Tahun ajaran wajib diisi');
@@ -95,12 +97,13 @@ const konfigurasiNilaiRaporModel = {
       const [rows] = await db.execute(query, params);
       return rows;
     } catch (err) {
-      console.error('Error getAllKategori:', err);
       throw new Error('Gagal mengambil kategori');
     }
   },
 
-  // Buat kategori baru untuk konfigurasi nilai rapor akademik
+  /**
+   * Buat kategori baru untuk konfigurasi nilai rapor akademik.
+   */
   async createKategori({ mapel_id, tahun_ajaran_id, min_nilai, max_nilai, deskripsi, urutan }) {
     if (!mapel_id || !tahun_ajaran_id || min_nilai == null || max_nilai == null || !deskripsi) {
       throw new Error('Parameter wajib diisi');
@@ -113,18 +116,19 @@ const konfigurasiNilaiRaporModel = {
         min_nilai,
         max_nilai,
         deskripsi,
-        urutan || 0,
+        urutan || 0
       ]);
 
       const [newRow] = await db.execute(QUERY_GET_NEW_KATEGORI, [result.insertId]);
       return newRow[0];
     } catch (err) {
-      console.error('Error createKategori:', err);
       throw new Error('Gagal membuat kategori');
     }
   },
 
-  // Perbarui kategori konfigurasi nilai rapor akademik
+  /**
+   * Perbarui kategori konfigurasi nilai rapor akademik.
+   */
   async updateKategori(id, { mapel_id, min_nilai, max_nilai, deskripsi, urutan }) {
     if (!id || mapel_id == null || min_nilai == null || max_nilai == null || !deskripsi) {
       throw new Error('Parameter wajib diisi');
@@ -137,16 +141,17 @@ const konfigurasiNilaiRaporModel = {
         max_nilai,
         deskripsi,
         urutan || 0,
-        id,
+        id
       ]);
       return result.affectedRows > 0;
     } catch (err) {
-      console.error('Error updateKategori:', err);
       throw new Error('Gagal memperbarui kategori');
     }
   },
 
-  // Hapus kategori dengan soft-delete (nonaktifkan)
+  /**
+   * Hapus kategori dengan soft-delete (nonaktifkan).
+   */
   async deleteKategori(id) {
     if (!id) {
       throw new Error('ID kategori wajib diisi');
@@ -156,10 +161,9 @@ const konfigurasiNilaiRaporModel = {
       const [result] = await db.execute(QUERY_DELETE_KATEGORI, [id]);
       return result.affectedRows > 0;
     } catch (err) {
-      console.error('Error deleteKategori:', err);
       throw new Error('Gagal menghapus kategori');
     }
-  },
+  }
 };
 
 module.exports = konfigurasiNilaiRaporModel;

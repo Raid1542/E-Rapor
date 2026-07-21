@@ -1,9 +1,8 @@
 /**
  * Nama File: absensiController.js
- * Fungsi: Controller absensi siswa guru kelas (PTS/PAS) + import Excel
+ * Fungsi: Controller absensi siswa guru kelas (PTS/PAS) + import Excel.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
- * Update: 15 Juli 2026 - Fix bind parameter undefined & pre-fill data di template
  */
 
 const absensiModel = require('../../models/guru_kelas/absensiModel');
@@ -17,10 +16,9 @@ const MAX_ABSEN = 90;
 // Konstanta untuk threshold similarity nama
 const SIMILARITY_THRESHOLD = 0.7;
 
-// ═════════════════════════════════════════════════════════════════════════════
-// HELPER - Hitung Kesamaan String (Levenshtein Distance)
-// ═════════════════════════════════════════════════════════════════════════════
-
+/**
+ * Hitung kesamaan string menggunakan Levenshtein Distance.
+ */
 const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
@@ -29,8 +27,12 @@ const calculateSimilarity = (str1, str2) => {
     const len2 = str2.length;
     const matrix = [];
 
-    for (let i = 0; i <= len1; i++) matrix[i] = [i];
-    for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+    for (let i = 0; i <= len1; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= len2; j++) {
+        matrix[0][j] = j;
+    }
 
     for (let i = 1; i <= len1; i++) {
         for (let j = 1; j <= len2; j++) {
@@ -47,10 +49,9 @@ const calculateSimilarity = (str1, str2) => {
     return 1 - matrix[len1][len2] / maxLen;
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. GET ABSENSI SISWA
-// ═════════════════════════════════════════════════════════════════════════════
-
+/**
+ * GET /absensi - Ambil data absensi siswa di kelas.
+ */
 exports.getAbsensiSiswa = async (req, res) => {
     try {
         const userId = req.user?.id;
@@ -68,13 +69,12 @@ exports.getAbsensiSiswa = async (req, res) => {
         const kelasId = infoKelas.kelas_id;
         const namaKelas = infoKelas.nama_kelas;
         const tahunAjaranId = req.idSemesterAktif;
-        const indukId = req.idTahunAjaranInduk; // ✅ TAMBAHKAN INI
+        const indukId = req.idTahunAjaranInduk;
 
         if (!tahunAjaranId || !kelasId || !indukId) {
             return res.status(500).json({ success: false, message: 'Data tahun ajaran atau kelas tidak valid' });
         }
 
-        // ✅ PERBAIKAN: Kirim 3 parameter sesuai dengan definisi di model
         const absensiList = await absensiModel.getAbsensiByKelas(kelasId, tahunAjaranId, indukId);
 
         const formattedData = absensiList.map(row => {
@@ -87,7 +87,7 @@ exports.getAbsensiSiswa = async (req, res) => {
                     sakit: row.sakit_pts,
                     izin: row.izin_pts,
                     alpha: row.alpha_pts,
-                    sudah_diinput: row.sudah_diinput === 1,
+                    sudah_diinput: row.sudah_diinput === 1
                 };
             } else {
                 return {
@@ -101,7 +101,7 @@ exports.getAbsensiSiswa = async (req, res) => {
                     sudah_diinput: row.sudah_diinput === 1,
                     pts_sakit: row.sakit_pts,
                     pts_izin: row.izin_pts,
-                    pts_alpha: row.alpha_pts,
+                    pts_alpha: row.alpha_pts
                 };
             }
         });
@@ -114,32 +114,35 @@ exports.getAbsensiSiswa = async (req, res) => {
                 jenis_penilaian: jenis,
                 semester,
                 absensi: formattedData,
-                total: formattedData.length,
-            },
+                total: formattedData.length
+            }
         });
     } catch (err) {
-        console.error('Error getAbsensiSiswa:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil data absensi',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+            message: 'Gagal mengambil data absensi: ' + err.message
         });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. UPSERT ABSENSI
-// ═════════════════════════════════════════════════════════════════════════════
-
+/**
+ * POST /absensi - Simpan atau update data absensi siswa.
+ */
 exports.upsertAbsensi = async (req, res) => {
     try {
         const userId = req.user?.id;
         const jenis = req.body.jenis?.toUpperCase() || req.penilaianContext?.jenis;
         const { siswa_id, sakit, izin, alpha } = req.body;
 
-        if (!userId) return res.status(401).json({ success: false, message: 'User tidak terautentikasi' });
-        if (!jenis || !['PTS', 'PAS'].includes(jenis)) return res.status(400).json({ success: false, message: 'Jenis harus PTS atau PAS' });
-        if (!siswa_id) return res.status(400).json({ success: false, message: 'ID siswa wajib diisi' });
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'User tidak terautentikasi' });
+        }
+        if (!jenis || !['PTS', 'PAS'].includes(jenis)) {
+            return res.status(400).json({ success: false, message: 'Jenis harus PTS atau PAS' });
+        }
+        if (!siswa_id) {
+            return res.status(400).json({ success: false, message: 'ID siswa wajib diisi' });
+        }
 
         const nilaiSakit = parseInt(sakit) || 0;
         const nilaiIzin = parseInt(izin) || 0;
@@ -170,7 +173,6 @@ exports.upsertAbsensi = async (req, res) => {
             return res.status(500).json({ success: false, message: 'Data tahun ajaran atau kelas tidak valid' });
         }
 
-        // ✅ VALIDASI PENTING: PAS tidak boleh kurang dari PTS
         if (jenis === 'PAS') {
             const ptsData = await absensiModel.checkPTSExists(siswa_id, tahunAjaranId);
             if (ptsData) {
@@ -203,19 +205,16 @@ exports.upsertAbsensi = async (req, res) => {
 
         res.json({ success: true, message: `Absensi ${jenis} berhasil disimpan` });
     } catch (err) {
-        console.error('Error upsertAbsensi:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal menyimpan absensi',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+            message: 'Gagal menyimpan absensi: ' + err.message
         });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. DOWNLOAD TEMPLATE IMPORT ABSENSI
-// ═════════════════════════════════════════════════════════════════════════════
-
+/**
+ * GET /absensi/import-template - Download template import absensi.
+ */
 exports.downloadTemplateAbsensi = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -228,36 +227,44 @@ exports.downloadTemplateAbsensi = async (req, res) => {
         const jenisPenilaian = jenis.toUpperCase();
 
         const [taRows] = await db.execute("SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1");
-        if (taRows.length === 0) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        if (taRows.length === 0) {
+            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        }
 
         const semesterId = taRows[0].id_tahun_ajaran;
         const indukId = taRows[0].id_tahun_ajaran_induk;
 
         const [kelasRow] = await db.execute('SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?', [userId, semesterId]);
-        if (kelasRow.length === 0) return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
+        if (kelasRow.length === 0) {
+            return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
+        }
 
         const kelasId = kelasRow[0].kelas_id;
         const [namaKelasRow] = await db.execute('SELECT nama_kelas FROM kelas WHERE id_kelas = ?', [kelasId]);
         const namaKelas = namaKelasRow[0]?.nama_kelas || 'Kelas';
 
         const [siswaRows] = await db.execute(
-            `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap FROM siswa s INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif' ORDER BY s.nama_lengkap ASC`,
+            `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap 
+        FROM siswa s 
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif' 
+        ORDER BY s.nama_lengkap ASC`,
             [kelasId, indukId]
         );
 
-        // ✅ PERBAIKAN: Ambil data absensi yang sudah ada untuk pre-fill template
         const [existingAbsensiRows] = await db.execute(
-            `SELECT siswa_id, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total FROM absensi WHERE kelas_id = ? AND id_tahun_ajaran = ?`,
+            `SELECT siswa_id, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total 
+        FROM absensi 
+        WHERE kelas_id = ? AND id_tahun_ajaran = ?`,
             [kelasId, semesterId]
         );
 
         const absensiMap = {};
         existingAbsensiRows.forEach(row => {
             absensiMap[row.siswa_id] = {
-                // Jika PAS, gunakan total semester. Jika PTS, gunakan pts.
                 sakit: jenisPenilaian === 'PAS' ? (row.sakit_total || 0) : (row.sakit_pts || 0),
                 izin: jenisPenilaian === 'PAS' ? (row.izin_total || 0) : (row.izin_pts || 0),
-                alpha: jenisPenilaian === 'PAS' ? (row.alpha_total || 0) : (row.alpha_pts || 0),
+                alpha: jenisPenilaian === 'PAS' ? (row.alpha_total || 0) : (row.alpha_pts || 0)
             };
         });
 
@@ -267,11 +274,10 @@ exports.downloadTemplateAbsensi = async (req, res) => {
 
         const worksheet = workbook.addWorksheet('Template Absensi');
 
-        // ✅ PERBAIKAN: Tambahkan baris instruksi di Row 1
         const instructionRow = worksheet.getRow(1);
         instructionRow.height = 40;
         const instrCell = instructionRow.getCell(1);
-        
+
         if (jenisPenilaian === 'PAS') {
             instrCell.value = '⚠️ PENTING (PERIODE PAS): Isi dengan JUMLAH TOTAL SEMESTER. Nilai TIDAK BOLEH lebih kecil dari data PTS yang sudah tercatat. (Contoh: Jika PTS sakit 2 hari, dan ada tambahan 1 hari, isi dengan 3, bukan 1).';
             instrCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFF0000' } };
@@ -282,7 +288,6 @@ exports.downloadTemplateAbsensi = async (req, res) => {
         instrCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
         worksheet.mergeCells('A1:G1');
 
-        // Header di row 2
         const headerRow = worksheet.getRow(2);
         headerRow.height = 28;
 
@@ -292,11 +297,15 @@ exports.downloadTemplateAbsensi = async (req, res) => {
             cell.value = header;
             cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
             cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-            cell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+            };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colIdx < 4 ? 'FF34495E' : 'FFE8690A' } };
         });
 
-        // Data siswa mulai dari row 3
         siswaRows.forEach((siswa, index) => {
             const rowNum = 3 + index;
             const dataRow = worksheet.getRow(rowNum);
@@ -312,19 +321,28 @@ exports.downloadTemplateAbsensi = async (req, res) => {
                 cell.value = val;
                 cell.font = { name: 'Calibri', size: 11, bold: colIdx === 3 };
                 cell.alignment = { vertical: 'middle', horizontal: colIdx === 3 ? 'left' : 'center' };
-                cell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                };
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' } };
                 cell.protection = { locked: true };
             });
 
-            // ✅ PERBAIKAN: Pre-fill dengan data yang sudah ada
             ['sakit', 'izin', 'alpha'].forEach((field, fieldIdx) => {
                 const colIdx = 5 + fieldIdx;
                 const cell = dataRow.getCell(colIdx);
-                cell.value = existing[field]; // Pre-fill nilai
-                cell.font = { name: 'Calibri', size: 11, bold: true }; // Bold agar terlihat sudah ada data
+                cell.value = existing[field];
+                cell.font = { name: 'Calibri', size: 11, bold: true };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                cell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                };
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' } };
 
                 cell.dataValidation = {
@@ -336,7 +354,7 @@ exports.downloadTemplateAbsensi = async (req, res) => {
                     error: `Nilai absensi harus berupa angka antara 0 sampai ${MAX_ABSEN}`,
                     showInputMessage: true,
                     promptTitle: 'Input Absensi',
-                    prompt: `Masukkan jumlah hari (0-${MAX_ABSEN})`,
+                    prompt: `Masukkan jumlah hari (0-${MAX_ABSEN})`
                 };
             });
         });
@@ -350,8 +368,10 @@ exports.downloadTemplateAbsensi = async (req, res) => {
             emptyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
         }
 
-        worksheet.columns = [{ width: 6 }, { width: 15 }, { width: 15 }, { width: 30 }, { width: 10 }, { width: 10 }, { width: 10 }];
-        worksheet.views = [{ state: 'frozen', ySplit: 2 }]; // Freeze row 1 and 2
+        worksheet.columns = [
+            { width: 6 }, { width: 15 }, { width: 15 }, { width: 30 }, { width: 10 }, { width: 10 }, { width: 10 }
+        ];
+        worksheet.views = [{ state: 'frozen', ySplit: 2 }];
 
         const buffer = await workbook.xlsx.writeBuffer();
         const fileName = `Template_Absensi_${namaKelas.replace(/[^a-z0-9]/gi, '_')}_${jenisPenilaian}.xlsx`;
@@ -360,20 +380,20 @@ exports.downloadTemplateAbsensi = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
-        console.error('Error downloadTemplateAbsensi:', err);
         res.status(500).json({ success: false, message: 'Gagal membuat template: ' + err.message });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4. IMPORT ABSENSI DARI EXCEL
-// ═════════════════════════════════════════════════════════════════════════════
-
+/**
+ * POST /absensi/import - Import data absensi dari Excel.
+ */
 exports.importAbsensiExcel = async (req, res) => {
     const connection = await db.getConnection();
 
     try {
-        if (!req.file) return res.status(400).json({ success: false, message: 'File Excel wajib diupload' });
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'File Excel wajib diupload' });
+        }
 
         const userId = req.user.id;
         const { jenis } = req.query;
@@ -385,13 +405,17 @@ exports.importAbsensiExcel = async (req, res) => {
         const jenisPenilaian = jenis.toUpperCase();
 
         const [taRows] = await db.execute("SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1");
-        if (taRows.length === 0) return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        if (taRows.length === 0) {
+            return res.status(400).json({ success: false, message: 'Tahun ajaran aktif belum diatur' });
+        }
 
         const semesterId = taRows[0].id_tahun_ajaran;
         const indukId = taRows[0].id_tahun_ajaran_induk;
 
         const [kelasRow] = await db.execute('SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?', [userId, semesterId]);
-        if (kelasRow.length === 0) return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
+        if (kelasRow.length === 0) {
+            return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
+        }
 
         const kelasId = kelasRow[0].kelas_id;
 
@@ -400,12 +424,12 @@ exports.importAbsensiExcel = async (req, res) => {
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
 
-        if (data.length < 3) { // Minimal row 1 (instruksi), row 2 (header), row 3 (data)
+        if (data.length < 3) {
             return res.status(400).json({ success: false, message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.' });
         }
 
         let headerRowIndex = -1;
-        for (let i = 1; i < Math.min(10, data.length); i++) { // Mulai dari 1 karena row 0 adalah instruksi
+        for (let i = 1; i < Math.min(10, data.length); i++) {
             const row = data[i].map(c => String(c).trim().toLowerCase());
             if (row.includes('nis') && row.some(c => c.includes('nama'))) {
                 headerRowIndex = i;
@@ -435,8 +459,6 @@ exports.importAbsensiExcel = async (req, res) => {
         const idxIzin = findColIndex('Izin');
         const idxAlpha = findColIndex('Alpha');
 
-        // ✅ PERBAIKAN: Validasi hanya memastikan ada data siswa, TIDAK memaksa nilai > 0
-        // Karena nilai 0 (hadir semua) adalah kondisi yang valid dan harus diizinkan.
         let adaDataSiswa = false;
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -451,24 +473,36 @@ exports.importAbsensiExcel = async (req, res) => {
                 success: false,
                 message: 'File Excel tidak valid - tidak ada data siswa.\n\nSolusi:\n1. Download ulang template Excel\n2. Pastikan kolom NIS dan Nama Siswa terisi\n3. Upload kembali file yang sudah diisi',
                 data: {
-                    total_baris: data.length - dataStartIndex, berhasil: 0, gagal: 0, dilewati: data.length - dataStartIndex,
-                    total_records_saved: 0, errors: null,
+                    total_baris: data.length - dataStartIndex,
+                    berhasil: 0,
+                    gagal: 0,
+                    dilewati: data.length - dataStartIndex,
+                    total_records_saved: 0,
+                    errors: null,
                     warnings: [{ row: 0, message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.' }],
-                    periode: jenisPenilaian,
-                },
+                    periode: jenisPenilaian
+                }
             });
         }
 
         const [siswaRows] = await db.execute(
-            `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status FROM siswa s INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
+            `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status 
+        FROM siswa s 
+        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
             [kelasId, indukId]
         );
 
         const siswaMapByNIS = {};
-        siswaRows.forEach(s => { if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s; });
+        siswaRows.forEach(s => {
+            if (s.nis) siswaMapByNIS[String(s.nis).trim()] = s;
+        });
 
         const [existingAbsensiRows] = await db.execute(
-            `SELECT siswa_id, MAX(sakit_pts) as sakit_pts, MAX(izin_pts) as izin_pts, MAX(alpha_pts) as alpha_pts FROM absensi WHERE kelas_id = ? AND id_tahun_ajaran = ? GROUP BY siswa_id`,
+            `SELECT siswa_id, MAX(sakit_pts) as sakit_pts, MAX(izin_pts) as izin_pts, MAX(alpha_pts) as alpha_pts 
+        FROM absensi 
+        WHERE kelas_id = ? AND id_tahun_ajaran = ? 
+        GROUP BY siswa_id`,
             [kelasId, semesterId]
         );
 
@@ -477,7 +511,7 @@ exports.importAbsensiExcel = async (req, res) => {
             existingAbsensiMap[row.siswa_id] = {
                 sakit_pts: row.sakit_pts || 0,
                 izin_pts: row.izin_pts || 0,
-                alpha_pts: row.alpha_pts || 0,
+                alpha_pts: row.alpha_pts || 0
             };
         });
 
@@ -585,7 +619,6 @@ exports.importAbsensiExcel = async (req, res) => {
                 continue;
             }
 
-            // ✅ VALIDASI PENTING: PAS tidak boleh kurang dari PTS
             if (jenisPenilaian === 'PAS') {
                 const existingData = existingAbsensiMap[siswaId];
                 if (existingData) {
@@ -607,17 +640,16 @@ exports.importAbsensiExcel = async (req, res) => {
                 }
             }
 
-            // Simpan data absensi
             if (jenisPenilaian === 'PTS') {
                 await connection.execute(
                     `INSERT INTO absensi (siswa_id, kelas_id, id_tahun_ajaran, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                     ON DUPLICATE KEY UPDATE
-                     sakit_pts = VALUES(sakit_pts), izin_pts = VALUES(izin_pts), alpha_pts = VALUES(alpha_pts),
-                     sakit_total = GREATEST(COALESCE(sakit_total, 0), VALUES(sakit_pts)),
-                     izin_total = GREATEST(COALESCE(izin_total, 0), VALUES(izin_pts)),
-                     alpha_total = GREATEST(COALESCE(alpha_total, 0), VALUES(alpha_pts)),
-                     updated_at = NOW()`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            sakit_pts = VALUES(sakit_pts), izin_pts = VALUES(izin_pts), alpha_pts = VALUES(alpha_pts),
+            sakit_total = GREATEST(COALESCE(sakit_total, 0), VALUES(sakit_pts)),
+            izin_total = GREATEST(COALESCE(izin_total, 0), VALUES(izin_pts)),
+            alpha_total = GREATEST(COALESCE(alpha_total, 0), VALUES(alpha_pts)),
+            updated_at = NOW()`,
                     [siswaId, kelasId, semesterId, sakit, izin, alpha, sakit, izin, alpha]
                 );
             } else {
@@ -628,10 +660,10 @@ exports.importAbsensiExcel = async (req, res) => {
 
                 await connection.execute(
                     `INSERT INTO absensi (siswa_id, kelas_id, id_tahun_ajaran, sakit_pts, izin_pts, alpha_pts, sakit_total, izin_total, alpha_total)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                     ON DUPLICATE KEY UPDATE
-                     sakit_total = VALUES(sakit_total), izin_total = VALUES(izin_total), alpha_total = VALUES(alpha_total),
-                     updated_at = NOW()`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            sakit_total = VALUES(sakit_total), izin_total = VALUES(izin_total), alpha_total = VALUES(alpha_total),
+            updated_at = NOW()`,
                     [siswaId, kelasId, semesterId, ptsSakit, ptsIzin, ptsAlpha, sakit, izin, alpha]
                 );
             }
@@ -688,12 +720,11 @@ exports.importAbsensiExcel = async (req, res) => {
                 nis_duplikat_detail: nisDuplikat,
                 nisn_duplikat_count: nisnDuplikat.length,
                 nisn_duplikat_detail: nisnDuplikat,
-                pesan_penting: nisDuplikat.length > 0 || nisnDuplikat.length > 0 ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.` : null,
-            },
+                pesan_penting: nisDuplikat.length > 0 || nisnDuplikat.length > 0 ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.` : null
+            }
         });
     } catch (err) {
         await connection.rollback();
-        console.error('Error importAbsensiExcel:', err);
         res.status(500).json({ success: false, message: 'Gagal mengimport absensi: ' + err.message });
     } finally {
         connection.release();

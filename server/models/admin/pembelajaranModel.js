@@ -1,20 +1,21 @@
 /**
  * Nama File: pembelajaranModel.js
- * Fungsi: Model CRUD pembelajaran (penugasan guru ke mapel & kelas)
+ * Fungsi: Model CRUD pembelajaran (penugasan guru ke mata pelajaran dan kelas).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
-// Model pembelajaran
 const pembelajaranModel = {
-  // Ambil semua pembelajaran per tahun ajaran
+  /**
+   * Ambil semua data pembelajaran per tahun ajaran.
+   */
   async getAllByTahunAjaran(tahunAjaranId) {
     try {
       const [rows] = await db.execute(`
         SELECT p.id, p.tahun_ajaran_id, p.kelas_id, p.mapel_id, p.user_id,
-                k.nama_kelas, mp.nama_mapel, mp.kode_mapel, mp.jenis AS jenis_mapel, u.nama_lengkap AS nama_guru
+               k.nama_kelas, mp.nama_mapel, mp.kode_mapel, mp.jenis AS jenis_mapel, u.nama_lengkap AS nama_guru
         FROM pembelajaran p
         JOIN kelas k ON p.kelas_id = k.id_kelas
         JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
@@ -24,17 +25,18 @@ const pembelajaranModel = {
       `, [tahunAjaranId]);
       return rows;
     } catch (err) {
-      console.error('Error getAllByTahunAjaran:', err);
-      throw err;
+      throw new Error('Gagal mengambil data pembelajaran per tahun ajaran');
     }
   },
 
-  // Ambil pembelajaran by kelas
+  /**
+   * Ambil data pembelajaran berdasarkan ID kelas.
+   */
   async getByKelasId(kelasId, tahunAjaranId = null) {
     try {
       let sql = `
         SELECT p.id, p.tahun_ajaran_id, p.kelas_id, p.mapel_id, p.user_id,
-                mp.nama_mapel, mp.kode_mapel, mp.jenis AS jenis_mapel, u.id_user, u.nama_lengkap AS nama_guru
+               mp.nama_mapel, mp.kode_mapel, mp.jenis AS jenis_mapel, u.id_user, u.nama_lengkap AS nama_guru
         FROM pembelajaran p
         JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
         JOIN user u ON p.user_id = u.id_user
@@ -51,31 +53,33 @@ const pembelajaranModel = {
       const [rows] = await db.execute(sql, params);
       return rows;
     } catch (err) {
-      console.error('Error getByKelasId:', err);
-      throw err;
+      throw new Error('Gagal mengambil data pembelajaran berdasarkan kelas');
     }
   },
 
-  // Ambil pembelajaran by kelas, terpisah wajib & pilihan
+  /**
+   * Ambil data pembelajaran berdasarkan kelas, dipisahkan antara wajib dan pilihan.
+   */
   async getByKelasIdSeparated(kelasId, tahunAjaranId = null) {
     try {
       const semuaData = await this.getByKelasId(kelasId, tahunAjaranId);
       return {
         mapel_wajib: semuaData.filter(p => p.jenis_mapel === 'wajib'),
-        mapel_pilihan: semuaData.filter(p => p.jenis_mapel === 'pilihan'),
+        mapel_pilihan: semuaData.filter(p => p.jenis_mapel === 'pilihan')
       };
     } catch (err) {
-      console.error('Error getByKelasIdSeparated:', err);
-      throw err;
+      throw new Error('Gagal memisahkan data pembelajaran wajib dan pilihan');
     }
   },
 
-  // Ambil pembelajaran by ID
+  /**
+   * Ambil detail pembelajaran berdasarkan ID.
+   */
   async getById(id) {
     try {
       const [rows] = await db.execute(`
         SELECT p.id, p.tahun_ajaran_id, p.kelas_id, p.mapel_id, p.user_id,
-                k.nama_kelas, mp.nama_mapel, mp.kode_mapel, mp.jenis AS jenis_mapel, u.nama_lengkap AS nama_guru
+               k.nama_kelas, mp.nama_mapel, mp.kode_mapel, mp.jenis AS jenis_mapel, u.nama_lengkap AS nama_guru
         FROM pembelajaran p
         JOIN kelas k ON p.kelas_id = k.id_kelas
         JOIN mata_pelajaran mp ON p.mapel_id = mp.id_mata_pelajaran
@@ -84,28 +88,30 @@ const pembelajaranModel = {
       `, [id]);
       return rows[0] || null;
     } catch (err) {
-      console.error('Error getById:', err);
-      throw err;
+      throw new Error('Gagal mengambil detail pembelajaran');
     }
   },
 
-  // Tambah pembelajaran
+  /**
+   * Tambah data pembelajaran baru.
+   */
   async create(data, connection = db) {
     try {
       const { tahun_ajaran_id, kelas_id, mapel_id, user_id } = data;
       const [result] = await connection.execute(
         `INSERT INTO pembelajaran (tahun_ajaran_id, kelas_id, mapel_id, user_id, created_at, updated_at)
-          VALUES (?, ?, ?, ?, NOW(), NOW())`,
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
         [tahun_ajaran_id, kelas_id, mapel_id, user_id]
       );
       return result.insertId;
     } catch (err) {
-      console.error('Error create:', err);
-      throw err;
+      throw new Error('Gagal membuat data pembelajaran');
     }
   },
 
-  // Update pembelajaran
+  /**
+   * Update data pembelajaran.
+   */
   async update(id, data, connection = db) {
     try {
       const { kelas_id, mapel_id, user_id } = data;
@@ -115,12 +121,13 @@ const pembelajaranModel = {
       );
       return result.affectedRows > 0;
     } catch (err) {
-      console.error('Error update:', err);
-      throw err;
+      throw new Error('Gagal mengupdate data pembelajaran');
     }
   },
 
-  // Hapus pembelajaran
+  /**
+   * Hapus data pembelajaran berdasarkan ID.
+   */
   async deleteById(id, connection = db) {
     try {
       const [result] = await connection.execute(
@@ -129,16 +136,17 @@ const pembelajaranModel = {
       );
       return result.affectedRows > 0;
     } catch (err) {
-      console.error('Error deleteById:', err);
-      throw err;
+      throw new Error('Gagal menghapus data pembelajaran');
     }
   },
 
-  // Cek duplikasi pembelajaran
-  async isDuplicate(user_id, kelas_id, mapel_id, tahun_ajaran_id, excludeId = null) {
+  /**
+   * Cek apakah data pembelajaran duplikat.
+   */
+  async isDuplicate(userId, kelasId, mapelId, tahunAjaranId, excludeId = null) {
     try {
       let sql = 'SELECT id FROM pembelajaran WHERE user_id = ? AND kelas_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?';
-      const params = [user_id, kelas_id, mapel_id, tahun_ajaran_id];
+      const params = [userId, kelasId, mapelId, tahunAjaranId];
 
       if (excludeId != null) {
         sql += ' AND id != ?';
@@ -148,16 +156,17 @@ const pembelajaranModel = {
       const [rows] = await db.execute(sql, params);
       return rows.length > 0;
     } catch (err) {
-      console.error('Error isDuplicate:', err);
-      throw err;
+      throw new Error('Gagal mengecek duplikasi pembelajaran');
     }
   },
 
-  // Ambil guru pengampu mapel di kelas
-  async getGuruPengampuMapelDiKelas(mapel_id, kelas_id, tahun_ajaran_id, excludeUserId = null) {
+  /**
+   * Ambil guru pengampu mata pelajaran di kelas tertentu.
+   */
+  async getGuruPengampuMapelDiKelas(mapelId, kelasId, tahunAjaranId, excludeUserId = null) {
     try {
       let sql = 'SELECT u.id_user, u.nama_lengkap FROM pembelajaran p JOIN user u ON p.user_id = u.id_user WHERE p.mapel_id = ? AND p.kelas_id = ? AND p.tahun_ajaran_id = ?';
-      const params = [mapel_id, kelas_id, tahun_ajaran_id];
+      const params = [mapelId, kelasId, tahunAjaranId];
 
       if (excludeUserId != null) {
         sql += ' AND p.user_id != ?';
@@ -167,12 +176,13 @@ const pembelajaranModel = {
       const [rows] = await db.execute(sql, params);
       return rows[0] || null;
     } catch (err) {
-      console.error('Error getGuruPengampuMapelDiKelas:', err);
-      throw err;
+      throw new Error('Gagal mengambil data guru pengampu mata pelajaran');
     }
   },
 
-  // Ambil wali kelas
+  /**
+   * Ambil data wali kelas.
+   */
   async getWaliKelas(kelasId, semesterId) {
     try {
       const [rows] = await db.execute(`
@@ -187,12 +197,13 @@ const pembelajaranModel = {
       `, [kelasId, semesterId]);
       return rows[0] || null;
     } catch (err) {
-      console.error('Error getWaliKelas:', err);
-      throw err;
+      throw new Error('Gagal mengambil data wali kelas');
     }
   },
 
-  // Cek wali kelas
+  /**
+   * Cek apakah user adalah wali kelas.
+   */
   async isWaliKelas(userId, kelasId, tahunAjaranId) {
     try {
       const [rows] = await db.execute(
@@ -201,26 +212,28 @@ const pembelajaranModel = {
       );
       return rows.length > 0;
     } catch (err) {
-      console.error('Error isWaliKelas:', err);
-      throw err;
+      throw new Error('Gagal mengecek status wali kelas');
     }
   },
 
-  // Cek mapel punya nilai rapor
-  async hasNilaiRapor(mapel_id, kelas_id, tahun_ajaran_id) {
+  /**
+   * Cek apakah mata pelajaran sudah memiliki nilai rapor.
+   */
+  async hasNilaiRapor(mapelId, kelasId, tahunAjaranId) {
     try {
       const [rows] = await db.execute(
-        'SELECT COUNT(*) as jumlah FROM nilai_rapor WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?',
-        [mapel_id, kelas_id, tahun_ajaran_id]
+        'SELECT COUNT(*) AS jumlah FROM nilai_rapor WHERE mapel_id = ? AND kelas_id = ? AND tahun_ajaran_id = ?',
+        [mapelId, kelasId, tahunAjaranId]
       );
       return rows[0].jumlah;
     } catch (err) {
-      console.error('Error hasNilaiRapor:', err);
-      throw err;
+      throw new Error('Gagal mengecek keberadaan nilai rapor');
     }
   },
 
-  // Ambil guru kelas aktif
+  /**
+   * Ambil daftar guru kelas yang aktif.
+   */
   async getGuruKelasAktif() {
     try {
       const [rows] = await db.execute(`
@@ -232,12 +245,13 @@ const pembelajaranModel = {
       `);
       return rows;
     } catch (err) {
-      console.error('Error getGuruKelasAktif:', err);
-      throw err;
+      throw new Error('Gagal mengambil daftar guru kelas aktif');
     }
   },
 
-  // Ambil guru bidang studi aktif
+  /**
+   * Ambil daftar guru bidang studi yang aktif.
+   */
   async getGuruBidangStudiAktif() {
     try {
       const [rows] = await db.execute(`
@@ -249,12 +263,13 @@ const pembelajaranModel = {
       `);
       return rows;
     } catch (err) {
-      console.error('Error getGuruBidangStudiAktif:', err);
-      throw err;
+      throw new Error('Gagal mengambil daftar guru bidang studi aktif');
     }
   },
 
-  // Ambil semua guru aktif
+  /**
+   * Ambil semua guru yang aktif (kelas dan bidang studi).
+   */
   async getGuruAktif() {
     try {
       const [rows] = await db.execute(`
@@ -266,12 +281,13 @@ const pembelajaranModel = {
       `);
       return rows;
     } catch (err) {
-      console.error('Error getGuruAktif:', err);
-      throw err;
+      throw new Error('Gagal mengambil daftar guru aktif');
     }
   },
 
-  // Ambil kelas per tahun ajaran induk
+  /**
+   * Ambil daftar kelas per tahun ajaran induk.
+   */
   async getKelasByTahunAjaran(idInduk) {
     try {
       const [rows] = await db.execute(
@@ -280,48 +296,52 @@ const pembelajaranModel = {
       );
       return rows;
     } catch (err) {
-      console.error('Error getKelasByTahunAjaran:', err);
-      throw err;
+      throw new Error('Gagal mengambil daftar kelas per tahun ajaran');
     }
   },
 
-  // Ambil mapel per tahun ajaran
+  /**
+   * Ambil daftar mata pelajaran per tahun ajaran.
+   */
   async getMapelByTahunAjaran(tahunAjaranId) {
     try {
       const [rows] = await db.execute(`
         SELECT id_mata_pelajaran AS id, nama_mapel AS nama, jenis, kode_mapel
-        FROM mata_pelajaran WHERE tahun_ajaran_id = ?
+        FROM mata_pelajaran 
+        WHERE tahun_ajaran_id = ?
         ORDER BY jenis ASC, urutan_rapor ASC, nama_mapel ASC
       `, [tahunAjaranId]);
       return rows;
     } catch (err) {
-      console.error('Error getMapelByTahunAjaran:', err);
-      throw err;
+      throw new Error('Gagal mengambil daftar mata pelajaran per tahun ajaran');
     }
   },
 
-  // Ambil info kelas
+  /**
+   * Ambil informasi detail kelas.
+   */
   async getKelasInfo(kelasId) {
     try {
       const [rows] = await db.execute(`
         SELECT k.id_kelas, k.nama_kelas, k.tahun_ajaran_id AS semester_id,
-                tai.tahun_ajaran, tai.semester, tai.status AS status_ta, tai.id_tahun_ajaran_induk
+               tai.tahun_ajaran, tai.semester, tai.status AS status_ta, tai.id_tahun_ajaran_induk
         FROM kelas k
         JOIN tahun_ajaran tai ON k.tahun_ajaran_id = tai.id_tahun_ajaran
         WHERE k.id_kelas = ?
       `, [kelasId]);
       return rows[0] || null;
     } catch (err) {
-      console.error('Error getKelasInfo:', err);
-      throw err;
+      throw new Error('Gagal mengambil informasi kelas');
     }
   },
 
-  // Cek mapel duplikat di kelas
-  async isMapelDuplicateInKelas(kelas_id, mapel_id, tahun_ajaran_id, excludeId = null) {
+  /**
+   * Cek apakah mata pelajaran duplikat di kelas yang sama.
+   */
+  async isMapelDuplicateInKelas(kelasId, mapelId, tahunAjaranId, excludeId = null) {
     try {
       let sql = 'SELECT id FROM pembelajaran WHERE kelas_id = ? AND mapel_id = ? AND tahun_ajaran_id = ?';
-      const params = [kelas_id, mapel_id, tahun_ajaran_id];
+      const params = [kelasId, mapelId, tahunAjaranId];
 
       if (excludeId != null) {
         sql += ' AND id != ?';
@@ -331,46 +351,55 @@ const pembelajaranModel = {
       const [rows] = await db.execute(sql, params);
       return rows.length > 0;
     } catch (err) {
-      console.error('Error isMapelDuplicateInKelas:', err);
-      throw err;
+      throw new Error('Gagal mengecek duplikasi mata pelajaran di kelas');
     }
   },
 
-  // Ambil mapel wajib belum ditugaskan
+  /**
+   * Ambil mata pelajaran wajib yang belum ditugaskan.
+   */
   async getMapelWajibBelumDitugaskan(kelasId, tahunAjaranId) {
     try {
       const [rows] = await db.execute(`
         SELECT mp.id_mata_pelajaran AS id, mp.nama_mapel, mp.kode_mapel, mp.urutan_rapor
         FROM mata_pelajaran mp
         WHERE mp.tahun_ajaran_id = ? AND mp.jenis = 'wajib'
-        AND NOT EXISTS (SELECT 1 FROM pembelajaran p WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ? AND p.tahun_ajaran_id = ?)
+        AND NOT EXISTS (
+          SELECT 1 FROM pembelajaran p 
+          WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ? AND p.tahun_ajaran_id = ?
+        )
         ORDER BY mp.urutan_rapor ASC, mp.nama_mapel ASC
       `, [tahunAjaranId, kelasId, tahunAjaranId]);
       return rows;
     } catch (err) {
-      console.error('Error getMapelWajibBelumDitugaskan:', err);
-      throw err;
+      throw new Error('Gagal mengambil mata pelajaran wajib yang belum ditugaskan');
     }
   },
 
-  // Ambil mapel pilihan belum ditugaskan
+  /**
+   * Ambil mata pelajaran pilihan yang belum ditugaskan.
+   */
   async getMapelPilihanBelumDitugaskan(kelasId, tahunAjaranId) {
     try {
       const [rows] = await db.execute(`
         SELECT mp.id_mata_pelajaran AS id, mp.nama_mapel, mp.kode_mapel
         FROM mata_pelajaran mp
         WHERE mp.tahun_ajaran_id = ? AND mp.jenis = 'pilihan'
-        AND NOT EXISTS (SELECT 1 FROM pembelajaran p WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ? AND p.tahun_ajaran_id = ?)
+        AND NOT EXISTS (
+          SELECT 1 FROM pembelajaran p 
+          WHERE p.mapel_id = mp.id_mata_pelajaran AND p.kelas_id = ? AND p.tahun_ajaran_id = ?
+        )
         ORDER BY mp.nama_mapel ASC
       `, [tahunAjaranId, kelasId, tahunAjaranId]);
       return rows;
     } catch (err) {
-      console.error('Error getMapelPilihanBelumDitugaskan:', err);
-      throw err;
+      throw new Error('Gagal mengambil mata pelajaran pilihan yang belum ditugaskan');
     }
   },
 
-  // Bulk insert mapel wajib
+  /**
+   * Bulk insert mata pelajaran wajib.
+   */
   async bulkInsertMapelWajib(kelasId, mapelIds, guruKelasId, tahunAjaranId, connection) {
     try {
       const inserted = [];
@@ -391,10 +420,9 @@ const pembelajaranModel = {
       }
       return inserted;
     } catch (err) {
-      console.error('Error bulkInsertMapelWajib:', err);
-      throw err;
+      throw new Error('Gagal melakukan bulk insert mata pelajaran wajib');
     }
-  },
+  }
 };
 
 module.exports = pembelajaranModel;

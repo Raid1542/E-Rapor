@@ -1,7 +1,7 @@
 /**
  * Nama File: bobotPenilaianModel.js
- * Fungsi: Model konfigurasi bobot komponen penilaian per mapel
- *         Menangani CRUD bobot untuk perhitungan nilai rapor otomatis
+ * Fungsi: Model konfigurasi bobot komponen penilaian per mata pelajaran.
+ *         Menangani CRUD bobot untuk perhitungan nilai rapor otomatis.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 10 Juli 2026
  */
@@ -37,7 +37,9 @@ const QUERY_GET_TOTAL_BOBOT = `
 `;
 
 const bobotPenilaianModel = {
-  // Ambil semua bobot komponen untuk satu mata pelajaran
+  /**
+   * Ambil semua bobot komponen untuk satu mata pelajaran.
+   */
   async getBobotByMapel(mapelId) {
     if (!mapelId) {
       throw new Error('ID mata pelajaran wajib diisi');
@@ -47,12 +49,13 @@ const bobotPenilaianModel = {
       const [rows] = await db.execute(QUERY_GET_BOBOT_BY_MAPEL, [mapelId]);
       return rows;
     } catch (err) {
-      console.error('Error getBobotByMapel:', err);
       throw new Error('Gagal mengambil data bobot');
     }
   },
 
-  // Update semua bobot untuk satu mapel (hapus lama + insert baru)
+  /**
+   * Update semua bobot untuk satu mata pelajaran (hapus lama dan insert baru).
+   */
   async updateBobotByMapel(mapelId, bobotList) {
     if (!mapelId) {
       throw new Error('ID mata pelajaran wajib diisi');
@@ -76,7 +79,7 @@ const bobotPenilaianModel = {
           mapelId,
           item.komponen_id,
           item.bobot,
-          item.is_active,
+          item.is_active
         ]);
       }
 
@@ -84,12 +87,13 @@ const bobotPenilaianModel = {
       const [rows] = await db.execute(QUERY_GET_BOBOT_BY_MAPEL, [mapelId]);
       return rows;
     } catch (err) {
-      console.error('Error updateBobotByMapel:', err);
       throw new Error('Gagal memperbarui bobot');
     }
   },
 
-  // Hitung total bobot aktif untuk validasi (harus = 100)
+  /**
+   * Hitung total bobot aktif untuk validasi (harus sama dengan 100).
+   */
   async getTotalBobot(mapelId) {
     if (!mapelId) {
       throw new Error('ID mata pelajaran wajib diisi');
@@ -99,10 +103,9 @@ const bobotPenilaianModel = {
       const [rows] = await db.execute(QUERY_GET_TOTAL_BOBOT, [mapelId]);
       return rows[0]?.total || 0;
     } catch (err) {
-      console.error('Error getTotalBobot:', err);
       throw new Error('Gagal menghitung total bobot');
     }
-  },
+  }
 };
 
 module.exports = bobotPenilaianModel;
