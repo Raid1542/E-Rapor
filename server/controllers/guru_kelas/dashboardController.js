@@ -11,7 +11,7 @@ const db = require('../../config/db');
 /**
  * Helper untuk cek gap dalam range nilai.
  */
-function checkRangeGaps(rows, minExpected = 0, maxExpected = 100, minField = 'rentang_min', maxField = 'rentang_max') {
+const checkRangeGaps = (rows, minExpected = 0, maxExpected = 100, minField = 'rentang_min', maxField = 'rentang_max') => {
     const gaps = [];
     if (rows.length === 0) return gaps;
 
@@ -33,18 +33,24 @@ function checkRangeGaps(rows, minExpected = 0, maxExpected = 100, minField = 're
     }
 
     return gaps;
-}
+};
 
 /**
- * GET /dashboard - Ambil data dashboard guru kelas.
+ * Ambil data dashboard guru kelas.
  */
 exports.getDashboardData = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user?.id;
         const idTahunAjaranInduk = req.idTahunAjaranInduk;
         const idSemesterAktif = req.idSemesterAktif;
 
-        // Ambil info tahun ajaran
+        if (!userId || !idTahunAjaranInduk || !idSemesterAktif) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data konteks pengguna atau tahun ajaran tidak ditemukan.'
+            });
+        }
+
         const [taRows] = await db.execute(`
         SELECT id_tahun_ajaran, id_tahun_ajaran_induk, tahun_ajaran, semester,
                 status_pts, status_pas, tanggal_pembagian_pts, tanggal_pembagian_pas
@@ -63,12 +69,13 @@ exports.getDashboardData = async (req, res) => {
         const semesterId = ta.id_tahun_ajaran;
         const indukId = ta.id_tahun_ajaran_induk;
 
-        // Tentukan jenis penilaian aktif
         let jenisPenilaianAktif = null;
-        if (ta.status_pts === 'aktif') jenisPenilaianAktif = 'PTS';
-        else if (ta.status_pas === 'aktif') jenisPenilaianAktif = 'PAS';
+        if (ta.status_pts === 'aktif') {
+            jenisPenilaianAktif = 'PTS';
+        } else if (ta.status_pas === 'aktif') {
+            jenisPenilaianAktif = 'PAS';
+        }
 
-        // Ambil data kelas guru
         const [kelasRows] = await db.execute(
             `SELECT k.id_kelas, k.nama_kelas
         FROM kelas k
@@ -88,7 +95,6 @@ exports.getDashboardData = async (req, res) => {
 
         const kelasInfo = kelasRows[0];
 
-        // Ambil jumlah siswa di kelas
         const [siswaRows] = await db.execute(
             `SELECT COUNT(*) as total
         FROM siswa_kelas sk
@@ -98,7 +104,6 @@ exports.getDashboardData = async (req, res) => {
 
         const totalSiswa = siswaRows[0]?.total || 0;
 
-        // Hitung progress absensi
         let absensiSudah = 0;
         if (jenisPenilaianAktif === 'PTS') {
             const [absensiPtsResult] = await db.execute(
@@ -120,7 +125,6 @@ exports.getDashboardData = async (req, res) => {
             absensiSudah = absensiPasResult[0]?.sudah || 0;
         }
 
-        // Hitung progress kokurikuler
         let kokurikulerSudah = 0;
         if (jenisPenilaianAktif === 'PTS') {
             const [mutabaahResult] = await db.execute(
@@ -153,7 +157,6 @@ exports.getDashboardData = async (req, res) => {
             kokurikulerSudah = allAspekResult[0]?.sudah || 0;
         }
 
-        // Hitung progress catatan wali kelas
         const [catatanResult] = await db.execute(
             `SELECT COUNT(DISTINCT siswa_id) as sudah
         FROM catatan_wali_kelas
@@ -163,7 +166,6 @@ exports.getDashboardData = async (req, res) => {
         );
         const catatanSudah = catatanResult[0]?.sudah || 0;
 
-        // Hitung progress ekskul (hanya saat PAS aktif)
         let ekskulSudah = 0;
         if (jenisPenilaianAktif === 'PAS') {
             const [ekskulResult] = await db.execute(
@@ -177,7 +179,6 @@ exports.getDashboardData = async (req, res) => {
             ekskulSudah = ekskulResult[0]?.sudah || 0;
         }
 
-        // Ambil mata pelajaran wajib yang diajar
         const [mapelRows] = await db.execute(
             `SELECT mp.id_mata_pelajaran, mp.nama_mapel, mp.kode_mapel, mp.jenis
         FROM mata_pelajaran mp
@@ -189,7 +190,6 @@ exports.getDashboardData = async (req, res) => {
 
         const totalMapel = mapelRows.length;
 
-        // Ambil komponen penilaian
         const [komponenRows] = await db.execute(`
         SELECT id_komponen, nama_komponen 
         FROM komponen_penilaian 
@@ -199,7 +199,6 @@ exports.getDashboardData = async (req, res) => {
         const totalKomponen = komponenRows.length;
         const ptsKomponen = komponenRows.find(k => /^PTS$/i.test(k.nama_komponen));
 
-        // Hitung progress per mapel
         let totalPenilaianDibutuhkan = 0;
         let totalPenilaianAda = 0;
         const mataPelajaranList = [];
@@ -221,7 +220,6 @@ exports.getDashboardData = async (req, res) => {
             )`,
                     [mapel.id_mata_pelajaran, semesterId, ptsKomponen.id_komponen, kelasInfo.id_kelas, indukId]
                 );
-
                 sudahDinilai = ptsResult[0]?.total || 0;
             } else if (jenisPenilaianAktif === 'PAS') {
                 const [lengkapResult] = await db.execute(
@@ -240,14 +238,12 @@ exports.getDashboardData = async (req, res) => {
             ) AS siswa_lengkap`,
                     [mapel.id_mata_pelajaran, semesterId, kelasInfo.id_kelas, indukId, totalKomponen]
                 );
-
                 sudahDinilai = lengkapResult[0]?.total || 0;
             }
 
             totalPenilaianDibutuhkan += totalSiswa;
             totalPenilaianAda += sudahDinilai;
 
-            // Ambil detail nilai rapor per siswa
             const nilaiRaporList = [];
 
             if (jenisPenilaianAktif) {
@@ -306,12 +302,8 @@ exports.getDashboardData = async (req, res) => {
                             status: komp.status
                         })),
                         status: jenisPenilaianAktif === 'PTS'
-                            ? row.jumlah_komponen_terisi > 0
-                                ? 'Sudah Input PTS'
-                                : 'Belum Input PTS'
-                            : row.jumlah_komponen_terisi === totalKomponen
-                                ? 'Lengkap'
-                                : `${row.jumlah_komponen_terisi}/${totalKomponen} komponen`
+                            ? (row.jumlah_komponen_terisi > 0 ? 'Sudah Input PTS' : 'Belum Input PTS')
+                            : (row.jumlah_komponen_terisi === totalKomponen ? 'Lengkap' : `${row.jumlah_komponen_terisi}/${totalKomponen} komponen`)
                     });
                 }
             }
@@ -331,7 +323,6 @@ exports.getDashboardData = async (req, res) => {
             ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100)
             : 0;
 
-        // Cek konfigurasi lengkap dengan validasi range gap
         let konfigurasiLengkap = true;
         const konfigurasiDetail = {
             kokurikuler: { lengkap: true, missing: [], gaps: [] },
@@ -341,9 +332,7 @@ exports.getDashboardData = async (req, res) => {
             summary: []
         };
 
-        // Cek kokurikuler
         if (jenisPenilaianAktif === 'PTS') {
-            // Untuk PTS: hanya cek Mutaba'ah
             const [kokurikulerRows] = await db.execute(
                 `SELECT rentang_min, rentang_max, grade, deskripsi
             FROM kategori_grade_kokurikuler
@@ -366,7 +355,6 @@ exports.getDashboardData = async (req, res) => {
                 }
             }
         } else if (jenisPenilaianAktif === 'PAS') {
-            // Untuk PAS: cek semua aspek kokurikuler
             const [aspekRows] = await db.execute(`SELECT id_aspek_kokurikuler, nama FROM aspek_kokurikuler`);
 
             for (const aspek of aspekRows) {
@@ -394,7 +382,6 @@ exports.getDashboardData = async (req, res) => {
             }
         }
 
-        // Cek akademik
         for (const mapel of mapelRows) {
             const [akademikRows] = await db.execute(
                 `SELECT min_nilai, max_nilai, deskripsi
@@ -419,7 +406,6 @@ exports.getDashboardData = async (req, res) => {
             }
         }
 
-        // Cek deskripsi rata-rata (hanya PTS)
         if (jenisPenilaianAktif === 'PTS') {
             const [deskripsiRows] = await db.execute(
                 `SELECT rentang_min, rentang_max, deskripsi
@@ -445,7 +431,6 @@ exports.getDashboardData = async (req, res) => {
             konfigurasiDetail.deskripsi_rata_rata.lengkap = true;
         }
 
-        // Cek bobot (hanya PAS)
         if (jenisPenilaianAktif === 'PAS') {
             for (const mapel of mapelRows) {
                 const [bobotResult] = await db.execute(
@@ -464,7 +449,6 @@ exports.getDashboardData = async (req, res) => {
             konfigurasiDetail.bobot.lengkap = true;
         }
 
-        // Generate summary untuk ditampilkan
         if (!konfigurasiDetail.kokurikuler.lengkap) {
             if (konfigurasiDetail.kokurikuler.missing.length > 0) {
                 konfigurasiDetail.summary.push({
@@ -530,7 +514,6 @@ exports.getDashboardData = async (req, res) => {
             }
         }
 
-        // Format jadwal
         const jadwal = {
             pts: ta.tanggal_pembagian_pts
                 ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', {
@@ -555,7 +538,7 @@ exports.getDashboardData = async (req, res) => {
                 semester: ta.semester,
                 status_pts: ta.status_pts || 'nonaktif',
                 status_pas: ta.status_pas || 'nonaktif',
-                jenis_penilaian_aktif,
+                jenis_penilaian_aktif: jenisPenilaianAktif,
                 jadwal,
                 total_kelas: 1,
                 total_siswa: totalSiswa,
@@ -596,7 +579,8 @@ exports.getDashboardData = async (req, res) => {
     } catch (err) {
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat data dashboard: ' + err.message
+            message: 'Gagal memuat data dashboard: ' + err.message,
+            error: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
     }
 };
