@@ -1,6 +1,6 @@
 /**
  * Nama File: siswaController.js
- * Fungsi: Controller master data siswa (CRUD + import Excel, soft delete)
+ * Fungsi: Controller master data siswa (CRUD + import Excel, soft delete).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
@@ -10,25 +10,28 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const db = require('../../config/db');
 
-// Ambil daftar semua siswa dengan pagination dan filter status
-const getSiswaMaster = async (req, res) => {
+/**
+ * Ambil daftar semua siswa dengan pagination dan filter status.
+ */
+exports.getSiswaMaster = async (req, res) => {
     try {
         const { search, page = 1, limit = 10, status = 'aktif' } = req.query;
         const result = await SiswaModel.getAllSiswa(
             search,
             status,
-            parseInt(page),
-            parseInt(limit)
+            parseInt(page, 10),
+            parseInt(limit, 10)
         );
         res.json({ success: true, data: result.data, pagination: result.pagination });
     } catch (err) {
-        console.error('Error getSiswaMaster:', err);
         res.status(500).json({ success: false, message: 'Gagal mengambil data siswa: ' + err.message });
     }
 };
 
-// Ambil detail siswa berdasarkan ID
-const getSiswaMasterById = async (req, res) => {
+/**
+ * Ambil detail siswa berdasarkan ID.
+ */
+exports.getSiswaMasterById = async (req, res) => {
     try {
         const { id } = req.params;
         const siswa = await SiswaModel.getSiswaById(id);
@@ -37,62 +40,54 @@ const getSiswaMasterById = async (req, res) => {
         }
         res.json({ success: true, data: siswa });
     } catch (err) {
-        console.error('Error getSiswaMasterById:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Gagal mengambil detail siswa: ' + err.message,
-        });
+        res.status(500).json({ success: false, message: 'Gagal mengambil detail siswa: ' + err.message });
     }
 };
 
-// Tambah siswa baru dengan validasi duplikasi NIS/NISN
-const tambahSiswaMaster = async (req, res) => {
+/**
+ * Tambah siswa baru dengan validasi duplikasi NIS/NISN.
+ */
+exports.tambahSiswaMaster = async (req, res) => {
     try {
         const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat } = req.body;
 
-        // Validasi field wajib
         if (!nis || !nama_lengkap || !jenis_kelamin) {
             return res.status(400).json({
                 success: false,
-                message: 'NIS, nama lengkap, dan jenis kelamin wajib diisi',
+                message: 'NIS, nama lengkap, dan jenis kelamin wajib diisi'
             });
         }
 
-        // Trim semua input
         const trimmedNis = nis.trim();
         const trimmedNisn = nisn ? nisn.trim() : null;
         const trimmedNama = nama_lengkap.trim();
 
-        // Cek duplikat NIS
         const nisExists = await SiswaModel.checkNisExists(trimmedNis);
         if (nisExists) {
             return res.status(400).json({
                 success: false,
                 message: `NIS "${trimmedNis}" sudah digunakan`,
-                code: 'DUPLICATE_NIS',
+                code: 'DUPLICATE_NIS'
             });
         }
 
-        // Cek duplikat NISN (jika ada)
         if (trimmedNisn) {
             const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
             if (nisnExists) {
                 return res.status(400).json({
                     success: false,
                     message: `NISN "${trimmedNisn}" sudah digunakan`,
-                    code: 'DUPLICATE_NISN',
+                    code: 'DUPLICATE_NISN'
                 });
             }
         }
 
-        // Cek nama sama (warning, bukan error)
         const namaExists = await SiswaModel.checkNamaExists(trimmedNama);
         let warningMessage = null;
         if (namaExists) {
             warningMessage = `Perhatian: Sudah ada siswa dengan nama "${trimmedNama}" di sistem.`;
         }
 
-        // Insert data
         const id = await SiswaModel.createSiswa({
             nis: trimmedNis,
             nisn: trimmedNisn,
@@ -100,70 +95,66 @@ const tambahSiswaMaster = async (req, res) => {
             tempat_lahir: tempat_lahir ? tempat_lahir.trim() : null,
             tanggal_lahir: tanggal_lahir || null,
             jenis_kelamin: jenis_kelamin,
-            alamat: alamat ? alamat.trim() : null,
+            alamat: alamat ? alamat.trim() : null
         });
 
         res.status(201).json({
             success: true,
             message: 'Siswa berhasil ditambahkan',
-            id: id,
-            warning: warningMessage,
+            id,
+            warning: warningMessage
         });
     } catch (err) {
-        console.error('Error tambahSiswaMaster:', err);
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({
                 success: false,
                 message: 'NIS atau NISN sudah terdaftar di sistem!',
-                code: 'DUPLICATE_ENTRY',
+                code: 'DUPLICATE_ENTRY'
             });
         }
         res.status(500).json({ success: false, message: 'Gagal menambah siswa: ' + err.message });
     }
 };
 
-// Update data siswa dengan validasi duplikasi (exclude diri sendiri)
-const editSiswaMaster = async (req, res) => {
+/**
+ * Update data siswa dengan validasi duplikasi (exclude diri sendiri).
+ */
+exports.editSiswaMaster = async (req, res) => {
     try {
         const { id } = req.params;
         const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, status } = req.body;
 
-        // Cek keberadaan siswa
         const existingSiswa = await SiswaModel.getSiswaById(id);
         if (!existingSiswa) {
             return res.status(404).json({ success: false, message: 'Siswa tidak ditemukan' });
         }
 
-        // Trim input
         const trimmedNis = nis ? nis.trim() : existingSiswa.nis;
         const trimmedNisn = nisn ? nisn.trim() : existingSiswa.nisn;
         const trimmedNama = nama_lengkap ? nama_lengkap.trim() : existingSiswa.nama_lengkap;
 
-        // Cek duplikat NIS (kecuali diri sendiri)
         if (trimmedNis !== existingSiswa.nis) {
             const nisExists = await SiswaModel.checkNisExists(trimmedNis, id);
             if (nisExists) {
                 return res.status(400).json({
                     success: false,
                     message: `NIS "${trimmedNis}" sudah digunakan`,
-                    code: 'DUPLICATE_NIS',
+                    code: 'DUPLICATE_NIS'
                 });
             }
         }
 
-        // Cek duplikat NISN (kecuali diri sendiri)
         if (trimmedNisn && trimmedNisn !== existingSiswa.nisn) {
             const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn, id);
             if (nisnExists) {
                 return res.status(400).json({
                     success: false,
                     message: `NISN "${trimmedNisn}" sudah digunakan`,
-                    code: 'DUPLICATE_NISN',
+                    code: 'DUPLICATE_NISN'
                 });
             }
         }
 
-        // Cek apakah ada perubahan data
         const hasChanges =
             existingSiswa.nis !== trimmedNis ||
             (existingSiswa.nisn || '') !== (trimmedNisn || '') ||
@@ -177,11 +168,10 @@ const editSiswaMaster = async (req, res) => {
         if (!hasChanges) {
             return res.status(400).json({
                 success: false,
-                message: 'Tidak ada perubahan data. Tidak perlu menyimpan.',
+                message: 'Tidak ada perubahan data. Tidak perlu menyimpan.'
             });
         }
 
-        // Update data
         const updated = await SiswaModel.updateSiswa(id, {
             nis: trimmedNis,
             nisn: trimmedNisn,
@@ -190,7 +180,7 @@ const editSiswaMaster = async (req, res) => {
             tanggal_lahir: tanggal_lahir || null,
             jenis_kelamin: jenis_kelamin,
             alamat: alamat ? alamat.trim() : null,
-            status: status || 'aktif',
+            status: status || 'aktif'
         });
 
         if (!updated) {
@@ -199,43 +189,38 @@ const editSiswaMaster = async (req, res) => {
 
         res.json({ success: true, message: 'Data siswa berhasil diperbarui' });
     } catch (err) {
-        console.error('Error editSiswaMaster:', err);
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({
                 success: false,
                 message: 'NIS atau NISN sudah terdaftar di sistem!',
-                code: 'DUPLICATE_ENTRY',
+                code: 'DUPLICATE_ENTRY'
             });
         }
-        res.status(500).json({
-            success: false,
-            message: 'Gagal memperbarui data siswa: ' + err.message,
-        });
+        res.status(500).json({ success: false, message: 'Gagal memperbarui data siswa: ' + err.message });
     }
 };
 
-// Hapus siswa dengan soft delete (ubah status jadi nonaktif)
-const hapusSiswaMaster = async (req, res) => {
+/**
+ * Hapus siswa dengan soft delete (ubah status jadi nonaktif).
+ */
+exports.hapusSiswaMaster = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Cek keberadaan siswa
         const existingSiswa = await SiswaModel.getSiswaById(id);
         if (!existingSiswa) {
             return res.status(404).json({ success: false, message: 'Siswa tidak ditemukan' });
         }
 
-        // Cek apakah siswa masih terdaftar di kelas
         const totalKelas = await SiswaModel.checkSiswaInKelas(id);
         if (totalKelas > 0) {
             return res.status(400).json({
                 success: false,
                 message: `Siswa "${existingSiswa.nama_lengkap}" tidak dapat dihapus karena masih terdaftar di ${totalKelas} kelas.`,
-                code: 'STILL_ENROLLED',
+                code: 'STILL_ENROLLED'
             });
         }
 
-        // Soft delete
         const deleted = await SiswaModel.deleteSiswa(id);
         if (!deleted) {
             return res.status(404).json({ success: false, message: 'Gagal menghapus siswa' });
@@ -243,23 +228,23 @@ const hapusSiswaMaster = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Siswa "${existingSiswa.nama_lengkap}" berhasil dihapus (soft delete)`,
+            message: `Siswa "${existingSiswa.nama_lengkap}" berhasil dihapus (soft delete)`
         });
     } catch (err) {
-        console.error('Error hapusSiswaMaster:', err);
         res.status(500).json({ success: false, message: 'Gagal menghapus siswa: ' + err.message });
     }
 };
 
-// Import data siswa dari file Excel (.xlsx)
-const importSiswaMaster = async (req, res) => {
+/**
+ * Import data siswa dari file Excel (.xlsx).
+ */
+exports.importSiswaMaster = async (req, res) => {
     const connection = await db.getConnection();
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
         }
 
-        // Baca file Excel
         const workbook = XLSX.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
@@ -273,17 +258,15 @@ const importSiswaMaster = async (req, res) => {
         let processedCount = 0;
         const skipped = [];
 
-        // Proses setiap baris
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rowNumber = i + 2;
 
-            // Validasi kolom wajib
             if (!row.nis || !row.nama_lengkap || !row.jenis_kelamin) {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
-                    reason: 'Kolom wajib (NIS, nama lengkap, jenis kelamin) tidak lengkap',
+                    reason: 'Kolom wajib (NIS, nama lengkap, jenis kelamin) tidak lengkap'
                 });
                 continue;
             }
@@ -292,57 +275,52 @@ const importSiswaMaster = async (req, res) => {
             const trimmedNisn = row.nisn ? String(row.nisn).trim() : null;
             const trimmedNama = String(row.nama_lengkap).trim();
 
-            // Cek duplikat NIS
             const nisExists = await SiswaModel.checkNisExists(trimmedNis);
             if (nisExists) {
                 skipped.push({
                     row: rowNumber,
                     nama: trimmedNama,
-                    reason: `NIS "${trimmedNis}" sudah terdaftar`,
+                    reason: `NIS "${trimmedNis}" sudah terdaftar`
                 });
                 continue;
             }
 
-            // Cek duplikat NISN
             if (trimmedNisn) {
                 const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
                 if (nisnExists) {
                     skipped.push({
                         row: rowNumber,
                         nama: trimmedNama,
-                        reason: `NISN "${trimmedNisn}" sudah terdaftar`,
+                        reason: `NISN "${trimmedNisn}" sudah terdaftar`
                     });
                     continue;
                 }
             }
 
-            // Konversi tanggal lahir
             let tanggal_lahir = row.tanggal_lahir || null;
             if (typeof tanggal_lahir === 'number') {
                 const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
                 if (!isNaN(date.getTime())) {
-                    tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-                        2,
-                        '0'
-                    )}-${String(date.getDate()).padStart(2, '0')}`;
+                    tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                 } else {
                     tanggal_lahir = null;
                 }
             } else if (typeof tanggal_lahir === 'string') {
                 tanggal_lahir = tanggal_lahir.trim();
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) tanggal_lahir = null;
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                    tanggal_lahir = null;
+                }
             }
 
-            // Insert data siswa
             try {
                 await SiswaModel.createSiswa({
                     nis: trimmedNis,
                     nisn: trimmedNisn,
                     nama_lengkap: trimmedNama,
                     tempat_lahir: row.tempat_lahir ? String(row.tempat_lahir).trim() : null,
-                    tanggal_lahir: tanggal_lahir,
+                    tanggal_lahir,
                     jenis_kelamin: row.jenis_kelamin || 'Laki-laki',
-                    alamat: row.alamat ? String(row.alamat).trim() : null,
+                    alamat: row.alamat ? String(row.alamat).trim() : null
                 });
                 processedCount++;
             } catch (insertErr) {
@@ -350,7 +328,7 @@ const importSiswaMaster = async (req, res) => {
                     skipped.push({
                         row: rowNumber,
                         nama: trimmedNama,
-                        reason: `NIS "${trimmedNis}" atau NISN "${trimmedNisn}" sudah terdaftar`,
+                        reason: `NIS "${trimmedNis}" atau NISN "${trimmedNisn}" sudah terdaftar`
                     });
                 } else {
                     skipped.push({ row: rowNumber, nama: trimmedNama, reason: 'Gagal menyimpan data' });
@@ -361,31 +339,21 @@ const importSiswaMaster = async (req, res) => {
         await connection.commit();
         fs.unlinkSync(req.file.path);
 
-        // Response dengan info data yang di-skip
         res.json({
             success: true,
-            message:
-                skipped.length > 0
-                    ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati`
-                    : `Import berhasil: ${processedCount} siswa ditambahkan`,
+            message: skipped.length > 0
+                ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati`
+                : `Import berhasil: ${processedCount} siswa ditambahkan`,
             total: processedCount,
-            skipped: skipped,
+            skipped
         });
     } catch (err) {
         await connection.rollback();
-        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        console.error('Import siswa master error:', err);
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
         res.status(500).json({ success: false, message: 'Gagal import siswa: ' + err.message });
     } finally {
         connection.release();
     }
-};
-
-module.exports = {
-    getSiswaMaster,
-    getSiswaMasterById,
-    tambahSiswaMaster,
-    editSiswaMaster,
-    hapusSiswaMaster,
-    importSiswaMaster,
 };

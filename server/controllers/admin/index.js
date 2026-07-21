@@ -1,35 +1,35 @@
 /**
  * Nama File: index.js
- * Fungsi: Export semua controller admin
+ * Fungsi: Export semua controller admin.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
 
 module.exports = {
     // User Management
-    ...require('./adminController'),           // CRUD admin
-    ...require('./guruController'),            // CRUD guru + import Excel
-    ...require('./pembinaEkskulController'),   // CRUD pembina ekskul
+    ...require('./adminController'),
+    ...require('./guruController'),
+    ...require('./pembinaEkskulController'),
 
     // School Data
-    ...require('./sekolahController'),         // Data sekolah + logo
-    ...require('./siswaController'),           // CRUD siswa master
-    ...require('./siswaPerKelasController'),   // Siswa per kelas
+    ...require('./sekolahController'),
+    ...require('./siswaController'),
+    ...require('./siswaPerKelasController'),
 
     // Academic Structure
-    ...require('./tahunAjaranController'),     // Tahun ajaran & semester
-    ...require('./kelasController'),           // CRUD kelas
-    ...require('./guruKelasController'),       // Wali kelas
-    ...require('./mapelController'),           // Mata pelajaran
-    ...require('./pembelajaranController'),    // Pembelajaran (mapel + kelas)
+    ...require('./tahunAjaranController'),
+    ...require('./kelasController'),
+    ...require('./guruKelasController'),
+    ...require('./mapelController'),
+    ...require('./pembelajaranController'),
 
     // Extracurricular
-    ...require('./ekstrakurikulerController'), // CRUD ekskul + peserta
+    ...require('./ekstrakurikulerController'),
 
     // Reporting & Analytics
-    ...require('./dashboardController'),       // Dashboard stats + upload foto
-    ...require('./raporController'),           // Generate rapor PDF
+    ...require('./dashboardController'),
+    ...require('./raporController'),
 
     // System Management
-    ...require('./backupController'),          // Backup & restore database
+    ...require('./backupController')
 };
