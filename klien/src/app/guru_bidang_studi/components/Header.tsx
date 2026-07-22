@@ -262,7 +262,7 @@ export default function Header({ user: initialUser }: HeaderProps) {
             window.removeEventListener('userDataUpdated', loadUserData);
             window.removeEventListener('profileImageUpdated', loadUserData);
         };
-    }, []); // PERBAIKAN: Dependency array dikosongkan, interval dihapus
+    }, []); 
 
     /* Muat informasi tahun ajaran aktif dari API */
     useEffect(() => {
