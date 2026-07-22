@@ -1,9 +1,8 @@
-/**
+/*
  * Nama File: Layout.tsx
  * Fungsi: Layout utama halaman guru kelas dengan Sidebar, Header, dan Footer.
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * Update: Tambah Footer
+ * Tanggal: 10 Juli 2026
  */
 
 'use client';
@@ -11,8 +10,9 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import Footer from './Footer'; // ← Tambah import
+import Footer from './Footer';
 
+/* Interface: Data pengguna untuk komponen layout */
 interface UserData {
     id: number;
     nama_lengkap: string;
@@ -20,20 +20,28 @@ interface UserData {
     role: string;
 }
 
-export default function AdminLayout({
+/* Komponen utama layout guru kelas */
+export default function GuruKelasLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
     const [user, setUser] = useState<UserData | null>(null);
 
+    // Muat data pengguna dari localStorage saat komponen dimuat
     useEffect(() => {
-        const userData = localStorage.getItem('currentUser');
-        if (userData) {
-            setUser(JSON.parse(userData));
+        try {
+            const userData = localStorage.getItem('currentUser');
+            if (userData) {
+                setUser(JSON.parse(userData));
+            }
+        } catch (error) {
+            console.error('Gagal memuat data pengguna:', error);
+            setUser(null);
         }
     }, []);
 
+    // Tampilkan loading state jika data pengguna belum tersedia
     if (!user) {
         return (
             <div
@@ -59,7 +67,7 @@ export default function AdminLayout({
                 <main className="flex-1 overflow-y-auto">
                     {children}
                 </main>
-                <Footer /> {/* ← Tambah Footer */}
+                <Footer />
             </div>
         </div>
     );

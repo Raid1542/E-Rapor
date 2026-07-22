@@ -1,19 +1,13 @@
-/**
+/*
  * Nama File: Footer.tsx
- * Fungsi: Komponen footer untuk halaman admin dengan copyright dinamis.
+ * Fungsi: Komponen footer untuk halaman admin dengan copyright dinamis
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
+ * Tanggal: 10 Juli 2026
  */
 
 'use client';
 
-// ═════════════════════════════════════════════════════════════════════════════
-// FOOTER COMPONENT
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * Footer dengan gradient orange dan copyright tahun dinamis.
- */
+/* Komponen Footer dengan gradient orange dan tahun copyright dinamis */
 const Footer = () => {
     const tahun = new Date().getFullYear();
 
