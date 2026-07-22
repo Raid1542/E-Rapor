@@ -1,27 +1,27 @@
-/**
+/*
  * Nama File: index.ts
- * Fungsi: Type definitions terpusat (UserData, MenuItem, SidebarProps, HeaderProps)
+ * Fungsi: Type definitions terpusat untuk komponen UI
  * Pembuat: Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 import { LucideIcon } from 'lucide-react';
 
-// Interface: data user (name, email, role) untuk localStorage & header
+/* Interface: data user untuk localStorage dan komponen header */
 export interface UserData {
     name: string;
     email: string;
     role: string;
 }
 
-// Interface: item menu navigasi sidebar (id, label, icon)
+/* Interface: item menu navigasi sidebar */
 export interface MenuItem {
     id: string;
     label: string;
     icon: LucideIcon;
 }
 
-// Interface: props Sidebar (sidebarOpen, activeMenu + setters)
+/* Interface: props untuk komponen Sidebar */
 export interface SidebarProps {
     sidebarOpen: boolean;
     setSidebarOpen: (value: boolean) => void;
@@ -29,7 +29,7 @@ export interface SidebarProps {
     setActiveMenu: (value: string) => void;
 }
 
-// Interface: props Header (user data, profile dropdown, logout handler)
+/* Interface: props untuk komponen Header */
 export interface HeaderProps {
     user: UserData;
     profileOpen: boolean;

@@ -1,12 +1,8 @@
-/**
+/*
  * Nama File: login_client.tsx
  * Fungsi: Halaman login client-side (form, popup notifikasi, validasi, redirect)
- *         Dilengkapi dengan konfirmasi logout jika user sudah login
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 15 September 2025
- * Update: 10 Juli 2026 - Tambah konfirmasi logout saat user sudah login akses halaman login
- * Update: 10 Juli 2026 - Popup logout disamakan dengan Header.tsx (animasi gk-*)
- * Redesign: tampilan modern, panel kiri bertema "kartu nilai", header form di-tengahkan, kolom input berkilau
  */
 
 'use client';
@@ -15,17 +11,16 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, X } from 'lucide-react';
 
-// Konstanta untuk API base URL
+// Konstanta konfigurasi API dan routing
 const API_BASE_URL = 'http://localhost:5000';
 
-// Konstanta untuk path dashboard per role
 const DASHBOARD_PATHS = {
     admin: '/admin/dashboard',
     guru_kelas: '/guru_kelas/dashboard',
     guru_bidang_studi: '/guru_bidang_studi/dashboard',
 };
 
-// Types untuk popup notifikasi
+// Definisi tipe data untuk popup notifikasi
 type PopupType = 'success' | 'error' | 'warning';
 
 interface PopupConfig {
@@ -35,27 +30,26 @@ interface PopupConfig {
     onClose?: () => void;
 }
 
-// ─── GLOBAL STYLES (SAMA DENGAN HEADER.TSX) ─────────────────────────────────
-
+/* Komponen untuk menyuntikkan animasi global */
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes gk-fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes gk-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes gk-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    @keyframes gk-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-    .gk-fadeIn { animation: gk-fadeIn 0.2s ease; }
-    .gk-scaleIn { animation: gk-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .gk-pulse { animation: gk-pulse 0.6s ease 0.15s; }
-    .gk-shimmer { 
-      background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.2) 100%);
-      background-size: 200% 100%;
-      animation: gk-shimmer 1.5s infinite;
-    }
-  `}</style>
+        @keyframes gk-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes gk-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(0.625rem); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes gk-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes gk-shimmer { 0% { background-position: -12.5rem 0; } 100% { background-position: 12.5rem 0; } }
+        
+        .gk-fadeIn { animation: gk-fadeIn 0.2s ease; }
+        .gk-scaleIn { animation: gk-scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .gk-pulse { animation: gk-pulse 0.6s ease 0.15s; }
+        .gk-shimmer { 
+            background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.2) 100%);
+            background-size: 200% 100%;
+            animation: gk-shimmer 1.5s infinite;
+        }
+    `}</style>
 );
 
-// ─── LOGIN POPUP (Modal notifikasi dengan animasi) ────────────────────────────
-
+/* Komponen modal popup notifikasi login */
 const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => void }) => {
     const handleClose = () => {
         popup.onClose?.();
@@ -68,7 +62,7 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
             iconBg: 'rgba(255,255,255,0.18)',
             iconBorder: 'rgba(255,255,255,0.35)',
             icon: (
-                <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                <svg width="2.75rem" height="2.75rem" viewBox="0 0 44 44" fill="none">
                     <circle cx="22" cy="22" r="22" fill="rgba(255,255,255,0.15)" />
                     <path d="M13 22l7 7 11-14" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -87,7 +81,7 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
             iconBg: 'rgba(255,255,255,0.15)',
             iconBorder: 'rgba(255,255,255,0.3)',
             icon: (
-                <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                <svg width="2.75rem" height="2.75rem" viewBox="0 0 44 44" fill="none">
                     <circle cx="22" cy="22" r="22" fill="rgba(255,255,255,0.12)" />
                     <path d="M15 15l14 14M29 15L15 29" stroke="white" strokeWidth="3" strokeLinecap="round" />
                 </svg>
@@ -106,7 +100,7 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
             iconBg: 'rgba(255,255,255,0.15)',
             iconBorder: 'rgba(255,255,255,0.3)',
             icon: (
-                <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                <svg width="2.75rem" height="2.75rem" viewBox="0 0 44 44" fill="none">
                     <circle cx="22" cy="22" r="22" fill="rgba(255,255,255,0.12)" />
                     <path d="M22 14v10M22 28v2" stroke="white" strokeWidth="3" strokeLinecap="round" />
                 </svg>
@@ -127,22 +121,30 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
     return (
         <>
             <style>{`
-        @keyframes lp-backdropIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes lp-cardIn { from { opacity: 0; transform: scale(0.78) translateY(32px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes lp-iconPop { 0% { transform: scale(0.5) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.18) rotate(4deg); opacity: 1; } 80% { transform: scale(0.94) rotate(-2deg); } 100% { transform: scale(1) rotate(0deg); } }
-        @keyframes lp-shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
-        @keyframes lp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
-        .lp-backdrop { animation: lp-backdropIn 0.22s ease both; }
-        .lp-card { animation: lp-cardIn 0.42s cubic-bezier(0.34,1.45,0.64,1) both; }
-        .lp-icon { animation: lp-iconPop 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.12s both; }
-        .lp-label-shimmer { background: linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,1) 40%, rgba(255,255,255,0.5) 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: lp-shimmer 2.2s linear infinite; }
-        .lp-btn { transition: background 0.18s, transform 0.12s, box-shadow 0.18s; }
-        .lp-btn:hover { transform: translateY(-1px); }
-        .lp-btn:active { transform: scale(0.97); }
-        .lp-deco1 { position: absolute; border-radius: 50%; top: -48px; right: -48px; width: 180px; height: 180px; pointer-events: none; }
-        .lp-deco2 { position: absolute; border-radius: 50%; bottom: -32px; left: -24px; width: 140px; height: 140px; pointer-events: none; }
-        ${popup.type === 'success' ? `.lp-dots { animation: lp-pulse 1.6s ease-in-out infinite; }` : ''}
-      `}</style>
+                @keyframes lp-backdropIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes lp-cardIn { from { opacity: 0; transform: scale(0.78) translateY(2rem); } to { opacity: 1; transform: scale(1) translateY(0); } }
+                @keyframes lp-iconPop { 0% { transform: scale(0.5) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.18) rotate(4deg); opacity: 1; } 80% { transform: scale(0.94) rotate(-2deg); } 100% { transform: scale(1) rotate(0deg); } }
+                @keyframes lp-shimmer { 0% { background-position: -12.5rem center; } 100% { background-position: 12.5rem center; } }
+                @keyframes lp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
+                
+                .lp-backdrop { animation: lp-backdropIn 0.22s ease both; }
+                .lp-card { animation: lp-cardIn 0.42s cubic-bezier(0.34, 1.45, 0.64, 1) both; }
+                .lp-icon { animation: lp-iconPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s both; }
+                .lp-label-shimmer { 
+                    background: linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,1) 40%, rgba(255,255,255,0.5) 100%); 
+                    background-size: 200% auto; 
+                    -webkit-background-clip: text; 
+                    -webkit-text-fill-color: transparent; 
+                    background-clip: text; 
+                    animation: lp-shimmer 2.2s linear infinite; 
+                }
+                .lp-btn { transition: background 0.18s, transform 0.12s, box-shadow 0.18s; }
+                .lp-btn:hover { transform: translateY(-0.0625rem); }
+                .lp-btn:active { transform: scale(0.97); }
+                .lp-deco1 { position: absolute; border-radius: 50%; top: -3rem; right: -3rem; width: 11.25rem; height: 11.25rem; pointer-events: none; }
+                .lp-deco2 { position: absolute; border-radius: 50%; bottom: -2rem; left: -1.5rem; width: 8.75rem; height: 8.75rem; pointer-events: none; }
+                ${popup.type === 'success' ? `.lp-dots { animation: lp-pulse 1.6s ease-in-out infinite; }` : ''}
+            `}</style>
 
             <div
                 className="lp-backdrop"
@@ -153,10 +155,10 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '16px',
+                    padding: '1rem',
                     background: 'rgba(12,5,2,0.62)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
+                    backdropFilter: 'blur(0.375rem)',
+                    WebkitBackdropFilter: 'blur(0.375rem)',
                 }}
                 onClick={(e) => {
                     if (e.target === e.currentTarget) handleClose();
@@ -167,16 +169,16 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     style={{
                         position: 'relative',
                         width: '100%',
-                        maxWidth: '360px',
-                        borderRadius: '24px',
+                        maxWidth: '22.5rem',
+                        borderRadius: '1.5rem',
                         overflow: 'hidden',
                         background: cfg.bg,
-                        boxShadow: '0 32px 80px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.1)',
-                        padding: '44px 32px 36px',
+                        boxShadow: '0 2rem 5rem rgba(0,0,0,0.42), 0 0 0 0.0625rem rgba(255,255,255,0.1)',
+                        padding: '2.75rem 2rem 2.25rem',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: '0',
+                        gap: 0,
                         textAlign: 'center',
                     }}
                 >
@@ -186,15 +188,15 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <div
                         className="lp-icon"
                         style={{
-                            width: 80,
-                            height: 80,
+                            width: '5rem',
+                            height: '5rem',
                             borderRadius: '50%',
                             background: cfg.iconBg,
-                            border: `2.5px solid ${cfg.iconBorder}`,
+                            border: `0.156rem solid ${cfg.iconBorder}`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            marginBottom: '20px',
+                            marginBottom: '1.25rem',
                             position: 'relative',
                             zIndex: 1,
                             flexShrink: 0,
@@ -206,10 +208,10 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <p
                         className="lp-label-shimmer"
                         style={{
-                            fontSize: '10px',
+                            fontSize: '0.625rem',
                             fontWeight: 700,
                             letterSpacing: '0.18em',
-                            marginBottom: '8px',
+                            marginBottom: '0.5rem',
                             position: 'relative',
                             zIndex: 1,
                         }}
@@ -220,10 +222,10 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <h3
                         style={{
                             color: cfg.titleColor,
-                            fontSize: '22px',
+                            fontSize: '1.375rem',
                             fontWeight: 800,
                             lineHeight: 1.25,
-                            margin: '0 0 10px',
+                            margin: '0 0 0.625rem',
                             position: 'relative',
                             zIndex: 1,
                         }}
@@ -233,11 +235,11 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
 
                     <div
                         style={{
-                            width: 40,
-                            height: 2.5,
+                            width: '2.5rem',
+                            height: '0.156rem',
                             background: 'rgba(255,255,255,0.35)',
-                            borderRadius: 2,
-                            margin: '0 0 14px',
+                            borderRadius: '0.125rem',
+                            margin: '0 0 0.875rem',
                             position: 'relative',
                             zIndex: 1,
                         }}
@@ -246,9 +248,9 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                     <p
                         style={{
                             color: cfg.msgColor,
-                            fontSize: '13.5px',
+                            fontSize: '0.843rem',
                             lineHeight: 1.65,
-                            margin: '0 0 28px',
+                            margin: '0 0 1.75rem',
                             position: 'relative',
                             zIndex: 1,
                             fontWeight: 400,
@@ -262,8 +264,8 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                             className="lp-dots"
                             style={{
                                 display: 'flex',
-                                gap: 6,
-                                marginBottom: 20,
+                                gap: '0.375rem',
+                                marginBottom: '1.25rem',
                                 position: 'relative',
                                 zIndex: 1,
                             }}
@@ -272,8 +274,8 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                                 <div
                                     key={i}
                                     style={{
-                                        width: 7,
-                                        height: 7,
+                                        width: '0.437rem',
+                                        height: '0.437rem',
                                         borderRadius: '50%',
                                         background: 'rgba(255,255,255,0.7)',
                                         animationDelay: `${i * 0.2}s`,
@@ -289,12 +291,12 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
                             onClick={handleClose}
                             style={{
                                 width: '100%',
-                                padding: '13px 0',
-                                borderRadius: '13px',
-                                border: `1.5px solid ${cfg.btnBorder}`,
+                                padding: '0.812rem 0',
+                                borderRadius: '0.812rem',
+                                border: `0.093rem solid ${cfg.btnBorder}`,
                                 background: cfg.btnBg,
                                 color: cfg.btnColor,
-                                fontSize: '14px',
+                                fontSize: '0.875rem',
                                 fontWeight: 700,
                                 cursor: 'pointer',
                                 letterSpacing: '0.04em',
@@ -314,8 +316,7 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
     );
 };
 
-// ─── CONFIRM LOGOUT MODAL (SAMA PERSIS DENGAN HEADER.TSX) ─────────────────────
-
+/* Komponen modal konfirmasi logout */
 const ConfirmLogoutModal = ({
     onConfirm,
     onCancel,
@@ -327,23 +328,24 @@ const ConfirmLogoutModal = ({
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
         <div
             className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 gk-scaleIn"
-            style={{ border: '1px solid #fde0c8' }}
+            style={{ border: '0.0625rem solid #fde0c8' }}
         >
             <button
                 onClick={onCancel}
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
             >
-                <X size={18} />
+                <X size="1.125rem" />
             </button>
 
             <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 gk-pulse">
-                <LogOut size={32} style={{ color: '#e8690a' }} />
+                <LogOut size="2rem" style={{ color: '#e8690a' }} />
             </div>
 
             <div className="text-center">
                 <h3 className="text-lg font-bold text-gray-900 mb-1">Konfirmasi Logout</h3>
                 <p className="text-sm text-gray-500 leading-relaxed mt-2">
-                    Apakah Anda yakin ingin keluar dari sistem?<br />
+                    Apakah Anda yakin ingin keluar dari sistem?
+                    <br />
                     Sesi Anda akan diakhiri.
                 </p>
             </div>
@@ -363,7 +365,7 @@ const ConfirmLogoutModal = ({
                     className="flex-1 py-3 rounded-xl text-white font-semibold text-sm transition-all"
                     style={{
                         background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                        boxShadow: '0 3px 12px rgba(232,105,10,0.3)',
+                        boxShadow: '0 0.187rem 0.75rem rgba(232,105,10,0.3)',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
@@ -375,8 +377,7 @@ const ConfirmLogoutModal = ({
     </div>
 );
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-
+/* Komponen utama halaman login client-side */
 export default function LoginClient() {
     const router = useRouter();
 
@@ -391,10 +392,9 @@ export default function LoginClient() {
     const showPopup = useCallback((cfg: PopupConfig) => setPopup(cfg), []);
     const closePopup = useCallback(() => setPopup(null), []);
 
-    // State untuk konfirmasi logout
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-    // Cek apakah user sudah login saat halaman login diakses
+    // Cek status login saat komponen dimuat
     useEffect(() => {
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
@@ -404,7 +404,7 @@ export default function LoginClient() {
         }
     }, []);
 
-    // Handle konfirmasi logout
+    // Proses logout
     const handleConfirmLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');
@@ -412,7 +412,7 @@ export default function LoginClient() {
         setShowLogoutConfirm(false);
     };
 
-    // Handle batal logout - redirect ke dashboard
+    // Batalkan logout dan redirect ke dashboard
     const handleCancelLogout = () => {
         setShowLogoutConfirm(false);
         try {
@@ -428,7 +428,7 @@ export default function LoginClient() {
         }
     };
 
-    // Fetch data sekolah publik
+    // Ambil data publik sekolah
     useEffect(() => {
         const fetchSekolah = async () => {
             try {
@@ -441,13 +441,13 @@ export default function LoginClient() {
                     }
                 }
             } catch {
-                // Abaikan error
+                // Abaikan error fetching
             }
         };
         fetchSekolah();
     }, []);
 
-    // Handle submit login
+    // Handle submit form login
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const { email_sekolah, password, role } = formData;
@@ -481,17 +481,15 @@ export default function LoginClient() {
                     userRole === 'admin'
                         ? 'Admin'
                         : userRole === 'guru_kelas'
-                            ? 'Guru Kelas'
-                            : 'Guru Bidang Studi';
+                        ? 'Guru Kelas'
+                        : 'Guru Bidang Studi';
 
                 let title = 'Login Gagal';
-                let message =
-                    'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
+                let message = 'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
 
                 if (errorCode === 'INVALID_CREDENTIALS') {
                     title = 'Login Gagal';
-                    message =
-                        'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
+                    message = 'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
                 } else if (errorCode === 'ROLE_NOT_ALLOWED') {
                     title = 'Role Tidak Sesuai';
                     message = `Anda tidak memiliki akses sebagai ${roleLabel}. Silakan pilih role yang sesuai atau hubungi administrator.`;
@@ -515,8 +513,7 @@ export default function LoginClient() {
                 window.dispatchEvent(new Event('userDataUpdated'));
             }
 
-            const roleLabel =
-                role === 'admin' ? 'Admin' : role === 'guru_kelas' ? 'Wali Kelas' : 'Guru Bidang Studi';
+            const roleLabel = role === 'admin' ? 'Admin' : role === 'guru_kelas' ? 'Wali Kelas' : 'Guru Bidang Studi';
 
             const urlParams = new URLSearchParams(window.location.search);
             const redirect = urlParams.get('redirect');
@@ -543,6 +540,7 @@ export default function LoginClient() {
         }
     };
 
+    // Handle perubahan input form
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({
@@ -556,135 +554,388 @@ export default function LoginClient() {
             <GlobalStyles />
             {popup && <LoginPopup popup={popup} onClose={closePopup} />}
 
-            {/* Modal Konfirmasi Logout - SAMA PERSIS DENGAN HEADER.TSX */}
             {showLogoutConfirm && (
                 <ConfirmLogoutModal onConfirm={handleConfirmLogout} onCancel={handleCancelLogout} />
             )}
 
             <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,600;1,700&display=swap');
-        * { font-family: 'Poppins', sans-serif; box-sizing: border-box; }
+                @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,600;1,700&display=swap');
+                
+                * { 
+                    font-family: 'Poppins', sans-serif; 
+                    box-sizing: border-box; 
+                }
 
-        :root {
-          --ink: #2b1608;
-          --ink-soft: #7a4a26;
-          --muted: #b98a5e;
-          --bg-wash: #fdf6f0;
-          --border-soft: #fde0c8;
-          --grad-1: #c95b08;
-          --grad-2: #e8690a;
-          --grad-3: #f5870a;
-        }
+                :root {
+                    --ink: #2b1608;
+                    --ink-soft: #7a4a26;
+                    --muted: #b98a5e;
+                    --bg-wash: #fdf6f0;
+                    --border-soft: #fde0c8;
+                    --grad-1: #c95b08;
+                    --grad-2: #e8690a;
+                    --grad-3: #f5870a;
+                }
 
-        .bg-image { background-image: url('/images/bg-logo.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; }
-        .glass-overlay { background: rgba(253,246,240,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+                /* Box Model & Layout */
+                .bg-image { 
+                    background-image: url('/images/bg-logo.jpg'); 
+                    background-size: cover; 
+                    background-position: center; 
+                    background-repeat: no-repeat; 
+                }
+                .glass-overlay { 
+                    background: rgba(253,246,240,0.6); 
+                    backdrop-filter: blur(0.25rem); 
+                    -webkit-backdrop-filter: blur(0.25rem); 
+                }
+                .login-card { 
+                    display: flex; 
+                    width: 100%; 
+                    max-width: 56.25rem; 
+                    min-height: 35rem; 
+                    border-radius: 1.5rem; 
+                    overflow: hidden; 
+                    box-shadow: 0 1.5rem 4rem rgba(201,91,8,0.22), 0 0 0 0.0625rem rgba(253,224,200,0.6); 
+                    background: #fff; 
+                }
+                .left-panel {
+                    width: 42%;
+                    background: linear-gradient(160deg, var(--grad-1) 0%, var(--grad-2) 55%, var(--grad-3) 100%);
+                    padding: 3rem 2rem;
+                    display: flex; 
+                    flex-direction: column; 
+                    align-items: center; 
+                    justify-content: center;
+                    position: relative; 
+                    overflow: hidden; 
+                    gap: 1.625rem;
+                }
+                .right-panel { 
+                    flex: 1; 
+                    background: #fff; 
+                    padding: 3rem 2.625rem; 
+                    display: flex; 
+                    flex-direction: column; 
+                    justify-content: center; 
+                }
+                .fg { margin-bottom: 1rem; }
 
-        .login-card { display: flex; width: 100%; max-width: 900px; min-height: 560px; border-radius: 24px; overflow: hidden; box-shadow: 0 24px 64px rgba(201,91,8,0.22), 0 0 0 1px rgba(253,224,200,0.6); background: #fff; }
+                /* Visual & Decorations */
+                .left-panel .ledger-lines {
+                    position: absolute; 
+                    inset: 0;
+                    background-image: repeating-linear-gradient(to bottom, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 2.625rem);
+                    opacity: 0.7; 
+                    pointer-events: none;
+                }
+                .left-panel::before { 
+                    content: ''; 
+                    position: absolute; 
+                    top: -3.75rem; 
+                    right: -3.75rem; 
+                    width: 12.5rem; 
+                    height: 12.5rem; 
+                    border-radius: 50%; 
+                    background: rgba(255,255,255,0.1); 
+                }
+                .left-panel::after { 
+                    content: ''; 
+                    position: absolute; 
+                    bottom: -2.5rem; 
+                    left: 1.25rem; 
+                    width: 8.75rem; 
+                    height: 8.75rem; 
+                    border-radius: 50%; 
+                    background: rgba(255,255,255,0.07); 
+                }
+                .panel-shimmer {
+                    position: absolute; 
+                    top: -20%; 
+                    left: -70%; 
+                    width: 45%; 
+                    height: 160%;
+                    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+                    transform: rotate(10deg);
+                    animation: panel-shimmer-sweep 5.5s ease-in-out infinite;
+                    pointer-events: none; 
+                    z-index: 3; 
+                    mix-blend-mode: soft-light;
+                }
+                @keyframes panel-shimmer-sweep {
+                    0% { left: -70%; }
+                    45% { left: 130%; }
+                    100% { left: 130%; }
+                }
 
-        .left-panel {
-          width: 42%;
-          background: linear-gradient(160deg, var(--grad-1) 0%, var(--grad-2) 55%, var(--grad-3) 100%);
-          padding: 48px 32px;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          position: relative; overflow: hidden; gap: 26px;
-        }
-        .left-panel .ledger-lines {
-          position: absolute; inset: 0;
-          background-image: repeating-linear-gradient(to bottom, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 42px);
-          opacity: 0.7; pointer-events: none;
-        }
-        .left-panel::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,0.1); }
-        .left-panel::after { content: ''; position: absolute; bottom: -40px; left: 20px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.07); }
+                /* Typography & Components */
+                .logo-orbit { 
+                    position: relative; 
+                    z-index: 1; 
+                    width: 9.5rem; 
+                    height: 9.5rem; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    flex-shrink: 0; 
+                    margin: 0 auto; 
+                }
+                .logo-orbit::before {
+                    content: ''; 
+                    position: absolute; 
+                    inset: -0.5rem; 
+                    border-radius: 50%;
+                    border: 0.093rem dashed rgba(255,255,255,0.4);
+                    animation: orbit-spin 18s linear infinite;
+                }
+                .logo-box { 
+                    width: 8.25rem; 
+                    height: 8.25rem; 
+                    border-radius: 1.625rem; 
+                    background: rgba(255,255,255,0.2); 
+                    border: 0.156rem solid rgba(255,255,255,0.45); 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    font-size: 3.5rem; 
+                    font-weight: 700; 
+                    color: #fff; 
+                    overflow: hidden; 
+                }
+                .logo-box img { width: 100%; height: 100%; object-fit: contain; }
+                @keyframes orbit-spin { to { transform: rotate(360deg); } }
 
-        .panel-shimmer {
-          position: absolute; top: -20%; left: -70%; width: 45%; height: 160%;
-          background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
-          transform: rotate(10deg);
-          animation: panel-shimmer-sweep 5.5s ease-in-out infinite;
-          pointer-events: none; z-index: 3; mix-blend-mode: soft-light;
-        }
-        @keyframes panel-shimmer-sweep {
-          0% { left: -70%; }
-          45% { left: 130%; }
-          100% { left: 130%; }
-        }
+                .left-text { position: relative; z-index: 1; text-align: center; width: 100%; }
+                .brand-erapor { 
+                    font-size: 0.75rem; 
+                    font-weight: 700; 
+                    letter-spacing: 0.16em; 
+                    text-transform: uppercase; 
+                    color: rgba(255,255,255,0.85); 
+                    margin: 0 0 0.375rem; 
+                    line-height: 1.2; 
+                }
+                .brand-nama { 
+                    font-size: 1.375rem; 
+                    font-weight: 800; 
+                    color: #fff; 
+                    text-shadow: 0 0.125rem 0.625rem rgba(0,0,0,0.15); 
+                    line-height: 1.3; 
+                    margin: 0 0 0.625rem; 
+                    word-break: break-word; 
+                }
+                .brand-sub { 
+                    font-size: 0.718rem; 
+                    color: rgba(255,255,255,0.75); 
+                    font-weight: 400; 
+                    line-height: 1.7; 
+                    margin: 0; 
+                }
 
-        .logo-orbit { position: relative; z-index: 1; width: 152px; height: 152px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 0 auto; }
-        .logo-orbit::before {
-          content: ''; position: absolute; inset: -8px; border-radius: 50%;
-          border: 1.5px dashed rgba(255,255,255,0.4);
-          animation: orbit-spin 18s linear infinite;
-        }
-        .logo-box { width: 132px; height: 132px; border-radius: 26px; background: rgba(255,255,255,0.2); border: 2.5px solid rgba(255,255,255,0.45); display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 700; color: #fff; overflow: hidden; }
-        .logo-box img { width: 100%; height: 100%; object-fit: contain; }
-        @keyframes orbit-spin { to { transform: rotate(360deg); } }
+                .right-header { text-align: center; margin: 0 auto 1.75rem; }
+                .right-label { 
+                    font-size: 0.687rem; 
+                    font-weight: 700; 
+                    letter-spacing: 0.14em; 
+                    color: var(--grad-3); 
+                    text-transform: uppercase; 
+                    margin: 0 0 0.5rem; 
+                }
+                .right-title { 
+                    font-size: 1.687rem; 
+                    font-weight: 800; 
+                    color: var(--ink); 
+                    margin: 0 0 0.625rem; 
+                }
+                .right-divider { 
+                    width: 2.25rem; 
+                    height: 0.187rem; 
+                    background: linear-gradient(90deg,var(--grad-1),var(--grad-3)); 
+                    border-radius: 0.125rem; 
+                    margin: 0 auto; 
+                }
 
-        .left-text { position: relative; z-index: 1; text-align: center; width: 100%; }
-        .brand-erapor { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.85); margin: 0 0 6px; line-height: 1.2; }
-        .brand-nama { font-size: 22px; font-weight: 800; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.15); line-height: 1.3; margin: 0 0 10px; word-break: break-word; }
-        .brand-sub { font-size: 11.5px; color: rgba(255,255,255,0.75); font-weight: 400; line-height: 1.7; margin: 0; }
+                .field-label { 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 0.375rem; 
+                    font-size: 0.687rem; 
+                    font-weight: 600; 
+                    letter-spacing: 0.08em; 
+                    color: var(--ink-soft); 
+                    text-transform: uppercase; 
+                    margin: 0 0 0.437rem; 
+                }
 
-        .right-panel { flex: 1; background: #fff; padding: 48px 42px; display: flex; flex-direction: column; justify-content: center; }
-        .right-header { text-align: center; margin: 0 auto 28px; }
-        .right-label { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--grad-3); text-transform: uppercase; margin: 0 0 8px; }
-        .right-title { font-size: 27px; font-weight: 800; color: var(--ink); margin: 0 0 10px; }
-        .right-divider { width: 36px; height: 3px; background: linear-gradient(90deg,var(--grad-1),var(--grad-3)); border-radius: 2px; margin: 0 auto; }
+                .shimmer-field { position: relative; border-radius: 0.75rem; overflow: hidden; isolation: isolate; }
+                .shimmer-field::after {
+                    content: ''; 
+                    position: absolute; 
+                    top: 0; 
+                    left: -10rem; 
+                    width: 55%; 
+                    height: 100%;
+                    background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.85) 50%, transparent 100%);
+                    transform: skewX(-22deg);
+                    animation: shimmer-sweep 3.4s ease-in-out infinite;
+                    pointer-events: none; 
+                    z-index: 2; 
+                    mix-blend-mode: soft-light;
+                }
+                .shimmer-field.shimmer-delay-1::after { animation-delay: 0.9s; }
+                .shimmer-field.shimmer-delay-2::after { animation-delay: 1.8s; }
+                @keyframes shimmer-sweep {
+                    0% { left: -10rem; }
+                    45% { left: 10rem; }
+                    100% { left: 10rem; }
+                }
 
-        .field-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-soft); text-transform: uppercase; margin: 0 0 7px; }
+                .field-input { 
+                    position: relative; 
+                    z-index: 1; 
+                    width: 100%; 
+                    height: 2.875rem; 
+                    padding: 0 0.875rem; 
+                    border-radius: 0.75rem; 
+                    border: 0.093rem solid var(--border-soft); 
+                    background: var(--bg-wash); 
+                    font-size: 0.843rem; 
+                    color: var(--ink); 
+                    font-family: 'Poppins', sans-serif; 
+                    outline: none; 
+                    transition: border-color .18s, box-shadow .18s, background .18s; 
+                }
+                .field-input::placeholder { color: var(--muted); }
+                .field-input:focus { 
+                    border-color: var(--grad-3); 
+                    box-shadow: 0 0 0 0.187rem rgba(245,135,10,0.14); 
+                    background: #fff; 
+                }
+                input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { 
+                    display: none !important; 
+                    visibility: hidden; 
+                    pointer-events: none; 
+                }
 
-        .shimmer-field { position: relative; border-radius: 12px; overflow: hidden; isolation: isolate; }
-        .shimmer-field::after {
-          content: ''; position: absolute; top: 0; left: -160%; width: 55%; height: 100%;
-          background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.85) 50%, transparent 100%);
-          transform: skewX(-22deg);
-          animation: shimmer-sweep 3.4s ease-in-out infinite;
-          pointer-events: none; z-index: 2; mix-blend-mode: soft-light;
-        }
-        .shimmer-field.shimmer-delay-1::after { animation-delay: 0.9s; }
-        .shimmer-field.shimmer-delay-2::after { animation-delay: 1.8s; }
-        @keyframes shimmer-sweep {
-          0% { left: -160%; }
-          45% { left: 160%; }
-          100% { left: 160%; }
-        }
+                .pw-wrap { position: relative; }
+                .pw-wrap .field-input { padding-right: 2.875rem; }
+                .pw-toggle { 
+                    position: absolute; 
+                    right: 0.75rem; 
+                    top: 50%; 
+                    transform: translateY(-50%); 
+                    background: none; 
+                    border: none; 
+                    cursor: pointer; 
+                    padding: 0.25rem; 
+                    color: var(--grad-3); 
+                    opacity: 0.6; 
+                    display: flex; 
+                    align-items: center; 
+                    transition: opacity .15s; 
+                    z-index: 3; 
+                }
+                .pw-toggle:hover { opacity: 1; }
 
-        .field-input { position: relative; z-index: 1; width: 100%; height: 46px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--border-soft); background: var(--bg-wash); font-size: 13.5px; color: var(--ink); font-family: 'Poppins', sans-serif; outline: none; transition: border-color .18s, box-shadow .18s, background .18s; }
-        .field-input::placeholder { color: var(--muted); }
-        .field-input:focus { border-color: var(--grad-3); box-shadow: 0 0 0 3px rgba(245,135,10,0.14); background: #fff; }
-        input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none !important; visibility: hidden; pointer-events: none; }
+                .role-select { 
+                    position: relative; 
+                    z-index: 1; 
+                    width: 100%; 
+                    height: 2.875rem; 
+                    padding: 0 2.75rem 0 0.875rem; 
+                    border-radius: 0.75rem; 
+                    border: 0.093rem solid var(--border-soft); 
+                    background: var(--bg-wash); 
+                    font-size: 0.843rem; 
+                    font-family: 'Poppins', sans-serif; 
+                    outline: none; 
+                    cursor: pointer; 
+                    transition: border-color .18s, box-shadow .18s, background .18s; 
+                    appearance: none; 
+                    -webkit-appearance: none; 
+                    -moz-appearance: none; 
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23f5870a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); 
+                    background-repeat: no-repeat; 
+                    background-position: right 0.812rem center; 
+                }
+                .role-select:focus { 
+                    border-color: var(--grad-3); 
+                    box-shadow: 0 0 0 0.187rem rgba(245,135,10,0.14); 
+                    background-color: #fff; 
+                }
+                .role-select option { color: var(--ink); background: #fff; }
 
-        .pw-wrap { position: relative; }
-        .pw-wrap .field-input { padding-right: 46px; }
-        .pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: var(--grad-3); opacity: 0.6; display: flex; align-items: center; transition: opacity .15s; z-index: 3; }
-        .pw-toggle:hover { opacity: 1; }
+                .btn-login { 
+                    width: 100%; 
+                    height: 3.125rem; 
+                    border-radius: 0.875rem; 
+                    border: none; 
+                    cursor: pointer; 
+                    background: linear-gradient(135deg,var(--grad-1),var(--grad-2),var(--grad-3)); 
+                    color: #fff; 
+                    font-family: 'Poppins', sans-serif; 
+                    font-size: 0.906rem; 
+                    font-weight: 700; 
+                    letter-spacing: 0.06em; 
+                    text-transform: uppercase; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    gap: 0.625rem; 
+                    margin-top: 0.5rem; 
+                    transition: transform .12s, box-shadow .18s, filter .18s; 
+                    box-shadow: 0 0.375rem 1.25rem rgba(201,91,8,0.32); 
+                }
+                .btn-login:hover:not(:disabled) { 
+                    transform: translateY(-0.125rem); 
+                    box-shadow: 0 0.625rem 1.75rem rgba(201,91,8,0.42); 
+                    filter: brightness(1.04); 
+                }
+                .btn-login:active:not(:disabled) { 
+                    transform: translateY(0) scale(0.98); 
+                }
+                .btn-login:disabled { 
+                    opacity: 0.6; 
+                    cursor: not-allowed; 
+                }
+                .btn-login:focus-visible, .field-input:focus-visible, .role-select:focus-visible, .pw-toggle:focus-visible { 
+                    outline: 0.125rem solid var(--grad-3); 
+                    outline-offset: 0.125rem; 
+                }
+                .btn-arrow { 
+                    width: 1.75rem; 
+                    height: 1.75rem; 
+                    border-radius: 0.562rem; 
+                    background: rgba(255,255,255,0.2); 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    flex-shrink: 0; 
+                    transition: transform .18s; 
+                }
+                .btn-login:hover:not(:disabled) .btn-arrow { 
+                    transform: translateX(0.187rem); 
+                }
 
-        .role-select { position: relative; z-index: 1; width: 100%; height: 46px; padding: 0 44px 0 14px; border-radius: 12px; border: 1.5px solid var(--border-soft); background: var(--bg-wash); font-size: 13.5px; font-family: 'Poppins', sans-serif; outline: none; cursor: pointer; transition: border-color .18s, box-shadow .18s, background .18s; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23f5870a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; }
-        .role-select:focus { border-color: var(--grad-3); box-shadow: 0 0 0 3px rgba(245,135,10,0.14); background-color: #fff; }
-        .role-select option { color: var(--ink); background: #fff; }
+                .footer-copy { 
+                    text-align: center; 
+                    font-size: 0.718rem; 
+                    color: var(--muted); 
+                    margin-top: 1.375rem; 
+                }
 
-        .btn-login { width: 100%; height: 50px; border-radius: 14px; border: none; cursor: pointer; background: linear-gradient(135deg,var(--grad-1),var(--grad-2),var(--grad-3)); color: #fff; font-family: 'Poppins', sans-serif; font-size: 14.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; transition: transform .12s, box-shadow .18s, filter .18s; box-shadow: 0 6px 20px rgba(201,91,8,0.32); }
-        .btn-login:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(201,91,8,0.42); filter: brightness(1.04); }
-        .btn-login:active:not(:disabled) { transform: translateY(0) scale(0.98); }
-        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
-        .btn-login:focus-visible, .field-input:focus-visible, .role-select:focus-visible, .pw-toggle:focus-visible { outline: 2px solid var(--grad-3); outline-offset: 2px; }
-        .btn-arrow { width: 28px; height: 28px; border-radius: 9px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .18s; }
-        .btn-login:hover:not(:disabled) .btn-arrow { transform: translateX(3px); }
+                @media (prefers-reduced-motion: reduce) {
+                    .logo-orbit::before { animation: none; }
+                    .shimmer-field::after { animation: none; display: none; }
+                    .panel-shimmer { animation: none; display: none; }
+                }
 
-        .fg { margin-bottom: 16px; }
-        .footer-copy { text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 22px; }
-
-        @media (prefers-reduced-motion: reduce) {
-          .logo-orbit::before { animation: none; }
-          .shimmer-field::after { animation: none; display: none; }
-          .panel-shimmer { animation: none; display: none; }
-        }
-
-        @media (max-width: 760px) {
-          .login-card { flex-direction: column; max-width: 420px; }
-          .left-panel { width: 100%; padding: 36px 28px; }
-          .right-panel { padding: 36px 28px; }
-        }
-      `}</style>
+                @media (max-width: 47.5rem) {
+                    .login-card { flex-direction: column; max-width: 26.25rem; }
+                    .left-panel { width: 100%; padding: 2.25rem 1.75rem; }
+                    .right-panel { padding: 2.25rem 1.75rem; }
+                }
+            `}</style>
 
             <div className="min-h-screen relative bg-image">
                 <div className="absolute inset-0 glass-overlay" />
@@ -730,7 +981,7 @@ export default function LoginClient() {
                                 {/* Email Field */}
                                 <div className="fg">
                                     <div className="field-label">
-                                        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg width="0.812rem" height="0.812rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path
                                                 strokeLinecap="round"
                                                 strokeLinejoin="round"
@@ -756,7 +1007,7 @@ export default function LoginClient() {
                                 {/* Password Field */}
                                 <div className="fg">
                                     <div className="field-label">
-                                        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg width="0.812rem" height="0.812rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <rect x="5" y="11" width="14" height="10" rx="2" strokeWidth={2} />
                                             <path strokeWidth={2} d="M8 11V7a4 4 0 018 0v4" />
                                         </svg>
@@ -781,7 +1032,7 @@ export default function LoginClient() {
                                             aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
                                         >
                                             {showPassword ? (
-                                                <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg width="1.062rem" height="1.062rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path
                                                         strokeLinecap="round"
                                                         strokeLinejoin="round"
@@ -790,7 +1041,7 @@ export default function LoginClient() {
                                                     />
                                                 </svg>
                                             ) : (
-                                                <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg width="1.062rem" height="1.062rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path
                                                         strokeLinecap="round"
                                                         strokeLinejoin="round"
@@ -812,7 +1063,7 @@ export default function LoginClient() {
                                 {/* Role Select */}
                                 <div className="fg">
                                     <div className="field-label">
-                                        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg width="0.812rem" height="0.812rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path
                                                 strokeLinecap="round"
                                                 strokeLinejoin="round"
@@ -847,10 +1098,10 @@ export default function LoginClient() {
                                         <>
                                             <div
                                                 style={{
-                                                    width: 18,
-                                                    height: 18,
+                                                    width: '1.125rem',
+                                                    height: '1.125rem',
                                                     borderRadius: '50%',
-                                                    border: '2.5px solid rgba(255,255,255,0.35)',
+                                                    border: '0.156rem solid rgba(255,255,255,0.35)',
                                                     borderTopColor: '#fff',
                                                     animation: 'spin 0.7s linear infinite',
                                                 }}
@@ -862,7 +1113,7 @@ export default function LoginClient() {
                                         <>
                                             <span>Login</span>
                                             <div className="btn-arrow">
-                                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg width="0.875rem" height="0.875rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path
                                                         strokeLinecap="round"
                                                         strokeLinejoin="round"
