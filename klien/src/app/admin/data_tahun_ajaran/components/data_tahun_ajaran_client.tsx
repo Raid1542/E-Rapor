@@ -48,7 +48,7 @@ interface ModalConfig {
 }
 
 /* ==========================================================================
-   GLOBAL STYLES — termasuk animasi fadeInUp ala Dashboard
+   GLOBAL STYLES
    ========================================================================== */
 const GlobalStyles = () => (
     <style jsx global>{`
@@ -59,7 +59,6 @@ const GlobalStyles = () => (
         .da-scaleIn { animation: da-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         .da-pulse   { animation: da-pulse   0.6s ease 0.15s; }
 
-        /* ── Animasi "muncul dari bawah" ala Dashboard ── */
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(12px); }
             to   { opacity: 1; transform: translateY(0);    }
@@ -72,7 +71,6 @@ const GlobalStyles = () => (
         .d5 { animation-delay: 0.25s; }
         .d6 { animation-delay: 0.30s; }
 
-        /* ── Hover lift untuk card & row, konsisten dengan Dashboard ── */
         .section-card {
             transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
                         box-shadow 0.25s ease;
@@ -154,12 +152,12 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
    SHARED STYLE CONSTANTS
    ========================================================================== */
 
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const inputErrCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-red-500 placeholder:text-gray-400";
+const inputCls = "w-full border border-orange-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/30 placeholder:text-gray-400";
+const inputErrCls = "w-full border border-red-400 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/30 placeholder:text-gray-400";
 
-const PAGE_BG = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const PAGE_BG = { background: '#fafafa' };
+const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.08)' };
+const HEADER_GRAD = { background: 'linear-gradient(135deg,#e8690a,#f5870a)' };
 
 const btnPrimary = {
     base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
@@ -168,7 +166,7 @@ const btnPrimary = {
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
 
-const labelCls = "block text-sm font-semibold mb-1.5";
+const labelCls = "block text-xs font-semibold mb-1.5 uppercase tracking-wide";
 const labelColor = { color: '#7a3a0a' };
 
 /* ==========================================================================
@@ -230,13 +228,13 @@ const SemesterBlock = ({
     accentBg: string;
 }) => (
     <div
-        className="rounded-xl p-3.5 flex-1 min-w-[180px]"
+        className="rounded-xl p-4 flex-1 min-w-[180px] border transition-all"
         style={{
-            background: aktif ? accentBg : '#fafafa',
-            border: `1px solid ${aktif ? accentColor + '40' : '#e5e7eb'}`,
+            background: aktif ? accentBg : '#ffffff',
+            borderColor: aktif ? accentColor + '40' : '#e5e7eb',
         }}
     >
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-3">
             <span
                 className="text-xs font-bold uppercase tracking-wide"
                 style={{ color: aktif ? accentColor : '#9ca3af' }}
@@ -248,11 +246,11 @@ const SemesterBlock = ({
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                     style={{ background: accentColor, color: '#fff' }}
                 >
-                    Berjalan
+                    Aktif
                 </span>
             )}
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
                 <span style={{ color: '#6b7280' }}>PTS</span>
                 <span className="font-semibold" style={{ color: '#374151' }}>{formatTanggalSingkat(pts)}</span>
@@ -518,7 +516,6 @@ export default function DataTahunAjaranClient() {
         setShowAlasanLainnya(false);
     };
 
-    // ✅ PERBAIKAN: Gunakan toLowerCase() untuk comparison
     const executeGantiSemester = async () => {
         if (!selectedItemForSemester) return;
 
@@ -667,212 +664,219 @@ export default function DataTahunAjaranClient() {
     };
 
     const renderForm = (isEdit: boolean) => (
-        <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
+        <div className="min-h-screen bg-gradient-to-br from-orange-50/50 via-white to-white">
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            <div className="mb-6 flex items-center gap-3 anim-in d1">
-                <button
-                    onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
-                    style={{ background: '#fff', border: '1px solid #fde0c8', color: '#c95b08' }}
-                >
-                    <ChevronLeft size={18} />
-                </button>
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
-                        {isEdit ? 'Edit Tahun Ajaran' : 'Tambah Tahun Ajaran'}
-                    </h1>
-                    <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
-                        {isEdit ? 'Perbarui tanggal PTS dan PAS' : 'Buat periode tahun ajaran baru'}
-                    </p>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Card header gradient — konsisten dengan pola Data Admin */}
-                <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                        <CalendarRange size={20} className="text-white" />
-                    </div>
-                    <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/75">
-                            {isEdit ? 'Formulir Edit' : 'Formulir Tambah'}
-                        </p>
-                        <h2 className="text-base font-bold text-white leading-tight">
-                            {isEdit ? 'Ubah Tahun Ajaran' : 'Tahun Ajaran Baru'}
-                        </h2>
-                    </div>
-                </div>
-
-                <div className="p-6 md:p-8">
-                    <div className="mb-7">
-                        <label className={labelCls} style={labelColor}>
-                            Tahun Ajaran <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="text"
-                                name="tahun1"
-                                value={formData.tahun1}
-                                onChange={handleInputChange}
-                                placeholder="2024"
-                                className={`w-32 ${errors.tahun ? inputErrCls : inputCls}`}
-                                disabled={isEdit}
-                            />
-                            <span className="text-2xl font-bold text-gray-300">/</span>
-                            <input
-                                type="text"
-                                name="tahun2"
-                                value={formData.tahun2}
-                                onChange={handleInputChange}
-                                placeholder="2025"
-                                className={`w-32 ${errors.tahun ? inputErrCls : inputCls}`}
-                                disabled={isEdit}
-                            />
-                        </div>
-                        {errors.tahun && <p className="text-red-500 text-xs mt-1.5">{errors.tahun}</p>}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
-                        <div
-                            className="p-4 rounded-xl border"
-                            style={{ background: '#fff7ed', borderColor: '#fdba74' }}
-                        >
-                            <div className="flex items-center gap-2 mb-4">
-                                <CalendarRange size={16} style={{ color: '#c2410c' }} />
-                                <h3 className="text-sm font-bold" style={{ color: '#c2410c' }}>
-                                    Semester Ganjil
-                                </h3>
-                            </div>
-                            <div className="space-y-3.5">
-                                <div>
-                                    <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
-                                        Tanggal PTS
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="pts_ganjil"
-                                        value={formData.pts_ganjil}
-                                        onChange={handleInputChange}
-                                        className={inputCls}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
-                                        Tanggal PAS
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="pas_ganjil"
-                                        value={formData.pas_ganjil}
-                                        onChange={handleInputChange}
-                                        className={errors.pas_ganjil ? inputErrCls : inputCls}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div
-                            className="p-4 rounded-xl border"
-                            style={{ background: '#f0fdf4', borderColor: '#86efac' }}
-                        >
-                            <div className="flex items-center gap-2 mb-4">
-                                <CalendarDays size={16} style={{ color: '#15803d' }} />
-                                <h3 className="text-sm font-bold" style={{ color: '#15803d' }}>
-                                    Semester Genap
-                                </h3>
-                            </div>
-                            <div className="space-y-3.5">
-                                <div>
-                                    <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
-                                        Tanggal PTS
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="pts_genap"
-                                        value={formData.pts_genap}
-                                        onChange={handleInputChange}
-                                        className={inputCls}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
-                                        Tanggal PAS
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="pas_genap"
-                                        value={formData.pas_genap}
-                                        onChange={handleInputChange}
-                                        className={errors.pas_genap ? inputErrCls : inputCls}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
+            {/* Header */}
+            <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-orange-100">
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                            style={{ background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', boxShadow: '0 1px 4px rgba(239,68,68,0.18)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#ef4444'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#f87171'; }}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-orange-50 active:scale-95"
+                            style={{ color: '#c95b08' }}
                         >
-                            Batal
+                            <ChevronLeft size={20} strokeWidth={2.5} />
                         </button>
-
-                        <button
-                            onClick={resetForm}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                            style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.18)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#60a5fa'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#93c5fd'; }}
-                        >
-                            Reset
-                        </button>
-
-                        <button
-                            onClick={isEdit ? openConfirmEdit : openConfirmTambah}
-                            className={`btn-primary ${btnPrimary.base}`}
-                            style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
-                            onMouseEnter={btnPrimary.hover}
-                            onMouseLeave={btnPrimary.leave}
-                        >
-                            {isEdit ? 'Simpan Perubahan' : 'Simpan'}
-                        </button>
+                        <div className="flex-1">
+                            <h1 className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+                                {isEdit ? 'Edit Tahun Ajaran' : 'Tambah Tahun Ajaran'}
+                            </h1>
+                            <p className="text-xs sm:text-sm text-orange-600 mt-0.5 font-medium">
+                                {isEdit ? 'Perbarui informasi periode' : 'Periode akademik baru'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
 
+            {/* Form Content */}
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                <div className="bg-white rounded-2xl shadow-lg border border-orange-100 overflow-hidden anim-in d1">
+                    {/* Card Header */}
+                    <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
+                        <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
+                            <CalendarRange size={22} className="text-white" />
+                        </div>
+                        <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/80">
+                                {isEdit ? 'Formulir Edit' : 'Formulir Tambah'}
+                            </p>
+                            <h2 className="text-base font-bold text-white leading-tight">
+                                {isEdit ? 'Ubah Data' : 'Tahun Ajaran Baru'}
+                            </h2>
+                        </div>
+                    </div>
+
+                    <div className="p-6 sm:p-8">
+                        {/* Tahun Ajaran */}
+                        <div className="mb-8">
+                            <label className={labelCls} style={labelColor}>
+                                Periode Tahun Ajaran <span className="text-red-500">*</span>
+                            </label>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="text"
+                                    name="tahun1"
+                                    value={formData.tahun1}
+                                    onChange={handleInputChange}
+                                    placeholder="2024"
+                                    className={`w-28 sm:w-32 ${errors.tahun ? inputErrCls : inputCls}`}
+                                    disabled={isEdit}
+                                    maxLength={4}
+                                />
+                                <span className="text-2xl font-bold text-gray-300">/</span>
+                                <input
+                                    type="text"
+                                    name="tahun2"
+                                    value={formData.tahun2}
+                                    onChange={handleInputChange}
+                                    placeholder="2025"
+                                    className={`w-28 sm:w-32 ${errors.tahun ? inputErrCls : inputCls}`}
+                                    disabled={isEdit}
+                                    maxLength={4}
+                                />
+                            </div>
+                            {errors.tahun && <p className="text-red-500 text-xs mt-1.5">{errors.tahun}</p>}
+                        </div>
+
+                        {/* Semester Section */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                            {/* Semester Ganjil */}
+                            <div className="p-5 rounded-xl border border-orange-200 bg-orange-50/30">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                                        <CalendarRange size={16} style={{ color: '#c2410c' }} />
+                                    </div>
+                                    <h3 className="text-sm font-bold" style={{ color: '#c2410c' }}>
+                                        Semester Ganjil
+                                    </h3>
+                                </div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
+                                            Tanggal PTS
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="pts_ganjil"
+                                            value={formData.pts_ganjil}
+                                            onChange={handleInputChange}
+                                            className={inputCls}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
+                                            Tanggal PAS
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="pas_ganjil"
+                                            value={formData.pas_ganjil}
+                                            onChange={handleInputChange}
+                                            className={inputCls}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Semester Genap */}
+                            <div className="p-5 rounded-xl border border-green-200 bg-green-50/30">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                                        <CalendarDays size={16} style={{ color: '#15803d' }} />
+                                    </div>
+                                    <h3 className="text-sm font-bold" style={{ color: '#15803d' }}>
+                                        Semester Genap
+                                    </h3>
+                                </div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
+                                            Tanggal PTS
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="pts_genap"
+                                            value={formData.pts_genap}
+                                            onChange={handleInputChange}
+                                            className={inputCls}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1.5" style={labelColor}>
+                                            Tanggal PAS
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="pas_genap"
+                                            value={formData.pas_genap}
+                                            onChange={handleInputChange}
+                                            className={inputCls}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-orange-100">
+                            <button
+                                onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}
+                                className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-semibold transition-all border border-red-200 text-red-600 hover:bg-red-50 active:scale-95"
+                            >
+                                Batal
+                            </button>
+                            
+                            <button
+                                onClick={resetForm}
+                                className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-semibold transition-all border border-blue-200 text-blue-600 hover:bg-blue-50 active:scale-95"
+                            >
+                                Reset
+                            </button>
+
+                            <button
+                                onClick={isEdit ? openConfirmEdit : openConfirmTambah}
+                                className={`flex-1 btn-primary ${btnPrimary.base}`}
+                                style={{ ...btnPrimary.style }}
+                                onMouseEnter={btnPrimary.hover}
+                                onMouseLeave={btnPrimary.leave}
+                            >
+                                {isEdit ? 'Simpan Perubahan' : 'Simpan'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Confirmation Modals */}
             {showConfirmTambah && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 da-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmTambah(false); }}
                 >
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 da-scaleIn">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 da-scaleIn">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                                 <ShieldAlert size={24} className="text-orange-500" />
                             </div>
                             <h3 className="text-base font-bold text-gray-900">
-                                Konfirmasi Penambahan Data
+                                Konfirmasi Penambahan
                             </h3>
                         </div>
 
                         <p className="text-sm text-gray-600 mb-6">
-                            Anda akan menambahkan tahun ajaran <strong>{formData.tahun1}/{formData.tahun2}</strong>.
-                            Tahun ajaran ini akan otomatis aktif dan tahun ajaran sebelumnya akan dinonaktifkan.
+                            Anda akan menambahkan tahun ajaran <strong>{formData.tahun1}/{formData.tahun2}</strong>. 
+                            Tahun ajaran ini akan otomatis aktif.
                         </p>
 
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowConfirmTambah(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors border-orange-200 text-orange-700 hover:bg-orange-50"
                             >
                                 Batal
                             </button>
@@ -897,13 +901,13 @@ export default function DataTahunAjaranClient() {
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmEdit(false); }}
                 >
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 da-scaleIn">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 da-scaleIn">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                                 <ShieldAlert size={24} className="text-orange-500" />
                             </div>
                             <h3 className="text-base font-bold text-gray-900">
-                                Konfirmasi Perubahan Data
+                                Konfirmasi Perubahan
                             </h3>
                         </div>
 
@@ -920,8 +924,7 @@ export default function DataTahunAjaranClient() {
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowConfirmEdit(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors border-orange-200 text-orange-700 hover:bg-orange-50"
                             >
                                 Batal
                             </button>
@@ -946,7 +949,7 @@ export default function DataTahunAjaranClient() {
     if (showEdit) return renderForm(true);
 
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-4 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
@@ -959,12 +962,12 @@ export default function DataTahunAjaranClient() {
             </div>
 
             <div
-                className="bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3 anim-in d2"
+                className="bg-white rounded-2xl px-4 sm:px-5 py-3.5 mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 anim-in d2"
                 style={CARD_STYLE}
             >
                 <button
                     onClick={() => setShowTambah(true)}
-                    className={`btn-primary ${btnPrimary.base}`}
+                    className={`btn-primary ${btnPrimary.base} w-full sm:w-auto`}
                     style={btnPrimary.style}
                     onMouseEnter={btnPrimary.hover}
                     onMouseLeave={btnPrimary.leave}
@@ -972,8 +975,8 @@ export default function DataTahunAjaranClient() {
                     <Plus size={16} /> Tambah Tahun Ajaran
                 </button>
 
-                <div className="flex items-center gap-3">
-                    <div className="relative min-w-[200px] max-w-xs">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                    <div className="relative min-w-[200px] max-w-xs w-full sm:w-auto">
                         <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                             <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
                         </div>
@@ -982,7 +985,7 @@ export default function DataTahunAjaranClient() {
                             placeholder="Cari tahun ajaran..."
                             value={searchQuery}
                             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                            className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                            className="w-full border border-orange-200 rounded-xl pl-9 pr-9 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/30 placeholder:text-gray-400"
                         />
                         {searchQuery && (
                             <button
@@ -1001,7 +1004,7 @@ export default function DataTahunAjaranClient() {
                         <select
                             value={itemsPerPage}
                             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                            className="border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200"
+                            className="border border-orange-200 rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/30"
                         >
                             <option value={10}>10</option>
                             <option value={25}>25</option>
@@ -1032,7 +1035,7 @@ export default function DataTahunAjaranClient() {
                             style={{ boxShadow: '0 6px 24px rgba(232,105,10,0.18)', border: '1.5px solid #f5a623' }}
                         >
                             <div
-                                className="px-6 py-5 flex items-center justify-between"
+                                className="px-5 sm:px-6 py-5 flex items-center justify-between"
                                 style={HEADER_GRAD}
                             >
                                 <div className="flex items-center gap-3">
@@ -1043,7 +1046,7 @@ export default function DataTahunAjaranClient() {
                                         <p className="text-[11px] font-semibold uppercase tracking-wider text-white/75">
                                             Tahun ajaran berjalan
                                         </p>
-                                        <h3 className="text-xl font-bold text-white leading-tight">
+                                        <h3 className="text-lg sm:text-xl font-bold text-white leading-tight">
                                             {tahunAktif.tahun_ajaran}
                                         </h3>
                                     </div>
@@ -1054,7 +1057,7 @@ export default function DataTahunAjaranClient() {
                                 </span>
                             </div>
 
-                            <div className="p-6">
+                            <div className="p-5 sm:p-6">
                                 <div className="flex flex-col sm:flex-row gap-4 mb-5">
                                     <SemesterBlock
                                         label="Ganjil"
@@ -1074,7 +1077,7 @@ export default function DataTahunAjaranClient() {
                                     />
                                 </div>
 
-                                <div className="flex gap-2.5 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
+                                <div className="flex flex-col sm:flex-row gap-2.5 pt-4 border-t border-orange-100">
                                     <button
                                         onClick={() => openEdit(tahunAktif)}
                                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:bg-orange-100"
@@ -1136,10 +1139,10 @@ export default function DataTahunAjaranClient() {
                                         {currentData.map((item) => (
                                             <div
                                                 key={item.id_induk}
-                                                className="item-hover px-5 py-3.5 flex flex-wrap items-center justify-between gap-3"
+                                                className="item-hover px-5 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
                                                 style={{ borderBottom: '1px solid #f3f4f6' }}
                                             >
-                                                <div className="flex items-center gap-3 min-w-0">
+                                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#f3f4f6' }}>
                                                         <CalendarRange size={14} className="text-gray-400" />
                                                     </div>
@@ -1230,7 +1233,7 @@ export default function DataTahunAjaranClient() {
                                             setAlasanCustom('');
                                         }
                                     }}
-                                    className="w-full border rounded-lg px-3 py-2 text-xs outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
+                                    className="w-full border border-orange-200 rounded-lg px-3 py-2 text-xs outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/30"
                                 >
                                     <option value="">-- Pilih Alasan --</option>
                                     <option value="Koreksi nilai siswa">Koreksi nilai siswa yang keliru</option>
@@ -1246,7 +1249,7 @@ export default function DataTahunAjaranClient() {
                                         value={alasanCustom}
                                         onChange={(e) => setAlasanCustom(e.target.value)}
                                         placeholder="Tulis alasan Anda..."
-                                        className="w-full border rounded-lg px-3 py-2 text-xs outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 mt-2"
+                                        className="w-full border border-orange-200 rounded-lg px-3 py-2 text-xs outline-none transition-all focus:ring-2 focus:ring-orange-400 bg-orange-50/30 mt-2"
                                         maxLength={200}
                                     />
                                 )}
@@ -1256,8 +1259,7 @@ export default function DataTahunAjaranClient() {
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowConfirmGantiSemester(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors border-orange-200 text-orange-700 hover:bg-orange-50"
                             >
                                 Batal
                             </button>
