@@ -51,15 +51,16 @@ exports.tambahSiswaMaster = async (req, res) => {
     try {
         const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat } = req.body;
 
-        if (!nis || !nama_lengkap || !jenis_kelamin) {
+        // PERBAIKAN: Tambahkan validasi nisn
+        if (!nis || !nisn || !nama_lengkap || !jenis_kelamin) {
             return res.status(400).json({
                 success: false,
-                message: 'NIS, nama lengkap, dan jenis kelamin wajib diisi'
+                message: 'NIS, NISN, nama lengkap, dan jenis kelamin wajib diisi'
             });
         }
 
         const trimmedNis = nis.trim();
-        const trimmedNisn = nisn ? nisn.trim() : null;
+        const trimmedNisn = nisn.trim(); // PERBAIKAN: Pastikan string, bukan null
         const trimmedNama = nama_lengkap.trim();
 
         const nisExists = await SiswaModel.checkNisExists(trimmedNis);
@@ -71,15 +72,13 @@ exports.tambahSiswaMaster = async (req, res) => {
             });
         }
 
-        if (trimmedNisn) {
-            const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
-            if (nisnExists) {
-                return res.status(400).json({
-                    success: false,
-                    message: `NISN "${trimmedNisn}" sudah digunakan`,
-                    code: 'DUPLICATE_NISN'
-                });
-            }
+        const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
+        if (nisnExists) {
+            return res.status(400).json({
+                success: false,
+                message: `NISN "${trimmedNisn}" sudah digunakan`,
+                code: 'DUPLICATE_NISN'
+            });
         }
 
         const namaExists = await SiswaModel.checkNamaExists(trimmedNama);
@@ -124,14 +123,22 @@ exports.editSiswaMaster = async (req, res) => {
         const { id } = req.params;
         const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, status } = req.body;
 
+        // PERBAIKAN: Tambahkan validasi nisn
+        if (!nis || !nisn || !nama_lengkap || !jenis_kelamin) {
+            return res.status(400).json({
+                success: false,
+                message: 'NIS, NISN, nama lengkap, dan jenis kelamin wajib diisi'
+            });
+        }
+
         const existingSiswa = await SiswaModel.getSiswaById(id);
         if (!existingSiswa) {
             return res.status(404).json({ success: false, message: 'Siswa tidak ditemukan' });
         }
 
-        const trimmedNis = nis ? nis.trim() : existingSiswa.nis;
-        const trimmedNisn = nisn ? nisn.trim() : existingSiswa.nisn;
-        const trimmedNama = nama_lengkap ? nama_lengkap.trim() : existingSiswa.nama_lengkap;
+        const trimmedNis = nis.trim();
+        const trimmedNisn = nisn.trim(); // PERBAIKAN: Pastikan string
+        const trimmedNama = nama_lengkap.trim();
 
         if (trimmedNis !== existingSiswa.nis) {
             const nisExists = await SiswaModel.checkNisExists(trimmedNis, id);
@@ -144,7 +151,7 @@ exports.editSiswaMaster = async (req, res) => {
             }
         }
 
-        if (trimmedNisn && trimmedNisn !== existingSiswa.nisn) {
+        if (trimmedNisn !== existingSiswa.nisn) {
             const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn, id);
             if (nisnExists) {
                 return res.status(400).json({
@@ -157,7 +164,7 @@ exports.editSiswaMaster = async (req, res) => {
 
         const hasChanges =
             existingSiswa.nis !== trimmedNis ||
-            (existingSiswa.nisn || '') !== (trimmedNisn || '') ||
+            existingSiswa.nisn !== trimmedNisn ||
             existingSiswa.nama_lengkap !== trimmedNama ||
             (existingSiswa.tempat_lahir || '') !== (tempat_lahir ? tempat_lahir.trim() : '') ||
             String(existingSiswa.tanggal_lahir || '') !== String(tanggal_lahir || '') ||
@@ -262,17 +269,18 @@ exports.importSiswaMaster = async (req, res) => {
             const row = data[i];
             const rowNumber = i + 2;
 
-            if (!row.nis || !row.nama_lengkap || !row.jenis_kelamin) {
+            // PERBAIKAN: Tambahkan validasi nisn di import
+            if (!row.nis || !row.nisn || !row.nama_lengkap || !row.jenis_kelamin) {
                 skipped.push({
                     row: rowNumber,
                     nama: row.nama_lengkap || '-',
-                    reason: 'Kolom wajib (NIS, nama lengkap, jenis kelamin) tidak lengkap'
+                    reason: 'Kolom wajib (NIS, NISN, nama lengkap, jenis kelamin) tidak lengkap'
                 });
                 continue;
             }
 
             const trimmedNis = String(row.nis).trim();
-            const trimmedNisn = row.nisn ? String(row.nisn).trim() : null;
+            const trimmedNisn = String(row.nisn).trim(); // PERBAIKAN: Pastikan string
             const trimmedNama = String(row.nama_lengkap).trim();
 
             const nisExists = await SiswaModel.checkNisExists(trimmedNis);
@@ -285,16 +293,14 @@ exports.importSiswaMaster = async (req, res) => {
                 continue;
             }
 
-            if (trimmedNisn) {
-                const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
-                if (nisnExists) {
-                    skipped.push({
-                        row: rowNumber,
-                        nama: trimmedNama,
-                        reason: `NISN "${trimmedNisn}" sudah terdaftar`
-                    });
-                    continue;
-                }
+            const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
+            if (nisnExists) {
+                skipped.push({
+                    row: rowNumber,
+                    nama: trimmedNama,
+                    reason: `NISN "${trimmedNisn}" sudah terdaftar`
+                });
+                continue;
             }
 
             let tanggal_lahir = row.tanggal_lahir || null;
@@ -331,7 +337,7 @@ exports.importSiswaMaster = async (req, res) => {
                         reason: `NIS "${trimmedNis}" atau NISN "${trimmedNisn}" sudah terdaftar`
                     });
                 } else {
-                    skipped.push({ row: rowNumber, nama: trimmedNama, reason: 'Gagal menyimpan data' });
+                    skipped.push({ row: rowNumber, nama: trimmedNama, reason: 'Gagal menyimpan data: ' + insertErr.message });
                 }
             }
         }

@@ -3,10 +3,10 @@
  * Fungsi: Komponen klien untuk mengelola data siswa (master data),
  *         mencakup fitur tambah, edit, detail, import Excel, filter,
  *         pencarian, dan pagination.
- * UPDATE: Menggunakan struktur master data (tanpa tahun ajaran)
- * UPDATE 2: Form tambah/edit pakai pola back-button + header card,
- *           tombol Batal/Reset disamakan dengan Data Admin & Tahun Ajaran.
- * UPDATE 3: Animasi disamakan dengan data_admin_client.tsx (fadeInUp, section-card, item-hover, btn-primary)
+ * UPDATE: Form tambah/edit pakai pola back-button + header card,
+ *         tombol Batal/Reset disamakan dengan Data Admin & Tahun Ajaran.
+ * UPDATE 2: Field Status dihilangkan saat Tambah (otomatis aktif), hanya muncul saat Edit.
+ * UPDATE 3: NISN sekarang wajib diisi (sesuai schema database NOT NULL).
  */
 
 'use client';
@@ -32,7 +32,6 @@ const GlobalStyles = () => (
     .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .dg-pulse   { animation: dg-pulse   0.6s ease 0.15s; }
 
-    /* ── Animasi "muncul dari bawah" ala Dashboard / Data Admin ── */
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(12px); }
         to   { opacity: 1; transform: translateY(0);    }
@@ -45,18 +44,15 @@ const GlobalStyles = () => (
     .d5 { animation-delay: 0.25s; }
     .d6 { animation-delay: 0.30s; }
 
-    /* ── Hover lift untuk card & row, konsisten dengan Dashboard ── */
     .section-card {
-        transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
-                    box-shadow 0.25s ease;
+        transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), box-shadow 0.25s ease;
     }
     .section-card:hover {
         transform: translateY(-3px);
         box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
     }
     .item-hover {
-        transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1),
-                    box-shadow 0.18s ease;
+        transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease;
     }
     .item-hover:hover {
         transform: translateY(-1px) scale(1.002);
@@ -117,8 +113,6 @@ const btnPrimary = {
 const labelCls = "block text-sm font-semibold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
-// ─── SECONDARY BUTTONS — disamakan dengan Data Admin (Batal=merah, Reset=biru) ──
-
 const BtnBatal = ({ onClick, children = 'Batal' }: { onClick: () => void; children?: React.ReactNode }) => (
     <button
         onClick={onClick}
@@ -143,7 +137,6 @@ const BtnReset = ({ onClick, children = 'Reset' }: { onClick: () => void; childr
     </button>
 );
 
-/** Tombol netral (untuk "Tutup" di modal Detail — bukan Batal/Reset, jadi tetap netral) */
 const BtnNetral = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
     <button onClick={onClick}
         className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
@@ -218,7 +211,6 @@ export default function DataSiswaClient() {
     const [filterValues, setFilterValues] = useState({ jenisKelamin: '', status: '' });
     const [tempFilterValues, setTempFilterValues] = useState({ jenisKelamin: '', status: '' });
 
-    // ✅ TAMBAHAN: State untuk modal konfirmasi
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
 
@@ -236,12 +228,9 @@ export default function DataSiswaClient() {
                 return;
             }
 
-            // ✅ KIRIM PARAMETER PAGINATION
             const res = await fetch(
                 `http://localhost:5000/api/admin/siswa-master?page=${page}&limit=${limit}&status=semua`,
-                {
-                    headers: { Authorization: `Bearer ${token}` }
-                }
+                { headers: { Authorization: `Bearer ${token}` } }
             );
 
             const data = await res.json();
@@ -296,12 +285,15 @@ export default function DataSiswaClient() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // PERBAIKAN: Menambahkan validasi nisn
     const validate = (isEdit: boolean): boolean => {
         const ne: Record<string, string> = {};
         if (!formData.nis?.trim()) ne.nis = 'NIS wajib diisi';
+        if (!formData.nisn?.trim()) ne.nisn = 'NISN wajib diisi'; // <-- TAMBAHAN VALIDASI NISN
         if (!formData.nama_lengkap?.trim()) ne.nama_lengkap = 'Nama lengkap wajib diisi';
         if (!formData.jenis_kelamin) ne.jenis_kelamin = 'Pilih jenis kelamin';
-        if (!formData.status) ne.status = 'Status wajib dipilih';
+        
+        if (isEdit && !formData.status) ne.status = 'Status wajib dipilih';
 
         setErrors(ne);
         if (Object.keys(ne).length > 0) {
@@ -311,7 +303,6 @@ export default function DataSiswaClient() {
         return true;
     };
 
-    // ✅ TAMBAHAN: Buka modal konfirmasi
     const openConfirmModal = (action: 'add' | 'edit') => {
         if (action === 'edit') {
             const originalData = siswaList.find(s => s.id_siswa === editId);
@@ -336,7 +327,6 @@ export default function DataSiswaClient() {
         setShowConfirmModal(true);
     };
 
-    // ✅ TAMBAHAN: Eksekusi tambah (setelah konfirmasi)
     const executeTambah = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -349,7 +339,7 @@ export default function DataSiswaClient() {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
                     nis: formData.nis,
-                    nisn: formData.nisn || null,
+                    nisn: formData.nisn, // PERBAIKAN: Kirim langsung, tidak lagi || null
                     nama_lengkap: formData.nama_lengkap,
                     tempat_lahir: formData.tempat_lahir || null,
                     tanggal_lahir: formData.tanggal_lahir || null,
@@ -372,7 +362,6 @@ export default function DataSiswaClient() {
         }
     };
 
-    // ✅ TAMBAHAN: Eksekusi edit (setelah konfirmasi)
     const executeEdit = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -385,7 +374,7 @@ export default function DataSiswaClient() {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
                     nis: formData.nis,
-                    nisn: formData.nisn || null,
+                    nisn: formData.nisn, // PERBAIKAN: Kirim langsung, tidak lagi || null
                     nama_lengkap: formData.nama_lengkap,
                     tempat_lahir: formData.tempat_lahir || null,
                     tanggal_lahir: formData.tanggal_lahir || null,
@@ -451,7 +440,6 @@ export default function DataSiswaClient() {
                 if (result.skipped && result.skipped.length > 0) {
                     const skippedCount = result.skipped.length;
 
-                    // ✅ HANYA AUTO-DOWNLOAD JIKA ERROR > 5
                     if (skippedCount > 5) {
                         downloadErrorReport(result.skipped);
                     }
@@ -491,7 +479,6 @@ export default function DataSiswaClient() {
         }
     };
 
-    // Fungsi download error report
     const downloadErrorReport = (skipped: any[]) => {
         const csvContent = [
             ['No', 'Baris', 'Nama', 'NIS', 'NISN', 'Alasan Error'].join(','),
@@ -600,8 +587,6 @@ export default function DataSiswaClient() {
         setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 200);
     };
 
-    // ── Modal close helpers ────────────────────────────────────────────────────
-
     const closeDetail = () => {
         setDetailClosing(true);
         setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200);
@@ -612,8 +597,7 @@ export default function DataSiswaClient() {
         setTimeout(() => { setShowImport(false); setImportClosing(false); }, 200);
     };
 
-    // ── FORM PAGE — pola back-button + header card, konsisten dengan
-    //    Data Admin & Data Tahun Ajaran ──────────────────────────────────────
+    // ── FORM PAGE ──────────────────────────────────────────────────────────────
 
     const renderForm = (isEdit: boolean) => (
         <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
@@ -621,7 +605,6 @@ export default function DataSiswaClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Page header dengan back-button */}
             <div className="mb-6 flex items-center gap-3 anim-in d1">
                 <button
                     onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}
@@ -642,10 +625,7 @@ export default function DataSiswaClient() {
                 </div>
             </div>
 
-            {/* Form card */}
             <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
-
-                {/* Card header gradient — konsisten dengan Data Admin */}
                 <div className="px-6 py-5 flex items-center gap-3" style={HEADER_GRAD}>
                     <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                         <GraduationCap size={20} className="text-white" />
@@ -660,10 +640,7 @@ export default function DataSiswaClient() {
                     </div>
                 </div>
 
-                {/* Form body */}
                 <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-
-                    {/* Nama Lengkap - PALING ATAS */}
                     <div className="flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>Nama Lengkap <span className="text-red-500">*</span></label>
                         <input type="text" name="nama_lengkap" value={formData.nama_lengkap} onChange={handleInputChange} placeholder="Masukkan nama lengkap"
@@ -671,7 +648,6 @@ export default function DataSiswaClient() {
                         {errors.nama_lengkap && <p className="text-red-500 text-xs">{errors.nama_lengkap}</p>}
                     </div>
 
-                    {/* NIS */}
                     <div className="flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>NIS <span className="text-red-500">*</span></label>
                         <input type="text" name="nis" value={formData.nis} onChange={handleInputChange} placeholder="Nomor Induk Siswa"
@@ -679,25 +655,24 @@ export default function DataSiswaClient() {
                         {errors.nis && <p className="text-red-500 text-xs">{errors.nis}</p>}
                     </div>
 
-                    {/* NISN */}
+                    {/* PERBAIKAN: Menambahkan tanda * dan error handling untuk NISN */}
                     <div className="flex flex-col gap-1.5">
-                        <label className={labelCls} style={labelColor}>NISN</label>
-                        <input type="text" name="nisn" value={formData.nisn} onChange={handleInputChange} placeholder="Nomor Induk Siswa Nasional" className={inputCls} />
+                        <label className={labelCls} style={labelColor}>NISN <span className="text-red-500">*</span></label>
+                        <input type="text" name="nisn" value={formData.nisn} onChange={handleInputChange} placeholder="Nomor Induk Siswa Nasional" 
+                            className={errors.nisn ? inputErrCls : inputCls} />
+                        {errors.nisn && <p className="text-red-500 text-xs">{errors.nisn}</p>}
                     </div>
 
-                    {/* Tempat Lahir */}
                     <div className="flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>Tempat Lahir</label>
                         <input type="text" name="tempat_lahir" value={formData.tempat_lahir} onChange={handleInputChange} placeholder="Misal: Jakarta" className={inputCls} />
                     </div>
 
-                    {/* Tanggal Lahir */}
                     <div className="flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>Tanggal Lahir</label>
                         <input type="date" name="tanggal_lahir" value={formData.tanggal_lahir} onChange={handleInputChange} className={inputCls} />
                     </div>
 
-                    {/* Jenis Kelamin */}
                     <div className="flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>Jenis Kelamin <span className="text-red-500">*</span></label>
                         <select name="jenis_kelamin" value={formData.jenis_kelamin} onChange={handleInputChange}
@@ -709,29 +684,29 @@ export default function DataSiswaClient() {
                         {errors.jenis_kelamin && <p className="text-red-500 text-xs">{errors.jenis_kelamin}</p>}
                     </div>
 
-                    {/* Alamat - Full width */}
                     <div className="md:col-span-2 flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>Alamat</label>
                         <textarea name="alamat" value={formData.alamat} onChange={handleInputChange} placeholder="Masukkan alamat lengkap" rows={2} className={inputCls} />
                     </div>
 
-                    {/* Status - Full width */}
-                    <div className="md:col-span-2">
-                        <div className="flex flex-col gap-1.5">
-                            <label className={labelCls} style={labelColor}>Status Siswa <span className="text-red-500">*</span></label>
-                            <select name="status" value={formData.status} onChange={handleInputChange}
-                                className={errors.status ? inputErrCls : inputCls}>
-                                <option value="">-- Pilih --</option>
-                                <option value="aktif">Aktif</option>
-                                <option value="lulus">Lulus</option>
-                                <option value="pindah">Pindah</option>
-                                <option value="drop-out">Drop Out</option>
-                            </select>
-                            {errors.status && <p className="text-red-500 text-xs">{errors.status}</p>}
+                    {/* PERBAIKAN: Status hanya ditampilkan saat mode Edit */}
+                    {isEdit && (
+                        <div className="md:col-span-2">
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Status Siswa <span className="text-red-500">*</span></label>
+                                <select name="status" value={formData.status} onChange={handleInputChange}
+                                    className={errors.status ? inputErrCls : inputCls}>
+                                    <option value="">-- Pilih --</option>
+                                    <option value="aktif">Aktif</option>
+                                    <option value="lulus">Lulus</option>
+                                    <option value="pindah">Pindah</option>
+                                    <option value="drop-out">Drop Out</option>
+                                </select>
+                                {errors.status && <p className="text-red-500 text-xs">{errors.status}</p>}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Form footer — full width di dalam grid */}
                     <div className="md:col-span-2 flex justify-end gap-3 pt-5 mt-2" style={{ borderTop: '1px solid #fde0c8' }}>
                         <BtnBatal onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }} />
                         <BtnReset onClick={handleReset} />
@@ -748,7 +723,6 @@ export default function DataSiswaClient() {
                 </div>
             </div>
 
-            {/* ✅ TAMBAHAN: Modal Konfirmasi Sederhana */}
             {showConfirmModal && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
@@ -805,15 +779,12 @@ export default function DataSiswaClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Page header */}
             <div className="mb-6 anim-in d1">
                 <h1 className="text-2xl font-bold text-gray-900">Data Siswa</h1>
                 <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola data siswa</p>
             </div>
 
-            {/* Toolbar card — terpisah dari tabel */}
             <div className="section-card bg-white rounded-2xl px-5 py-3.5 mb-5 flex flex-wrap items-center justify-between gap-3 anim-in d2" style={CARD_STYLE}>
-                {/* Kiri: Tambah */}
                 <button onClick={() => setShowTambah(true)}
                     className={`btn-primary ${btnPrimary.base}`}
                     style={btnPrimary.style}
@@ -823,10 +794,7 @@ export default function DataSiswaClient() {
                     <Plus size={16} /> Tambah Siswa
                 </button>
 
-                {/* Kanan: controls */}
                 <div className="flex flex-wrap items-center gap-2">
-
-                    {/* Tampilkan N data */}
                     <div className="flex items-center gap-2 whitespace-nowrap">
                         <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
                         <select value={itemsPerPage}
@@ -841,7 +809,6 @@ export default function DataSiswaClient() {
                         <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
                     </div>
 
-                    {/* Search */}
                     <div className="relative min-w-[200px] sm:min-w-[220px]">
                         <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                             <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
@@ -858,7 +825,6 @@ export default function DataSiswaClient() {
                         )}
                     </div>
 
-                    {/* Filter */}
                     <button onClick={openFilterModal}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
                         style={{ background: '#fff', border: '1.5px solid #d97706', color: '#b35a08', boxShadow: '0 1px 4px rgba(217,119,6,0.15)' }}
@@ -868,7 +834,6 @@ export default function DataSiswaClient() {
                         <Filter size={15} /> Filter
                     </button>
 
-                    {/* Import */}
                     <button onClick={() => setShowImport(true)}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
                         style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', boxShadow: '0 1px 4px rgba(59,130,246,0.15)' }}
@@ -880,17 +845,13 @@ export default function DataSiswaClient() {
                 </div>
             </div>
 
-            {/* Table card — terpisah dari toolbar */}
             <div className="section-card bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
-
-                {/* Info count */}
                 <div className="px-5 py-2.5" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                     <p className="text-xs" style={{ color: '#c95b08' }}>
                         Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
                     </p>
                 </div>
 
-                {/* Table */}
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[640px] text-sm border-collapse">
                         <thead>
@@ -975,7 +936,6 @@ export default function DataSiswaClient() {
                     </table>
                 </div>
 
-                {/* Pagination */}
                 <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
                     <span className="text-sm font-medium" style={{ color: '#c95b08' }}>
                         Halaman {currentPage} dari {totalPages}

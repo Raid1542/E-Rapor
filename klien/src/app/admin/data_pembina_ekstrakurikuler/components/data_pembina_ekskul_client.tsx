@@ -21,7 +21,6 @@ const GlobalStyles = () => (
     .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
     .dg-pulse   { animation: dg-pulse   0.6s ease 0.15s; }
 
-    /* Animasi ini hanya kita biarkan untuk modal, bukan untuk layout utama agar tidak bentrok */
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(12px); }
         to   { opacity: 1; transform: translateY(0);    }
@@ -139,7 +138,7 @@ interface Pembina {
 }
 
 interface FormDataType {
-    nama: string;
+    nama_lengkap: string;
     niy: string;
     nuptk: string;
     tempat_lahir: string;
@@ -199,53 +198,53 @@ export default function DataPembinaEkskulClient() {
     // ── fetch ──────────────────────────────────────────────────────────────────
 
     const fetchPembina = useCallback(async (page = 1, limit = 100) => {
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
-            return;
-        }
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+                return;
+            }
 
-        const res = await fetch(`http://localhost:5000/api/admin/pembina-ekskul?page=${page}&limit=${limit}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+            const res = await fetch(`http://localhost:5000/api/admin/pembina-ekskul?page=${page}&limit=${limit}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        const data = await res.json();
-        if (res.ok) {
-            setPembinaList(Array.isArray(data.data) ? data.data.map((p: any) => {
-                let s = 'aktif';
-                if (typeof p.status === 'string') {
-                    s = p.status.trim().toLowerCase();
-                    if (s !== 'aktif') s = 'nonaktif';
-                }
-                return {
-                    id: p.id_user || p.id,
-                    nama: p.nama_lengkap || p.nama,
-                    niy: p.niy || '',
-                    nuptk: p.nuptk || '',
-                    tempat_lahir: p.tempat_lahir || '',
-                    tanggal_lahir: p.tanggal_lahir || '',
-                    jenis_kelamin: p.jenis_kelamin || '',
-                    alamat: p.alamat || '',
-                    no_telepon: p.no_telepon || '',
-                    status: s,
-                };
-            }) : []);
-        } else {
-            showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message });
+            const data = await res.json();
+            if (res.ok) {
+                setPembinaList(Array.isArray(data.data) ? data.data.map((p: any) => {
+                    let s = 'aktif';
+                    if (typeof p.status === 'string') {
+                        s = p.status.trim().toLowerCase();
+                        if (s !== 'aktif') s = 'nonaktif';
+                    }
+                    return {
+                        id: p.id_user || p.id,
+                        nama: p.nama_lengkap || p.nama,
+                        niy: p.niy || '',
+                        nuptk: p.nuptk || '',
+                        tempat_lahir: p.tempat_lahir || '',
+                        tanggal_lahir: p.tanggal_lahir || '',
+                        jenis_kelamin: p.jenis_kelamin || '',
+                        alamat: p.alamat || '',
+                        no_telepon: p.no_telepon || '',
+                        status: s,
+                    };
+                }) : []);
+            } else {
+                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        } finally {
+            setLoading(false);
         }
-    } catch {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-    } finally {
-        setLoading(false);
-    }
-}, [showModal]);
+    }, [showModal]);
 
     useEffect(() => { fetchPembina(); }, [fetchPembina]);
 
     const [formData, setFormData] = useState<FormDataType>({
-        nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '',
-        jenis_kelamin: '', alamat: '', no_telepon: '', status: 'aktif',
+        nama_lengkap: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '',
+        jenis_kelamin: '', alamat: '', no_telepon: '', status: 'aktif', // Default status untuk tambah
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -254,7 +253,7 @@ export default function DataPembinaEkskulClient() {
     const handleEdit = (pembina: Pembina) => {
         setEditId(pembina.id);
         setFormData({
-            nama: pembina.nama || '', niy: pembina.niy || '', nuptk: pembina.nuptk || '',
+            nama_lengkap: pembina.nama || '', niy: pembina.niy || '', nuptk: pembina.nuptk || '',
             tempat_lahir: pembina.tempat_lahir || '', tanggal_lahir: pembina.tanggal_lahir || '',
             jenis_kelamin: pembina.jenis_kelamin || '', alamat: pembina.alamat || '',
             no_telepon: pembina.no_telepon || '', status: pembina.status || 'aktif',
@@ -267,11 +266,31 @@ export default function DataPembinaEkskulClient() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // ── PERBAIKAN: Validasi tempat lahir, tanggal lahir, dan usia minimal 18 tahun ──
     const validate = (isEdit: boolean): boolean => {
         const ne: Record<string, string> = {};
-        if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
+        if (!formData.nama_lengkap?.trim()) ne.nama_lengkap = 'Nama wajib diisi';
+        if (!formData.tempat_lahir?.trim()) ne.tempat_lahir = 'Tempat lahir wajib diisi';
+        
+        if (!formData.tanggal_lahir) {
+            ne.tanggal_lahir = 'Tanggal lahir wajib diisi';
+        } else {
+            const birthDate = new Date(formData.tanggal_lahir);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            if (age < 18) {
+                ne.tanggal_lahir = 'Usia minimal 18 tahun';
+            }
+        }
+        
         if (!formData.jenis_kelamin) ne.jenis_kelamin = 'Pilih jenis kelamin';
-        if (!formData.status) ne.status = 'Status wajib dipilih';
+        
+        // Hanya validasi status saat edit
+        if (isEdit && !formData.status) ne.status = 'Status wajib dipilih';
 
         setErrors(ne);
         if (Object.keys(ne).length > 0) {
@@ -287,7 +306,7 @@ export default function DataPembinaEkskulClient() {
             if (!originalData) return;
             const normalize = (str?: string | null) => (str || '').trim().toLowerCase();
             const hasChanged =
-                formData.nama !== (originalData.nama || '') || formData.niy !== (originalData.niy || '') ||
+                formData.nama_lengkap !== (originalData.nama || '') || formData.niy !== (originalData.niy || '') ||
                 formData.nuptk !== (originalData.nuptk || '') || formData.tempat_lahir !== (originalData.tempat_lahir || '') ||
                 formData.tanggal_lahir !== (originalData.tanggal_lahir || '') || normalize(formData.jenis_kelamin) !== normalize(originalData.jenis_kelamin) ||
                 formData.alamat !== (originalData.alamat || '') || formData.no_telepon !== (originalData.no_telepon || '') ||
@@ -313,14 +332,15 @@ export default function DataPembinaEkskulClient() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    nama: formData.nama, niy: formData.niy || null, nuptk: formData.nuptk || null,
+                    nama_lengkap: formData.nama_lengkap, niy: formData.niy || null, nuptk: formData.nuptk || null,
                     tempat_lahir: formData.tempat_lahir || null, tanggal_lahir: formData.tanggal_lahir || null,
-                    jenis_kelamin: formData.jenis_kelamin, alamat: formData.alamat || null, no_telepon: formData.no_telepon || null, status: formData.status,
+                    jenis_kelamin: formData.jenis_kelamin, alamat: formData.alamat || null, no_telepon: formData.no_telepon || null, 
+                    // Status tidak dikirim karena sudah di-set otomatis di backend
                 }),
             });
             if (res.ok) {
                 setShowTambah(false); handleReset(); await fetchPembina();
-                showModal({ type: 'success', title: 'Data Ditambahkan!', message: `Data pembina ${formData.nama} berhasil ditambahkan.` });
+                showModal({ type: 'success', title: 'Data Ditambahkan!', message: `Data pembina ${formData.nama_lengkap} berhasil ditambahkan.` });
             } else {
                 const err = await res.json();
                 showModal({ type: 'error', title: 'Gagal Menambahkan', message: err.message || 'Terjadi kesalahan.' });
@@ -341,14 +361,14 @@ export default function DataPembinaEkskulClient() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    nama: formData.nama, niy: formData.niy || null, nuptk: formData.nuptk || null,
+                    nama_lengkap: formData.nama_lengkap, niy: formData.niy || null, nuptk: formData.nuptk || null,
                     tempat_lahir: formData.tempat_lahir || null, tanggal_lahir: formData.tanggal_lahir || null,
                     jenis_kelamin: formData.jenis_kelamin, alamat: formData.alamat || null, no_telepon: formData.no_telepon || null, status: formData.status,
                 }),
             });
             if (res.ok) {
                 setShowEdit(false); setEditId(null); handleReset(); await fetchPembina();
-                showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data pembina ${formData.nama} berhasil diperbarui.` });
+                showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data pembina ${formData.nama_lengkap} berhasil diperbarui.` });
             } else {
                 const err = await res.json();
                 showModal({ type: 'error', title: 'Gagal Memperbarui', message: err.message || 'Terjadi kesalahan.' });
@@ -359,7 +379,17 @@ export default function DataPembinaEkskulClient() {
     };
 
     const handleReset = () => {
-        setFormData({ nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '', jenis_kelamin: '', alamat: '', no_telepon: '', status: 'aktif' });
+        setFormData({ 
+            nama_lengkap: '', 
+            niy: '', 
+            nuptk: '', 
+            tempat_lahir: '', 
+            tanggal_lahir: '', 
+            jenis_kelamin: '', 
+            alamat: '', 
+            no_telepon: '', 
+            status: 'aktif' 
+        });
         setErrors({});
     };
 
@@ -446,10 +476,10 @@ export default function DataPembinaEkskulClient() {
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
     const closeImport = () => { setImportClosing(true); setTimeout(() => { setShowImport(false); setImportClosing(false); }, 200); };
 
-        // ── FORM PAGE ──────────────────────────────────────────────────────────────
+    // ── FORM PAGE ──────────────────────────────────────────────────────────────
 
     const renderForm = (isEdit: boolean) => (
-        <div className={`flex-1 p-6 min-h-screen transition-all duration-300 ${formClosing ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`} style={PAGE_BG}>
+        <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
@@ -482,8 +512,8 @@ export default function DataPembinaEkskulClient() {
                 <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="flex flex-col gap-1.5">
                         <label className={labelCls} style={labelColor}>Nama Lengkap <span className="text-red-500">*</span></label>
-                        <input type="text" name="nama" value={formData.nama} onChange={handleInputChange} placeholder="Masukkan nama lengkap" className={errors.nama ? inputErrCls : inputCls} />
-                        {errors.nama && <p className="text-red-500 text-xs">{errors.nama}</p>}
+                        <input type="text" name="nama_lengkap" value={formData.nama_lengkap} onChange={handleInputChange} placeholder="Masukkan nama lengkap" className={errors.nama_lengkap ? inputErrCls : inputCls} />
+                        {errors.nama_lengkap && <p className="text-red-500 text-xs">{errors.nama_lengkap}</p>}
                     </div>
 
                     <div className="flex flex-col gap-1.5">
@@ -496,14 +526,18 @@ export default function DataPembinaEkskulClient() {
                         <input type="text" name="nuptk" value={formData.nuptk} onChange={handleInputChange} placeholder="Nomor Unik PTK" className={inputCls} />
                     </div>
 
+                    {/* PERBAIKAN: Menambahkan tanda * dan error handling untuk Tempat Lahir */}
                     <div className="flex flex-col gap-1.5">
-                        <label className={labelCls} style={labelColor}>Tempat Lahir</label>
-                        <input type="text" name="tempat_lahir" value={formData.tempat_lahir} onChange={handleInputChange} placeholder="Misal: Jakarta" className={inputCls} />
+                        <label className={labelCls} style={labelColor}>Tempat Lahir <span className="text-red-500">*</span></label>
+                        <input type="text" name="tempat_lahir" value={formData.tempat_lahir} onChange={handleInputChange} placeholder="Misal: Jakarta" className={errors.tempat_lahir ? inputErrCls : inputCls} />
+                        {errors.tempat_lahir && <p className="text-red-500 text-xs">{errors.tempat_lahir}</p>}
                     </div>
 
+                    {/* PERBAIKAN: Menambahkan tanda * dan error handling untuk Tanggal Lahir */}
                     <div className="flex flex-col gap-1.5">
-                        <label className={labelCls} style={labelColor}>Tanggal Lahir</label>
-                        <input type="date" name="tanggal_lahir" value={formData.tanggal_lahir} onChange={handleInputChange} className={inputCls} />
+                        <label className={labelCls} style={labelColor}>Tanggal Lahir <span className="text-red-500">*</span></label>
+                        <input type="date" name="tanggal_lahir" value={formData.tanggal_lahir} onChange={handleInputChange} className={errors.tanggal_lahir ? inputErrCls : inputCls} />
+                        {errors.tanggal_lahir && <p className="text-red-500 text-xs">{errors.tanggal_lahir}</p>}
                     </div>
 
                     <div className="flex flex-col gap-1.5">
@@ -526,17 +560,20 @@ export default function DataPembinaEkskulClient() {
                         <textarea name="alamat" value={formData.alamat} onChange={handleInputChange} placeholder="Masukkan alamat lengkap" rows={2} className={inputCls} />
                     </div>
 
-                    <div className="md:col-span-2">
-                        <div className="flex flex-col gap-1.5">
-                            <label className={labelCls} style={labelColor}>Status <span className="text-red-500">*</span></label>
-                            <select name="status" value={formData.status} onChange={handleInputChange} className={errors.status ? inputErrCls : inputCls}>
-                                <option value="">-- Pilih --</option>
-                                <option value="aktif">Aktif</option>
-                                <option value="nonaktif">Nonaktif</option>
-                            </select>
-                            {errors.status && <p className="text-red-500 text-xs">{errors.status}</p>}
+                    {/* PERBAIKAN: Status hanya ditampilkan saat edit */}
+                    {isEdit && (
+                        <div className="md:col-span-2">
+                            <div className="flex flex-col gap-1.5">
+                                <label className={labelCls} style={labelColor}>Status <span className="text-red-500">*</span></label>
+                                <select name="status" value={formData.status} onChange={handleInputChange} className={errors.status ? inputErrCls : inputCls}>
+                                    <option value="">-- Pilih --</option>
+                                    <option value="aktif">Aktif</option>
+                                    <option value="nonaktif">Nonaktif</option>
+                                </select>
+                                {errors.status && <p className="text-red-500 text-xs">{errors.status}</p>}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="md:col-span-2 flex justify-end gap-3 pt-5 mt-2" style={{ borderTop: '1px solid #fde0c8' }}>
                         <BtnBatal onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }} />
@@ -588,7 +625,6 @@ export default function DataPembinaEkskulClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* PERBAIKAN 2: Hapus anim-in dari sini agar saat kembali dari form, elemen tidak animasi naik lagi */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900">Data Pembina Ekstrakurikuler</h1>
             </div>

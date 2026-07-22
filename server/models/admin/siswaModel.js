@@ -128,12 +128,19 @@ class SiswaModel {
         try {
             const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat } = data;
             const [result] = await db.execute(QUERY_CREATE_SISWA, [
-                nis, nisn || null, nama_lengkap, tempat_lahir || null,
-                tanggal_lahir || null, jenis_kelamin, alamat || null
+                nis, 
+                nisn ? String(nisn).trim() : '', // PERBAIKAN: Kirim string kosong, BUKAN null (karena DB NOT NULL)
+                nama_lengkap, 
+                tempat_lahir || null,
+                tanggal_lahir || null, 
+                jenis_kelamin, 
+                alamat || null
             ]);
             return result.insertId;
         } catch (err) {
-            throw new Error('Gagal membuat data siswa');
+            console.error("=== ERROR DETAIL DARI DATABASE (createSiswa) ===");
+            console.error(err);
+            throw new Error('Gagal membuat data siswa: ' + err.message);
         }
     }
 
@@ -144,13 +151,21 @@ class SiswaModel {
         try {
             const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, status } = data;
             const [result] = await db.execute(QUERY_UPDATE_SISWA, [
-                nis, nisn || null, nama_lengkap, tempat_lahir || null,
-                tanggal_lahir || null, jenis_kelamin, alamat || null,
-                status || 'aktif', id
+                nis, 
+                nisn ? String(nisn).trim() : '', // PERBAIKAN: Kirim string kosong, BUKAN null
+                nama_lengkap, 
+                tempat_lahir || null,
+                tanggal_lahir || null, 
+                jenis_kelamin, 
+                alamat || null,
+                status || 'aktif', 
+                id
             ]);
             return result.affectedRows > 0;
         } catch (err) {
-            throw new Error('Gagal mengupdate data siswa');
+            console.error("=== ERROR DETAIL DARI DATABASE (updateSiswa) ===");
+            console.error(err);
+            throw new Error('Gagal mengupdate data siswa: ' + err.message);
         }
     }
 
