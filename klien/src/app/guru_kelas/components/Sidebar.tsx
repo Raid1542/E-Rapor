@@ -76,9 +76,9 @@ const SidebarStyles = () => (
 
         /* Wadah ikon: badge bulat/kotak lembut (sama seperti Admin) */
         .sb-icon-wrap {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -214,7 +214,7 @@ export default function Sidebar({ user }: SidebarProps) {
     const handleNavigation = (url: string) => router.push(url);
 
     // ── Reusable nav item styles (disamakan dengan Admin) ──────────────────
-    const navBase = 'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
+    const navBase = 'sb-nav-item w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 text-sm font-medium';
     const navActive = 'sb-active bg-white text-orange-600 shadow-sm font-semibold';
     const navInactive = 'text-white hover:bg-white/10 hover:text-white';
 
@@ -228,7 +228,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 className={`${navBase} ${isActive ? navActive : navInactive}`}
             >
                 <span className={`sb-icon-wrap ${isActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-                    <IconComponent className="w-[18px] h-[18px]" />
+                    <IconComponent className="w-5 h-5" />
                 </span>
                 {isExpanded && <span>{item.name}</span>}
             </button>
@@ -237,7 +237,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
     return (
         <div
-            className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[72px]'}`}
+            className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[80px]'}`}
             style={{
                 background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
             }}
@@ -246,7 +246,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
             {/* ── Header: Logo + Nama Sekolah (sama seperti Admin) ───── */}
             <div
-                className="flex items-center justify-between px-4 py-4"
+                className="flex items-center justify-between px-3 py-4"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
             >
                 {isExpanded ? (
@@ -293,7 +293,7 @@ export default function Sidebar({ user }: SidebarProps) {
             </div>
 
             {/* ── Navigation (jarak antar menu disamakan dengan Admin) ───────────────────── */}
-            <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
+            <div className="flex-1 overflow-y-auto px-2 py-4 sb-scrollbar-none">
 
                 {/* ── MENU UTAMA ── */}
                 {menuUtama.map((item) => renderMenuItem(item, pathname === item.url))}
@@ -351,7 +351,7 @@ export default function Sidebar({ user }: SidebarProps) {
                     className={`${navBase} ${pathname === '/guru_kelas/profil' ? navActive : navInactive}`}
                 >
                     <span className={`sb-icon-wrap ${pathname === '/guru_kelas/profil' ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-                        <UserCircle className="w-[18px] h-[18px]" />
+                        <UserCircle className="w-5 h-5" />
                     </span>
                     {isExpanded && <span>Profil</span>}
                 </button>

@@ -125,7 +125,7 @@ const ConfirmLogoutModal = ({
           onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
         >
-          Ya, Keluar
+          Ya
         </button>
       </div>
     </div>

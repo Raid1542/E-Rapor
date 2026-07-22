@@ -1,8 +1,7 @@
 /**
  * Nama File: Sidebar.tsx
  * Fungsi: Komponen sidebar navigasi untuk panel admin.
- * Update: penyegaran visual (ikon aktif berbentuk badge, indikator submenu timeline,
- *         header & badge lebih rapi) — palet warna orange utama tidak diubah.
+ * Update: Perbaikan alignment chevron submenu
  */
 
 'use client';
@@ -78,9 +77,9 @@ const SidebarStyles = () => (
 
     /* Wadah ikon: badge bulat/kotak lembut, beda tampilan saat aktif vs tidak */
     .sb-icon-wrap {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -192,7 +191,7 @@ export default function Sidebar() {
     }
   };
 
-  // ── Fetch Tahun Ajaran Aktif ──────────────────────────────────────────────
+  // ── Fetch Tahun Ajaran Aktif ────────────────────────────────────────────
   const fetchTahunAjaranAktif = async () => {
     try {
       setTaLoading(true);
@@ -280,7 +279,7 @@ export default function Sidebar() {
     { name: 'Arsip Rapor', url: '/admin/arsip_rapor' },
   ];
 
-  // ── Active state ───────────────────────────────────────────────────────────
+  // ─ Active state ───────────────────────────────────────────────────────────
   const isDashboardActive = pathname === '/admin/dashboard';
   const isTahunAjaranActive = pathname === '/admin/data_tahun_ajaran';
   const isBackupRestoreActive = pathname === '/admin/backup_restore';
@@ -288,7 +287,7 @@ export default function Sidebar() {
   const isMasterDataActive = masterDataSubmenu.some((item) => item.url === pathname);
   const isAkademikActive = akademikSubmenu.some((item) => item.url === pathname);
 
-  // ── Auto redirect jika user langsung akses halaman Akademik tanpa TA aktif ──
+  //  Auto redirect jika user langsung akses halaman Akademik tanpa TA aktif ──
   useEffect(() => {
     if (!taLoading && !taAktif && isAkademikActive) {
       setTimeout(() => {
@@ -303,7 +302,7 @@ export default function Sidebar() {
     if (isAkademikActive && taAktif) setOpenDropdowns((prev) => ({ ...prev, akademik: true }));
   }, [isMasterDataActive, isAkademikActive, taAktif]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // ─ Handlers ───────────────────────────────────────────────────────────
   const toggleSidebar = () => {
     setIsExpanded(!isExpanded);
     if (isExpanded) setOpenDropdowns({ masterData: false, akademik: false });
@@ -341,9 +340,9 @@ export default function Sidebar() {
     handleNavigation(url);
   };
 
-  // ── Reusable nav item styles ───────────────────────────────────────────────
+  // ─ Reusable nav item styles ───────────────────────────────────────────────
   const navBase =
-    'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
+    'sb-nav-item w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 text-sm font-medium';
   const navActive =
     'sb-active bg-white text-orange-600 shadow-sm font-semibold';
   const navInactive =
@@ -358,7 +357,7 @@ export default function Sidebar() {
 
   return (
     <div
-      className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[72px]'}`}
+      className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[80px]'}`}
       style={{
         background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
       }}
@@ -367,7 +366,7 @@ export default function Sidebar() {
 
       {/* ── Header: Logo + Nama Sekolah ─────────────────────────────────── */}
       <div
-        className="flex items-center justify-between px-4 py-4"
+        className="flex items-center justify-between px-3 py-4"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
       >
         {isExpanded ? (
@@ -413,16 +412,17 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* ── Navigation ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
+      {/* ─ Navigation ───────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-2 py-4 sb-scrollbar-none">
 
         {/* Dashboard */}
         <button
           onClick={() => handleNavigation('/admin/dashboard')}
-          className={`${navBase} ${isDashboardActive ? navActive : navInactive}`}
+          className={`${navBase} ${isExpanded ? 'justify-start' : 'justify-center'} ${isDashboardActive ? navActive : navInactive}`}
+          title={!isExpanded ? 'Dashboard' : ''}
         >
           <span className={`sb-icon-wrap ${isDashboardActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-            <Home className="w-[18px] h-[18px]" />
+            <Home className="w-5 h-5" />
           </span>
           {isExpanded && <span>Dashboard</span>}
         </button>
@@ -438,10 +438,11 @@ export default function Sidebar() {
         {/* Tahun Ajaran */}
         <button
           onClick={() => handleNavigation('/admin/data_tahun_ajaran')}
-          className={`${navBase} ${isTahunAjaranActive ? navActive : navInactive}`}
+          className={`${navBase} ${isExpanded ? 'justify-start' : 'justify-center'} ${isTahunAjaranActive ? navActive : navInactive}`}
+          title={!isExpanded ? 'Tahun Ajaran' : ''}
         >
           <span className={`sb-icon-wrap ${isTahunAjaranActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-            <Calendar className="w-[18px] h-[18px]" />
+            <Calendar className="w-5 h-5" />
           </span>
           {isExpanded && <span>Tahun Ajaran</span>}
         </button>
@@ -450,18 +451,19 @@ export default function Sidebar() {
         <div className="mb-1">
           <button
             onClick={() => toggleDropdown('masterData')}
-            className={`${navBase} mb-0 ${isMasterDataActive ? navActive : navInactive} justify-between`}
+            className={`${navBase} mb-0 ${isExpanded ? 'justify-start' : 'justify-center'} ${isMasterDataActive ? navActive : navInactive}`}
+            title={!isExpanded ? 'Data Master' : ''}
           >
-            <div className="flex items-center gap-3">
-              <span className={`sb-icon-wrap ${isMasterDataActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-                <Database className="w-[18px] h-[18px]" />
-              </span>
-              {isExpanded && <span>Data Master</span>}
-            </div>
+            <span className={`sb-icon-wrap ${isMasterDataActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+              <Database className="w-5 h-5" />
+            </span>
             {isExpanded && (
-              <ChevronDown
-                className={`w-4 h-4 opacity-70 sb-chevron ${openDropdowns.masterData ? 'sb-chevron-open' : ''}`}
-              />
+              <>
+                <span>Data Master</span>
+                <ChevronDown
+                  className={`w-4 h-4 opacity-70 sb-chevron ml-auto ${openDropdowns.masterData ? 'sb-chevron-open' : ''}`}
+                />
+              </>
             )}
           </button>
           {isExpanded && openDropdowns.masterData && (
@@ -530,28 +532,30 @@ export default function Sidebar() {
         <div className="mb-1">
           <button
             onClick={() => toggleDropdown('akademik')}
-            className={`${navBase} mb-0 justify-between ${!taAktif
+            className={`${navBase} mb-0 ${isExpanded ? 'justify-start' : 'justify-center'} ${!taAktif
               ? navDisabled
               : isAkademikActive
                 ? navActive
                 : navInactive
               }`}
-            title={!taAktif ? 'Aktifkan Tahun Ajaran terlebih dahulu' : ''}
+            title={!isExpanded ? (!taAktif ? 'Aktifkan TA terlebih dahulu' : 'Operasional') : ''}
           >
-            <div className="flex items-center gap-3">
-              <span className={`sb-icon-wrap ${!taAktif ? 'sb-icon-disabled' : isAkademikActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-                {!taAktif ? (
-                  <Lock className="w-[18px] h-[18px]" />
-                ) : (
-                  <FileText className="w-[18px] h-[18px]" />
+            <span className={`sb-icon-wrap ${!taAktif ? 'sb-icon-disabled' : isAkademikActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
+              {!taAktif ? (
+                <Lock className="w-5 h-5" />
+              ) : (
+                <FileText className="w-5 h-5" />
+              )}
+            </span>
+            {isExpanded && (
+              <>
+                <span>Operasional</span>
+                {taAktif && (
+                  <ChevronDown
+                    className={`w-4 h-4 opacity-70 sb-chevron ml-auto ${openDropdowns.akademik ? 'sb-chevron-open' : ''}`}
+                  />
                 )}
-              </span>
-              {isExpanded && <span>Operasional</span>}
-            </div>
-            {isExpanded && taAktif && (
-              <ChevronDown
-                className={`w-4 h-4 opacity-70 sb-chevron ${openDropdowns.akademik ? 'sb-chevron-open' : ''}`}
-              />
+              </>
             )}
           </button>
 
@@ -606,10 +610,11 @@ export default function Sidebar() {
         {/* Backup & Restore */}
         <button
           onClick={() => handleNavigation('/admin/backup_restore')}
-          className={`${navBase} ${isBackupRestoreActive ? navActive : navInactive}`}
+          className={`${navBase} ${isExpanded ? 'justify-start' : 'justify-center'} ${isBackupRestoreActive ? navActive : navInactive}`}
+          title={!isExpanded ? 'Backup & Restore' : ''}
         >
           <span className={`sb-icon-wrap ${isBackupRestoreActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-            <Settings className="w-[18px] h-[18px]" />
+            <Settings className="w-5 h-5" />
           </span>
           {isExpanded && <span>Backup &amp; Restore</span>}
         </button>
@@ -625,10 +630,11 @@ export default function Sidebar() {
         {/* Profil */}
         <button
           onClick={() => handleNavigation('/admin/profil')}
-          className={`${navBase} ${isProfilActive ? navActive : navInactive}`}
+          className={`${navBase} ${isExpanded ? 'justify-start' : 'justify-center'} ${isProfilActive ? navActive : navInactive}`}
+          title={!isExpanded ? 'Profil' : ''}
         >
           <span className={`sb-icon-wrap ${isProfilActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-            <UserCircle className="w-[18px] h-[18px]" />
+            <UserCircle className="w-5 h-5" />
           </span>
           {isExpanded && <span>Profil</span>}
         </button>
