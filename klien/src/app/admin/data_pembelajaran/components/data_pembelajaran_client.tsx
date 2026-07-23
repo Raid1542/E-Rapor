@@ -20,12 +20,22 @@
  *     struktur CSS Grid (pembelajaranGridCols) yang dipakai identik oleh kedua
  *     tabel, sama seperti pola grid yang dipakai di halaman Data Pembina
  *     Ekskul, sehingga kolom selalu sejajar persis.
+ *   - 🩹 FIX 2: Dropdown "Guru Pengampu" dan "Mata Pelajaran" sebelumnya memakai
+ *     <select> native, yang gaya opsi ter-hover/fokusnya ikut tema abu-abu
+ *     bawaan browser (tidak konsisten dengan warna oranye brand) dan bisa
+ *     membuka ke ATAS sehingga menabrak header modal. Diganti dengan dropdown
+ *     kustom (SearchDropdown) yang selalu membuka ke bawah, tampilannya
+ *     konsisten dengan pola PembinaDropdown di halaman Data Ekstrakurikuler.
+ *     Kartu/modal yang membungkusnya juga dilepas dari `overflow-hidden`
+ *     (sudut dibulatkan langsung di header/footer) supaya panel dropdown
+ *     tidak ikut terpotong. Perilaku data (onChange mengirim id sebagai
+ *     string) tetap identik dengan <select> sebelumnya.
  */
 
 'use client';
 
-import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
-import { Pencil, Plus, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, BookOpen, CheckSquare, Square, Lock, CalendarRange } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, ChangeEvent, ReactNode } from 'react';
+import { Pencil, Plus, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, BookOpen, CheckSquare, Square, Lock, CalendarRange, ChevronDown } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
@@ -88,6 +98,12 @@ const GlobalStyles = () => (
     .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
     .btn-action:hover  { filter: brightness(1.04); }
     .btn-action:active { filter: brightness(0.98); }
+
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #f0c896; border-radius: 10px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #e8a865; }
+    .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #f0c896 transparent; }
 
     button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
         outline: 2.5px solid #f5a623;
@@ -197,6 +213,86 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
     </div>
   </div>
 );
+
+// ─── DROPDOWN KUSTOM (Guru Pengampu / Mata Pelajaran) ────────────────────────
+// Menggantikan <select> native. <select> native gaya hover/fokus opsinya ikut
+// tema abu-abu bawaan browser (tidak konsisten dengan warna oranye brand) dan
+// bisa membuka ke ATAS bila ruang di bawah dianggap kurang, sehingga menabrak
+// header modal. Dropdown ini SELALU membuka ke bawah dengan tinggi maksimum +
+// scroll halus, cukup untuk menampilkan ±10 opsi sekaligus. Perilaku data
+// tetap identik: memanggil onChange dengan string id (atau '' untuk kosong).
+interface SearchDropdownOption { id: number; label: string; sublabel?: string; }
+
+const SearchDropdown = ({
+  value, options, onChange, hasError = false, placeholder, disabled = false,
+}: {
+  value: string;
+  options: SearchDropdownOption[];
+  onChange: (v: string) => void;
+  hasError?: boolean;
+  placeholder: string;
+  disabled?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selected = options.find(o => String(o.id) === value);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        className={`${hasError ? inputErrCls : inputCls} flex items-center justify-between ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <span className={selected ? 'text-gray-800 font-medium' : 'text-gray-400'}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown size={16} className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: ACCENT }} />
+      </button>
+
+      {open && !disabled && (
+        <div
+          className="absolute left-0 right-0 top-full mt-1.5 z-30 rounded-xl bg-white overflow-y-auto dg-scaleIn scrollbar-thin"
+          style={{ ...CARD_STYLE, boxShadow: '0 12px 28px rgba(0,0,0,0.12)', maxHeight: '400px' }}
+        >
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false); }}
+            className="w-full text-left px-3.5 py-2.5 text-sm text-gray-400 hover:bg-orange-50/60 transition-colors"
+          >
+            {placeholder}
+          </button>
+          {options.map(o => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => { onChange(String(o.id)); setOpen(false); }}
+              className="w-full flex items-center gap-2 text-left px-3.5 py-2.5 text-sm font-medium text-gray-800 hover:bg-orange-50/60 transition-colors"
+              style={String(o.id) === value ? { background: '#fff5eb', color: ACCENT_DARK, fontWeight: 700 } : {}}
+            >
+              {o.sublabel && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded flex-shrink-0" style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1px solid #fde0c8' }}>
+                  {o.sublabel}
+                </span>
+              )}
+              <span className="truncate">{o.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────────
 interface Pembelajaran {
@@ -638,6 +734,11 @@ export default function DataPembelajaranPage() {
     if (errorsPilihan[name]) setErrorsPilihan(prev => ({ ...prev, [name]: '' }));
   };
 
+  const setPilihanField = (name: keyof FormDataPilihan, value: string) => {
+    setFormDataPilihan(prev => ({ ...prev, [name]: value }));
+    if (errorsPilihan[name]) setErrorsPilihan(prev => ({ ...prev, [name]: '' }));
+  };
+
   const validateFormPilihan = (): boolean => {
     const ne: Record<string, string> = {};
     if (!formDataPilihan.mapel_id) ne.mapel_id = 'Pilih mata pelajaran';
@@ -784,6 +885,9 @@ export default function DataPembelajaranPage() {
   // tabel, tergantung apakah kolom "Aksi" ditampilkan (semester aktif) atau tidak.
   const pembelajaranGridCols = isSemesterActive ? PEMBELAJARAN_GRID_WITH_AKSI : PEMBELAJARAN_GRID_NO_AKSI;
 
+  // Opsi dropdown Guru Pengampu (dipakai di form Edit & Modal Tambah Pilihan)
+  const guruOptions: SearchDropdownOption[] = guruList.map(g => ({ id: g.id, label: g.nama }));
+
   // ── PAGE: Form EDIT Mapel Pilihan — dibiarkan ringkas (card kecil) ─────────
   if (showFormEdit) {
     return (
@@ -792,71 +896,69 @@ export default function DataPembelajaranPage() {
         {modal && <NotifModal modal={modal} onClose={closeModal} />}
         {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Data Pembelajaran</h1>
-          <p className="text-sm mt-0.5 text-gray-500">
-            Edit Pembelajaran — Kelas {dataPerKelas?.kelas.nama_kelas}
-          </p>
-        </div>
-
-        <div className="card-flat bg-white rounded-2xl overflow-hidden max-w-2xl mx-auto" style={CARD_STYLE}>
-          <div className="flex items-center justify-between px-6 py-4" style={{ background: BRAND_GRADIENT }}>
-            <h2 className="text-base font-bold text-white">Edit Guru Pengampu</h2>
-            <button onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.2)' }}>
-              <X size={16} className="text-white" />
-            </button>
+        <div className="w-full max-w-2xl">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Data Pembelajaran</h1>
+            <p className="text-sm mt-0.5 text-gray-500">
+              Edit Pembelajaran — Kelas {dataPerKelas?.kelas.nama_kelas}
+            </p>
           </div>
 
-          {dataPerKelas && (
-            <div className="px-6 pt-5">
-              <div className="rounded-xl p-4" style={{ background: '#fff8f2', border: '1px solid #fde0c8' }}>
-                <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: ACCENT_DARK }}>
-                  Informasi Mapel
-                </p>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Mata Pelajaran</p>
-                    <p className="font-semibold text-gray-800">{editData?.nama_mapel}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Guru Lama</p>
-                    <p className="font-semibold text-gray-800">{editData?.nama_guru}</p>
+          <div className="card-flat bg-white rounded-2xl mx-auto" style={CARD_STYLE}>
+            <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
+              <h2 className="text-base font-bold text-white">Edit Guru Pengampu</h2>
+              <button onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <X size={16} className="text-white" />
+              </button>
+            </div>
+
+            {dataPerKelas && (
+              <div className="px-6 pt-5">
+                <div className="rounded-xl p-4" style={{ background: '#fff8f2', border: '1px solid #fde0c8' }}>
+                  <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: ACCENT_DARK }}>
+                    Informasi Mapel
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">Mata Pelajaran</p>
+                      <p className="font-semibold text-gray-800">{editData?.nama_mapel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">Guru Lama</p>
+                      <p className="font-semibold text-gray-800">{editData?.nama_guru}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="p-6 space-y-5">
-            <div className="flex flex-col gap-1.5">
-              <label className={labelCls} style={labelColor}>
-                Guru Pengampu Baru <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="user_id"
-                value={formDataPilihan.user_id}
-                onChange={handlePilihanChange}
-                className={errorsPilihan.user_id ? inputErrCls : inputCls}
-                disabled={dropdownLoading}
-              >
-                <option value="">-- Pilih Guru --</option>
-                {guruList.map(g => (
-                  <option key={g.id} value={g.id}>{g.nama}</option>
-                ))}
-              </select>
-              {errorsPilihan.user_id && <p className="text-red-600 text-xs font-semibold mt-0.5">{errorsPilihan.user_id}</p>}
+            <div className="p-6 space-y-5">
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls} style={labelColor}>
+                  Guru Pengampu Baru <span className="text-red-500">*</span>
+                </label>
+                <SearchDropdown
+                  value={formDataPilihan.user_id}
+                  options={guruOptions}
+                  onChange={(v) => setPilihanField('user_id', v)}
+                  hasError={!!errorsPilihan.user_id}
+                  placeholder="-- Pilih Guru --"
+                  disabled={dropdownLoading}
+                />
+                {errorsPilihan.user_id && <p className="text-red-600 text-xs font-semibold mt-0.5">{errorsPilihan.user_id}</p>}
+              </div>
             </div>
-          </div>
 
-          <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
-            <ActionButton variant="neutral" onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}>
-              Batal
-            </ActionButton>
-            <ActionButton variant="primary" onClick={() => openConfirmPilihan('edit-pilihan')}>
-              Simpan Perubahan
-            </ActionButton>
+            <div className="px-6 py-4 flex justify-end gap-2.5 rounded-b-2xl" style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
+              <ActionButton variant="neutral" onClick={() => { setShowFormEdit(false); setEditId(null); setEditData(null); }}>
+                Batal
+              </ActionButton>
+              <ActionButton variant="primary" onClick={() => openConfirmPilihan('edit-pilihan')}>
+                Simpan Perubahan
+              </ActionButton>
+            </div>
           </div>
         </div>
 
@@ -1029,8 +1131,8 @@ export default function DataPembelajaranPage() {
       {showModalPilihan && dataPerKelas && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 dg-fadeIn">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !submittingPilihan && setShowModalPilihan(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden dg-scaleIn" style={CARD_STYLE}>
-            <div className="flex items-center justify-between px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md dg-scaleIn" style={CARD_STYLE}>
+            <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
               <div className="flex items-center gap-2">
                 <BookOpen size={18} className="text-white" />
                 <h2 className="text-base font-bold text-white">Tambah Mapel Pilihan</h2>
@@ -1062,18 +1164,14 @@ export default function DataPembelajaranPage() {
                     <label className={labelCls} style={labelColor}>
                       Mata Pelajaran <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      name="mapel_id"
+                    <SearchDropdown
                       value={formDataPilihan.mapel_id}
-                      onChange={handlePilihanChange}
-                      className={errorsPilihan.mapel_id ? inputErrCls : inputCls}
+                      options={dataPerKelas.mapel_pilihan_tersedia.map(m => ({ id: m.id, label: m.nama_mapel, sublabel: m.kode_mapel }))}
+                      onChange={(v) => setPilihanField('mapel_id', v)}
+                      hasError={!!errorsPilihan.mapel_id}
+                      placeholder="-- Pilih Mata Pelajaran --"
                       disabled={dropdownLoading || submittingPilihan}
-                    >
-                      <option value="">-- Pilih Mata Pelajaran --</option>
-                      {dataPerKelas.mapel_pilihan_tersedia.map(m => (
-                        <option key={m.id} value={m.id}>{m.nama_mapel}</option>
-                      ))}
-                    </select>
+                    />
                     {errorsPilihan.mapel_id && <p className="text-red-600 text-xs font-semibold mt-0.5">{errorsPilihan.mapel_id}</p>}
                   </div>
 
@@ -1081,25 +1179,21 @@ export default function DataPembelajaranPage() {
                     <label className={labelCls} style={labelColor}>
                       Guru Pengampu <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      name="user_id"
+                    <SearchDropdown
                       value={formDataPilihan.user_id}
-                      onChange={handlePilihanChange}
-                      className={errorsPilihan.user_id ? inputErrCls : inputCls}
+                      options={guruOptions}
+                      onChange={(v) => setPilihanField('user_id', v)}
+                      hasError={!!errorsPilihan.user_id}
+                      placeholder="-- Pilih Guru --"
                       disabled={dropdownLoading || submittingPilihan}
-                    >
-                      <option value="">-- Pilih Guru --</option>
-                      {guruList.map(g => (
-                        <option key={g.id} value={g.id}>{g.nama}</option>
-                      ))}
-                    </select>
+                    />
                     {errorsPilihan.user_id && <p className="text-red-600 text-xs font-semibold mt-0.5">{errorsPilihan.user_id}</p>}
                   </div>
                 </>
               )}
             </div>
 
-            <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
+            <div className="px-6 py-4 flex justify-end gap-2.5 rounded-b-2xl" style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
               <ActionButton variant="neutral" onClick={() => setShowModalPilihan(false)} disabled={submittingPilihan}>
                 Batal
               </ActionButton>

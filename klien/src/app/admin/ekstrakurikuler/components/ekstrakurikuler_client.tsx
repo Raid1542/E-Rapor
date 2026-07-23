@@ -23,6 +23,13 @@
  *     ke bawah dengan tinggi maksimum + scroll. Secara fungsi tetap sama
  *     persis — hanya mengubah tampilan/posisi panel opsi, bukan cara data
  *     pembina_id disimpan atau divalidasi.
+ *   - 🩹 FIX 2: Tabel data ekstrakurikuler sebelumnya memakai <table> native
+ *     tanpa lebar kolom eksplisit yang sama antara header dan body, sehingga
+ *     kolom header (gradient oranye) tidak sejajar dengan isi baris —
+ *     terutama kolom Aksi yang "menggantung" jauh ke kanan dengan banyak
+ *     ruang kosong. Diganti dengan tabel berbasis CSS grid (GRID_COLS_EKSKUL)
+ *     yang dipakai identik oleh header maupun setiap baris, sama seperti pola
+ *     di Data Guru/Admin/Siswa, sehingga kolom selalu sejajar dan rapi.
  */
 
 'use client';
@@ -90,6 +97,10 @@ const ACCENT_DARK = '#c95b08';
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
+/* Kolom grid tabel — dipakai identik oleh header dan setiap baris agar
+   selalu sejajar (pola sama seperti Data Guru/Admin/Siswa). */
+const GRID_COLS_EKSKUL = 'minmax(56px,0.5fr) minmax(200px,2.2fr) minmax(160px,1.6fr) minmax(130px,1.1fr) minmax(280px,2.4fr)';
+
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
@@ -131,13 +142,26 @@ const GlobalStyles = () => (
     .btn-action:hover  { filter: brightness(1.04); }
     .btn-action:active { filter: brightness(0.98); }
 
+    .dg-shimmer {
+        background: linear-gradient(90deg, #f7f7f7 0%, #efefef 50%, #f7f7f7 100%);
+        background-size: 800px 100%;
+        animation: dg-shimmer-move 1.3s ease-in-out infinite;
+    }
+    @keyframes dg-shimmer-move { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #f0c896; border-radius: 10px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #e8a865; }
+    .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #f0c896 transparent; }
+
     button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
         outline: 2.5px solid #f5a623;
         outline-offset: 2px;
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .btn-action, .card-flat, .row-hover {
+        .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .btn-action, .card-flat, .row-hover, .dg-shimmer {
             animation: none !important;
             transition: none !important;
         }
@@ -368,8 +392,8 @@ const PembinaDropdown = ({
 
       {open && (
         <div
-          className="absolute left-0 right-0 top-full mt-1.5 z-30 rounded-xl bg-white overflow-y-auto dg-scaleIn"
-          style={{ ...CARD_STYLE, boxShadow: '0 12px 28px rgba(0,0,0,0.12)', maxHeight: '230px' }}
+          className="absolute left-0 right-0 top-full mt-1.5 z-30 rounded-xl bg-white overflow-y-auto dg-scaleIn scrollbar-thin"
+          style={{ ...CARD_STYLE, boxShadow: '0 12px 28px rgba(0,0,0,0.12)', maxHeight: '400px' }}
         >
           <button
             type="button"
@@ -868,8 +892,8 @@ export default function DataEkstrakurikulerPage() {
         </p>
       </div>
 
-      <div className="card-flat bg-white rounded-2xl overflow-hidden max-w-2xl mx-auto anim-in d2" style={CARD_STYLE}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+      <div className="card-flat bg-white rounded-2xl max-w-2xl mx-auto anim-in d2" style={CARD_STYLE}>
+        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
           <h2 className="text-base font-bold text-white">
             {isEdit ? 'Edit Ekstrakurikuler' : 'Tambah Ekstrakurikuler'}
           </h2>
@@ -913,7 +937,7 @@ export default function DataEkstrakurikulerPage() {
           </div>
         </div>
 
-        <div className="px-6 py-4 flex flex-col sm:flex-row justify-end gap-2.5" style={{ borderTop: '1px solid #f0e0d0', background: '#fafafa' }}>
+        <div className="px-6 py-4 flex flex-col sm:flex-row justify-end gap-2.5 rounded-b-2xl" style={{ borderTop: '1px solid #f0e0d0', background: '#fafafa' }}>
           <ActionButton variant="neutral" onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>
             Batal
           </ActionButton>
@@ -1178,7 +1202,10 @@ export default function DataEkstrakurikulerPage() {
           </div>
 
           {/* ====================================================================
-              CARD 3: Tabel data ekstrakurikuler
+              CARD 3: Tabel data ekstrakurikuler — berbasis CSS grid, kolom
+              header & body memakai GRID_COLS_EKSKUL yang identik sehingga
+              selalu sejajar (memperbaiki tabel native yang sebelumnya renggang
+              tidak rata pada kolom Aksi).
           ==================================================================== */}
           <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
             <div className="px-4 sm:px-5 py-2.5" style={{ borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
@@ -1188,74 +1215,87 @@ export default function DataEkstrakurikulerPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-sm border-collapse">
-                <thead>
-                  <tr style={{ background: BRAND_GRADIENT }}>
-                    {['No.', 'Nama Ekstrakurikuler', 'Pembina', 'Jumlah Siswa', 'Aksi'].map(h => (
-                      <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                          Memuat data...
+              <div style={{ width: '100%', minWidth: '850px' }}>
+                {/* Header */}
+                <div className="grid" style={{ gridTemplateColumns: GRID_COLS_EKSKUL, background: BRAND_GRADIENT }}>
+                  <div className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
+                  <div className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama Ekstrakurikuler</div>
+                  <div className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Pembina</div>
+                  <div className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Jumlah Siswa</div>
+                  <div className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
+                </div>
+
+                {/* Body */}
+                {loading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS_EKSKUL, borderColor: '#f0f0f0' }}>
+                      {Array.from({ length: 5 }).map((__, j) => (
+                        <div key={j} className="px-4 py-4 flex items-center justify-center">
+                          <div className="dg-shimmer h-4 rounded w-full" style={{ maxWidth: j === 1 ? '85%' : '60%' }} />
                         </div>
-                      </td>
-                    </tr>
-                  ) : currentEkskul.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                        {searchQuery ? 'Tidak ada data yang cocok' : 'Belum ada data ekstrakurikuler'}
-                      </td>
-                    </tr>
-                  ) : (
-                    currentEkskul.map((ekskul, index) => (
-                      <tr
-                        key={ekskul.id_ekskul}
-                        className="row-hover row-in transition-colors"
-                        style={{ borderBottom: '1px solid #f0f0f0', background: '#fff', animationDelay: `${Math.min(index, 8) * 0.03}s` }}
-                        onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
-                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                      >
-                        <td className="px-5 py-3.5 text-center text-gray-400">{startIndex + index + 1}</td>
-                        <td className="px-5 py-3.5 font-bold text-gray-900">{ekskul.nama_ekskul}</td>
-                        <td className="px-5 py-3.5 text-gray-700">
-                          {ekskul.nama_pembina ? ekskul.nama_pembina : (
-                            <span className="text-gray-400 italic text-xs">Belum ditetapkan</span>
+                      ))}
+                    </div>
+                  ))
+                ) : currentEkskul.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 text-sm">
+                    {searchQuery ? 'Tidak ada data yang cocok' : 'Belum ada data ekstrakurikuler'}
+                  </div>
+                ) : (
+                  currentEkskul.map((ekskul, index) => (
+                    <div
+                      key={ekskul.id_ekskul}
+                      className="grid row-in row-hover border-b transition-colors"
+                      style={{
+                        gridTemplateColumns: GRID_COLS_EKSKUL,
+                        borderColor: '#f0f0f0',
+                        background: '#fff',
+                        animationDelay: `${Math.min(index, 8) * 0.03}s`,
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    >
+                      <div className="px-4 py-3.5 flex items-center justify-center text-center text-gray-400">{startIndex + index + 1}</div>
+
+                      <div className="px-4 py-3.5 flex items-center overflow-hidden">
+                        <p className="font-bold text-gray-900 truncate" title={ekskul.nama_ekskul}>{ekskul.nama_ekskul}</p>
+                      </div>
+
+                      <div className="px-4 py-3.5 flex items-center overflow-hidden">
+                        {ekskul.nama_pembina ? (
+                          <p className="text-gray-700 truncate" title={ekskul.nama_pembina}>{ekskul.nama_pembina}</p>
+                        ) : (
+                          <span className="text-gray-400 italic text-xs">Belum ditetapkan</span>
+                        )}
+                      </div>
+
+                      <div className="px-4 py-3.5 flex items-center justify-center">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap"
+                          style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                          {ekskul.jumlah_siswa || 0} siswa
+                        </span>
+                      </div>
+
+                      <div className="px-4 py-3.5 flex items-center justify-center">
+                        <div className="flex justify-center flex-wrap gap-1.5">
+                          <ActionButton size="sm" variant="info" onClick={() => handleLihatPeserta(ekskul)} title="Lihat siswa">
+                            <Users size={13} /> Lihat Siswa
+                          </ActionButton>
+                          {isSemesterActive && (
+                            <>
+                              <ActionButton size="sm" variant="warning" onClick={() => handleEdit(ekskul)} title="Edit data">
+                                <Pencil size={13} /> Edit
+                              </ActionButton>
+                              <ActionButton size="sm" variant="danger" onClick={() => handleDelete(ekskul.id_ekskul, ekskul.nama_ekskul)} title="Hapus data">
+                                <Trash2 size={13} /> Hapus
+                              </ActionButton>
+                            </>
                           )}
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
-                            style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-                            {ekskul.jumlah_siswa || 0} siswa
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                          <div className="flex justify-center gap-1.5">
-                            <ActionButton size="sm" variant="info" onClick={() => handleLihatPeserta(ekskul)} title="Lihat siswa">
-                              <Users size={13} /> Lihat Siswa
-                            </ActionButton>
-                            {isSemesterActive && (
-                              <>
-                                <ActionButton size="sm" variant="warning" onClick={() => handleEdit(ekskul)} title="Edit data">
-                                  <Pencil size={13} /> Edit
-                                </ActionButton>
-                                <ActionButton size="sm" variant="danger" onClick={() => handleDelete(ekskul.id_ekskul, ekskul.nama_ekskul)} title="Hapus data">
-                                  <Trash2 size={13} /> Hapus
-                                </ActionButton>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-gray-200" style={{ background: '#fafafa' }}>

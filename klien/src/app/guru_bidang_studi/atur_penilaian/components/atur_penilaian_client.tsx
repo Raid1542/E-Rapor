@@ -15,6 +15,16 @@
  *   ✅ REDESIGN: Modal konfirmasi simpan tidak lagi tampil seperti peringatan (ikon & warna disesuaikan)
  *   ✅ REDESIGN: Animasi diperhalus (fade/scale lebih lembut, transisi lebih konsisten)
  *   - Semua logika bisnis (state, validasi, pemanggilan API) TIDAK diubah
+ * UPDATE 2 (🎨 RESTYLE — konsistensi design system):
+ *   Disamakan penuh dengan Data Guru/Admin/Siswa/Dashboard/Backup&Restore/
+ *   Data Ekstrakurikuler: token BRAND_GRADIENT/ACCENT/ACCENT_DARK, kartu abu
+ *   netral (#f6f7f9 / border #ececec), sistem ActionButton (primary/info/
+ *   warning/neutral/danger), tabel Kategori Akademik diubah ke grid kolom
+ *   sejajar (pola sama seperti tabel Data Guru/Admin/Siswa/Ekstrakurikuler),
+ *   tab switcher & tombol simpan/edit warnanya disamakan dengan konvensi
+ *   halaman lain (Simpan = oranye/primary, Edit = kuning/warning, Tambah
+ *   Baris = biru/info, Hapus = merah/danger). TIDAK ADA PERUBAHAN LOGIKA:
+ *   seluruh state, effect, handler, dan endpoint API tetap identik.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -33,37 +43,36 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 // ====== KONSTANTA API ======
 const API = 'http://localhost:5000/api/guru-bidang-studi';
 
-// ====== DESIGN TOKENS (soft, muted orange) ======
-const THEME = {
-    colors: {
-        primary: '#B6500A',
-        primarySoft: '#E8690A',
-        primaryLight: '#FBE3C6',
-        background: '#FDFBF9',
-        surface: '#FFFFFF',
-        border: '#F0DDC0',
-        text: {
-            primary: '#2B241D',
-            secondary: '#6B5D50',
-            muted: '#A79683',
-        },
-        success: { base: '#3F9463', hover: '#357F54', soft: '#EAF6EF', text: '#276B45', border: '#BEE3CD' },
-        danger: { base: '#D6564F', hover: '#BE4640', soft: '#FCECEB', text: '#9C332D', border: '#F3C4C0' },
-        neutral: { base: '#6B7280', hover: '#565D68', soft: '#F3F3F1', text: '#4B4640', border: '#E1DCD3' },
-        warning: { base: '#C98A2E', hover: '#AD7625', soft: '#FBF1DD', text: '#8A5A14', border: '#EDD6A6' },
-        info: { base: '#3E8AA6', hover: '#33718A', soft: '#E9F3F6', text: '#215C71', border: '#BEDCE6' },
-        slate: { base: '#5B6472', hover: '#49515C', soft: '#F0F1F3', text: '#3A4048', border: '#D9DDE2' },
-    },
-    gradients: {
-        primary: 'linear-gradient(135deg, #B6500A 0%, #E8690A 100%)',
-        header: 'linear-gradient(120deg, #B6500A 0%, #E8690A 45%, #F5A623 100%)',
-    },
-    shadows: {
-        sm: '0 1px 2px rgba(120,70,20,0.05)',
-        md: '0 6px 18px rgba(120,70,20,0.08)',
-        lift: '0 10px 28px rgba(120,70,20,0.12)',
-    },
+// ====== DESIGN TOKENS — disamakan penuh dengan Data Guru/Admin/Siswa/
+// Dashboard/Backup&Restore/Data Ekstrakurikuler. ======
+
+const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
+
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+
+const labelCls = "block text-sm font-bold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+const inputCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400";
+
+/* Palet warna semantik untuk banner/badge (bukan tombol) — dipakai konsisten
+   dengan warna yang sudah ada di halaman lain (info biru, sukses hijau,
+   peringatan amber, bahaya merah, netral abu, aksen oranye lembut). */
+const COLORS = {
+    success: { bg: '#dcfce7', text: '#166534', border: '#86efac' },
+    danger: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
+    warning: { bg: '#fef9c3', text: '#92400e', border: '#fde68a' },
+    info: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+    neutral: { bg: '#f3f4f6', text: '#4b5563', border: '#d1d5db' },
+    accent: { bg: '#fff5eb', text: ACCENT_DARK, border: '#fde0c8' },
 };
+
+/* Kolom grid tabel Kategori Akademik — header & body memakai lebar identik
+   (pola sama seperti tabel Data Guru/Admin/Siswa/Ekstrakurikuler). */
+const GRID_COLS_KATEGORI = 'minmax(56px,0.6fr) minmax(160px,1.4fr) minmax(220px,2.6fr)';
 
 // ====== HELPER: Parse Error ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
@@ -83,13 +92,12 @@ const parseBackendError = async (res: Response): Promise<{ message: string; code
 };
 
 // ====== TYPES ======
-type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
+type ModalType = 'success' | 'error' | 'warning' | 'network';
 
 interface ModalConfig {
     type: ModalType;
     title: string;
     message: string;
-    onConfirm?: () => void;
 }
 
 interface MapelItem {
@@ -136,122 +144,106 @@ interface BatchKategoriItem {
     isNew?: boolean;
 }
 
-// ====== GLOBAL STYLES ======
+// ====== GLOBAL STYLES — identik dengan Data Guru/Admin/Siswa/Ekstrakurikuler ======
 const GlobalStyles = () => (
     <style jsx global>{`
+        @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .dg-fadeIn  { animation: dg-fadeIn  0.18s ease; }
+        .dg-scaleIn { animation: dg-scaleIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+        .dg-pulse   { animation: dg-pulse   0.6s ease 0.1s; }
+
         @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0);    }
         }
-        @keyframes scaleIn {
-            from { opacity: 0; transform: scale(0.95) translateY(8px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+        .anim-in { animation: fadeInUp 0.4s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.03s; }
+        .d2 { animation-delay: 0.07s; }
+        .d3 { animation-delay: 0.11s; }
+        .row-in { animation: fadeInUp 0.28s ease forwards; opacity: 0; }
+
+        .card-flat { transition: box-shadow 0.2s ease; }
+        .card-flat:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+        .row-hover { position: relative; transition: background-color 0.15s ease; }
+        .row-hover::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+            background: ${BRAND_GRADIENT}; transform: scaleY(0); transition: transform 0.16s ease;
         }
-        @keyframes softPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.035); }
+        .row-hover:hover::before { transform: scaleY(1); }
+
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action:hover  { filter: brightness(1.04); }
+        .btn-action:active { filter: brightness(0.98); }
+
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+            outline: 2.5px solid #f5a623;
+            outline-offset: 2px;
         }
-        @keyframes overlayIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes iconPop {
-            0% { opacity: 0; transform: scale(0.5) rotate(-8deg); }
-            60% { opacity: 1; transform: scale(1.08) rotate(2deg); }
-            100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        }
-        @keyframes rowIn {
-            from { opacity: 0; transform: translateX(-6px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes sheen {
-            from { background-position: -150% 0; }
-            to { background-position: 250% 0; }
-        }
-        .animate-fade-in-up {
-            animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-        }
-        .delay-1 { animation-delay: 0.06s; }
-        .delay-2 { animation-delay: 0.12s; }
-        .delay-3 { animation-delay: 0.18s; }
-        .scale-in { animation: scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
-        .overlay-in { animation: overlayIn 0.18s ease; }
-        .soft-pulse { animation: softPulse 0.7s ease; }
-        .icon-pop { animation: iconPop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards; }
-        .row-in { animation: rowIn 0.35s cubic-bezier(0.16,1,0.3,1) forwards; opacity: 0; }
-        .header-sheen {
-            position: relative;
-            overflow: hidden;
-        }
-        .header-sheen::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%);
-            background-size: 250% 100%;
-            animation: sheen 1.4s ease-out 0.3s 1;
-        }
-        .hover-lift { transition: box-shadow 0.2s ease, transform 0.2s ease; }
-        .hover-lift:hover { transform: translateY(-2px) scale(1.015); }
-        .hover-lift:active { transform: translateY(0) scale(0.99); }
-        .transition-smooth { transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease; }
-        .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-            background: #ecd3b1;
-            border-radius: 10px;
-        }
-        select:focus, input:focus {
-            outline: none;
+
+        @media (prefers-reduced-motion: reduce) {
+            .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .btn-action, .card-flat, .row-hover {
+                animation: none !important;
+                transition: none !important;
+            }
         }
     `}</style>
 );
 
-// ====== NOTIF MODAL ======
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btnBg: string; btnHover: string; btnLabel: string }> = {
-    success: { iconBg: 'bg-emerald-50', ring: 'ring-emerald-100', icon: <CheckCircle2 size={38} className="text-emerald-500" />, btnBg: THEME.colors.success.base, btnHover: THEME.colors.success.hover, btnLabel: 'Ok' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btnBg: THEME.colors.danger.base, btnHover: THEME.colors.danger.hover, btnLabel: 'Ok' },
-    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btnBg: THEME.colors.warning.base, btnHover: THEME.colors.warning.hover, btnLabel: 'Mengerti' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btnBg: THEME.colors.slate.base, btnHover: THEME.colors.slate.hover, btnLabel: 'Ok' },
-    confirm: { iconBg: 'bg-emerald-50', ring: 'ring-emerald-100', icon: <CheckCircle2 size={38} className="text-emerald-500" />, btnBg: THEME.colors.success.base, btnHover: THEME.colors.success.hover, btnLabel: 'Ya, Simpan' },
+// ====== SISTEM TOMBOL AKSI — identik dengan Data Guru/Admin/Siswa/Ekstrakurikuler ======
+
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'danger';
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
+    info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
+    warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
+    neutral: { background: '#fff', color: '#4b5563', border: '1.5px solid #e5e7eb' },
+    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
+    danger: { background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca' },
+};
+
+const ActionButton = ({
+    onClick, children, variant = 'neutral', disabled = false, fullWidth = false, title,
+}: {
+    onClick?: () => void; children: React.ReactNode; variant?: BtnVariant;
+    disabled?: boolean; fullWidth?: boolean; title?: string;
+}) => (
+    <button
+        type="button"
+        title={title}
+        onClick={onClick}
+        disabled={disabled}
+        className={`btn-action inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={VARIANT_BASE[variant]}
+    >
+        {children}
+    </button>
+);
+
+// ====== NOTIF MODAL — identik dengan Data Guru/Admin/Siswa ======
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
-    const isConfirm = modal.type === 'confirm';
     return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 overlay-in">
-            <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 scale-in">
-                {!isConfirm && (
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-smooth"><X size={18} /></button>
-                )}
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} soft-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 dg-fadeIn">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>{s.icon}</div>
+                <div className="text-center w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
                 </div>
-                {isConfirm ? (
-                    <div className="flex gap-3 w-full">
-                        <button onClick={onClose}
-                            className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-smooth"
-                            style={{ borderColor: THEME.colors.neutral.border, color: THEME.colors.neutral.text, background: '#fff' }}
-                        >Batal</button>
-                        <button onClick={() => { modal.onConfirm?.(); onClose(); }}
-                            className="flex-1 text-white font-semibold py-3 rounded-xl transition-smooth text-sm"
-                            style={{ background: s.btnBg }}
-                            onMouseEnter={e => (e.currentTarget.style.background = s.btnHover)}
-                            onMouseLeave={e => (e.currentTarget.style.background = s.btnBg)}
-                        >{s.btnLabel}</button>
-                    </div>
-                ) : (
-                    <button onClick={onClose}
-                        className="w-full text-white font-semibold py-3 rounded-xl transition-smooth"
-                        style={{ background: s.btnBg }}
-                        onMouseEnter={e => (e.currentTarget.style.background = s.btnHover)}
-                        onMouseLeave={e => (e.currentTarget.style.background = s.btnBg)}
-                    >{s.btnLabel}</button>
-                )}
+                <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>OK, Mengerti</button>
             </div>
         </div>
     );
@@ -264,24 +256,24 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     if (gaps.length === 0) return null;
 
     return (
-        <div className="mb-5 pl-4 pr-4 py-4 rounded-xl flex items-start gap-3 animate-fade-in-up border-l-4"
-            style={{ background: THEME.colors.warning.soft, borderColor: THEME.colors.warning.base }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#F4DFAF' }}>
-                <AlertTriangle size={18} style={{ color: THEME.colors.warning.hover }} />
+        <div className="mb-5 pl-4 pr-4 py-4 rounded-xl flex items-start gap-3 anim-in"
+            style={{ background: COLORS.warning.bg, border: `1px solid ${COLORS.warning.border}` }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fde68a' }}>
+                <AlertTriangle size={18} style={{ color: COLORS.warning.text }} />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-bold mb-2" style={{ color: THEME.colors.warning.text }}>Range Nilai 0–100 Belum Lengkap</p>
+                <p className="text-sm font-bold mb-2" style={{ color: COLORS.warning.text }}>Range Nilai 0–100 Belum Lengkap</p>
                 {gaps.length === 1 ? (
-                    <p className="text-xs" style={{ color: THEME.colors.warning.hover }}>
+                    <p className="text-xs" style={{ color: COLORS.warning.text }}>
                         Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <strong className="px-2 py-0.5 rounded bg-amber-200/60">{gaps[0].gap}</strong>.
                     </p>
                 ) : (
-                    <div className="text-xs" style={{ color: THEME.colors.warning.hover }}>
+                    <div className="text-xs" style={{ color: COLORS.warning.text }}>
                         <p className="mb-2">Ditemukan {gaps.length} gap:</p>
                         <ul className="space-y-1 ml-4">
                             {gaps.map((g, i) => (
                                 <li key={i} className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: THEME.colors.warning.base }}></span>
+                                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: COLORS.warning.text }}></span>
                                     <span><strong>{g.aspek}:</strong> gap pada <strong className="px-1.5 py-0.5 rounded bg-amber-200/60">{g.gap}</strong></span>
                                 </li>
                             ))}
@@ -887,11 +879,11 @@ export default function AturPenilaianGBSClient() {
     // ====== LOADING STATE ======
     if (loading) {
         return (
-            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
+            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
-                <div className="text-center overlay-in">
-                    <div className="w-11 h-11 rounded-full border-[3px] mx-auto mb-4 animate-spin" style={{ borderColor: THEME.colors.primaryLight, borderTopColor: THEME.colors.primarySoft }} />
-                    <p className="text-sm font-medium" style={{ color: THEME.colors.text.secondary }}>Memuat data...</p>
+                <div className="text-center dg-fadeIn">
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-100 border-t-orange-500 mx-auto mb-4 animate-spin" />
+                    <p className="text-sm font-semibold" style={{ color: ACCENT_DARK }}>Memuat data...</p>
                 </div>
             </div>
         );
@@ -899,12 +891,12 @@ export default function AturPenilaianGBSClient() {
 
     if (isNotAssigned) {
         return (
-            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
+            <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overlay-in">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 scale-in">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
                         <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100">
                             <AlertCircle size={44} className="text-red-500" />
                         </div>
@@ -912,11 +904,9 @@ export default function AturPenilaianGBSClient() {
                             <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
                             <p className="text-sm text-gray-600">Anda belum ditugaskan mengajar mata pelajaran.</p>
                         </div>
-                        <button onClick={handleLogout}
-                            className="w-full py-3 rounded-xl text-sm font-bold border transition-smooth flex items-center justify-center gap-2"
-                            style={{ borderColor: THEME.colors.neutral.border, color: THEME.colors.neutral.text, background: THEME.colors.neutral.soft }}>
+                        <ActionButton variant="neutral" fullWidth onClick={handleLogout}>
                             <LogOut size={17} /> Logout
-                        </button>
+                        </ActionButton>
                     </div>
                 </div>
             </div>
@@ -925,38 +915,30 @@ export default function AturPenilaianGBSClient() {
 
     // ====== RENDER ======
     return (
-        <div className="flex-1 p-6 min-h-screen" style={{ background: THEME.colors.background }}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* ====== HEADER ====== */}
-            <div className="mb-6 flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 icon-pop header-sheen" style={{ background: THEME.gradients.primary, boxShadow: `0 6px 16px rgba(232,105,10,0.35)` }}>
-                    <ClipboardList size={20} className="text-white relative z-10" />
-                </div>
-                <div className="animate-fade-in-up delay-1">
-                    <h1 className="text-xl font-bold" style={{ color: THEME.colors.text.primary }}>Atur Penilaian</h1>
-                    <p className="text-sm" style={{ color: THEME.colors.text.muted }}>Kelola kategori akademik dan bobot penilaian per mata pelajaran</p>
-                </div>
+            {/* ====== HEADER — teks polos, konsisten dengan Data Guru/Admin/Siswa ====== */}
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Atur Penilaian</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola kategori akademik dan bobot penilaian per mata pelajaran</p>
             </div>
 
-            {/* ====== STATUS BANNER (accent-border card) ====== */}
+            {/* ====== STATUS BANNER ====== */}
             {isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3.5 rounded-xl bg-white border-l-4 animate-fade-in-up"
+                <div className="card-flat mb-4 flex items-start gap-3 px-4 py-3.5 rounded-2xl bg-white anim-in d2"
                     style={{
-                        borderColor: isPeriodLocked ? THEME.colors.slate.base : THEME.colors.warning.base,
-                        border: `1px solid ${THEME.colors.border}`,
-                        borderLeftWidth: '4px',
-                        borderLeftColor: isPeriodLocked ? THEME.colors.slate.base : THEME.colors.warning.base,
-                        boxShadow: THEME.shadows.sm,
+                        ...CARD_STYLE,
+                        borderLeft: `4px solid ${isPeriodLocked ? COLORS.neutral.text : COLORS.warning.text}`,
                     }}>
-                    <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: isPeriodLocked ? THEME.colors.slate.base : THEME.colors.warning.base }} />
+                    <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: isPeriodLocked ? COLORS.neutral.text : COLORS.warning.text }} />
                     <div className="flex-1">
-                        <p className="text-sm font-bold mb-1" style={{ color: isPeriodLocked ? THEME.colors.slate.text : THEME.colors.warning.text }}>
+                        <p className="text-sm font-bold mb-1" style={{ color: isPeriodLocked ? COLORS.neutral.text : COLORS.warning.text }}>
                             {isPeriodLocked ? 'Periode Penilaian Selesai' : 'Periode Penilaian Belum Aktif'}
                         </p>
-                        <p className="text-xs" style={{ color: THEME.colors.text.secondary }}>
+                        <p className="text-xs text-gray-500">
                             {isPeriodLocked
                                 ? 'Konfigurasi kategori dan bobot sudah dikunci dan tidak dapat diubah.'
                                 : 'Periode penilaian belum aktif. Silakan hubungi admin.'}
@@ -966,25 +948,26 @@ export default function AturPenilaianGBSClient() {
             )}
 
             {/* ====== MAIN CARD ====== */}
-            <div className="bg-white rounded-2xl overflow-hidden animate-fade-in-up delay-2" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
-                {/* Tabs — segmented control */}
-                <div className="px-6 py-4 border-b" style={{ borderColor: THEME.colors.border, background: THEME.colors.surface }}>
-                    <div className="inline-flex p-1 rounded-xl gap-1" style={{ background: THEME.colors.primaryLight }}>
+            <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+                {/* Tabs — segmented pill, warna aktif BRAND_GRADIENT, sama gaya dengan
+                    tab switcher Backup & Restore */}
+                <div className="px-4 sm:px-6 py-4 border-b" style={{ borderColor: '#f0f0f0' }}>
+                    <div className="inline-flex p-1 rounded-xl gap-1" style={{ background: '#f6f7f9', border: '1px solid #ececec' }}>
                         <button
                             onClick={() => handleTabChange('akademik')}
-                            className="px-5 py-2 rounded-lg text-sm font-semibold transition-smooth flex items-center gap-2"
+                            className="btn-action px-4 sm:px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                             style={activeTab === 'akademik'
-                                ? { background: '#fff', color: THEME.colors.primary, boxShadow: THEME.shadows.sm }
-                                : { background: 'transparent', color: THEME.colors.text.muted }}
+                                ? { background: BRAND_GRADIENT, color: '#fff', boxShadow: '0 2px 8px rgba(232,105,10,0.25)' }
+                                : { background: 'transparent', color: ACCENT_DARK }}
                         >
                             <FileText size={15} /> Kategori Akademik
                         </button>
                         <button
                             onClick={() => handleTabChange('bobot')}
-                            className="px-5 py-2 rounded-lg text-sm font-semibold transition-smooth flex items-center gap-2"
+                            className="btn-action px-4 sm:px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
                             style={activeTab === 'bobot'
-                                ? { background: '#fff', color: THEME.colors.primary, boxShadow: THEME.shadows.sm }
-                                : { background: 'transparent', color: THEME.colors.text.muted }}
+                                ? { background: BRAND_GRADIENT, color: '#fff', boxShadow: '0 2px 8px rgba(232,105,10,0.25)' }
+                                : { background: 'transparent', color: ACCENT_DARK }}
                         >
                             <SlidersHorizontal size={15} /> Bobot Penilaian
                         </button>
@@ -992,14 +975,14 @@ export default function AturPenilaianGBSClient() {
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-6" key={activeTab} style={{ animation: 'fadeInUp 0.35s cubic-bezier(0.16,1,0.3,1)' }}>
+                <div className="p-4 sm:p-6" key={activeTab}>
                     {/* ====== TAB: AKADEMIK ====== */}
                     {activeTab === 'akademik' && (
                         <div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-xl" style={{ background: '#FBF7F2', border: `1px solid ${THEME.colors.border}` }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
                                 <div>
-                                    <label className="flex items-center gap-1.5 text-sm font-semibold mb-1.5" style={{ color: THEME.colors.text.secondary }}>
-                                        <GraduationCap size={14} style={{ color: THEME.colors.primarySoft }} /> Mata Pelajaran
+                                    <label className={labelCls} style={labelColor}>
+                                        <span className="inline-flex items-center gap-1.5"><GraduationCap size={14} style={{ color: ACCENT }} /> Mata Pelajaran</span>
                                     </label>
                                     <select
                                         value={selectedMapelAkademik || ''}
@@ -1007,10 +990,7 @@ export default function AturPenilaianGBSClient() {
                                             setSelectedMapelAkademik(e.target.value ? Number(e.target.value) : null);
                                             setSelectedKelasAkademik(null);
                                         }}
-                                        className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white transition-smooth focus:ring-2"
-                                        style={{ borderColor: THEME.colors.border, color: THEME.colors.text.primary }}
-                                        onFocus={e => e.currentTarget.style.borderColor = THEME.colors.primarySoft}
-                                        onBlur={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                                        className={inputCls}
                                     >
                                         <option value="">-- Pilih Mata Pelajaran --</option>
                                         {/* ✅ Tanpa filter 'pilihan' — semua mapel yang ditugaskan tampil */}
@@ -1022,16 +1002,13 @@ export default function AturPenilaianGBSClient() {
 
                                 {selectedMapelAkademik && kelasListAkademik.length > 0 && (
                                     <div>
-                                        <label className="flex items-center gap-1.5 text-sm font-semibold mb-1.5" style={{ color: THEME.colors.text.secondary }}>
-                                            <Users size={14} style={{ color: THEME.colors.primarySoft }} /> Kelas
+                                        <label className={labelCls} style={labelColor}>
+                                            <span className="inline-flex items-center gap-1.5"><Users size={14} style={{ color: ACCENT }} /> Kelas</span>
                                         </label>
                                         <select
                                             value={selectedKelasAkademik || ''}
                                             onChange={(e) => setSelectedKelasAkademik(e.target.value ? Number(e.target.value) : null)}
-                                            className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white transition-smooth focus:ring-2"
-                                            style={{ borderColor: THEME.colors.border, color: THEME.colors.text.primary }}
-                                            onFocus={e => e.currentTarget.style.borderColor = THEME.colors.primarySoft}
-                                            onBlur={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                                            className={inputCls}
                                         >
                                             <option value="">-- Pilih Kelas --</option>
                                             {kelasListAkademik.map((kelas) => (
@@ -1046,82 +1023,76 @@ export default function AturPenilaianGBSClient() {
                                 <>
                                     <CoverageWarning coverage={coverageInfo} />
 
-                                    <div className="flex justify-between items-center mb-4 pb-4" style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <div className="flex justify-between items-center mb-4 pb-4 border-b" style={{ borderColor: '#f0f0f0' }}>
                                         <div className="flex items-center gap-2">
-                                            <FileText size={14} style={{ color: THEME.colors.text.muted }} />
-                                            <p className="text-xs" style={{ color: THEME.colors.text.secondary }}>
+                                            <FileText size={14} className="text-gray-400" />
+                                            <p className="text-xs text-gray-500">
                                                 Menampilkan <strong>{kategoriList.length}</strong> kategori (urut dari nilai tertinggi)
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={openBatchEdit}
+                                        <ActionButton
+                                            variant={isReadOnly ? 'neutral' : 'warning'}
                                             disabled={isReadOnly}
-                                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-smooth hover-lift"
-                                            style={{
-                                                background: isReadOnly ? THEME.colors.neutral.base : THEME.gradients.primary,
-                                                boxShadow: isReadOnly ? 'none' : '0 6px 16px rgba(232,105,10,0.35)'
-                                            }}
+                                            onClick={openBatchEdit}
                                         >
                                             {isReadOnly ? (<><Lock size={16} /> Terkunci</>) : (<><Pencil size={16} /> Edit Semua</>)}
-                                        </button>
+                                        </ActionButton>
                                     </div>
 
-                                    <div className="overflow-x-auto scrollbar-thin rounded-xl" style={{ border: `1px solid ${THEME.colors.border}` }}>
-                                        <div className="min-w-[640px]">
-                                            <table className="w-full text-sm border-collapse">
-                                                <thead>
-                                                    <tr style={{ background: THEME.gradients.header }}>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap w-16">No.</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Range Nilai</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">Deskripsi</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {kategoriLoading ? (
-                                                        <tr>
-                                                            <td colSpan={3} className="py-12 text-center text-gray-400 text-sm">
-                                                                <div className="flex flex-col items-center gap-2">
-                                                                    <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: THEME.colors.primaryLight, borderTopColor: THEME.colors.primarySoft }} />
-                                                                    Memuat data...
+                                    {/* Tabel Kategori Akademik — grid kolom sejajar, pola sama dengan
+                                        Data Guru/Admin/Siswa/Ekstrakurikuler */}
+                                    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #ececec' }}>
+                                        <div className="overflow-x-auto">
+                                            <div style={{ width: '100%', minWidth: '480px' }}>
+                                                <div className="grid" style={{ gridTemplateColumns: GRID_COLS_KATEGORI, background: BRAND_GRADIENT }}>
+                                                    <div className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
+                                                    <div className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Range Nilai</div>
+                                                    <div className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Deskripsi</div>
+                                                </div>
+
+                                                {kategoriLoading ? (
+                                                    Array.from({ length: 3 }).map((_, i) => (
+                                                        <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS_KATEGORI, borderColor: '#f0f0f0' }}>
+                                                            {Array.from({ length: 3 }).map((__, j) => (
+                                                                <div key={j} className="px-4 py-4 flex items-center justify-center">
+                                                                    <div className="h-4 rounded w-full bg-gray-100 animate-pulse" style={{ maxWidth: j === 2 ? '85%' : '55%' }} />
                                                                 </div>
-                                                            </td>
-                                                        </tr>
-                                                    ) : kategoriList.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan={3} className="py-12 text-center text-gray-400 text-sm">Belum ada kategori</td>
-                                                        </tr>
-                                                    ) : (
-                                                        kategoriList
-                                                            .slice()
-                                                            .sort((a, b) => b.max_nilai - a.max_nilai)
-                                                            .map((kategori, index) => (
-                                                                <tr key={kategori.id} className="transition-smooth row-in"
-                                                                    style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: index % 2 === 0 ? '#fff' : '#FBF7F2', animationDelay: `${Math.min(index, 8) * 0.04}s` }}
-                                                                    onMouseEnter={e => (e.currentTarget.style.background = THEME.colors.primaryLight)}
-                                                                    onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#FBF7F2')}>
-                                                                    <td className="px-4 py-3 text-center text-gray-500 font-medium">{index + 1}</td>
-                                                                    <td className="px-4 py-3 text-center">
-                                                                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold"
-                                                                            style={{ background: THEME.colors.primaryLight, color: THEME.colors.primary, border: `1px solid ${THEME.colors.border}` }}>
-                                                                            {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-gray-700">{kategori.deskripsi}</td>
-                                                                </tr>
-                                                            ))
-                                                    )}
-                                                </tbody>
-                                            </table>
+                                                            ))}
+                                                        </div>
+                                                    ))
+                                                ) : kategoriList.length === 0 ? (
+                                                    <div className="py-12 text-center text-gray-400 text-sm">Belum ada kategori</div>
+                                                ) : (
+                                                    kategoriList
+                                                        .slice()
+                                                        .sort((a, b) => b.max_nilai - a.max_nilai)
+                                                        .map((kategori, index) => (
+                                                            <div key={kategori.id} className="grid row-in row-hover border-b transition-colors"
+                                                                style={{ gridTemplateColumns: GRID_COLS_KATEGORI, borderColor: '#f0f0f0', background: '#fff', animationDelay: `${Math.min(index, 8) * 0.04}s` }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                                <div className="px-4 py-3.5 flex items-center justify-center text-gray-400">{index + 1}</div>
+                                                                <div className="px-4 py-3.5 flex items-center justify-center">
+                                                                    <span className="inline-block px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap"
+                                                                        style={{ background: COLORS.accent.bg, color: COLORS.accent.text, border: `1px solid ${COLORS.accent.border}` }}>
+                                                                        {Math.floor(kategori.min_nilai)} – {Math.floor(kategori.max_nilai)}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="px-4 py-3.5 flex items-center text-gray-700 truncate" title={kategori.deskripsi}>{kategori.deskripsi}</div>
+                                                            </div>
+                                                        ))
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </>
                             ) : (
-                                <div className="py-12 text-center rounded-2xl" style={{ background: '#FBF7F2', border: `2px dashed ${THEME.colors.border}` }}>
-                                    <FileText size={56} className="mx-auto mb-4" style={{ color: THEME.colors.primarySoft, opacity: 0.6 }} />
-                                    <p className="text-base font-bold" style={{ color: THEME.colors.text.secondary }}>
+                                <div className="py-12 text-center rounded-2xl" style={{ background: '#fafafa', border: '2px dashed #e5e5e5' }}>
+                                    <FileText size={48} className="mx-auto mb-3 text-gray-300" />
+                                    <p className="text-sm font-bold text-gray-500">
                                         {!selectedMapelAkademik ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
                                     </p>
-                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>untuk melihat kategori penilaian</p>
+                                    <p className="text-xs mt-1 text-gray-400">untuk melihat kategori penilaian</p>
                                 </div>
                             )}
                         </div>
@@ -1130,10 +1101,10 @@ export default function AturPenilaianGBSClient() {
                     {/* ====== TAB: BOBOT ====== */}
                     {activeTab === 'bobot' && (
                         <div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-xl" style={{ background: '#FBF7F2', border: `1px solid ${THEME.colors.border}` }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
                                 <div>
-                                    <label className="flex items-center gap-1.5 text-sm font-semibold mb-1.5" style={{ color: THEME.colors.text.secondary }}>
-                                        <GraduationCap size={14} style={{ color: THEME.colors.primarySoft }} /> Mata Pelajaran
+                                    <label className={labelCls} style={labelColor}>
+                                        <span className="inline-flex items-center gap-1.5"><GraduationCap size={14} style={{ color: ACCENT }} /> Mata Pelajaran</span>
                                     </label>
                                     <select
                                         value={selectedMapelBobot || ''}
@@ -1141,10 +1112,7 @@ export default function AturPenilaianGBSClient() {
                                             setSelectedMapelBobot(e.target.value ? Number(e.target.value) : null);
                                             setSelectedKelasBobot(null);
                                         }}
-                                        className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white transition-smooth focus:ring-2"
-                                        style={{ borderColor: THEME.colors.border, color: THEME.colors.text.primary }}
-                                        onFocus={e => e.currentTarget.style.borderColor = THEME.colors.primarySoft}
-                                        onBlur={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                                        className={inputCls}
                                     >
                                         <option value="">-- Pilih Mata Pelajaran --</option>
                                         {mapelList.map((mapel) => (
@@ -1155,16 +1123,13 @@ export default function AturPenilaianGBSClient() {
 
                                 {selectedMapelBobot && kelasListBobot.length > 0 && (
                                     <div>
-                                        <label className="flex items-center gap-1.5 text-sm font-semibold mb-1.5" style={{ color: THEME.colors.text.secondary }}>
-                                            <Users size={14} style={{ color: THEME.colors.primarySoft }} /> Kelas
+                                        <label className={labelCls} style={labelColor}>
+                                            <span className="inline-flex items-center gap-1.5"><Users size={14} style={{ color: ACCENT }} /> Kelas</span>
                                         </label>
                                         <select
                                             value={selectedKelasBobot || ''}
                                             onChange={(e) => setSelectedKelasBobot(e.target.value ? Number(e.target.value) : null)}
-                                            className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white transition-smooth focus:ring-2"
-                                            style={{ borderColor: THEME.colors.border, color: THEME.colors.text.primary }}
-                                            onFocus={e => e.currentTarget.style.borderColor = THEME.colors.primarySoft}
-                                            onBlur={e => e.currentTarget.style.borderColor = THEME.colors.border}
+                                            className={inputCls}
                                         >
                                             <option value="">-- Pilih Kelas --</option>
                                             {kelasListBobot.map((kelas) => (
@@ -1179,16 +1144,16 @@ export default function AturPenilaianGBSClient() {
                                 bobotLoading ? (
                                     <div className="py-12 text-center">
                                         <div className="flex flex-col items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: THEME.colors.primaryLight, borderTopColor: THEME.colors.primarySoft }} />
+                                            <div className="w-8 h-8 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin" />
                                             <p className="text-sm text-gray-400">Memuat bobot...</p>
                                         </div>
                                     </div>
                                 ) : (
                                     <div>
                                         {isPTSActive && (
-                                            <div className="mb-4 p-3 rounded-xl flex items-center gap-3 border-l-4" style={{ background: THEME.colors.info.soft, borderColor: THEME.colors.info.base }}>
-                                                <Info size={18} style={{ color: THEME.colors.info.base, flexShrink: 0 }} />
-                                                <p className="text-sm" style={{ color: THEME.colors.info.text }}>
+                                            <div className="mb-4 p-3 rounded-xl flex items-center gap-3" style={{ background: COLORS.info.bg, border: `1px solid ${COLORS.info.border}` }}>
+                                                <Info size={18} style={{ color: COLORS.info.text, flexShrink: 0 }} />
+                                                <p className="text-sm" style={{ color: COLORS.info.text }}>
                                                     Periode <strong>PTS</strong> aktif — bobot otomatis <strong>PTS = 100%</strong>
                                                 </p>
                                             </div>
@@ -1202,10 +1167,10 @@ export default function AturPenilaianGBSClient() {
                                                 const isEditable = !isPTSActive && !isReadOnly;
 
                                                 return (
-                                                    <div key={bobot.komponen_id} className="flex items-center justify-between gap-4 p-4 rounded-xl transition-smooth"
-                                                        style={{ background: isEditable ? '#FBF7F2' : '#F7F7F6', border: `1px solid ${isEditable ? THEME.colors.border : '#E5E7EB'}` }}>
+                                                    <div key={bobot.komponen_id} className="flex items-center justify-between gap-4 p-4 rounded-xl transition-colors"
+                                                        style={{ background: isEditable ? '#fafafa' : '#f3f4f6', border: `1px solid ${isEditable ? '#ececec' : '#e5e7eb'}` }}>
                                                         <div className="flex-1">
-                                                            <span className="font-semibold text-sm" style={{ color: THEME.colors.text.secondary }}>{komponen?.nama_komponen || 'Komponen'}</span>
+                                                            <span className="font-bold text-sm text-gray-700">{komponen?.nama_komponen || 'Komponen'}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <input
@@ -1230,49 +1195,44 @@ export default function AturPenilaianGBSClient() {
                                                                 }}
                                                                 disabled={!isEditable}
                                                                 maxLength={5}
-                                                                className={`w-24 h-11 px-3 text-center font-bold rounded-xl border-2 transition-smooth focus:ring-2 ${isEditable ? 'bg-white text-gray-800' : 'bg-gray-100 text-gray-500 cursor-not-allowed'}`}
-                                                                style={{ borderColor: isEditable ? THEME.colors.border : '#E5E7EB' }}
+                                                                className={`w-24 h-11 px-3 text-center font-bold rounded-xl border-2 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 ${isEditable ? 'bg-white text-gray-800 border-gray-200' : 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'}`}
                                                                 readOnly={!isEditable}
                                                                 placeholder="0"
                                                             />
-                                                            <span className="text-base font-bold" style={{ color: THEME.colors.text.secondary }}>%</span>
+                                                            <span className="text-base font-bold text-gray-600">%</span>
                                                         </div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
 
-                                        <div className="p-4 rounded-xl mb-6 border-l-4" style={{ background: isBobotValid ? THEME.colors.success.soft : THEME.colors.warning.soft, borderColor: isBobotValid ? THEME.colors.success.base : THEME.colors.warning.base }}>
+                                        <div className="p-4 rounded-xl mb-6" style={{ background: isBobotValid ? COLORS.success.bg : COLORS.warning.bg, border: `1px solid ${isBobotValid ? COLORS.success.border : COLORS.warning.border}` }}>
                                             <div className="flex justify-between items-center">
-                                                <span className="font-bold text-sm" style={{ color: THEME.colors.text.secondary }}>Total Bobot:</span>
-                                                <span className="text-lg font-bold" style={{ color: isBobotValid ? THEME.colors.success.text : THEME.colors.warning.text }}>{totalBobot.toFixed(2)}%</span>
+                                                <span className="font-bold text-sm text-gray-700">Total Bobot:</span>
+                                                <span className="text-lg font-bold" style={{ color: isBobotValid ? COLORS.success.text : COLORS.warning.text }}>{totalBobot.toFixed(2)}%</span>
                                             </div>
                                         </div>
 
                                         {!isPTSActive && !isReadOnly && (
-                                            <div className="flex justify-end pt-4" style={{ borderTop: `1px solid ${THEME.colors.border}` }}>
-                                                <button onClick={openConfirmSaveBobot} disabled={isSavingBobot || !isBobotValid}
-                                                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-smooth hover-lift"
-                                                    style={{ background: THEME.colors.success.base, boxShadow: '0 6px 16px rgba(63,148,99,0.3)' }}
-                                                    onMouseEnter={(e) => { if (!isSavingBobot && isBobotValid) e.currentTarget.style.background = THEME.colors.success.hover; }}
-                                                    onMouseLeave={(e) => { if (!isSavingBobot && isBobotValid) e.currentTarget.style.background = THEME.colors.success.base; }}>
+                                            <div className="flex justify-end pt-4 border-t" style={{ borderColor: '#f0f0f0' }}>
+                                                <ActionButton variant="primary" disabled={isSavingBobot || !isBobotValid} onClick={openConfirmSaveBobot}>
                                                     {isSavingBobot ? (
                                                         <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Menyimpan...</>
                                                     ) : (
                                                         <><Save size={16} /> Simpan Bobot</>
                                                     )}
-                                                </button>
+                                                </ActionButton>
                                             </div>
                                         )}
                                     </div>
                                 )
                             ) : (
-                                <div className="py-12 text-center rounded-2xl" style={{ background: '#FBF7F2', border: `2px dashed ${THEME.colors.border}` }}>
-                                    <SlidersHorizontal size={56} className="mx-auto mb-4" style={{ color: THEME.colors.primarySoft, opacity: 0.6 }} />
-                                    <p className="text-base font-bold" style={{ color: THEME.colors.text.secondary }}>
+                                <div className="py-12 text-center rounded-2xl" style={{ background: '#fafafa', border: '2px dashed #e5e5e5' }}>
+                                    <SlidersHorizontal size={48} className="mx-auto mb-3 text-gray-300" />
+                                    <p className="text-sm font-bold text-gray-500">
                                         {!selectedMapelBobot ? 'Pilih Mata Pelajaran' : 'Pilih Kelas'}
                                     </p>
-                                    <p className="text-xs mt-1" style={{ color: THEME.colors.text.muted }}>untuk mengatur bobot penilaian</p>
+                                    <p className="text-xs mt-1 text-gray-400">untuk mengatur bobot penilaian</p>
                                 </div>
                             )}
                         </div>
@@ -1284,43 +1244,39 @@ export default function AturPenilaianGBSClient() {
             {showBatchEdit && (
                 <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeBatchEdit(); }}>
-                    <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${batchEditClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-                        style={{ border: `1px solid ${THEME.colors.border}` }}>
+                        style={CARD_STYLE}>
 
-                        <div className="flex items-center justify-between px-6 py-4" style={{ background: THEME.gradients.header }}>
+                        <div className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
                                     <FileText size={20} className="text-white" />
                                 </div>
                                 <div>
                                     <h2 className="text-base font-bold text-white">Edit Kategori Akademik</h2>
-                                    <p className="text-xs text-orange-50/90 mt-0.5">Kelola semua kategori sekaligus</p>
+                                    <p className="text-xs text-white/80 mt-0.5">Kelola semua kategori sekaligus</p>
                                 </div>
                             </div>
-                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-smooth" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
 
-                        <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
-                            <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2 border-l-4" style={{ background: THEME.colors.info.soft, borderColor: THEME.colors.info.base }}>
-                                    <Info size={16} style={{ color: THEME.colors.info.base }} className="mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs" style={{ color: THEME.colors.info.text }}>
+                        <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+                            <div className="p-4 sm:p-6 space-y-4">
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: COLORS.info.bg, border: `1px solid ${COLORS.info.border}` }}>
+                                    <Info size={16} style={{ color: COLORS.info.text }} className="mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs" style={{ color: COLORS.info.text }}>
                                         <strong>Tips:</strong> Isi semua kategori sekaligus. Pastikan range nilai 0-100 lengkap tanpa overlap dan minimal 3 poin per kategori.
                                     </p>
                                 </div>
 
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold" style={{ color: THEME.colors.text.secondary }}>Kategori ({batchKategori.length})</h3>
-                                    <button onClick={addBatchRow}
-                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-smooth"
-                                        style={{ background: THEME.colors.info.soft, border: `1.5px solid ${THEME.colors.info.border}`, color: THEME.colors.info.text }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = '#DCEBF0')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = THEME.colors.info.soft)}>
+                                    <h3 className="text-sm font-bold text-gray-700">Kategori ({batchKategori.length})</h3>
+                                    <ActionButton variant="info" onClick={addBatchRow}>
                                         <Plus size={14} /> Tambah Baris
-                                    </button>
+                                    </ActionButton>
                                 </div>
 
                                 <div className="space-y-3">
@@ -1332,50 +1288,45 @@ export default function AturPenilaianGBSClient() {
                                         if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
 
                                         return (
-                                            <div key={index} className="p-4 rounded-xl transition-smooth" style={{ background: '#FBF7F2', border: `1.5px solid ${THEME.colors.border}` }}>
+                                            <div key={index} className="p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
                                                 <div className="flex items-start gap-3">
                                                     <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
-                                                        style={{ background: THEME.gradients.primary }}>
+                                                        style={{ background: BRAND_GRADIENT }}>
                                                         {index + 1}
                                                     </div>
 
                                                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                         <div>
-                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: THEME.colors.text.secondary }}>Min <span style={{ color: THEME.colors.danger.base }}>*</span></label>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Min <span className="text-red-500">*</span></label>
                                                             <input type="number" min="0" max="100" value={kategori.min_nilai}
                                                                 onChange={(e) => updateBatchRow(index, 'min_nilai', parseInt(e.target.value) || 0)}
-                                                                className="w-full border rounded-xl px-3 py-2 text-sm bg-white transition-smooth focus:ring-2"
-                                                                style={{ borderColor: THEME.colors.border }} />
+                                                                className={inputCls} />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: THEME.colors.text.secondary }}>Max <span style={{ color: THEME.colors.danger.base }}>*</span></label>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Max <span className="text-red-500">*</span></label>
                                                             <input type="number" min="0" max="100" value={kategori.max_nilai}
                                                                 onChange={(e) => updateBatchRow(index, 'max_nilai', parseInt(e.target.value) || 0)}
-                                                                className="w-full border rounded-xl px-3 py-2 text-sm bg-white transition-smooth focus:ring-2"
-                                                                style={{ borderColor: THEME.colors.border }} />
+                                                                className={inputCls} />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold mb-1.5" style={{ color: THEME.colors.text.secondary }}>Deskripsi <span style={{ color: THEME.colors.danger.base }}>*</span></label>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Deskripsi <span className="text-red-500">*</span></label>
                                                             <input type="text" value={kategori.deskripsi}
                                                                 onChange={(e) => updateBatchRow(index, 'deskripsi', e.target.value)}
-                                                                className="w-full border rounded-xl px-3 py-2 text-sm bg-white transition-smooth focus:ring-2"
-                                                                style={{ borderColor: THEME.colors.border }} placeholder="Sangat Baik" />
+                                                                className={inputCls} placeholder="Sangat Baik" />
                                                         </div>
                                                     </div>
 
                                                     {batchKategori.length > 1 && (
                                                         <button onClick={() => removeBatchRow(index)}
-                                                            className="mt-7 p-2 rounded-lg transition-smooth"
-                                                            style={{ background: THEME.colors.danger.soft, border: `1.5px solid ${THEME.colors.danger.border}`, color: THEME.colors.danger.text }}
-                                                            onMouseEnter={e => (e.currentTarget.style.background = '#F9D9D6')}
-                                                            onMouseLeave={e => (e.currentTarget.style.background = THEME.colors.danger.soft)}>
+                                                            className="btn-action mt-7 p-2 rounded-lg transition-colors"
+                                                            style={{ background: COLORS.danger.bg, border: `1.5px solid ${COLORS.danger.border}`, color: COLORS.danger.text }}>
                                                             <Trash2 size={16} />
                                                         </button>
                                                     )}
                                                 </div>
 
                                                 {errors.length > 0 && (
-                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: THEME.colors.danger.soft, color: THEME.colors.danger.text, border: `1px solid ${THEME.colors.danger.border}` }}>
+                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: COLORS.danger.bg, color: COLORS.danger.text, border: `1px solid ${COLORS.danger.border}` }}>
                                                         <AlertCircle size={12} /> {errors.join(' | ')}
                                                     </div>
                                                 )}
@@ -1388,9 +1339,9 @@ export default function AturPenilaianGBSClient() {
                                     const validation = validateBatchKategori();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? THEME.colors.success.soft : THEME.colors.warning.soft,
-                                            border: `1.5px solid ${validation.valid ? THEME.colors.success.border : THEME.colors.warning.border}`,
-                                            color: validation.valid ? THEME.colors.success.text : THEME.colors.warning.text
+                                            background: validation.valid ? COLORS.success.bg : COLORS.warning.bg,
+                                            border: `1.5px solid ${validation.valid ? COLORS.success.border : COLORS.warning.border}`,
+                                            color: validation.valid ? COLORS.success.text : COLORS.warning.text
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
                                             <strong>Status:</strong> {validation.valid
@@ -1402,39 +1353,31 @@ export default function AturPenilaianGBSClient() {
                             </div>
                         </div>
 
-                        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: `1.5px solid ${THEME.colors.border}`, background: '#FBF7F2' }}>
-                            <button onClick={closeBatchEdit} disabled={isSavingBatch}
-                                className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-smooth disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{ borderColor: THEME.colors.neutral.border, color: THEME.colors.neutral.text, background: '#fff' }}
-                                onMouseEnter={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.colors.neutral.soft; }}
-                                onMouseLeave={e => { if (!isSavingBatch) e.currentTarget.style.background = '#fff'; }}>
+                        <div className="px-4 sm:px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
+                            <ActionButton variant="neutral" disabled={isSavingBatch} onClick={closeBatchEdit}>
                                 Batal
-                            </button>
-                            <button onClick={openConfirmSaveBatch} disabled={isSavingBatch}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-smooth hover-lift"
-                                style={{ background: THEME.colors.success.base, boxShadow: '0 6px 16px rgba(63,148,99,0.3)' }}
-                                onMouseEnter={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.colors.success.hover; }}
-                                onMouseLeave={e => { if (!isSavingBatch) e.currentTarget.style.background = THEME.colors.success.base; }}>
+                            </ActionButton>
+                            <ActionButton variant="primary" disabled={isSavingBatch} onClick={openConfirmSaveBatch}>
                                 {isSavingBatch ? (
                                     <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Menyimpan...</>
                                 ) : (
                                     <><Save size={16} /> Simpan {batchKategori.length} Kategori</>
                                 )}
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ====== MODAL KONFIRMASI (disesuaikan agar terasa sebagai konfirmasi simpan, bukan peringatan) ====== */}
+            {/* ====== MODAL KONFIRMASI SIMPAN ====== */}
             {showConfirmModal && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overlay-in"
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 dg-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
-                    <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 scale-in">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: THEME.colors.success.soft }}>
-                                <CheckCircle2 size={24} style={{ color: THEME.colors.success.base }} />
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
                             </div>
                             <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
                         </div>
@@ -1443,25 +1386,15 @@ export default function AturPenilaianGBSClient() {
                                 confirmAction === 'save-batch-kategori' ? `Apakah Anda yakin ingin menyimpan ${batchKategori.length} kategori ini?\n\nSemua kategori lama akan dihapus dan diganti dengan yang baru.` :
                                     'Apakah Anda yakin ingin menyimpan?'}
                         </p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-smooth"
-                                style={{ borderColor: THEME.colors.neutral.border, color: THEME.colors.neutral.text, background: '#fff' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = THEME.colors.neutral.soft)}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                                Batal
-                            </button>
-                            <button onClick={() => {
+                        <div className="flex gap-2.5">
+                            <ActionButton variant="neutral" fullWidth onClick={() => setShowConfirmModal(false)}>Batal</ActionButton>
+                            <ActionButton variant="primary" fullWidth onClick={() => {
                                 setShowConfirmModal(false);
                                 if (confirmAction === 'save-bobot') executeSaveBobot();
                                 else if (confirmAction === 'save-batch-kategori') executeSaveBatchKategori();
-                            }}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-smooth"
-                                style={{ background: THEME.colors.success.base, boxShadow: THEME.shadows.sm }}
-                                onMouseEnter={e => (e.currentTarget.style.background = THEME.colors.success.hover)}
-                                onMouseLeave={e => (e.currentTarget.style.background = THEME.colors.success.base)}>
+                            }}>
                                 Ya, Simpan
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
