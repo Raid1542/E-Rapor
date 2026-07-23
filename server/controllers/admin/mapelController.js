@@ -3,6 +3,11 @@
  * Fungsi: Controller CRUD mata pelajaran per semester (validasi kode/nama/urutan).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
+ * Update: 🐛 FIX BUG "Cannot read properties of undefined (reading 'tahun_ajaran_id')"
+ *         Penyebab: mapelModel.getById() mengembalikan SATU OBJEK (atau null),
+ *         tapi controller memperlakukannya seolah ARRAY (existingRows.length,
+ *         existingRows[0]). Diperbaiki di getMataPelajaranById, editMataPelajaran,
+ *         dan hapusMataPelajaran. Tidak ada perubahan logika lain.
  */
 
 const mapelModel = require('../../models/admin/mapelModel');
@@ -63,6 +68,9 @@ exports.getMataPelajaran = async (req, res) => {
 
 /**
  * Ambil detail mata pelajaran berdasarkan ID.
+ *
+ * ✅ FIX: mapelModel.getById() mengembalikan SATU OBJEK (atau null),
+ *    bukan array — jadi tidak perlu .length atau [0] lagi.
  */
 exports.getMataPelajaranById = async (req, res) => {
     try {
@@ -73,12 +81,12 @@ exports.getMataPelajaranById = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ID tidak valid' });
         }
 
-        const rows = await mapelModel.getById(idNum);
-        if (rows.length === 0) {
+        const mapel = await mapelModel.getById(idNum);
+        if (!mapel) {
             return res.status(404).json({ success: false, message: 'Mata pelajaran tidak ditemukan' });
         }
 
-        res.json({ success: true, data: rows[0] });
+        res.json({ success: true, data: mapel });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Gagal mengambil detail mata pelajaran: ' + err.message });
     }
@@ -175,6 +183,11 @@ exports.tambahMataPelajaran = async (req, res) => {
 
 /**
  * Update data mata pelajaran.
+ *
+ * ✅ FIX: mapelModel.getById() mengembalikan SATU OBJEK (atau null).
+ *    Sebelumnya kode memperlakukan hasilnya sebagai array
+ *    (existingRows.length, existingRows[0]) sehingga oldData selalu
+ *    undefined dan menyebabkan crash saat membaca oldData.tahun_ajaran_id.
  */
 exports.editMataPelajaran = async (req, res) => {
     try {
@@ -187,12 +200,16 @@ exports.editMataPelajaran = async (req, res) => {
 
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor } = req.body;
 
-        const existingRows = await mapelModel.getById(idNum);
-        if (existingRows.length === 0) {
+        // ── Sebelumnya (BUG): ─────────────────────────────────────────────
+        // const existingRows = await mapelModel.getById(idNum);
+        // if (existingRows.length === 0) { ... }   // objek tidak punya .length
+        // const oldData = existingRows[0];         // selalu undefined
+        // ── Sesudah (FIX): ────────────────────────────────────────────────
+        const oldData = await mapelModel.getById(idNum);
+        if (!oldData) {
             return res.status(404).json({ success: false, message: 'Mata pelajaran tidak ditemukan.' });
         }
 
-        const oldData = existingRows[0];
         const semesterId = oldData.tahun_ajaran_id;
 
         const isActive = await isSemesterActive(semesterId);
@@ -258,7 +275,7 @@ exports.editMataPelajaran = async (req, res) => {
             urutan_rapor: urutanRaporFinal
         });
 
-        if (result.affectedRows === 0) {
+        if (!result) {
             return res.status(404).json({ success: false, message: 'Mata pelajaran tidak ditemukan' });
         }
 
@@ -273,6 +290,9 @@ exports.editMataPelajaran = async (req, res) => {
 
 /**
  * Hapus mata pelajaran.
+ *
+ * ✅ FIX: mapelModel.getById() mengembalikan SATU OBJEK (atau null),
+ *    bukan array — sama seperti fix di editMataPelajaran di atas.
  */
 exports.hapusMataPelajaran = async (req, res) => {
     try {
@@ -283,12 +303,11 @@ exports.hapusMataPelajaran = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ID tidak valid' });
         }
 
-        const existingRows = await mapelModel.getById(idNum);
-        if (existingRows.length === 0) {
+        const mapelData = await mapelModel.getById(idNum);
+        if (!mapelData) {
             return res.status(404).json({ success: false, message: 'Mata pelajaran tidak ditemukan.' });
         }
 
-        const mapelData = existingRows[0];
         const semesterId = mapelData.tahun_ajaran_id;
 
         const isActive = await isSemesterActive(semesterId);
@@ -307,7 +326,7 @@ exports.hapusMataPelajaran = async (req, res) => {
         }
 
         const result = await mapelModel.delete(idNum);
-        if (result.affectedRows === 0) {
+        if (!result) {
             return res.status(404).json({ success: false, message: 'Mata pelajaran tidak ditemukan' });
         }
 

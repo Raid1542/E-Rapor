@@ -1,20 +1,28 @@
 /**
  * Nama File: data_siswa_client.tsx
  * Fungsi: Komponen klien untuk menampilkan daftar siswa kelas
- *         oleh guru kelas. Menggunakan template UI Atur Penilaian.
- * UPDATE: Fix bug logic isNotAssigned - array kosong ≠ belum ditugaskan
+ *         oleh guru kelas.
+ * UPDATE: Disamakan penuh dengan tampilan Data Guru (versi terbaru) — bentuk
+ *         card, warna background, bentuk & warna tombol (pill Detail hijau,
+ *         tabel asli <table>, modal detail bergaya kartu ikon), serta animasi
+ *         buka/tutup 300ms dengan translate-y. Logic tidak diubah sama sekali
+ *         (termasuk fix isNotAssigned).
  */
 
 'use client';
 import { useState, useEffect, ReactNode, useCallback } from 'react';
-import { Eye, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut } from 'lucide-react';
+import {
+    Eye, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert,
+    Users, LogOut, ChevronLeft, ChevronRight, User, IdCard, Award,
+    Calendar, BookOpen,
+} from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ====== KONSTANTA API ======
+// ====== KONSTANTA API  (tidak diubah) ======
 const API = 'http://localhost:5000/api/guru-kelas';
 
-// ====== HELPER: Parse Error dari Backend ======
+// ====== HELPER: Parse Error dari Backend  (tidak diubah) ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
     try {
         const contentType = res.headers.get('content-type');
@@ -31,7 +39,7 @@ const parseBackendError = async (res: Response): Promise<{ message: string; code
     }
 };
 
-// ====== TYPES ======
+// ====== TYPES  (tidak diubah) ======
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
 
 interface ModalConfig {
@@ -54,83 +62,149 @@ interface Siswa {
     fase?: string;
 }
 
-// ====== GLOBAL STYLES ======
+/* ==========================================================================
+   DESIGN TOKENS — sama persis dengan Data Guru (versi terbaru)
+   ========================================================================== */
+
+const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
+
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes ap-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes ap-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes ap-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .ap-fadeIn  { animation: ap-fadeIn  0.2s ease; }
-    .ap-scaleIn { animation: ap-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-    .ap-pulse   { animation: ap-pulse   0.6s ease 0.15s; }
-  `}</style>
+        @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        @keyframes dg-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+        .dg-fadeIn  { animation: dg-fadeIn  0.18s ease; }
+        .dg-scaleIn { animation: dg-scaleIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+        .dg-pulse   { animation: dg-pulse   0.6s ease 0.1s; }
+        .dg-shimmer {
+            background: linear-gradient(90deg, #f7f7f7 0%, #efefef 50%, #f7f7f7 100%);
+            background-size: 800px 100%;
+            animation: dg-shimmer 1.3s ease-in-out infinite;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0);   }
+        }
+        .anim-in { animation: fadeInUp 0.35s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.02s; }
+        .d2 { animation-delay: 0.06s; }
+        .d3 { animation-delay: 0.10s; }
+        .row-in { animation: fadeInUp 0.28s ease forwards; opacity: 0; }
+
+        .card-flat { transition: box-shadow 0.2s ease; }
+        .card-flat:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action:hover  { filter: brightness(1.04); }
+        .btn-action:active { filter: brightness(0.98); }
+
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+            outline: 2.5px solid #f5a623;
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .dg-shimmer, .btn-action, .card-flat {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    `}</style>
 );
 
-// ====== NOTIF MODAL ======
+// ====== NOTIF MODAL — struktur & warna identik dengan Data Guru ======
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
-    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={38} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
     const isConfirm = modal.type === 'confirm';
     return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
-                {!isConfirm && (
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                )}
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ap-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-                </div>
-                {isConfirm ? (
-                    <div className="flex gap-3 w-full">
-                        <button onClick={onClose} className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}>Batal</button>
-                        <button onClick={() => { modal.onConfirm?.(); onClose(); }} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm">Lanjutkan</button>
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                <div className="dg-scaleIn contents w-full">
+                    {!isConfirm && (
+                        <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                            <X size={18} />
+                        </button>
+                    )}
+                    <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>{s.icon}</div>
+                    <div className="text-center w-full">
+                        <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
                     </div>
-                ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>Ok</button>
-                )}
+                    {isConfirm ? (
+                        <div className="flex gap-2.5 w-full mt-1">
+                            <button onClick={onClose} className="btn-action flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors" style={{ borderColor: '#e5e7eb', color: '#4b5563', background: '#fff' }}>Batal</button>
+                            <button onClick={() => { modal.onConfirm?.(); onClose(); }} className="btn-action flex-1 text-white font-bold py-2.5 rounded-xl transition-colors text-sm" style={{ background: BRAND_GRADIENT, boxShadow: '0 4px 14px rgba(232,105,10,0.30)' }}>Lanjutkan</button>
+                        </div>
+                    ) : (
+                        <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>OK, Mengerti</button>
+                    )}
+                </div>
             </div>
         </div>
     );
 };
 
-// ====== SHARED STYLE CONSTANTS ======
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+/* ==========================================================================
+   SHARED STYLE CONSTANTS  (sama persis dengan Data Guru)
+   ========================================================================== */
 
-const btnPrimary = {
-    base: "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
-    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' },
-    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+
+/* ==========================================================================
+   SISTEM TOMBOL AKSI — identik dengan Data Guru
+   ========================================================================== */
+
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success';
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
+    info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
+    warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
+    neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
+    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
 };
 
-const BtnSecondary = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
-    <button onClick={onClick}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-    >{children}</button>
-);
+const ActionButton = ({
+    onClick, children, variant = 'neutral', size = 'md', disabled = false, type = 'button', fullWidth = false, title,
+}: {
+    onClick?: () => void; children: ReactNode; variant?: BtnVariant; size?: 'md' | 'sm';
+    disabled?: boolean; type?: 'button' | 'submit'; fullWidth?: boolean; title?: string;
+}) => {
+    const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2.5 text-sm';
+    return (
+        <button
+            type={type}
+            title={title}
+            onClick={onClick}
+            disabled={disabled}
+            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            style={VARIANT_BASE[variant]}
+        >
+            {children}
+        </button>
+    );
+};
 
-// ====== HELPERS FORMAT DATA ======
+// ====== HELPERS FORMAT DATA  (tidak diubah) ======
 const formatTanggalIndo = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '-';
-    return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+    const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][date.getMonth()];
+    return `${date.getDate()} ${bulan} ${date.getFullYear()}`;
 };
 
 const formatJenisKelamin = (jk: string): string => {
@@ -153,7 +227,7 @@ export default function DataSiswaClient() {
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // State untuk mendeteksi jika guru belum ditugaskan
+    // State untuk mendeteksi jika guru belum ditugaskan  (tidak diubah)
     const [isNotAssigned, setIsNotAssigned] = useState(false);
 
     // Modal state
@@ -165,12 +239,13 @@ export default function DataSiswaClient() {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
+    // Fungsi penutup dengan animasi 300ms — sama persis dengan Data Guru
     const closeDetail = () => {
         setDetailClosing(true);
-        setTimeout(() => { setShowDetail(false); setDetailClosing(false); setSelectedSiswa(null); }, 200);
+        setTimeout(() => { setShowDetail(false); setDetailClosing(false); setSelectedSiswa(null); }, 300);
     };
 
-    // ====== FETCH DATA SISWA ======
+    // ====== FETCH DATA SISWA  (tidak diubah) ======
     useEffect(() => {
         const fetchSiswa = async () => {
             setLoading(true);
@@ -191,7 +266,7 @@ export default function DataSiswaClient() {
                         const siswa = data.data || [];
                         setSiswaList(siswa);
                         setFilteredSiswa(siswa);
-                        
+
                         // ✅ FIX: Ambil nama kelas dengan benar
                         if (data.kelas_nama) {
                             setKelasNama(data.kelas_nama);
@@ -200,14 +275,14 @@ export default function DataSiswaClient() {
                         } else {
                             setKelasNama('Kelas Anda');
                         }
-                        
+
                         // ✅ FIX: JANGAN set isNotAssigned = true kalau array kosong!
                         // isNotAssigned hanya true kalau backend return 403
                     } else {
-                        showModal({ 
-                            type: 'error', 
-                            title: 'Gagal Memuat', 
-                            message: data.message || 'Terjadi kesalahan' 
+                        showModal({
+                            type: 'error',
+                            title: 'Gagal Memuat',
+                            message: data.message || 'Terjadi kesalahan'
                         });
                     }
                 } else {
@@ -228,7 +303,7 @@ export default function DataSiswaClient() {
         fetchSiswa();
     }, [showModal]);
 
-    // ====== FILTER PENCARIAN ======
+    // ====== FILTER PENCARIAN  (tidak diubah) ======
     useEffect(() => {
         if (!searchQuery.trim()) {
             setFilteredSiswa(siswaList);
@@ -245,23 +320,18 @@ export default function DataSiswaClient() {
 
     const handleDetail = (siswa: Siswa) => { setSelectedSiswa(siswa); setShowDetail(true); };
 
-    // ====== PAGINATION LOGIC ======
+    // ====== PAGINATION LOGIC  (tidak diubah) ======
     const totalPages = Math.max(1, Math.ceil(filteredSiswa.length / itemsPerPage));
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentSiswa = filteredSiswa.slice(startIndex, endIndex);
 
+    /* Render pagination — pola & gaya tombol identik dengan Data Guru */
     const renderPagination = () => {
         const pages: ReactNode[] = [];
-        const btnBase = "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors";
-        const btnActive = "text-white border-orange-500";
-        const btnInactive = "text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white";
-
-        pages.push(
-            <button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>
-        );
-
+        const btnBase = "min-w-[30px] h-8 px-1.5 flex items-center justify-center rounded-lg text-xs font-bold border-2 transition-colors btn-action";
+        const btnActive = "text-white border-transparent";
+        const btnInactive = "text-gray-600 border-transparent hover:bg-orange-50 bg-transparent";
         const range: number[] = [];
         if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) range.push(i); }
         else {
@@ -271,59 +341,39 @@ export default function DataSiswaClient() {
             if (currentPage < totalPages - 2) range.push(-2);
             range.push(totalPages);
         }
-
-        range.forEach((p) => {
-            if (p < 0) { pages.push(<span key={p} className="px-1 text-gray-400 text-sm">…</span>); }
-            else {
-                pages.push(
-                    <button key={p} onClick={() => setCurrentPage(p)}
-                        className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
-                        style={currentPage === p ? { background: 'linear-gradient(135deg,#e8690a,#f5a623)' } : {}}
-                    >{p}</button>
-                );
-            }
+        range.forEach(p => {
+            if (p < 0) { pages.push(<span key={p} className="px-1 text-gray-400 text-xs">…</span>); }
+            else { pages.push(<button key={p} onClick={() => setCurrentPage(p)} className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`} style={currentPage === p ? { background: BRAND_GRADIENT, boxShadow: '0 2px 6px rgba(232,105,10,0.30)' } : {}}>{p}</button>); }
         });
-
-        pages.push(
-            <button key="next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                className={`${btnBase} ${btnInactive} disabled:opacity-40`}>»</button>
-        );
         return pages;
     };
 
     // ====== RENDER UTAMA ======
 
-    // Tampilkan Modal Akses Ditolak jika guru belum ditugaskan
+    // Tampilkan layar Akses Ditolak jika guru belum ditugaskan  (logic tidak diubah)
     if (isNotAssigned) {
         return (
-            <div className="flex-1 min-h-screen p-6 flex items-center justify-center" style={PAGE_BG}>
+            <div className="flex-1 min-h-screen p-3 sm:p-6 flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn">
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ap-scaleIn">
-                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ap-pulse">
-                            <AlertCircle size={48} className="text-red-500" />
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dg-pulse">
+                            <AlertCircle size={38} className="text-red-500" />
                         </div>
                         <div className="text-center">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
-                            <p className="text-sm text-gray-600 leading-relaxed">
+                            <h3 className="text-lg font-bold text-gray-900 mb-1.5">Akses Ditolak</h3>
+                            <p className="text-sm text-gray-500 leading-relaxed">
                                 Anda belum ditugaskan sebagai guru kelas di semester ini.
                                 <br />
                                 Silakan hubungi Administrator untuk penugasan kelas.
                             </p>
                         </div>
-                        <button
-                            onClick={handleLogout}
-                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
-                            style={{
-                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
-                            }}
-                        >
-                            <LogOut size={18} /> Logout
-                        </button>
+                        <ActionButton variant="primary" fullWidth onClick={handleLogout}>
+                            <LogOut size={16} /> Logout
+                        </ActionButton>
                     </div>
                 </div>
             </div>
@@ -331,194 +381,189 @@ export default function DataSiswaClient() {
     }
 
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
-
-            {/* Modals */}
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Page header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Data Siswa</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Daftar siswa kelas {kelasNama}</p>
+            {/* Page header — polos, sama dengan Data Guru (tanpa kotak ikon) */}
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Data Siswa</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">Daftar siswa kelas {kelasNama}</p>
             </div>
 
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                {/* Toolbar */}
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
-                            Kelas: <span style={{ color: '#e8690a' }}>{kelasNama}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {/* Tampilkan per halaman */}
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
-                                <select value={itemsPerPage}
-                                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200">
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                            </div>
+            {/* Toolbar — kiri: info kelas. Kanan: search + tampilkan data. */}
+            <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d2" style={CARD_STYLE}>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
 
-                            {/* Pencarian */}
-                            <div className="relative min-w-[200px] sm:min-w-[220px]">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
-                                </div>
-                                <input type="text" placeholder="Cari siswa..." value={searchQuery}
-                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400" />
-                                {searchQuery && (
-                                    <button type="button" onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                                        className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
+                    <div className="flex-shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
+                        <span className="text-xs font-bold" style={{ color: ACCENT_DARK }}>Kelas:</span>
+                        <span className="text-xs font-bold" style={{ color: ACCENT }}>{kelasNama}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
+                        <div className="relative w-full xs:w-auto sm:w-56 flex-shrink-0">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                <Search className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                             </div>
+                            <input type="text" placeholder="Cari nama, NIS, NISN..." value={searchQuery}
+                                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                className="w-full border rounded-lg pl-8 pr-8 py-2 text-xs outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400"
+                            />
+                            {searchQuery && (
+                                <button type="button" aria-label="Bersihkan pencarian" onClick={() => { setSearchQuery(''); setCurrentPage(1); }} className="absolute inset-y-0 right-2.5 flex items-center" style={{ color: ACCENT }}>
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
+                            <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>Tampilkan</span>
+                            <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                                className="border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200">
+                                <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                            </select>
+                            <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>data</span>
                         </div>
                     </div>
-                    <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                        Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
-                    </p>
                 </div>
+            </div>
 
-                {/* Tabel & Empty State */}
+            {/* Table card — tabel asli, sama persis dengan Data Guru */}
+            <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[600px] text-sm border-collapse">
+                    <table className="w-full min-w-[700px] table-fixed">
                         <thead>
-                            <tr style={TH_GRAD}>
-                                {['No.', 'Nama', 'NIS', 'NISN', 'Jenis Kelamin', 'Detail'].map(h => (
-                                    <th key={h} className="px-5 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
-                                ))}
+                            <tr className="bg-gradient-to-r from-[#c95b08] via-[#e8690a] to-[#f5a623]">
+                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '60px' }}>No.</th>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase" style={{ width: '260px' }}>Nama</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '110px' }}>NIS</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '110px' }}>NISN</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '110px' }}>Kelamin</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '120px' }}>Detail</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {loading ? (
-                                <tr><td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                        Memuat data...
-                                    </div>
-                                </td></tr>
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <tr key={i}>
+                                        <td colSpan={6} className="px-4 py-3">
+                                            <div className="dg-shimmer h-10 rounded w-full" />
+                                        </td>
+                                    </tr>
+                                ))
                             ) : currentSiswa.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="py-16 text-center">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center">
-                                                <Users size={32} style={{ color: '#e8690a' }} />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-gray-800 text-base">
-                                                    {searchQuery ? 'Siswa Tidak Ditemukan' : 'Belum Ada Data Siswa'}
-                                                </p>
-                                                <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
-                                                    {searchQuery
-                                                        ? `Tidak ada siswa yang cocok dengan kata kunci "${searchQuery}".`
-                                                        : `Belum ada siswa yang terdaftar di kelas Anda.`
-                                                    }
-                                                </p>
-                                            </div>
+                                    <td colSpan={6} className="py-10 text-center">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Users size={32} className="text-gray-300" />
+                                            <p className="text-sm font-semibold text-gray-500">
+                                                {searchQuery ? 'Siswa Tidak Ditemukan' : 'Belum Ada Data Siswa'}
+                                            </p>
+                                            <p className="text-xs text-gray-400">
+                                                {searchQuery ? `Tidak ada siswa yang cocok dengan kata kunci "${searchQuery}".` : 'Belum ada siswa yang terdaftar di kelas Anda.'}
+                                            </p>
                                         </div>
                                     </td>
                                 </tr>
-                            ) : currentSiswa.map((siswa, index) => (
-                                <tr key={siswa.id}
-                                    className="transition-colors"
-                                    style={{ borderBottom: '1px solid #fde0c8', background: index % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}>
-                                    <td className="px-5 py-3.5 text-center text-gray-500 font-medium">{startIndex + index + 1}</td>
-                                    <td className="px-5 py-3.5 font-bold text-gray-800">{siswa.nama}</td>
-                                    <td className="px-5 py-3.5 text-center text-gray-600">{siswa.nis}</td>
-                                    <td className="px-5 py-3.5 text-center text-gray-600">{siswa.nisn}</td>
-                                    <td className="px-5 py-3.5 text-center">
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold"
-                                            style={{
-                                                background: siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#eff6ff' : '#fdf2f8',
-                                                color: siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#1d4ed8' : '#9d174d',
-                                                border: `1px solid ${siswa.jenis_kelamin?.toLowerCase().includes('laki') ? '#bfdbfe' : '#fbcfe8'}`,
-                                            }}>
-                                            {formatJenisKelamin(siswa.jenis_kelamin)}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3.5 text-center">
-                                        <button onClick={() => handleDetail(siswa)}
-                                            className={btnPrimary.base}
-                                            style={btnPrimary.style}
-                                            onMouseEnter={btnPrimary.hover}
-                                            onMouseLeave={btnPrimary.leave}>
-                                            <Eye size={13} /> Detail
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            ) : (
+                                currentSiswa.map((siswa, index) => (
+                                    <tr key={siswa.id} className="hover:bg-orange-50/30 transition-colors">
+                                        <td className="px-4 py-3 text-center text-gray-400 text-sm" style={{ width: '60px' }}>{startIndex + index + 1}</td>
+                                        <td className="px-4 py-3" style={{ width: '260px' }}>
+                                            <p className="font-bold text-gray-900 truncate" title={siswa.nama}>{siswa.nama}</p>
+                                        </td>
+                                        <td className="px-4 py-3 text-center text-gray-500 font-mono text-xs" style={{ width: '110px' }}>{siswa.nis || '-'}</td>
+                                        <td className="px-4 py-3 text-center text-gray-500 font-mono text-xs" style={{ width: '110px' }}>{siswa.nisn || '-'}</td>
+                                        <td className="px-4 py-3 text-center text-gray-600 text-sm" style={{ width: '110px' }}>{formatJenisKelamin(siswa.jenis_kelamin)}</td>
+                                        <td className="px-4 py-3 text-center" style={{ width: '120px' }}>
+                                            <button
+                                                onClick={() => handleDetail(siswa)}
+                                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
+                                            >
+                                                <Eye size={13} /> Detail
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
 
-                {/* Pagination */}
-                {filteredSiswa.length > 0 && (
-                    <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                        <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Halaman {currentPage} dari {totalPages}</span>
-                        <div className="flex items-center gap-1">{renderPagination()}</div>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-gray-200" style={{ background: '#fafafa' }}>
+                    <span className="text-xs font-medium text-gray-500">
+                        {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} data
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors" style={{ color: ACCENT_DARK }}>
+                            <ChevronLeft size={14} /> Sebelumnya
+                        </button>
+                        <div className="flex items-center gap-1 mx-1">{renderPagination()}</div>
+                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors" style={{ color: ACCENT_DARK }}>
+                            Berikutnya <ChevronRight size={14} />
+                        </button>
                     </div>
-                )}
+                </div>
             </div>
 
-            {/* ====== MODAL DETAIL SISWA ====== */}
+            {/* Modal Detail dengan Animasi — struktur kartu ikon sama persis dengan Data Guru */}
             {showDetail && selectedSiswa && (
-                <div
-                    className={`fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
-                    onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div
-                        className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-                        style={CARD_STYLE}>
-
-                        {/* Modal header */}
-                        <div className="sticky top-0 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
-                            <h2 className="text-base font-bold text-white">Detail Siswa</h2>
-                            <button onClick={closeDetail}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                                style={{ background: 'rgba(255,255,255,0.2)' }}>
-                                <X size={16} className="text-white" />
+                <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeDetail} />
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl transform transition-all duration-300 overflow-hidden ${detailClosing ? 'opacity-0 scale-95 translate-y-4' : 'opacity-100 scale-100 translate-y-0'}`}>
+                        <div className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+                            <h2 className="text-lg sm:text-xl font-bold text-white">Detail Data Siswa</h2>
+                            <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                                <X size={18} className="text-white" />
                             </button>
                         </div>
 
-                        <div className="p-6">
-                            <div className="flex flex-col items-center mb-6">
-                                <h3 className="text-lg font-bold text-gray-800">{selectedSiswa.nama}</h3>
+                        <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
+                            <div className="flex justify-center mb-6">
+                                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4" style={{ background: 'linear-gradient(135deg, #fed7aa, #fde0c8)', borderColor: '#fde0c8' }}>
+                                    <User size={48} style={{ color: '#c2410c' }} />
+                                </div>
                             </div>
 
-                            {/* Detail rows */}
-                            <div className="space-y-2.5">
-                                {[
-                                    { label: 'Kelas', value: selectedSiswa.kelas },
-                                    { label: 'NIS', value: selectedSiswa.nis },
-                                    { label: 'NISN', value: selectedSiswa.nisn },
-                                    { label: 'Tempat Lahir', value: selectedSiswa.tempat_lahir || '-' },
-                                    { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedSiswa.tanggal_lahir) },
-                                    { label: 'Jenis Kelamin', value: formatJenisKelamin(selectedSiswa.jenis_kelamin) },
-                                    { label: 'Fase', value: selectedSiswa.fase || '-' },
-                                ].map((item, i) => (
-                                    <div key={i} className="grid grid-cols-4 gap-2 pb-2.5"
-                                        style={{ borderBottom: '1px solid #fde0c8' }}>
-                                        <span className="text-xs font-semibold col-span-1" style={{ color: '#7a3a0a' }}>{item.label}</span>
-                                        <span className="text-xs text-gray-700">:</span>
-                                        <span className="text-xs text-gray-700 col-span-2 wrap-break-word">{item.value}</span>
-                                    </div>
-                                ))}
+                            <div className="flex flex-col items-center gap-2.5 mb-6 pb-4 border-b" style={{ borderColor: '#fde0c8' }}>
+                                <h3 className="text-lg font-bold text-gray-800 text-center">{selectedSiswa.nama}</h3>
+                                <div className="flex flex-wrap items-center justify-center gap-2">
+                                    <span className="px-3 py-1.5 rounded-lg text-sm font-bold" style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1px solid #fde0c8' }}>
+                                        Kelas {selectedSiswa.kelas}
+                                    </span>
+                                </div>
                             </div>
 
-                            <div className="flex justify-end mt-6 pt-4" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><IdCard size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>NIS</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11 font-mono">{selectedSiswa.nis || '-'}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Award size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>NISN</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11 font-mono">{selectedSiswa.nisn || '-'}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Calendar size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Tempat, Tanggal Lahir</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{selectedSiswa.tempat_lahir || '-'}, {formatTanggalIndo(selectedSiswa.tanggal_lahir)}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Users size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Jenis Kelamin</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{formatJenisKelamin(selectedSiswa.jenis_kelamin)}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><BookOpen size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Fase</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{selectedSiswa.fase || '-'}</p>
+                                </div>
                             </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+                            <button onClick={closeDetail} className="px-4 sm:px-6 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }} onMouseEnter={e => { e.currentTarget.style.background = '#fff5eb'; e.currentTarget.style.borderColor = '#fbbf24'; }} onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#fde0c8'; }}>Tutup</button>
                         </div>
                     </div>
                 </div>

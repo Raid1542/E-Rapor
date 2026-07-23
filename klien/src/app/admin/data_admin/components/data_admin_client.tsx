@@ -9,6 +9,10 @@
  *         halaman, tabel berbasis grid dengan kolom sejajar, ukuran elemen
  *         konsisten, dan letak toolbar (Tambah Admin di kiri, pencarian +
  *         baris per halaman di kanan). Logic tidak diubah sama sekali.
+ * UPDATE 2: Halaman detail disamakan dengan Data Guru (kartu ikon per
+ *           field + avatar), header halaman disederhanakan tanpa kotak
+ *           ikon, dan kolom Nama pada tabel tidak lagi memakai bulatan
+ *           inisial — konsisten dengan Data Guru.
  */
 
 "use client";
@@ -17,6 +21,7 @@ import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react'
 import {
     Eye, Pencil, X, Plus, Search, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, ChevronLeft, ChevronRight, Users, RotateCcw,
+    Phone, MapPin, Calendar, IdCard, Mail, User,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -224,22 +229,6 @@ const ActionButton = ({
 };
 
 /* ==========================================================================
-   AVATAR INISIAL — pengganti foto profil, warna mengikuti jenis kelamin
-   ========================================================================== */
-
-const Avatar = ({ nama, gender }: { nama: string; gender: string }) => {
-    const isFemale = gender === 'Perempuan';
-    return (
-        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
-            style={isFemale
-                ? { background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8' }
-                : { background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe' }}>
-            {nama.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('') || '?'}
-        </div>
-    );
-};
-
-/* ==========================================================================
    MAIN COMPONENT
    ========================================================================== */
 
@@ -278,9 +267,6 @@ export default function DataAdminClient() {
         if (isNaN(date.getTime())) return dateString;
         return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
     };
-
-    const getInitials = (name: string): string =>
-        name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('');
 
     /* ------------------------------------------------------------------
        STATE  (tidak diubah)
@@ -568,29 +554,8 @@ export default function DataAdminClient() {
 
     const closeDetail = () => {
         setDetailClosing(true);
-        setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 180);
+        setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 300);
     };
-
-    /* ------------------------------------------------------------------
-       MODAL HEADER — banner gradien tipis, konsisten dengan Data Guru
-    ------------------------------------------------------------------ */
-
-    const ModalHeader = ({ icon, eyebrow, title, onClose }: { icon: ReactNode; eyebrow: string; title: string; onClose: () => void }) => (
-        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
-            <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                    {icon}
-                </div>
-                <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/75 leading-none mb-0.5">{eyebrow}</p>
-                    <h2 className="text-sm font-bold text-white leading-tight truncate">{title}</h2>
-                </div>
-            </div>
-            <button onClick={onClose} aria-label="Tutup" className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/15 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <X size={16} className="text-white" />
-            </button>
-        </div>
-    );
 
     /* ------------------------------------------------------------------
        FORM RENDER
@@ -623,25 +588,23 @@ export default function DataAdminClient() {
                 </div>
 
                 <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
-                    <div className="px-6 sm:px-7 py-4 flex items-center gap-3" style={{ background: BRAND_GRADIENT }}>
-                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                            <Users size={18} className="text-white" />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/75">{isEdit ? 'Formulir Edit' : 'Formulir Tambah'}</p>
-                            <h2 className="text-sm font-bold text-white">{isEdit ? 'Ubah Data Admin' : 'Data Admin Baru'}</h2>
-                        </div>
+                    <div className="px-6 sm:px-7 py-4" style={{ background: BRAND_GRADIENT }}>
+                        <h2 className="text-sm sm:text-base font-bold text-white">{isEdit ? 'Ubah Data Admin' : 'Data Admin Baru'}</h2>
                     </div>
 
                     <div className="p-6 sm:p-7">
-
-                        <p className="text-xs font-bold uppercase tracking-wide mb-4" style={{ color: ACCENT }}>Data Diri</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
 
                             <div className="flex flex-col gap-1 md:col-span-2">
                                 <label className={labelCls} style={labelColor}>Nama Lengkap <span className="text-red-500">*</span></label>
                                 <input type="text" name="nama" value={formData.nama} onChange={handleInputChange} placeholder="Masukkan nama lengkap" className={errors.nama ? inputErrCls : inputCls} />
                                 {errors.nama && <p className="text-red-600 text-xs font-semibold mt-0.5">{errors.nama}</p>}
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className={labelCls} style={labelColor}>Email Akun <span className="text-red-500">*</span></label>
+                                <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="contoh@sekolah.sch.id" className={errors.email ? inputErrCls : inputCls} />
+                                {errors.email && <p className="text-red-600 text-xs font-semibold mt-0.5">{errors.email}</p>}
                             </div>
 
                             <div className="flex flex-col gap-1">
@@ -667,28 +630,6 @@ export default function DataAdminClient() {
                             </div>
 
                             <div className="flex flex-col gap-1">
-                                <label className={labelCls} style={labelColor}>No. Telepon</label>
-                                <input type="tel" name="no_telepon" value={formData.no_telepon} onChange={handleInputChange} placeholder="08xxxxxxxxxx" className={inputCls} />
-                            </div>
-
-                            <div className="md:col-span-2 flex flex-col gap-1">
-                                <label className={labelCls} style={labelColor}>Alamat</label>
-                                <textarea name="alamat" value={formData.alamat} onChange={handleInputChange} placeholder="Jalan, Kelurahan, Kecamatan, Kota" rows={3} className={inputCls} />
-                            </div>
-                        </div>
-
-                        <div className="my-6 border-t" style={{ borderColor: '#f0e0d0' }} />
-
-                        <p className="text-xs font-bold uppercase tracking-wide mb-4" style={{ color: ACCENT }}>Akun &amp; Kepegawaian</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                            <div className="flex flex-col gap-1">
-                                <label className={labelCls} style={labelColor}>Email Akun <span className="text-red-500">*</span></label>
-                                <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="contoh@sekolah.sch.id" className={errors.email ? inputErrCls : inputCls} />
-                                {errors.email && <p className="text-red-600 text-xs font-semibold mt-0.5">{errors.email}</p>}
-                            </div>
-
-                            <div className="flex flex-col gap-1">
                                 <label className={labelCls} style={labelColor}>NIY</label>
                                 <input type="text" name="niy" value={formData.niy} onChange={handleInputChange} placeholder="Nomor Induk Yayasan" className={inputCls} />
                             </div>
@@ -696,6 +637,11 @@ export default function DataAdminClient() {
                             <div className="flex flex-col gap-1">
                                 <label className={labelCls} style={labelColor}>NUPTK</label>
                                 <input type="text" name="nuptk" value={formData.nuptk} onChange={handleInputChange} placeholder="Nomor Unik PTK" className={inputCls} />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className={labelCls} style={labelColor}>No. Telepon</label>
+                                <input type="tel" name="no_telepon" value={formData.no_telepon} onChange={handleInputChange} placeholder="08xxxxxxxxxx" className={inputCls} />
                             </div>
 
                             {isEdit && (
@@ -709,9 +655,14 @@ export default function DataAdminClient() {
                                     {errors.statusAdmin && <p className="text-red-600 text-xs font-semibold mt-0.5">{errors.statusAdmin}</p>}
                                 </div>
                             )}
+
+                            <div className="md:col-span-2 flex flex-col gap-1">
+                                <label className={labelCls} style={labelColor}>Alamat</label>
+                                <textarea name="alamat" value={formData.alamat} onChange={handleInputChange} placeholder="Jalan, Kelurahan, Kecamatan, Kota" rows={3} className={inputCls} />
+                            </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row justify-end gap-2.5 mt-7 pt-5 border-t" style={{ borderColor: '#f0e0d0' }}>
+                        <div className="flex flex-col sm:flex-row justify-end gap-2.5 mt-6 pt-4 border-t" style={{ borderColor: '#f0e0d0' }}>
                             <ActionButton variant="neutral" onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); handleReset(); }}>
                                 Batal
                             </ActionButton>
@@ -761,34 +712,28 @@ export default function DataAdminClient() {
     ------------------------------------------------------------------ */
 
     return (
-        <div className="flex-1 min-h-screen p-4 sm:p-6" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Page header — ikon gradien sebagai identitas, sama dengan Data Guru */}
-            <div className="mb-5 flex items-center gap-3 anim-in d1">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: BRAND_GRADIENT, boxShadow: '0 3px 10px rgba(232,105,10,0.25)' }}>
-                    <Users size={19} className="text-white" />
-                </div>
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">Data Admin</h1>
-                    <p className="text-sm mt-0.5 text-gray-500">Kelola data admin dan hak akses</p>
-                </div>
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Data Admin</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola data admin dan hak akses</p>
             </div>
 
             {/* Toolbar — paling kiri sendiri: tombol Tambah Admin.
                 Kanan (urut): search kecil, baris per halaman. */}
-            <div className="card-flat bg-white rounded-2xl px-4 py-3.5 mb-4 anim-in d2" style={CARD_STYLE}>
+            <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d2" style={CARD_STYLE}>
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
 
                     <div className="flex-shrink-0">
                         <ActionButton variant="primary" onClick={() => setShowTambah(true)}>
-                            <Plus size={16} /> Tambah Admin
+                            <Plus size={16} /> <span className="hidden sm:inline">Tambah Admin</span><span className="sm:hidden">Tambah</span>
                         </ActionButton>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5 lg:justify-end">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 lg:justify-end">
                         <div className="relative w-full xs:w-auto sm:w-56 flex-shrink-0">
                             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                 <Search className="w-3.5 h-3.5" style={{ color: ACCENT }} />
@@ -804,22 +749,23 @@ export default function DataAdminClient() {
                             )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
-                            <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>Baris per halaman</span>
+                        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
+                            <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>Tampilkan</span>
                             <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                                 className="border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200">
                                 <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
                             </select>
+                            <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>data</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Table card */}
+            {/* Table card — grid-based, sama persis strukturnya dengan Data Guru */}
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
 
                 <div className="overflow-x-auto">
-                    <div style={{ width: '100%', minWidth: '760px' }}>
+                    <div style={{ width: '100%', minWidth: '850px' }}>
                         {/* Header — grid kolom sama persis dengan setiap baris di bawahnya */}
                         <div
                             className="grid"
@@ -866,12 +812,8 @@ export default function DataAdminClient() {
                             >
                                 <div className="px-4 py-4 flex items-center justify-center text-center text-gray-400">{startIndex + index + 1}</div>
 
-                                <div className="px-4 py-4 flex items-center gap-2.5 overflow-hidden">
-                                    <Avatar nama={admin.nama || '?'} gender={formatGender(admin.jenis_kelamin || admin.lp)} />
-                                    <div className="min-w-0">
-                                        <p className="font-bold text-gray-900 truncate">{admin.nama}</p>
-                                        <p className="text-xs text-gray-400 truncate">{admin.email || '-'}</p>
-                                    </div>
+                                <div className="px-4 py-4 flex items-center overflow-hidden">
+                                    <p className="font-bold text-gray-900 truncate" title={admin.nama}>{admin.nama}</p>
                                 </div>
 
                                 <div className="px-4 py-4 flex items-center justify-center text-center text-gray-600 whitespace-nowrap">{formatGender(admin.jenis_kelamin || admin.lp)}</div>
@@ -906,19 +848,19 @@ export default function DataAdminClient() {
                 </div>
 
                 {/* Footer: info + pagination — sama persis dengan Data Guru */}
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t" style={{ borderColor: '#f0f0f0', background: '#fafafa' }}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-gray-200" style={{ background: '#fafafa' }}>
                     <span className="text-xs font-medium text-gray-500">
                         {filteredAdmin.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredAdmin.length)} dari {filteredAdmin.length} data
                     </span>
 
                     <div className="flex items-center gap-1">
                         <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                            className="btn-action h-8 px-2 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent" style={{ color: ACCENT_DARK }}>
+                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors" style={{ color: ACCENT_DARK }}>
                             <ChevronLeft size={14} /> Sebelumnya
                         </button>
                         <div className="flex items-center gap-1 mx-1">{renderPagination()}</div>
                         <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                            className="btn-action h-8 px-2 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent" style={{ color: ACCENT_DARK }}>
+                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors" style={{ color: ACCENT_DARK }}>
                             Berikutnya <ChevronRight size={14} />
                         </button>
                     </div>
@@ -926,53 +868,85 @@ export default function DataAdminClient() {
             </div>
 
             {/* ================================================================
-                MODAL DETAIL — struktur identik dengan Data Guru
+                MODAL DETAIL — struktur & gaya identik dengan Data Guru
+                (avatar, badge status, kartu ikon per field). Tidak ada
+                badge Role karena data Admin memang tidak memilikinya.
             ================================================================ */}
             {showDetail && selectedAdmin && (
-                <div className={`fixed inset-0 flex items-center justify-center z-[100] p-4 transition-opacity duration-180 ${detailClosing ? 'opacity-0' : 'opacity-100'}`}
-                    onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] overflow-y-auto transform transition-all duration-180 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`} style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
-
-                        <div className="sticky top-0 z-10">
-                            <ModalHeader icon={<Users size={17} className="text-white" />} eyebrow="Profil Admin" title={selectedAdmin.nama} onClose={closeDetail} />
+                <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeDetail} />
+                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl transform transition-all duration-300 overflow-hidden ${detailClosing ? 'opacity-0 scale-95 translate-y-4' : 'opacity-100 scale-100 translate-y-0'}`}>
+                        <div className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+                            <h2 className="text-lg sm:text-xl font-bold text-white">Detail Data Admin</h2>
+                            <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                                <X size={18} className="text-white" />
+                            </button>
                         </div>
 
-                        <div className="p-6">
-                            <div className="mb-4 pb-4 border-b flex items-center justify-between flex-wrap gap-2" style={{ borderColor: '#f0f0f0' }}>
-                                <p className="text-sm text-gray-500">{selectedAdmin.email || '-'}</p>
-                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
+                            <div className="flex justify-center mb-6">
+                                <div className="relative">
+                                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4 overflow-hidden" style={{ background: selectedAdmin.profileImage ? '#fff' : 'linear-gradient(135deg, #fed7aa, #fde0c8)', borderColor: '#fde0c8' }}>
+                                        {selectedAdmin.profileImage ? (
+                                            <img src={selectedAdmin.profileImage} alt={selectedAdmin.nama} className="w-full h-full rounded-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                        ) : (
+                                            <User size={48} style={{ color: '#c2410c' }} />
+                                        )}
+                                    </div>
+                                    <div className="absolute bottom-1 right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border-2" style={{ background: selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? '#22c55e' : '#6b7280', borderColor: '#fff' }}>
+                                        <div className="w-2 h-2 rounded-full bg-white" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-center gap-3 mb-6 pb-4 border-b" style={{ borderColor: '#fde0c8' }}>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold" style={{ background: selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? '#dcfce7' : '#f3f4f6', color: selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? '#166534' : '#4b5563', border: `1px solid ${selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? '#86efac' : '#d1d5db'}` }}>
+                                    <span className="w-2 h-2 rounded-full" style={{ background: selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? '#22c55e' : '#6b7280' }} />
                                     {selectedAdmin.statusAdmin?.toLowerCase() === 'aktif' ? 'Aktif' : 'Nonaktif'}
                                 </span>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                                {[
-                                    { label: 'NIY', value: selectedAdmin.niy || '-' },
-                                    { label: 'NUPTK', value: selectedAdmin.nuptk || '-' },
-                                    { label: 'Jenis Kelamin', value: formatGender(selectedAdmin.jenis_kelamin || selectedAdmin.lp) },
-                                    { label: 'No. Telepon', value: selectedAdmin.no_telepon || '-' },
-                                    { label: 'Tempat Lahir', value: selectedAdmin.tempat_lahir || '-' },
-                                    { label: 'Tanggal Lahir', value: formatTanggalIndo(selectedAdmin.tanggal_lahir) },
-                                ].map((item, i) => (
-                                    <div key={i} className="rounded-xl px-3.5 py-2.5" style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wide mb-0.5" style={{ color: ACCENT }}>{item.label}</p>
-                                        <p className="text-sm font-semibold text-gray-700">{item.value}</p>
-                                    </div>
-                                ))}
-                                <div className="col-span-2 rounded-xl px-3.5 py-2.5" style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}>
-                                    <p className="text-[10px] font-bold uppercase tracking-wide mb-0.5" style={{ color: ACCENT }}>Alamat</p>
-                                    <p className="text-sm font-semibold text-gray-700">{selectedAdmin.alamat || '-'}</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><User size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Nama Lengkap</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{selectedAdmin.nama}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Mail size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Email Akun</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11 break-all">{selectedAdmin.email || '-'}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><IdCard size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>NIY</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11 font-mono">{selectedAdmin.niy || '-'}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><IdCard size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>NUPTK</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11 font-mono">{selectedAdmin.nuptk || '-'}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Users size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Jenis Kelamin</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{formatGender(selectedAdmin.jenis_kelamin || selectedAdmin.lp)}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Phone size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>No. Telepon</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{selectedAdmin.no_telepon || '-'}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><Calendar size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Tempat, Tanggal Lahir</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{selectedAdmin.tempat_lahir || '-'}, {formatTanggalIndo(selectedAdmin.tanggal_lahir)}</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl" style={{ background: '#fffaf6', border: '1px solid #fde0c8' }}>
+                                    <div className="flex items-center gap-2.5 mb-2"><div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}><MapPin size={16} style={{ color: '#c2410c' }} /></div><p className="text-xs sm:text-sm font-bold" style={{ color: '#c2410c' }}>Alamat</p></div>
+                                    <p className="text-sm sm:text-base font-bold text-gray-900 ml-10 sm:ml-11">{selectedAdmin.alamat || '-'}</p>
                                 </div>
                             </div>
+                        </div>
 
-                            <div className="flex justify-end gap-2.5 mt-6 pt-4 border-t" style={{ borderColor: '#f0f0f0' }}>
-                                <ActionButton variant="neutral" onClick={closeDetail}>Tutup</ActionButton>
-                                <ActionButton variant="warning" onClick={() => { handleEdit(selectedAdmin); closeDetail(); }}>
-                                    <Pencil size={14} /> Edit Data
-                                </ActionButton>
-                            </div>
+                        <div className="flex justify-end gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+                            <ActionButton variant="neutral" onClick={closeDetail}>Tutup</ActionButton>
+                            <ActionButton variant="warning" onClick={() => { handleEdit(selectedAdmin); closeDetail(); }}>
+                                <Pencil size={16} /> Edit Data
+                            </ActionButton>
                         </div>
                     </div>
                 </div>

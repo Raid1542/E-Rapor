@@ -173,6 +173,10 @@ const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-80
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
+/* Kolom grid tabel — sama persis strukturnya dengan Data Admin (7 kolom),
+   dipakai identik oleh header dan setiap baris agar selalu sejajar. */
+const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(180px,1.6fr)';
+
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
@@ -180,7 +184,7 @@ const labelColor = { color: '#7a3a0a' };
    SISTEM TOMBOL AKSI
    ========================================================================== */
 
-type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success';
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
 
 const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
@@ -188,6 +192,7 @@ const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
     neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
     success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
+    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
 };
 
 const ActionButton = ({
@@ -775,7 +780,7 @@ export default function DataGuruClient() {
                             <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>data</span>
                         </div>
 
-                        <ActionButton variant="neutral" onClick={openFilterModal}>
+                        <ActionButton variant="accent" onClick={openFilterModal}>
                             <Filter size={15} /> <span className="hidden sm:inline">Filter</span>{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                         </ActionButton>
                         <ActionButton variant="info" onClick={() => setShowImport(true)}>
@@ -785,82 +790,86 @@ export default function DataGuruClient() {
                 </div>
             </div>
 
-            {/* Table card */}
+            {/* Table card — grid-based, sama persis strukturnya dengan Data Admin */}
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[850px] table-fixed">
-                        <thead>
-                            <tr className="bg-gradient-to-r from-[#c95b08] via-[#e8690a] to-[#f5a623]">
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '60px' }}>No.</th>
-                                <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase" style={{ width: '250px' }}>Nama</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '100px' }}>Kelamin</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '80px' }}>NIY</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '80px' }}>NUPTK</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '100px' }}>Status</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase" style={{ width: '180px' }}>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {loading ? (
-                                Array.from({ length: 5 }).map((_, i) => (
-                                    <tr key={i}>
-                                        <td colSpan={7} className="px-4 py-3">
-                                            <div className="dg-shimmer h-10 rounded w-full" />
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : currentGuru.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="py-10 text-center">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <Users size={32} className="text-gray-300" />
-                                            <p className="text-sm font-semibold text-gray-500">Tidak ada data guru</p>
-                                            {searchQuery && <p className="text-xs text-gray-400">Coba kata kunci lain</p>}
+                    <div style={{ width: '100%', minWidth: '850px' }}>
+                        {/* Header — grid kolom sama persis dengan setiap baris di bawahnya */}
+                        <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
+                            <div className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Kelamin</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">NIY</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">NUPTK</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Status</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
+                        </div>
+
+                        {/* Body */}
+                        {loading ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS, borderColor: '#f0f0f0' }}>
+                                    {Array.from({ length: 7 }).map((__, j) => (
+                                        <div key={j} className="px-4 py-4 flex items-center justify-center">
+                                            <div className="dg-shimmer h-4 rounded w-full" style={{ maxWidth: j === 1 ? '85%' : '55%' }} />
                                         </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                currentGuru.map((guru, index) => (
-                                    <tr key={guru.id} className="hover:bg-orange-50/30 transition-colors">
-                                        <td className="px-4 py-3 text-center text-gray-400 text-sm" style={{ width: '60px' }}>{startIndex + index + 1}</td>
-                                        <td className="px-4 py-3" style={{ width: '250px' }}>
-                                            <p className="font-bold text-gray-900 truncate" title={guru.nama}>{guru.nama}</p>
-                                        </td>
-                                        <td className="px-4 py-3 text-center text-gray-600 text-sm" style={{ width: '100px' }}>{formatGender(guru.jenisKelamin)}</td>
-                                        <td className="px-4 py-3 text-center text-gray-500 font-mono text-xs" style={{ width: '80px' }}>{guru.niy || '-'}</td>
-                                        <td className="px-4 py-3 text-center text-gray-500 font-mono text-xs" style={{ width: '80px' }}>{guru.nuptk || '-'}</td>
-                                        <td className="px-4 py-3 text-center" style={{ width: '100px' }}>
-                                            {guru.statusGuru === 'aktif' ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-200">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Aktif
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500 border border-gray-200">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />Nonaktif
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-center" style={{ width: '180px' }}>
-                                            <div className="flex justify-center gap-1.5">
-                                                <button 
-                                                    onClick={() => handleDetail(guru)}
-                                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
-                                                >
-                                                    <Eye size={13} /> Detail
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleEdit(guru)}
-                                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-                                                >
-                                                    <Pencil size={13} /> Edit
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                    ))}
+                                </div>
+                            ))
+                        ) : currentGuru.length === 0 ? (
+                            <div className="py-14 text-center">
+                                <div className="flex flex-col items-center gap-2">
+                                    <Users size={32} className="text-gray-300" />
+                                    <p className="text-sm font-semibold text-gray-500">Tidak ada data guru</p>
+                                    {searchQuery && <p className="text-xs text-gray-400">Coba kata kunci lain</p>}
+                                </div>
+                            </div>
+                        ) : currentGuru.map((guru, index) => (
+                            <div key={guru.id} className="grid row-in row-hover border-b transition-colors"
+                                style={{
+                                    gridTemplateColumns: GRID_COLS,
+                                    borderColor: '#f0f0f0',
+                                    background: '#fff',
+                                    animationDelay: `${Math.min(index, 8) * 0.03}s`,
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                            >
+                                <div className="px-4 py-4 flex items-center justify-center text-center text-gray-400">{startIndex + index + 1}</div>
+
+                                <div className="px-4 py-4 flex items-center overflow-hidden">
+                                    <p className="font-bold text-gray-900 truncate" title={guru.nama}>{guru.nama}</p>
+                                </div>
+
+                                <div className="px-4 py-4 flex items-center justify-center text-center text-gray-600 whitespace-nowrap">{formatGender(guru.jenisKelamin)}</div>
+                                <div className="px-4 py-4 flex items-center justify-center text-center text-gray-500 font-mono text-xs truncate">{guru.niy || '-'}</div>
+                                <div className="px-4 py-4 flex items-center justify-center text-center text-gray-500 font-mono text-xs truncate">{guru.nuptk || '-'}</div>
+
+                                <div className="px-4 py-4 flex items-center justify-center">
+                                    {guru.statusGuru === 'aktif' ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-200 whitespace-nowrap">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />Aktif
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" />Nonaktif
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="px-4 py-4 flex items-center justify-center">
+                                    <div className="flex justify-center gap-1.5">
+                                        <ActionButton size="sm" variant="info" onClick={() => handleDetail(guru)} title="Lihat detail">
+                                            <Eye size={13} /> Detail
+                                        </ActionButton>
+                                        <ActionButton size="sm" variant="warning" onClick={() => handleEdit(guru)} title="Edit data">
+                                            <Pencil size={13} /> Edit
+                                        </ActionButton>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-gray-200" style={{ background: '#fafafa' }}>
@@ -959,8 +968,10 @@ export default function DataGuruClient() {
                         </div>
 
                         <div className="flex justify-end gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
-                            <button onClick={closeDetail} className="px-4 sm:px-6 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }} onMouseEnter={e => { e.currentTarget.style.background = '#fff5eb'; e.currentTarget.style.borderColor = '#fbbf24'; }} onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#fde0c8'; }}>Tutup</button>
-                            <button onClick={() => { handleEdit(selectedGuru); closeDetail(); }} className="px-4 sm:px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2" style={{ background: BRAND_GRADIENT, boxShadow: '0 4px 14px rgba(232,105,10,0.35)' }} onMouseEnter={e => { e.currentTarget.style.background = ACCENT_DARK; }} onMouseLeave={e => { e.currentTarget.style.background = BRAND_GRADIENT; }}><Pencil size={16} /> Edit Data</button>
+                            <ActionButton variant="neutral" onClick={closeDetail}>Tutup</ActionButton>
+                            <ActionButton variant="warning" onClick={() => { handleEdit(selectedGuru); closeDetail(); }}>
+                                <Pencil size={16} /> Edit Data
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
