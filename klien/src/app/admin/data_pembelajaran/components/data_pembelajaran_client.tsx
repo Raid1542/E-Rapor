@@ -1,35 +1,9 @@
 /**
  * Nama File: data_pembelajaran_client.tsx
- * Update:
- *   - 🎨 UI RESTYLE: Disamakan dengan design system Data Mata Pelajaran
- *     (data_mata_pelajaran_client.tsx) — kartu abu-abu netral (#f6f7f9 / border #ececec),
- *     tombol ActionButton (primary/neutral/warning/danger/info), gradient header
- *     BRAND_GRADIENT, animasi anim-in/row-hover/btn-action yang konsisten.
- *   - ⚠️ TIDAK ADA PERUBAHAN LOGIKA: seluruh state, effect, handler, dan endpoint API
- *     tetap identik dengan versi sebelumnya. Hanya lapisan tampilan yang diubah.
- *   - ✅ FIXED: Race condition saat load dari localStorage
- *   - ✅ FIXED: fetchDataPerKelas terima parameter semesterId
- *   - ✅ FIXED: Disable dropdown kelas jika semester belum dipilih
- *   - Dropdown Semester (TA → Semester → Kelas)
- *   - Kirim semester_id ke semua endpoint
- *   - 🩹 FIX TAMPILAN: Tabel "Mata Pelajaran Wajib" dan "Mata Pelajaran Pilihan"
- *     sebelumnya masing-masing memakai <table> terpisah, sehingga lebar kolom
- *     dihitung sendiri-sendiri oleh browser berdasarkan isi selnya (tombol
- *     "Hapus" saja vs "Edit + Hapus") — akibatnya kolom No/Kode/Mata Pelajaran/
- *     Guru Pengampu/Aksi antara kedua tabel jadi tidak sejajar. Diganti dengan
- *     struktur CSS Grid (pembelajaranGridCols) yang dipakai identik oleh kedua
- *     tabel, sama seperti pola grid yang dipakai di halaman Data Pembina
- *     Ekskul, sehingga kolom selalu sejajar persis.
- *   - 🩹 FIX 2: Dropdown "Guru Pengampu" dan "Mata Pelajaran" sebelumnya memakai
- *     <select> native, yang gaya opsi ter-hover/fokusnya ikut tema abu-abu
- *     bawaan browser (tidak konsisten dengan warna oranye brand) dan bisa
- *     membuka ke ATAS sehingga menabrak header modal. Diganti dengan dropdown
- *     kustom (SearchDropdown) yang selalu membuka ke bawah, tampilannya
- *     konsisten dengan pola PembinaDropdown di halaman Data Ekstrakurikuler.
- *     Kartu/modal yang membungkusnya juga dilepas dari `overflow-hidden`
- *     (sudut dibulatkan langsung di header/footer) supaya panel dropdown
- *     tidak ikut terpotong. Perilaku data (onChange mengirim id sebagai
- *     string) tetap identik dengan <select> sebelumnya.
+ * Fungsi: Komponen klien untuk mengelola penugasan guru mengajar (mata
+ *         pelajaran wajib & pilihan) per kelas, per semester.
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
+ * Tanggal: 20 Juli 2026
  */
 
 'use client';

@@ -4,6 +4,12 @@
  *         Dengan auto-recompute nilai kokurikuler (fleksibel edit meski ada nilai siswa).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * 
+ * UPDATE: ✅ Fix bug "jenis_penilaian is not defined" saat membangun response sukses.
+ *            Variabel yang dideklarasikan bernama `jenisPenilaian` (camelCase),
+ *            bukan `jenis_penilaian` (snake_case), sehingga sebelumnya melempar
+ *            ReferenceError SETELAH data berhasil di-commit ke database — membuat
+ *            frontend menerima response error padahal data sudah tersimpan.
  */
 
 const db = require('../../config/db');
@@ -234,7 +240,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             data: {
                 jumlah_grade: grades.length,
                 id_aspek_kokurikuler,
-                jenis_penilaian,
+                jenis_penilaian: jenisPenilaian, 
                 auto_recomputed: true
             }
         });

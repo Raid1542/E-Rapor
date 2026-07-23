@@ -656,7 +656,7 @@ export default function DataKelasClient() {
                             setLoading(true);
                             fetchKelas(id);
                         }}
-                        className="border rounded-lg px-3 py-1.5 text-sm font-semibold outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200 min-w-[210px]"
+                        className={`${inputCls} min-w-[210px] font-semibold`}
                     >
                         <option value="">-- Pilih Tahun Ajaran --</option>
                         {tahunAjaranList.map(ta => (
