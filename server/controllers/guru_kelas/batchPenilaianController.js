@@ -251,6 +251,7 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             message: error.message || 'Gagal menyimpan batch grade',
             code: error.code || 'BATCH_SAVE_ERROR'
         });
+        
     } finally {
         connection.release();
     }
