@@ -2,7 +2,7 @@
  * Nama File: backup_restore_client.tsx
  * Fungsi: Komponen klien untuk fitur backup dan restore database aplikasi.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 'use client';
@@ -63,7 +63,7 @@ const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
         color: ACCENT_DARK,
         border: '0.09375rem solid #f0a94e',
         boxShadow: '0 0.125rem 0.5rem rgba(232, 105, 10, 0.18)'
-    },
+    }
 };
 
 /* ==========================================================================
@@ -172,10 +172,12 @@ export default function BackupRestoreClient() {
 
             const res = await fetch('http://localhost:5000/api/admin/backup', {
                 method: 'GET',
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (!res.ok) throw new Error('Gagal melakukan backup data.');
+            if (!res.ok) {
+                throw new Error('Gagal melakukan backup data.');
+            }
 
             const blob = await res.blob();
             const contentDisposition = res.headers.get('Content-Disposition');
@@ -263,7 +265,7 @@ export default function BackupRestoreClient() {
             const res = await fetch('http://localhost:5000/api/admin/backup/restore', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
-                body: formData,
+                body: formData
             });
 
             const data = await res.json();
@@ -283,10 +285,13 @@ export default function BackupRestoreClient() {
                 fileInputRef.current.value = '';
             }
 
-            // Muat ulang halaman agar data segar dari database terbaca
+            // Soft reset: hapus sesi dan redirect ke login agar data segar terbaca
             setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+                localStorage.removeItem('token');
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('userRole');
+                window.location.href = '/login?restored=true';
+            }, 2500);
 
         } catch (err: any) {
             setRestoreStatus('error');
