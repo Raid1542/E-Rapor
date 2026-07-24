@@ -2,7 +2,7 @@
  * Nama File: backup_restore_client.tsx
  * Fungsi: Komponen klien untuk fitur backup dan restore database aplikasi.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 'use client';
@@ -19,19 +19,117 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 type Tab = 'backup' | 'restore';
 type BackupStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RestoreStatus = 'idle' | 'loading' | 'success' | 'error';
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'accent';
 
-// ─── SHARED STYLE CONSTANTS (disamakan dengan design system orange) ───────────
+/* ==========================================================================
+   KONSTANTA DAN DESIGN TOKENS
+   ========================================================================== */
 
-const PAGE_BG = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #f0e0d0', boxShadow: '0 4px 20px rgba(180,70,10,0.10)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const BRAND_GRADIENT = 'linear-gradient(135deg, #c95b08 0%, #e8690a 55%, #f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
 
-const btnPrimary = {
-    base: "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed",
-    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
-    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = {
+    border: '0.0625rem solid #ececec',
+    boxShadow: '0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.05)'
 };
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: {
+        background: BRAND_GRADIENT,
+        color: '#fff',
+        border: '0.09375rem solid #c95b08',
+        boxShadow: '0 0.125rem 0.5rem rgba(232, 105, 10, 0.25)'
+    },
+    info: {
+        background: '#eff6ff',
+        color: '#1d4ed8',
+        border: '0.09375rem solid #bfdbfe'
+    },
+    warning: {
+        background: '#facc15',
+        color: '#78350f',
+        border: '0.09375rem solid #eab308',
+        boxShadow: '0 0.125rem 0.5rem rgba(234, 179, 8, 0.35)'
+    },
+    neutral: {
+        background: '#fff',
+        color: ACCENT_DARK,
+        border: '0.09375rem solid #f0e0d0'
+    },
+    accent: {
+        background: 'linear-gradient(135deg, #fff5eb 0%, #ffe3c2 55%, #fdd7a8 100%)',
+        color: ACCENT_DARK,
+        border: '0.09375rem solid #f0a94e',
+        boxShadow: '0 0.125rem 0.5rem rgba(232, 105, 10, 0.18)'
+    }
+};
+
+/* ==========================================================================
+   KOMPONEN PENDUKUNG
+   ========================================================================== */
+
+/* Fungsi: Menyuntikkan animasi global dan style dasar untuk halaman ini. */
+const GlobalStyles = () => (
+    <style jsx global>{`
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(0.5rem); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .anim-in { animation: fadeInUp 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.02s; }
+        .d2 { animation-delay: 0.06s; }
+        .d3 { animation-delay: 0.10s; }
+
+        .card-flat { transition: box-shadow 0.2s ease; }
+        .card-flat:hover { box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.06); }
+
+        .btn-action { 
+            transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; 
+        }
+        .btn-action:hover { filter: brightness(1.04); }
+        .btn-action:active { filter: brightness(0.98); }
+
+        button:focus-visible, input:focus-visible {
+            outline: 0.15625rem solid #f5a623;
+            outline-offset: 0.125rem;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .anim-in, .card-flat, .btn-action { animation: none !important; transition: none !important; }
+        }
+    `}</style>
+);
+
+/* Fungsi: Merender tombol aksi dengan varian warna yang konsisten. */
+const ActionButton = ({
+    onClick,
+    children,
+    variant = 'neutral',
+    disabled = false,
+    title
+}: {
+    onClick?: () => void;
+    children: React.ReactNode;
+    variant?: BtnVariant;
+    disabled?: boolean;
+    title?: string;
+}) => (
+    <button
+        title={title}
+        onClick={onClick}
+        disabled={disabled}
+        className={`btn-action inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+        style={VARIANT_BASE[variant]}
+    >
+        {children}
+    </button>
+);
+
+/* ==========================================================================
+   KOMPONEN UTAMA
+   ========================================================================== */
 
 export default function BackupRestoreClient() {
     const [activeTab, setActiveTab] = useState<Tab>('backup');
@@ -74,10 +172,12 @@ export default function BackupRestoreClient() {
 
             const res = await fetch('http://localhost:5000/api/admin/backup', {
                 method: 'GET',
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (!res.ok) throw new Error('Gagal melakukan backup data.');
+            if (!res.ok) {
+                throw new Error('Gagal melakukan backup data.');
+            }
 
             const blob = await res.blob();
             const contentDisposition = res.headers.get('Content-Disposition');
@@ -165,7 +265,7 @@ export default function BackupRestoreClient() {
             const res = await fetch('http://localhost:5000/api/admin/backup/restore', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
-                body: formData,
+                body: formData
             });
 
             const data = await res.json();
@@ -185,10 +285,13 @@ export default function BackupRestoreClient() {
                 fileInputRef.current.value = '';
             }
 
-            // Muat ulang halaman agar data segar dari database terbaca
+            // Soft reset: hapus sesi dan redirect ke login agar data segar terbaca
             setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+                localStorage.removeItem('token');
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('userRole');
+                window.location.href = '/login?restored=true';
+            }, 2500);
 
         } catch (err: any) {
             setRestoreStatus('error');
@@ -215,32 +318,31 @@ export default function BackupRestoreClient() {
        RENDER UI
        ========================================================================== */
     return (
-        <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
+        <div className="flex-1 p-3 sm:p-6 min-h-screen" style={PAGE_BG}>
+            <GlobalStyles />
+
             {showSessionExpired && (
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* ── Page Title ── */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Backup &amp; Restore</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
+            {/* Judul Halaman */}
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Backup &amp; Restore</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">
                     Kelola data cadangan aplikasi e-Rapor
                 </p>
             </div>
 
-            {/* ====================================================================
-                CARD 1: Tab Switcher — berdiri sendiri, gaya pill, sama pola
-                dengan Card 1 di halaman lain (latar putih, border standar).
-            ==================================================================== */}
-            <div className="bg-white rounded-2xl px-2 py-2 mb-5 flex items-center gap-2 w-fit" style={CARD_STYLE}>
+            {/* Pengalih Tab */}
+            <div className="card-flat bg-white rounded-2xl px-2 py-2 mb-4 flex items-center gap-2 w-fit anim-in d2" style={CARD_STYLE}>
                 <button
                     onClick={() => handleTabChange('backup')}
                     className="btn-action flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
                     style={activeTab === 'backup'
-                        ? { ...HEADER_GRAD, color: '#fff', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }
-                        : { color: '#7a3a0a', background: 'transparent' }}
-                    onMouseEnter={e => { if (activeTab !== 'backup') e.currentTarget.style.background = '#fff0e5'; }}
-                    onMouseLeave={e => { if (activeTab !== 'backup') e.currentTarget.style.background = 'transparent'; }}
+                        ? { background: BRAND_GRADIENT, color: '#fff', boxShadow: '0 0.125rem 0.5rem rgba(232, 105, 10, 0.25)' }
+                        : { color: ACCENT_DARK, background: 'transparent' }}
+                    onMouseEnter={(e) => { if (activeTab !== 'backup') e.currentTarget.style.background = '#fff5eb'; }}
+                    onMouseLeave={(e) => { if (activeTab !== 'backup') e.currentTarget.style.background = 'transparent'; }}
                 >
                     <Database className="w-4 h-4" />
                     Backup Data
@@ -250,10 +352,10 @@ export default function BackupRestoreClient() {
                     onClick={() => handleTabChange('restore')}
                     className="btn-action flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
                     style={activeTab === 'restore'
-                        ? { ...HEADER_GRAD, color: '#fff', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }
-                        : { color: '#7a3a0a', background: 'transparent' }}
-                    onMouseEnter={e => { if (activeTab !== 'restore') e.currentTarget.style.background = '#fff0e5'; }}
-                    onMouseLeave={e => { if (activeTab !== 'restore') e.currentTarget.style.background = 'transparent'; }}
+                        ? { background: BRAND_GRADIENT, color: '#fff', boxShadow: '0 0.125rem 0.5rem rgba(232, 105, 10, 0.25)' }
+                        : { color: ACCENT_DARK, background: 'transparent' }}
+                    onMouseEnter={(e) => { if (activeTab !== 'restore') e.currentTarget.style.background = '#fff5eb'; }}
+                    onMouseLeave={(e) => { if (activeTab !== 'restore') e.currentTarget.style.background = 'transparent'; }}
                 >
                     <FileUp className="w-4 h-4" />
                     Restore Data
@@ -262,16 +364,16 @@ export default function BackupRestoreClient() {
 
             {/* Konten Tab: Backup Data */}
             {activeTab === 'backup' && (
-                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                    <div className="px-6 py-4" style={HEADER_GRAD}>
-                        <h2 className="text-base font-bold text-white flex items-center gap-2">
-                            <Database size={18} />
+                <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+                    <div className="px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+                        <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                            <Database size="1.125rem" />
                             Backup Data Aplikasi e-Rapor
                         </h2>
                     </div>
 
-                    <div className="p-6">
-                        {/* ── Info box (kuning - peringatan) ── */}
+                    <div className="p-4 sm:p-6">
+                        {/* Kotak Informasi */}
                         <div
                             className="flex items-start gap-2.5 rounded-xl p-3.5 mb-4"
                             style={{ background: '#fef9c3', border: '0.0625rem solid #fde68a' }}
@@ -285,9 +387,9 @@ export default function BackupRestoreClient() {
 
                         {/* Status Sukses Backup */}
                         {backupStatus === 'ready' && (
-                            <div className="flex items-center gap-2.5 rounded-xl p-3.5 mb-4" style={{ background: '#eaf7ef', border: '1px solid #b6e8c8' }}>
-                                <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#1a7a3a' }} />
-                                <p className="text-sm font-medium" style={{ color: '#1a7a3a' }}>
+                            <div className="flex items-center gap-2.5 rounded-xl p-3.5 mb-4" style={{ background: '#dcfce7', border: '0.0625rem solid #86efac' }}>
+                                <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#166534' }} />
+                                <p className="text-sm font-medium" style={{ color: '#166534' }}>
                                     Data berhasil dibackup. Klik <strong>Unduh Backup</strong> untuk menyimpan file.
                                 </p>
                             </div>
@@ -300,7 +402,8 @@ export default function BackupRestoreClient() {
                             </div>
                         )}
 
-                        <div style={{ borderTop: '1px solid #fde0c8' }} className="pt-5 flex justify-end gap-3">
+                        {/* Tombol Aksi Backup */}
+                        <div className="pt-5 flex flex-col sm:flex-row justify-end gap-2.5 border-t" style={{ borderColor: '#f0e0d0' }}>
                             {backupStatus === 'ready' && (
                                 <ActionButton variant="neutral" onClick={handleDownloadBackup}>
                                     <Download className="w-4 h-4" />
@@ -323,21 +426,21 @@ export default function BackupRestoreClient() {
 
             {/* Konten Tab: Restore Data */}
             {activeTab === 'restore' && (
-                <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                    <div className="px-6 py-4" style={HEADER_GRAD}>
-                        <h2 className="text-base font-bold text-white flex items-center gap-2">
-                            <FileUp size={18} />
+                <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+                    <div className="px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+                        <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                            <FileUp size="1.125rem" />
                             Restore Hasil Backup Aplikasi e-Rapor
                         </h2>
                     </div>
 
-                    <div className="p-6">
-                        {/* ── Langkah-langkah ── */}
+                    <div className="p-4 sm:p-6">
+                        {/* Langkah-langkah */}
                         <div className="flex flex-col gap-2.5 mb-5">
                             <div className="flex items-start gap-2.5">
                                 <div
-                                    className="w-[22px] h-[22px] rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold mt-0.5"
-                                    style={HEADER_GRAD}
+                                    className="w-[1.375rem] h-[1.375rem] rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold mt-0.5"
+                                    style={{ background: BRAND_GRADIENT, fontSize: '0.6875rem' }}
                                 >
                                     1
                                 </div>
@@ -347,8 +450,8 @@ export default function BackupRestoreClient() {
                             </div>
                             <div className="flex items-start gap-2.5">
                                 <div
-                                    className="w-[22px] h-[22px] rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold mt-0.5"
-                                    style={HEADER_GRAD}
+                                    className="w-[1.375rem] h-[1.375rem] rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold mt-0.5"
+                                    style={{ background: BRAND_GRADIENT, fontSize: '0.6875rem' }}
                                 >
                                     2
                                 </div>
@@ -360,9 +463,9 @@ export default function BackupRestoreClient() {
 
                         {/* Status Sukses / Error Restore */}
                         {restoreStatus === 'success' && (
-                            <div className="flex items-start gap-2.5 rounded-xl p-4 mb-5" style={{ background: '#eaf7ef', border: '1px solid #b6e8c8' }}>
-                                <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#1a7a3a' }} />
-                                <p className="text-sm whitespace-pre-line" style={{ color: '#1a7a3a' }}>{restoreMessage}</p>
+                            <div className="flex items-start gap-2.5 rounded-xl p-4 mb-5" style={{ background: '#dcfce7', border: '0.0625rem solid #86efac' }}>
+                                <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#166534' }} />
+                                <p className="text-sm whitespace-pre-line" style={{ color: '#166534' }}>{restoreMessage}</p>
                             </div>
                         )}
                         {restoreStatus === 'error' && (
@@ -379,9 +482,9 @@ export default function BackupRestoreClient() {
 
                             <div
                                 className="flex items-stretch rounded-xl overflow-hidden w-full transition-colors"
-                                style={{ border: '1px solid #fde0c8' }}
-                                onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#e8690a')}
-                                onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#fde0c8')}
+                                style={{ border: '0.0625rem solid #ececec' }}
+                                onMouseEnter={(e) => (e.currentTarget.style.borderColor = ACCENT)}
+                                onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#ececec')}
                             >
                                 <label
                                     htmlFor="restore-file-input"
@@ -410,15 +513,9 @@ export default function BackupRestoreClient() {
                             )}
                         </div>
 
-                        <div style={{ borderTop: '1px solid #fde0c8' }} className="pt-5 flex justify-end">
-                            <button
-                                onClick={handleRestore}
-                                disabled={restoreStatus === 'loading' || !selectedFile}
-                                className={btnPrimary.base}
-                                style={{ ...btnPrimary.style, border: '1.5px solid #c95b08' }}
-                                onMouseEnter={e => { if (restoreStatus !== 'loading' && selectedFile) btnPrimary.hover(e); }}
-                                onMouseLeave={btnPrimary.leave}
-                            >
+                        {/* Tombol Aksi Restore */}
+                        <div className="pt-5 flex justify-end border-t" style={{ borderColor: '#f0e0d0' }}>
+                            <ActionButton variant="primary" disabled={restoreStatus === 'loading' || !selectedFile} onClick={handleRestore}>
                                 {restoreStatus === 'loading' ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (

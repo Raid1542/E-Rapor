@@ -528,9 +528,23 @@ export default function AturPenilaianGuruKelasClient() {
     }, [selectedMapelId, komponenList, activeTab, showModal, jenisPenilaianAktif, isNotAssigned]);
 
     const handleTabChange = (tab: typeof activeTab) => {
-        if (tab !== 'akademik') { setSelectedMapelAkademik(null); setCoverageInfo(null); }
-        if (tab !== 'bobot') { setSelectedMapelId(null); }
-        if (tab !== 'deskripsi-rata-rata') { setDeskripsiRataRataList([]); setDeskripsiRataRataCoverage(null); }
+        // Hanya proses jika tab berbeda dari yang aktif
+        if (tab === activeTab) return;
+
+        // Clear data yang relevan saat pindah tab
+        if (tab !== 'akademik') {
+            setSelectedMapelAkademik(null);
+            setCoverageInfo(null);
+        }
+        if (tab !== 'bobot') {
+            setSelectedMapelId(null);
+        }
+        if (tab !== 'deskripsi-rata-rata') {
+            setDeskripsiRataRataList([]);
+            setDeskripsiRataRataCoverage(null);
+        }
+
+        // Clear kategori list saat pindah tab
         setKategoriList([]);
         setActiveTab(tab);
     };

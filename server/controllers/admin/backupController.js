@@ -10,10 +10,8 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
-const { exec } = require('child_process');
-const util = require('util');
+const { spawn } = require('child_process');
 
-const execPromise = util.promisify(exec);
 const TEMP_DIR = path.join(__dirname, '../../temp_backup');
 
 /* Fungsi: Backup seluruh database dan folder uploads ke file ZIP. */
@@ -29,11 +27,9 @@ exports.downloadBackup = async (req, res) => {
         const zipPath = path.join(TEMP_DIR, fileName);
         const sqlPath = path.join(TEMP_DIR, 'database.sql');
 
-        // Ambil daftar semua tabel
         const [tables] = await db.execute('SHOW TABLES');
         const tableNames = tables.map(row => Object.values(row)[0]);
 
-        // Mulai membangun string SQL dump
         let sqlDump = `-- Backup Database E-Rapor SDIT Ulil Albab\n`;
         sqlDump += `-- Tanggal: ${new Date().toISOString()}\n`;
         sqlDump += `-- Total Tabel: ${tableNames.length}\n\n`;
@@ -83,8 +79,7 @@ exports.downloadBackup = async (req, res) => {
                     sqlDump += `\n`;
                 }
             } catch (err) {
-                // Abaikan error tabel spesifik agar backup tetap berjalan
-                console.warn(`[BACKUP WARNING] Gagal membackup tabel ${tableName}:`, err.message);
+                // Abaikan error tabel spesifik agar proses backup tetap berjalan
             }
         }
 
@@ -97,8 +92,12 @@ exports.downloadBackup = async (req, res) => {
 
         output.on('close', () => {
             res.download(zipPath, fileName, (err) => {
-                if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-                if (fs.existsSync(sqlPath)) fs.unlinkSync(sqlPath);
+                if (fs.existsSync(zipPath)) {
+                    fs.unlinkSync(zipPath);
+                }
+                if (fs.existsSync(sqlPath)) {
+                    fs.unlinkSync(sqlPath);
+                }
 
                 if (err && !res.headersSent) {
                     res.status(500).json({ message: 'Gagal mendownload backup' });
@@ -125,7 +124,7 @@ exports.downloadBackup = async (req, res) => {
     }
 };
 
-/* Fungsi: Restore database dari file .sql atau .zip. */
+/* Fungsi: Restore database dari file .sql atau .zip menggunakan Stream Pipe. */
 exports.uploadRestore = async (req, res) => {
     try {
         if (!req.file) {
@@ -166,43 +165,65 @@ exports.uploadRestore = async (req, res) => {
             database: process.env.DB_NAME || 'erapor_db'
         };
 
-        // Perintah restore menggunakan MySQL CLI (paling aman untuk menghindari error parsing)
-        const mysqlCommand = `mysql -h ${dbConfig.host} -u ${dbConfig.user} -p"${dbConfig.password}" ${dbConfig.database} < "${sqlFilePath}"`;
+        // Gunakan spawn + pipe untuk kestabilan proses di Windows
+        const mysqlProcess = spawn('mysql', [
+            `-h${dbConfig.host}`,
+            `-u${dbConfig.user}`,
+            `-p${dbConfig.password}`,
+            dbConfig.database
+        ], { shell: true });
 
-        try {
-            const { stderr } = await execPromise(mysqlCommand);
-            
-            if (stderr && !stderr.includes('Warning')) {
-                console.error('[RESTORE WARNING]:', stderr);
-            }
+        let stderrData = '';
 
-            // Hapus file temporary setelah berhasil
-            fs.unlinkSync(filePath);
-            if (sqlFilePath !== filePath && fs.existsSync(sqlFilePath)) {
-                fs.unlinkSync(sqlFilePath);
-            }
+        mysqlProcess.stderr.on('data', (data) => {
+            stderrData += data.toString();
+        });
 
-            res.json({
-                success: true,
-                message: 'Database berhasil di-restore sepenuhnya.',
-                warning: 'Data telah diperbarui. Halaman akan dimuat ulang otomatis.'
+        // Bungkus dalam Promise untuk menunggu proses selesai
+        await new Promise((resolve, reject) => {
+            mysqlProcess.on('close', (code) => {
+                if (code === 0) {
+                    resolve(true);
+                } else {
+                    reject(new Error(`Proses MySQL gagal dengan kode ${code}. Detail: ${stderrData}`));
+                }
             });
 
-        } catch (mysqlErr) {
-            // Hapus file temporary jika proses gagal
-            fs.unlinkSync(filePath);
-            if (sqlFilePath !== filePath && fs.existsSync(sqlFilePath)) {
-                fs.unlinkSync(sqlFilePath);
-            }
-
-            return res.status(500).json({ 
-                message: 'Restore dibatalkan karena terdapat error pada struktur data.', 
-                detail: mysqlErr.message 
+            mysqlProcess.on('error', (err) => {
+                reject(new Error(`Gagal memulai proses MySQL: ${err.message}. Pastikan 'mysql' sudah terdaftar di Environment Variables (PATH).`));
             });
+
+            // Pipe isi file SQL langsung ke input proses mysql
+            const fileStream = fs.createReadStream(sqlFilePath);
+            fileStream.pipe(mysqlProcess.stdin);
+
+            fileStream.on('error', (err) => {
+                mysqlProcess.kill();
+                reject(new Error(`Gagal membaca file SQL: ${err.message}`));
+            });
+        });
+
+        // Bersihkan file temporary setelah berhasil
+        fs.unlinkSync(filePath);
+        if (sqlFilePath !== filePath && fs.existsSync(sqlFilePath)) {
+            fs.unlinkSync(sqlFilePath);
         }
 
+        res.json({
+            success: true,
+            message: 'Database berhasil di-restore sepenuhnya.',
+            warning: 'Data telah diperbarui. Halaman akan dimuat ulang otomatis.'
+        });
+
     } catch (err) {
-        console.error('[FATAL RESTORE ERROR]:', err);
-        res.status(500).json({ message: 'Gagal restore database', error: err.message });
+        // Bersihkan file temporary jika proses gagal
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        res.status(500).json({ 
+            message: 'Restore dibatalkan karena terdapat error pada struktur data atau koneksi.', 
+            detail: err.message 
+        });
     }
 };
