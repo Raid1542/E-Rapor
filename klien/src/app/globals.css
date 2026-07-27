@@ -15,6 +15,8 @@
 :root {
     --background: #ffffff;
     --foreground: #171717;
+    --input-bg: #ffffff;
+    --input-text: #171717;
 }
 
 /* Mapping variabel CSS ke konfigurasi tema Tailwind */
@@ -25,11 +27,15 @@
     --font-mono: var(--font-geist-mono);
 }
 
-/* Override variabel CSS untuk dark mode (berdasarkan preferensi OS) */
+/* Override variabel CSS untuk dark mode */
 @media (prefers-color-scheme: dark) {
     :root {
         --background: #0a0a0a;
-        --foreground: #ffffff; /* Diperbaiki dari 'black' agar teks tetap terbaca */
+        --foreground: #ededed;
+        
+        /* PERBAIKAN: Paksa input tetap background putih dan teks hitam di dark mode */
+        --input-bg: #ffffff;
+        --input-text: #171717;
     }
 }
 
@@ -41,4 +47,30 @@ body {
     /* Tipografi */
     color: var(--foreground);
     font-family: var(--font-sans);
+}
+
+/* PERBAIKAN: Pastikan input, select, dan textarea memiliki warna yang konsisten */
+input,
+select,
+textarea {
+    /* !important digunakan untuk mengalahkan style inline dari Tailwind (seperti bg-orange-50/40) */
+    background-color: var(--input-bg) !important;
+    color: var(--input-text) !important;
+    border: 0.0625rem solid #d1d5db; /* gray-300 */
+}
+
+/* Placeholder text agar tetap terlihat di kedua mode */
+input::placeholder,
+textarea::placeholder,
+select::placeholder {
+    color: #9ca3af; /* gray-400 */
+}
+
+/* Fokus state untuk aksesibilitas */
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: #f97316; /* orange-500 */
+    box-shadow: 0 0 0 0.1875rem rgba(249, 115, 22, 0.1);
 }
