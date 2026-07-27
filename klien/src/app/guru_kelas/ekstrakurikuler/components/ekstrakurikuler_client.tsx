@@ -152,7 +152,7 @@ export default function EkskulClient() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
 
-    // 🆕 BARU: STATE untuk Import Ekstrakurikuler
+    //  BARU: STATE untuk Import Ekstrakurikuler
     const [showImportModal, setShowImportModal] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -497,7 +497,7 @@ export default function EkskulClient() {
                 showModal({
                     type: 'success',
                     title: 'Template Berhasil Diunduh',
-                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
+                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
                 });
             }, 300);
         } catch (err: any) {
@@ -641,7 +641,7 @@ export default function EkskulClient() {
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // 🆕 AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            //  AUTO-DOWNLOAD CSV JIKA ERROR > 4
             const errors = data.data?.errors || [];
             const totalErrors = errors.length;
 

@@ -60,11 +60,11 @@ exports.getEkskulSiswa = async (req, res) => {
 
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas 
-        FROM guru_kelas gk 
-        INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
-        INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-        WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-        LIMIT 1`,
+            FROM guru_kelas gk 
+            INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
+            INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+            WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+            LIMIT 1`,
             [userId, tahunAjaranIndukId]
         );
 
@@ -79,9 +79,9 @@ exports.getEkskulSiswa = async (req, res) => {
 
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nama_lengkap AS nama, s.nis, s.nisn 
-        FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
-        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
-        ORDER BY s.nama_lengkap`,
+            FROM siswa s JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id 
+            WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
+            ORDER BY s.nama_lengkap`,
             [kelas_id, tahunAjaranIndukId]
         );
 
@@ -89,8 +89,8 @@ exports.getEkskulSiswa = async (req, res) => {
         for (const siswa of siswaRows) {
             const [ekskulRows] = await db.execute(
                 `SELECT e.id_ekskul, e.nama_ekskul, pe.deskripsi 
-            FROM peserta_ekstrakurikuler pe JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
-            WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ?`,
+                FROM peserta_ekstrakurikuler pe JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
+                WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ?`,
                 [siswa.id_siswa, semesterId]
             );
 
@@ -109,9 +109,17 @@ exports.getEkskulSiswa = async (req, res) => {
             [semesterId]
         );
 
-        res.json({ success: true, data, daftar_ekskul, kelas: nama_kelas, semester, pasStatus });
+        res.json({ 
+            success: true, 
+            data, 
+            daftar_ekskul: daftarEkskul, 
+            kelas: nama_kelas, 
+            semester, 
+            pasStatus 
+        });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data ekskul' });
+        console.error('[ERROR] getEkskulSiswa:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data ekskul: ' + err.message });
     }
 };
 
@@ -156,10 +164,10 @@ exports.updateEkskulSiswa = async (req, res) => {
 
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id 
-        FROM guru_kelas gk
-        INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-        WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-        LIMIT 1`,
+            FROM guru_kelas gk
+            INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+            WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+            LIMIT 1`,
             [userId, tahunAjaranIndukId]
         );
 
@@ -181,7 +189,7 @@ exports.updateEkskulSiswa = async (req, res) => {
             const placeholders = ekskulIds.map(() => '?').join(',');
             await db.execute(
                 `DELETE FROM peserta_ekstrakurikuler 
-            WHERE siswa_id = ? AND tahun_ajaran_id = ? AND ekskul_id NOT IN (${placeholders})`,
+                WHERE siswa_id = ? AND tahun_ajaran_id = ? AND ekskul_id NOT IN (${placeholders})`,
                 [siswaId, semesterId, ...ekskulIds]
             );
         } else {
@@ -198,14 +206,15 @@ exports.updateEkskulSiswa = async (req, res) => {
 
             await db.execute(
                 `INSERT INTO peserta_ekstrakurikuler (siswa_id, ekskul_id, tahun_ajaran_id, deskripsi) 
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE deskripsi = VALUES(deskripsi), updated_at = CURRENT_TIMESTAMP`,
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE deskripsi = VALUES(deskripsi), updated_at = CURRENT_TIMESTAMP`,
                 [siswaId, ekskulId, semesterId, deskripsi]
             );
         }
 
         res.json({ success: true, message: 'Data ekstrakurikuler berhasil diperbarui' });
     } catch (err) {
+        console.error('[ERROR] updateEkskulSiswa:', err);
         res.status(500).json({ success: false, message: 'Gagal update ekskul: ' + err.message });
     }
 };
@@ -225,11 +234,11 @@ exports.downloadTemplateEkskul = async (req, res) => {
 
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas 
-        FROM guru_kelas gk 
-        INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
-        INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-        WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-        LIMIT 1`,
+            FROM guru_kelas gk 
+            INNER JOIN kelas k ON gk.kelas_id = k.id_kelas 
+            INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+            WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+            LIMIT 1`,
             [userId, tahunAjaranIndukId]
         );
 
@@ -246,21 +255,23 @@ exports.downloadTemplateEkskul = async (req, res) => {
 
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
-        FROM siswa s
-        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
-        ORDER BY s.nama_lengkap ASC`,
+            FROM siswa s
+            INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+            WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+            ORDER BY s.nama_lengkap ASC`,
             [kelas_id, tahunAjaranIndukId]
         );
 
+        // ✅ PERBAIKAN 2: Gunakan parameterized query untuk IN clause agar lebih aman
+        const siswaIds = siswaRows.length > 0 ? siswaRows.map(s => s.id_siswa) : [0];
         const [existingEkskulRows] = await db.execute(
             `SELECT pe.siswa_id, pe.ekskul_id, pe.deskripsi, e.nama_ekskul
-        FROM peserta_ekstrakurikuler pe
-        INNER JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul
-        WHERE pe.siswa_id IN (${siswaRows.length > 0 ? siswaRows.map(s => s.id_siswa).join(',') : '0'})
-        AND pe.tahun_ajaran_id = ?
-        ORDER BY pe.siswa_id, pe.ekskul_id`,
-            [semesterId]
+            FROM peserta_ekstrakurikuler pe
+            INNER JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul
+            WHERE pe.siswa_id IN (?)
+            AND pe.tahun_ajaran_id = ?
+            ORDER BY pe.siswa_id, pe.ekskul_id`,
+            [siswaIds, semesterId]
         );
 
         const ekskulBySiswa = {};
@@ -388,6 +399,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
+        console.error('[ERROR] downloadTemplateEkskul:', err);
         res.status(500).json({ success: false, message: 'Gagal membuat template: ' + err.message });
     }
 };
@@ -421,10 +433,10 @@ exports.importEkskulExcel = async (req, res) => {
 
         const [guruKelasRows] = await db.execute(
             `SELECT gk.kelas_id 
-        FROM guru_kelas gk
-        INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
-        WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
-        LIMIT 1`,
+            FROM guru_kelas gk
+            INNER JOIN tahun_ajaran ta ON gk.tahun_ajaran_id = ta.id_tahun_ajaran
+            WHERE gk.user_id = ? AND ta.id_tahun_ajaran_induk = ?
+            LIMIT 1`,
             [userId, tahunAjaranIndukId]
         );
 
@@ -524,9 +536,9 @@ exports.importEkskulExcel = async (req, res) => {
 
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.status
-        FROM siswa s
-        INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-        WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
+            FROM siswa s
+            INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+            WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'`,
             [kelas_id, tahunAjaranIndukId]
         );
 
@@ -662,7 +674,7 @@ exports.importEkskulExcel = async (req, res) => {
             for (const ekskul of ekskulList) {
                 await connection.execute(
                     `INSERT INTO peserta_ekstrakurikuler (siswa_id, ekskul_id, tahun_ajaran_id, deskripsi)
-            VALUES (?, ?, ?, ?)`,
+                    VALUES (?, ?, ?, ?)`,
                     [siswa.id_siswa, ekskul.ekskul_id, semesterId, ekskul.deskripsi]
                 );
             }
@@ -716,6 +728,7 @@ exports.importEkskulExcel = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
+        console.error('[ERROR] importEkskulExcel:', err);
         res.status(500).json({ success: false, message: 'Gagal mengimport ekskul: ' + err.message });
     } finally {
         connection.release();

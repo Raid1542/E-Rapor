@@ -13,10 +13,10 @@ const db = require('../../config/db');
 exports.getTahunAjaranAktif = async () => {
     try {
         const [rows] = await db.execute(`
-      SELECT ta.id_tahun_ajaran, ta.id_tahun_ajaran_induk, ta.semester, ta.status_pts, ta.status_pas
-      FROM tahun_ajaran ta 
-      WHERE ta.status = 'aktif' 
-      LIMIT 1
+        SELECT ta.id_tahun_ajaran, ta.id_tahun_ajaran_induk, ta.semester, ta.status_pts, ta.status_pas
+        FROM tahun_ajaran ta 
+        WHERE ta.status = 'aktif' 
+        LIMIT 1
     `);
         return rows.length > 0 ? rows[0] : null;
     } catch (err) {

@@ -933,106 +933,117 @@ export default function AturPenilaianGuruKelasClient() {
         setShowConfirmModal(true);
     };
 
-    // ✅ PERBAIKAN: executeSaveBatchAkademik dengan UPDATE strategy
-    const executeSaveBatchAkademik = async () => {
-        setIsSavingBatchAkademik(true);
-        try {
-            const token = localStorage.getItem('token');
-            // ✅ PERBAIKAN: Gunakan UPDATE untuk kategori yang sudah ada
-            // dan INSERT untuk yang baru, hindari DELETE
-            const promises = [];
+    // ✅ PERBAIKAN: executeSaveBatchAkademik dengan strategi DELETE dulu, baru UPDATE/INSERT
+const executeSaveBatchAkademik = async () => {
+    setIsSavingBatchAkademik(true);
+    try {
+        const token = localStorage.getItem('token');
+        
+        // 1. Cari kategori yang dihapus (ada di original, tapi tidak ada di batch sekarang)
+        const currentIds = new Set(batchAkademik.map(b => b.id).filter(Boolean));
+        const deletedItems = originalBatchAkademik.filter(orig => orig.id && !currentIds.has(orig.id));
 
-            // Update existing categories
-            originalBatchAkademik.forEach((orig) => {
-                const updated = batchAkademik.find(b => b.id === orig.id);
-                if (updated && orig.id) {
-                    // UPDATE kategori yang sudah ada
-                    promises.push(
-                        fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`
-                            },
-                            body: JSON.stringify({
-                                min_nilai: Math.floor(updated.min_nilai),
-                                max_nilai: Math.floor(updated.max_nilai),
-                                deskripsi: updated.deskripsi.trim()
-                            })
-                        })
-                    );
-                }
-            });
+        // 2. Hapus dulu kategori yang dihapus agar tidak terjadi error overlap saat update
+        if (deletedItems.length > 0) {
+            const deletePromises = deletedItems.map(orig =>
+                fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            );
+            const deleteResults = await Promise.all(deletePromises);
+            const deleteFailed = deleteResults.find(r => !r.ok);
+            if (deleteFailed) {
+                throw new Error('Gagal menghapus kategori yang dihapus.');
+            }
+        }
 
-            // Insert new categories (yang tidak punya id)
-            batchAkademik.filter(b => !b.id).forEach(newCat => {
-                promises.push(
-                    fetch(`${API}/atur-penilaian/kategori-akademik`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${token}`
-                        },
+        // 3. Update kategori yang ada dan Insert kategori baru
+        const updateInsertPromises = [];
+        
+        // Update existing
+        originalBatchAkademik.forEach((orig) => {
+            const updated = batchAkademik.find(b => b.id === orig.id);
+            if (updated && orig.id) {
+                updateInsertPromises.push(
+                    fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                         body: JSON.stringify({
-                            min_nilai: Math.floor(newCat.min_nilai),
-                            max_nilai: Math.floor(newCat.max_nilai),
-                            deskripsi: newCat.deskripsi.trim(),
-                            urutan: 0,
-                            mapel_id: selectedMapelAkademik,
-                            jenis: jenisPenilaianAktif
+                            min_nilai: Math.floor(updated.min_nilai),
+                            max_nilai: Math.floor(updated.max_nilai),
+                            deskripsi: updated.deskripsi.trim()
                         })
                     })
                 );
-            });
-
-            const results = await Promise.all(promises);
-            const allSuccess = results.every(r => r.ok);
-
-            if (allSuccess) {
-                setShowConfirmModal(false);
-                closeBatchEditAkademik();
-                showModal({
-                    type: 'success',
-                    title: 'Berhasil Disimpan!',
-                    message: `${batchAkademik.length} kategori berhasil disimpan. Nilai rapor siswa telah dihitung ulang otomatis.`
-                });
-
-                // Refresh data
-                const jenisParam = getJenisParam(jenisPenilaianAktif);
-                const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                if (reloadRes.ok) {
-                    const data = await reloadRes.json();
-                    setKategoriList((data.data || []).map((item: any) => ({
-                        ...item,
-                        min_nilai: Math.floor(parseFloat(item.min_nilai)),
-                        max_nilai: Math.floor(parseFloat(item.max_nilai))
-                    })));
-                    setCoverageInfo(data.coverage || null);
-                }
-            } else {
-                setShowConfirmModal(false);
-                // ✅ PERBAIKAN: Baca error detail dari backend
-                const failedResult = results.find(r => !r.ok);
-                if (failedResult) {
-                    const errData = await failedResult.json().catch(() => ({}));
-                    showModal({
-                        type: 'error',
-                        title: 'Gagal Menyimpan',
-                        message: errData.message || 'Beberapa kategori gagal disimpan.'
-                    });
-                } else {
-                    showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
-                }
             }
-        } catch (err: any) {
+        });
+
+        // Insert new
+        batchAkademik.filter(b => !b.id).forEach(newCat => {
+            updateInsertPromises.push(
+                fetch(`${API}/atur-penilaian/kategori-akademik`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                        min_nilai: Math.floor(newCat.min_nilai),
+                        max_nilai: Math.floor(newCat.max_nilai),
+                        deskripsi: newCat.deskripsi.trim(),
+                        urutan: 0,
+                        mapel_id: selectedMapelAkademik,
+                        jenis: jenisPenilaianAktif
+                    })
+                })
+            );
+        });
+
+        const results = await Promise.all(updateInsertPromises);
+        const allSuccess = results.every(r => r.ok);
+
+        if (allSuccess) {
             setShowConfirmModal(false);
-            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
-        } finally {
-            setIsSavingBatchAkademik(false);
+            closeBatchEditAkademik();
+            showModal({
+                type: 'success',
+                title: 'Berhasil Disimpan!',
+                message: `${batchAkademik.length} kategori berhasil disimpan. Nilai rapor siswa telah dihitung ulang otomatis.`
+            });
+            
+            // Refresh data
+            const jenisParam = getJenisParam(jenisPenilaianAktif);
+            const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (reloadRes.ok) {
+                const data = await reloadRes.json();
+                setKategoriList((data.data || []).map((item: any) => ({
+                    ...item,
+                    min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                    max_nilai: Math.floor(parseFloat(item.max_nilai))
+                })));
+                setCoverageInfo(data.coverage || null);
+            }
+        } else {
+            setShowConfirmModal(false);
+            const failedResult = results.find(r => !r.ok);
+            if (failedResult) {
+                const errData = await failedResult.json().catch(() => ({}));
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Menyimpan',
+                    message: errData.message || 'Beberapa kategori gagal disimpan.'
+                });
+            } else {
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
+            }
         }
-    };
+    } catch (err: any) {
+        setShowConfirmModal(false);
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
+    } finally {
+        setIsSavingBatchAkademik(false);
+    }
+};
 
     // ── Batch Edit - Deskripsi Rata-rata ──
     const loadBatchDeskripsi = () => {

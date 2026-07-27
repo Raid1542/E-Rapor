@@ -16,6 +16,7 @@ const db = require('../config/db');
 const authenticate = require('../middleware/authenticate');
 const authorize = require('../middleware/authorize');
 const cekPenilaianStatus = require('../middleware/cekPenilaianStatus');
+const cekStatusPAS = require('../middleware/cekStatusPAS');
 const cekGuruKelasDitugaskan = require('../middleware/cekGuruKelasDitugaskan');
 const guruKelasControllers = require('../controllers/guru_kelas');
 
@@ -299,10 +300,10 @@ router.put('/catatan-wali-kelas/:siswa_id/:jenis/:semester', authenticate, guruK
 // ROUTE: EKSTRAKURIKULER
 // ==========================================================================
 
-router.get('/ekskul/import-template', authenticate, guruKelasOnly, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateEkskul));
-router.post('/ekskul/import', authenticate, guruKelasOnly, cekPenilaianStatus, setPenilaianContextAktif, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importEkskulExcel));
-router.get('/ekskul', authenticate, guruKelasOnly, cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getEkskulSiswa));
-router.put('/ekskul/:siswaId', authenticate, guruKelasOnly, validateIdParam('siswaId'), cekPenilaianStatus, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateEkskulSiswa));
+router.get('/ekskul/import-template', authenticate, guruKelasOnly, cekStatusPAS, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.downloadTemplateEkskul));
+router.post('/ekskul/import', authenticate, guruKelasOnly, cekStatusPAS, cekGuruKelasDitugaskan, uploadExcel.single('file'), safeHandler(guruKelasControllers.importEkskulExcel));
+router.get('/ekskul', authenticate, guruKelasOnly, cekStatusPAS, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.getEkskulSiswa));
+router.put('/ekskul/:siswaId', authenticate, guruKelasOnly, validateIdParam('siswaId'), cekStatusPAS, cekGuruKelasDitugaskan, safeHandler(guruKelasControllers.updateEkskulSiswa));
 
 // ==========================================================================
 // ROUTE: KOKURIKULER
