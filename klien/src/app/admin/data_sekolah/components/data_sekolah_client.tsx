@@ -5,69 +5,106 @@
  *         dan pengunggahan logo sekolah. Data disimpan ke backend melalui API PUT,
  *         sedangkan logo diupload via FormData ke endpoint khusus.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * Update: Tambah animasi fadeInUp konsisten dengan Dashboard & Data Tahun Ajaran
+ * Update: Menyamakan tampilan (warna, bentuk tombol, kartu) dengan
+ *         data_guru_client.tsx / data_pembina_ekskul_client.tsx / data_kelas_client.tsx /
+ *         data_tahun_ajaran_client.tsx. Hanya lapisan UI yang diubah — semua logika,
+ *         state, dan pemanggilan API tetap sama persis seperti sebelumnya.
  */
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X, Upload, ImageOff } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
+// ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
+// Disamakan dengan data_guru_client.tsx / data_pembina_ekskul_client.tsx /
+// data_kelas_client.tsx / data_tahun_ajaran_client.tsx.
 
-const PAGE_BG = { background: '#ffffff' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 4px 24px rgba(200,80,10,0.09)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
+const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
 
-const inputCls = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400";
-const labelCls = "block text-sm font-semibold mb-1.5";
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+
+const inputCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400";
+const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
-// ─── GLOBAL STYLES — animasi fadeInUp ala Dashboard ──────────────────────────
+// ─── GLOBAL STYLES ─────────────────────────────────────────────────────────
 
 const GlobalStyles = () => (
     <style jsx global>{`
-        @keyframes ds-fadeIn  { from { opacity:0 } to { opacity:1 } }
-        @keyframes ds-scaleIn { from { opacity:0; transform:scale(0.93) translateY(10px) } to { opacity:1; transform:scale(1) translateY(0) } }
-        @keyframes ds-pulse   { 0%{transform:scale(1)} 50%{transform:scale(1.1)} 100%{transform:scale(1)} }
-        .ds-fadeIn  { animation: ds-fadeIn 0.2s ease; }
-        .ds-scaleIn { animation: ds-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .ds-pulse   { animation: ds-pulse 0.6s ease 0.15s; }
+        @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .dg-fadeIn  { animation: dg-fadeIn  0.18s ease; }
+        .dg-scaleIn { animation: dg-scaleIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+        .dg-pulse   { animation: dg-pulse   0.6s ease 0.1s; }
 
-        /* ── Animasi "muncul dari bawah" ala Dashboard ── */
         @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0);    }
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0);   }
         }
-        .anim-in { animation: fadeInUp 0.45s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
-        .d1 { animation-delay: 0.05s; }
-        .d2 { animation-delay: 0.10s; }
-        .d3 { animation-delay: 0.15s; }
-        .d4 { animation-delay: 0.20s; }
-        .d5 { animation-delay: 0.25s; }
-        .d6 { animation-delay: 0.30s; }
+        .anim-in { animation: fadeInUp 0.35s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.02s; }
+        .d2 { animation-delay: 0.06s; }
+        .d3 { animation-delay: 0.10s; }
 
-        /* ── Hover lift untuk card, konsisten dengan Dashboard ── */
-        .section-card {
-            transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
-                        box-shadow 0.25s ease;
+        .card-flat { transition: box-shadow 0.2s ease; }
+        .card-flat:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action:hover  { filter: brightness(1.04); }
+        .btn-action:active { filter: brightness(0.98); }
+
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, label:focus-within {
+            outline: 2.5px solid #f5a623;
+            outline-offset: 2px;
         }
-        .section-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 28px rgba(180,70,10,0.13) !important;
-        }
-        .btn-primary {
-            transition: transform 0.18s ease, box-shadow 0.18s ease;
-        }
-        .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(232,105,10,0.34); }
-        .btn-primary:active { transform: translateY(0); }
 
         /* ── Logo preview: sedikit pulse pas ganti gambar ── */
-        .logo-pop { animation: ds-scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+        .logo-pop { animation: dg-scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .anim-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .btn-action, .card-flat, .logo-pop {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
     `}</style>
+);
+
+// ─── SISTEM TOMBOL AKSI ────────────────────────────────────────────────────
+
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
+    info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
+    warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
+    neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
+    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
+    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
+};
+
+const ActionButton = ({
+    onClick, children, variant = 'neutral', disabled = false, fullWidth = false,
+}: {
+    onClick?: () => void; children: React.ReactNode; variant?: BtnVariant;
+    disabled?: boolean; fullWidth?: boolean;
+}) => (
+    <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap px-5 py-2.5 text-sm ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={VARIANT_BASE[variant]}
+    >
+        {children}
+    </button>
 );
 
 // ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
@@ -76,31 +113,33 @@ type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ds-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ds-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                    <X size={18} />
-                </button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ds-pulse`}>
-                    {s.icon}
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                <div className="dg-scaleIn contents w-full">
+                    <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                        <X size={18} />
+                    </button>
+                    <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>
+                        {s.icon}
+                    </div>
+                    <div className="text-center w-full">
+                        <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
+                    </div>
+                    <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>
+                        OK, Mengerti
+                    </button>
                 </div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-                </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
-                </button>
             </div>
         </div>
     );
@@ -298,7 +337,7 @@ export default function DataSekolahPage() {
             <div className="flex items-center justify-center min-h-screen" style={PAGE_BG}>
                 <div className="text-center">
                     <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data sekolah...</p>
+                    <p className="text-sm font-semibold" style={{ color: ACCENT_DARK }}>Memuat data sekolah...</p>
                 </div>
             </div>
         );
@@ -308,7 +347,7 @@ export default function DataSekolahPage() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="flex-1 min-h-screen p-6 flex flex-col items-center" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6 flex flex-col items-center" style={PAGE_BG}>
             <GlobalStyles />
 
             {/* Notif modal */}
@@ -318,21 +357,21 @@ export default function DataSekolahPage() {
             )}
 
             {/* Page header */}
-            <div className="w-full max-w-3xl mb-6 anim-in d1">
-                <h1 className="text-2xl font-bold text-gray-900">Data Sekolah</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola informasi dan logo sekolah</p>
+            <div className="w-full max-w-3xl mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Data Sekolah</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola informasi dan logo sekolah</p>
             </div>
 
             {/* Card */}
-            <div className="section-card w-full max-w-3xl bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
+            <div className="card-flat w-full max-w-3xl bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
 
                 {/* Card header */}
-                <div className="px-6 py-4" style={HEADER_GRAD}>
-                    <h2 className="text-base font-bold text-white">Informasi Sekolah</h2>
-                    <p className="text-xs text-white/70 mt-0.5">Lengkapi semua informasi sekolah dengan benar</p>
+                <div className="px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
+                    <h2 className="text-sm sm:text-base font-bold text-white">Informasi Sekolah</h2>
+                    <p className="text-xs text-white/75 mt-0.5">Lengkapi semua informasi sekolah dengan benar</p>
                 </div>
 
-                <div className="p-6 sm:p-8">
+                <div className="p-4 sm:p-6 md:p-8">
 
                     {/* ── Logo section ── */}
                     <div className="flex flex-col items-center mb-8">
@@ -340,7 +379,7 @@ export default function DataSekolahPage() {
                         {/* Preview bulat */}
                         <div
                             key={logoPreview ?? 'empty'}
-                            className="logo-pop w-32 h-32 rounded-full flex items-center justify-center overflow-hidden mb-4"
+                            className="logo-pop w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center overflow-hidden mb-4"
                             style={{ border: '3px dashed #fde0c8', background: '#fffaf6' }}
                         >
                             {logoPreview ? (
@@ -349,11 +388,8 @@ export default function DataSekolahPage() {
                                     onError={() => setLogoPreview(null)} />
                             ) : (
                                 <div className="flex flex-col items-center">
-                                    <svg className="w-10 h-10 mb-1" fill="none" stroke="#f5a623" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
-                                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    <span className="text-[10px] font-medium" style={{ color: '#c95b08' }}>Belum ada logo</span>
+                                    <ImageOff size={30} className="mb-1" style={{ color: '#f5a623' }} />
+                                    <span className="text-[10px] font-bold" style={{ color: ACCENT_DARK }}>Belum ada logo</span>
                                 </div>
                             )}
                         </div>
@@ -365,34 +401,29 @@ export default function DataSekolahPage() {
 
                         {/* Tombol pilih file */}
                         <label
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer text-xs font-semibold transition-all"
-                            style={{ border: '1.5px dashed #fde0c8', background: '#fffaf6', color: '#e8690a' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                            onMouseLeave={e => (e.currentTarget.style.background = '#fffaf6')}
+                            className="btn-action flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer text-xs font-bold transition-all"
+                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                            </svg>
+                            <Upload size={14} />
                             {selectedFile ? selectedFile.name : 'Pilih Logo Baru'}
                             <input key={fileInputKey} type="file" accept="image/jpeg,image/png,image/jpg"
                                 onChange={handleLogoChange} className="hidden" />
                         </label>
-                        <p className="text-[10px] mt-1.5" style={{ color: '#c95b08' }}>JPG, JPEG, PNG · maks. 2 MB</p>
+                        <p className="text-[11px] mt-1.5 text-gray-400 font-medium">JPG, JPEG, PNG · maks. 2 MB</p>
                     </div>
 
                     {/* ── Divider ── */}
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="flex-1 h-px" style={{ background: '#fde0c8' }} />
-                        <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#c95b08' }}>Informasi Umum</span>
-                        <div className="flex-1 h-px" style={{ background: '#fde0c8' }} />
+                        <div className="flex-1 h-px" style={{ background: '#f0f0f0' }} />
+                        <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: ACCENT_DARK }}>Informasi Umum</span>
+                        <div className="flex-1 h-px" style={{ background: '#f0f0f0' }} />
                     </div>
 
                     {/* ── Form fields ── */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-2">
 
                         {/* Nama Sekolah — full width */}
-                        <div className="sm:col-span-2 flex flex-col gap-1.5">
+                        <div className="sm:col-span-2 flex flex-col gap-1">
                             <label className={labelCls} style={labelColor}>Nama Sekolah <span className="text-red-500">*</span></label>
                             <input type="text" name="namaSekolah" value={formData.namaSekolah}
                                 onChange={handleInputChange} placeholder="Masukkan nama sekolah"
@@ -409,7 +440,7 @@ export default function DataSekolahPage() {
                             { label: 'Kepala Sekolah', name: 'kepalaSekolah', type: 'text' },
                             { label: 'NIY Kepala Sekolah', name: 'niyKepalaSekolah', type: 'text' },
                         ].map((field) => (
-                            <div key={field.name} className="flex flex-col gap-1.5">
+                            <div key={field.name} className="flex flex-col gap-1">
                                 <label className={labelCls} style={labelColor}>{field.label}</label>
                                 <input type={field.type} name={field.name}
                                     value={formData[field.name as keyof typeof formData] as string}
@@ -420,7 +451,7 @@ export default function DataSekolahPage() {
                         ))}
 
                         {/* Alamat — full width */}
-                        <div className="sm:col-span-2 flex flex-col gap-1.5">
+                        <div className="sm:col-span-2 flex flex-col gap-1">
                             <label className={labelCls} style={labelColor}>Alamat</label>
                             <textarea name="alamat" value={formData.alamat} onChange={handleInputChange}
                                 rows={3} placeholder="Masukkan alamat lengkap sekolah"
@@ -429,19 +460,9 @@ export default function DataSekolahPage() {
                     </div>
 
                     {/* ── Simpan ── */}
-                    <div className="mt-2 pt-5" style={{ borderTop: '1px solid #fde0c8' }}>
+                    <div className="mt-4 pt-5 border-t" style={{ borderColor: '#f0e0d0' }}>
                         <div className="flex justify-end">
-                            <button
-                                onClick={openConfirmModal}
-                                disabled={isBusy}
-                                className="btn-primary flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{
-                                    background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                    boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
-                                }}
-                                onMouseEnter={e => { if (!isBusy) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; }}
-                            >
+                            <ActionButton variant="primary" disabled={isBusy} onClick={openConfirmModal}>
                                 {isBusy ? (
                                     <>
                                         <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -450,51 +471,40 @@ export default function DataSekolahPage() {
                                 ) : (
                                     'Simpan Perubahan'
                                 )}
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Modal Konfirmasi Sederhana */}
+            {/* Modal Konfirmasi */}
             {showConfirmModal && (
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 ds-fadeIn"
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
                 >
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ds-scaleIn">
-                        <div className="flex items-center gap-3 mb-4">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="flex items-center gap-3 mb-3">
                             <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert size={24} className="text-orange-500" />
+                                <ShieldAlert size={22} className="text-orange-500" />
                             </div>
-                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">
+                            <h3 className="text-base font-bold text-gray-900">
                                 Konfirmasi Perubahan Data
                             </h3>
                         </div>
 
-                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">
+                        <p className="text-sm text-gray-500 mb-5">
                             Apakah Anda yakin ingin menyimpan perubahan data sekolah ini?
                         </p>
 
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                            >
+                        <div className="flex gap-2.5">
+                            <ActionButton variant="neutral" fullWidth onClick={() => setShowConfirmModal(false)}>
                                 Batal
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowConfirmModal(false);
-                                    executeSubmit();
-                                }}
-                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
-                                style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}
-                            >
+                            </ActionButton>
+                            <ActionButton variant="primary" fullWidth onClick={() => { setShowConfirmModal(false); executeSubmit(); }}>
                                 Simpan
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>

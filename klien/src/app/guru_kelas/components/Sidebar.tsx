@@ -1,9 +1,8 @@
-/**
+/*
  * Nama File: Sidebar.tsx
- * Fungsi: Komponen sidebar navigasi untuk guru kelas
- * UPDATE: Tampilan disamakan dengan Sidebar Admin (badge ikon aktif, aksen bar,
- *         label seksi bergaris, jarak antar menu identik). Tidak ada submenu.
+ * Fungsi: Komponen sidebar navigasi untuk guru kelas.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 10 Juli 2026
  */
 
 'use client';
@@ -25,60 +24,63 @@ import {
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
-// ─── GLOBAL STYLES (disamakan dengan Sidebar Admin) ─────────────────────────
+/* Konstanta: URL dasar API */
+const API_BASE_URL = 'http://localhost:5000';
+
+/* Komponen: Menyuntikkan animasi global untuk sidebar */
 const SidebarStyles = () => (
     <style jsx global>{`
-        @keyframes sb_slideDown {
+        @keyframes sb-slideDown {
             from {
                 opacity: 0;
-                transform: translateY(-8px);
+                transform: translateY(-0.5rem);
                 max-height: 0;
             }
             to {
                 opacity: 1;
                 transform: translateY(0);
-                max-height: 500px;
+                max-height: 31.25rem;
             }
         }
-        @keyframes sb_fadeIn {
-            from { opacity: 0; transform: translateX(-4px); }
+        @keyframes sb-fadeIn {
+            from { opacity: 0; transform: translateX(-0.25rem); }
             to { opacity: 1; transform: translateX(0); }
         }
-        @keyframes sb_badgePulse {
+        @keyframes sb-badgePulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
-        .sb-slideDown { animation: sb_slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .sb-fadeIn { animation: sb_fadeIn 0.25s ease-out; }
-        .sb-badgePulse { animation: sb_badgePulse 2s ease-in-out infinite; }
+        .sb-slideDown { animation: sb-slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .sb-fadeIn { animation: sb-fadeIn 0.25s ease-out; }
+        .sb-badgePulse { animation: sb-badgePulse 2s ease-in-out infinite; }
 
         .sb-nav-item {
             position: relative;
             transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .sb-nav-item:hover:not(:disabled) {
-            transform: translateX(3px);
+            transform: translateX(0.1875rem);
         }
 
-        /* Aksen bar kecil di sisi kiri item yang aktif (sama seperti Admin) */
+        /* Aksen bar kecil di sisi kiri item yang aktif */
         .sb-nav-item.sb-active::before {
             content: '';
             position: absolute;
-            left: -12px;
+            left: -0.75rem;
             top: 50%;
             transform: translateY(-50%);
-            width: 4px;
-            height: 22px;
-            border-radius: 0 4px 4px 0;
+            width: 0.25rem;
+            height: 1.375rem;
+            border-radius: 0 0.25rem 0.25rem 0;
             background: #fff;
-            box-shadow: 0 0 8px rgba(255,255,255,0.6);
+            box-shadow: 0 0 0.5rem rgba(255, 255, 255, 0.6);
         }
 
-        /* Wadah ikon: badge bulat/kotak lembut (sama seperti Admin) */
+        /* Wadah ikon: badge bulat/kotak lembut */
         .sb-icon-wrap {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 0.75rem;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -87,15 +89,15 @@ const SidebarStyles = () => (
         }
         .sb-icon-wrap.sb-icon-active {
             background: linear-gradient(135deg, #c95b08, #f5870a);
-            box-shadow: 0 3px 10px rgba(180,70,10,0.28);
+            box-shadow: 0 0.1875rem 0.625rem rgba(180, 70, 10, 0.28);
             color: #fff;
         }
         .sb-icon-wrap.sb-icon-inactive {
-            background: rgba(255,255,255,0.10);
-            color: rgba(255,255,255,0.9);
+            background: rgba(255, 255, 255, 0.10);
+            color: rgba(255, 255, 255, 0.9);
         }
         .sb-nav-item:hover:not(:disabled) .sb-icon-wrap.sb-icon-inactive {
-            background: rgba(255,255,255,0.18);
+            background: rgba(255, 255, 255, 0.18);
         }
 
         .sb-chevron {
@@ -105,17 +107,17 @@ const SidebarStyles = () => (
             transform: rotate(180deg);
         }
 
-        /* Label seksi dengan garis pemisah tipis (sama seperti Admin) */
+        /* Label seksi dengan garis pemisah tipis */
         .sb-section-label {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 0.5rem;
         }
         .sb-section-label::after {
             content: '';
             flex: 1;
-            height: 1px;
-            background: linear-gradient(to right, rgba(255,255,255,0.18), transparent);
+            height: 0.0625rem;
+            background: linear-gradient(to right, rgba(255, 255, 255, 0.18), transparent);
         }
 
         .sb-scrollbar-none::-webkit-scrollbar { display: none; }
@@ -123,6 +125,7 @@ const SidebarStyles = () => (
     `}</style>
 );
 
+/* Interface: Props untuk komponen Sidebar */
 interface SidebarProps {
     user: {
         id: number;
@@ -132,44 +135,53 @@ interface SidebarProps {
     };
 }
 
+/* Komponen Utama: Sidebar navigasi untuk Guru Kelas */
 export default function Sidebar({ user }: SidebarProps) {
     const router = useRouter();
     const pathname = usePathname();
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
     const [logoUrl, setLogoUrl] = useState<string>('/images/LogoUA.jpg');
     const [schoolName, setSchoolName] = useState<string>('SDIT Ulil Albab');
 
-    // ── Fetch data sekolah (logo + nama) ──────────────────────────────────
+    /* Ambil data sekolah (logo dan nama) dari API */
     const fetchSchoolData = async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const res = await fetch('http://localhost:5000/api/sekolah', {
+            const res = await fetch(`${API_BASE_URL}/api/sekolah`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
             if (res.ok) {
                 const { data } = await res.json();
                 if (data) {
-                    if (data.logo_path) setLogoUrl(`http://localhost:5000${data.logo_path}?t=${Date.now()}`);
-                    if (data.nama_sekolah) setSchoolName(data.nama_sekolah);
+                    if (data.logo_path) {
+                        setLogoUrl(`${API_BASE_URL}${data.logo_path}?t=${Date.now()}`);
+                    }
+                    if (data.nama_sekolah) {
+                        setSchoolName(data.nama_sekolah);
+                    }
                 }
             }
-        } catch (err) {
-            console.warn('Gagal fetch data sekolah di sidebar guru kelas:', err);
+        } catch (error) {
+            console.warn('Gagal fetch data sekolah di sidebar guru kelas:', error);
         }
     };
 
+    // Setup event listeners untuk update data secara real-time
     useEffect(() => {
         fetchSchoolData();
 
         const handleLogoUpdate = (e: Event) => {
             const customEvent = e as CustomEvent;
             const logoPath = customEvent.detail?.logoPath;
-            if (logoPath) setLogoUrl(`http://localhost:5000${logoPath}?t=${Date.now()}`);
-            else fetchSchoolData();
+            if (logoPath) {
+                setLogoUrl(`${API_BASE_URL}${logoPath}?t=${Date.now()}`);
+            } else {
+                fetchSchoolData();
+            }
         };
 
         const handleSchoolUpdate = () => fetchSchoolData();
@@ -183,7 +195,7 @@ export default function Sidebar({ user }: SidebarProps) {
         };
     }, []);
 
-    // ── Menu Items ─────────────────────────────────────────────────────────
+    // Konstanta data menu navigasi
     const menuUtama = [
         { name: 'Dashboard', url: '/guru_kelas/dashboard', icon: Home },
     ];
@@ -209,16 +221,22 @@ export default function Sidebar({ user }: SidebarProps) {
         { name: 'Cetak Rapor', url: '/guru_kelas/rapor', icon: BookOpen },
     ];
 
-    // ── Handlers ───────────────────────────────────────────────────────────
-    const toggleSidebar = () => setIsExpanded(!isExpanded);
-    const handleNavigation = (url: string) => router.push(url);
+    /* Handler: Toggle ekspansi sidebar */
+    const toggleSidebar = () => {
+        setIsExpanded(!isExpanded);
+    };
 
-    // ── Reusable nav item styles (disamakan dengan Admin) ──────────────────
-    const navBase = 'sb-nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium';
+    /* Handler: Navigasi ke URL tertentu */
+    const handleNavigation = (url: string) => {
+        router.push(url);
+    };
+
+    // Konstanta style untuk item navigasi
+    const navBase = 'sb-nav-item w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 text-sm font-medium';
     const navActive = 'sb-active bg-white text-orange-600 shadow-sm font-semibold';
     const navInactive = 'text-white hover:bg-white/10 hover:text-white';
 
-    // Helper untuk render menu item dengan icon component (badge aktif sama seperti Admin)
+    /* Fungsi: Merender item menu dengan ikon dan status aktif */
     const renderMenuItem = (item: any, isActive: boolean) => {
         const IconComponent = item.icon;
         return (
@@ -228,7 +246,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 className={`${navBase} ${isActive ? navActive : navInactive}`}
             >
                 <span className={`sb-icon-wrap ${isActive ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-                    <IconComponent className="w-[18px] h-[18px]" />
+                    <IconComponent className="w-5 h-5" />
                 </span>
                 {isExpanded && <span>{item.name}</span>}
             </button>
@@ -237,24 +255,27 @@ export default function Sidebar({ user }: SidebarProps) {
 
     return (
         <div
-            className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-[72px]'}`}
+            className={`flex flex-col h-screen transition-all duration-300 ${isExpanded ? 'w-64' : 'w-20'}`}
             style={{
                 background: 'linear-gradient(175deg, #9a3a08 0%, #c95b08 40%, #e8690a 75%, #f5870a 100%)',
             }}
         >
             <SidebarStyles />
 
-            {/* ── Header: Logo + Nama Sekolah (sama seperti Admin) ───── */}
+            {/* Header Sidebar: Logo + Nama Sekolah */}
             <div
-                className="flex items-center justify-between px-4 py-4"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
+                className="flex items-center justify-between px-3 py-4"
+                style={{ borderBottom: '0.0625rem solid rgba(255,255,255,0.15)' }}
             >
                 {isExpanded ? (
                     <>
                         <div className="flex items-center gap-3 min-w-0">
                             <div
                                 className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-110 hover:rotate-6"
-                                style={{ background: 'rgba(255,255,255,0.18)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
+                                style={{ 
+                                    background: 'rgba(255,255,255,0.18)', 
+                                    boxShadow: '0 0 0 0.1875rem rgba(255,255,255,0.08)' 
+                                }}
                             >
                                 <img
                                     src={logoUrl}
@@ -280,7 +301,10 @@ export default function Sidebar({ user }: SidebarProps) {
                     <button
                         onClick={toggleSidebar}
                         className="mx-auto w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 hover:scale-110"
-                        style={{ background: 'rgba(255,255,255,0.15)', boxShadow: '0 0 0 3px rgba(255,255,255,0.08)' }}
+                        style={{ 
+                            background: 'rgba(255,255,255,0.15)', 
+                            boxShadow: '0 0 0 0.1875rem rgba(255,255,255,0.08)' 
+                        }}
                     >
                         <img
                             src={logoUrl}
@@ -292,13 +316,13 @@ export default function Sidebar({ user }: SidebarProps) {
                 )}
             </div>
 
-            {/* ── Navigation (jarak antar menu disamakan dengan Admin) ───────────────────── */}
-            <div className="flex-1 overflow-y-auto px-3 py-4 sb-scrollbar-none">
+            {/* Area Navigasi */}
+            <div className="flex-1 overflow-y-auto px-2 py-4 sb-scrollbar-none">
 
-                {/* ── MENU UTAMA ── */}
+                {/* Menu Utama */}
                 {menuUtama.map((item) => renderMenuItem(item, pathname === item.url))}
 
-                {/* ── DATA SISWA ── */}
+                {/* Label Data Siswa */}
                 {isExpanded && (
                     <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Data Siswa
@@ -308,7 +332,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {dataSiswa.map((item) => renderMenuItem(item, pathname === item.url))}
 
-                {/* ── INPUT NILAI ── */}
+                {/* Label Input Nilai */}
                 {isExpanded && (
                     <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Input Nilai
@@ -318,7 +342,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {inputNilai.map((item) => renderMenuItem(item, pathname === item.url))}
 
-                {/* ── KEGIATAN ── */}
+                {/* Label Kegiatan */}
                 {isExpanded && (
                     <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Kegiatan
@@ -328,7 +352,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {kegiatan.map((item) => renderMenuItem(item, pathname === item.url))}
 
-                {/* ── LAPORAN ── */}
+                {/* Label Laporan */}
                 {isExpanded && (
                     <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Laporan
@@ -338,7 +362,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
                 {laporan.map((item) => renderMenuItem(item, pathname === item.url))}
 
-                {/* ── SAYA ── */}
+                {/* Label Saya */}
                 {isExpanded && (
                     <p className="sb-fadeIn sb-section-label text-[10px] font-bold tracking-widest text-white/60 uppercase px-4 pt-4 pb-2">
                         Saya
@@ -346,16 +370,16 @@ export default function Sidebar({ user }: SidebarProps) {
                 )}
                 {!isExpanded && <div className="my-3 mx-2 border-t border-white/10" />}
 
+                {/* Menu Profil */}
                 <button
                     onClick={() => handleNavigation('/guru_kelas/profil')}
                     className={`${navBase} ${pathname === '/guru_kelas/profil' ? navActive : navInactive}`}
                 >
                     <span className={`sb-icon-wrap ${pathname === '/guru_kelas/profil' ? 'sb-icon-active' : 'sb-icon-inactive'}`}>
-                        <UserCircle className="w-[18px] h-[18px]" />
+                        <UserCircle className="w-5 h-5" />
                     </span>
                     {isExpanded && <span>Profil</span>}
                 </button>
-
             </div>
         </div>
     );

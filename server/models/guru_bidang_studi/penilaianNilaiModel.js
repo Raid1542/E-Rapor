@@ -1,16 +1,14 @@
 /**
  * Nama File: penilaianNilaiModel.js
- * Fungsi: Model input nilai siswa (validasi akses, bobot per kelas, status aktif)
+ * Fungsi: Model input nilai siswa (validasi akses, bobot per kelas, status aktif).
+ *         Menerapkan clamping dan filtering ketat untuk mencegah human error.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// KONSTANTA QUERY SQL
-// ═════════════════════════════════════════════════════════════════════════════
-
+// Konstanta query SQL
 const QUERY_TAHUN_AJARAN_AKTIF = `
     SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status_pts, status_pas
     FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
@@ -27,8 +25,9 @@ const QUERY_VALIDATE_AKSES_GURU_MAPEL = `
 `;
 
 const QUERY_VALIDATE_SISWA_AKTIF = `
-    SELECT sk.kelas_id, sk.status 
+    SELECT sk.kelas_id, s.status 
     FROM siswa_kelas sk
+    JOIN siswa s ON sk.siswa_id = s.id_siswa
     JOIN pembelajaran p ON sk.kelas_id = p.kelas_id
     WHERE sk.siswa_id = ? AND p.user_id = ? AND p.mapel_id = ? AND p.tahun_ajaran_id = ? AND sk.id_tahun_ajaran_induk = ?
     LIMIT 1
@@ -42,12 +41,12 @@ const QUERY_GET_SISWA_BY_KELAS = `
     SELECT s.id_siswa AS id, s.nis, s.nisn, s.nama_lengkap AS nama
     FROM siswa s 
     JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
-    WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND sk.status = 'Aktif'
-    ORDER BY s.nama_lengkap
+    WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
+    ORDER BY s.nama_lengkap ASC
 `;
 
 const QUERY_GET_KOMPONEN_PENILAIAN = `
-    SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan
+    SELECT id_komponen, nama_komponen FROM komponen_penilaian ORDER BY urutan ASC
 `;
 
 const QUERY_GET_BOBOT_BY_MAPEL = `
@@ -111,106 +110,110 @@ const QUERY_GET_KELAS_BY_SISWA = `
     LIMIT 1
 `;
 
-// ═════════════════════════════════════════════════════════════════════════════
-// FUNGSI MODEL
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Ambil tahun ajaran yang sedang aktif
+/**
+ * Ambil tahun ajaran yang sedang aktif.
+ */
 const getTahunAjaranAktif = async () => {
     try {
         const [rows] = await db.execute(QUERY_TAHUN_AJARAN_AKTIF);
         return rows[0] || null;
     } catch (err) {
-        console.error('Error getTahunAjaranAktif:', err);
         throw new Error('Gagal mengambil tahun ajaran aktif');
     }
 };
 
-// Validasi akses guru ke mapel di kelas tertentu
+/**
+ * Validasi apakah guru berhak mengajar mapel di kelas tertentu.
+ */
 const validateAksesGuru = async (userId, mapelId, kelasId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_VALIDATE_AKSES_GURU, [userId, mapelId, kelasId, semesterId]);
         return rows.length > 0;
     } catch (err) {
-        console.error('Error validateAksesGuru:', err);
         throw new Error('Gagal memvalidasi akses guru');
     }
 };
 
-// Validasi akses guru ke mapel (tanpa filter kelas)
+/**
+ * Validasi apakah guru berhak mengajar mapel secara umum di semester ini.
+ */
 const validateAksesGuruMapel = async (userId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_VALIDATE_AKSES_GURU_MAPEL, [userId, mapelId, semesterId]);
         return rows.length > 0;
     } catch (err) {
-        console.error('Error validateAksesGuruMapel:', err);
         throw new Error('Gagal memvalidasi akses guru mapel');
     }
 };
 
-// Cek siswa aktif di kelas yang diajar guru + ambil kelas_id
+/**
+ * Validasi status aktif siswa di kelas yang diajar guru.
+ */
 const validateSiswaAktif = async (siswaId, userId, mapelId, semesterId, indukId) => {
     try {
         const [rows] = await db.execute(QUERY_VALIDATE_SISWA_AKTIF, [siswaId, userId, mapelId, semesterId, indukId]);
         if (rows.length === 0) {
             return { valid: false, kelas_id: null, status: null };
         }
-        return { valid: rows[0].status === 'Aktif', kelas_id: rows[0].kelas_id, status: rows[0].status };
+        return { valid: rows[0].status === 'aktif', kelas_id: rows[0].kelas_id, status: rows[0].status };
     } catch (err) {
-        console.error('Error validateSiswaAktif:', err);
         throw new Error('Gagal memvalidasi siswa aktif');
     }
 };
 
-// Ambil nama kelas by ID
+/**
+ * Ambil nama kelas berdasarkan ID.
+ */
 const getNamaKelas = async (kelasId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NAMA_KELAS, [kelasId]);
         return rows[0]?.nama_kelas || 'Kelas Tidak Diketahui';
     } catch (err) {
-        console.error('Error getNamaKelas:', err);
         throw new Error('Gagal mengambil nama kelas');
     }
 };
 
-// Ambil daftar siswa aktif di kelas
+/**
+ * Ambil daftar siswa aktif di kelas tertentu.
+ */
 const getSiswaByKelas = async (kelasId, indukId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_SISWA_BY_KELAS, [kelasId, indukId]);
         return rows;
     } catch (err) {
-        console.error('Error getSiswaByKelas:', err);
         throw new Error('Gagal mengambil daftar siswa');
     }
 };
 
-// Ambil semua komponen penilaian
+/**
+ * Ambil daftar komponen penilaian.
+ */
 const getKomponenPenilaian = async () => {
     try {
         const [rows] = await db.execute(QUERY_GET_KOMPONEN_PENILAIAN);
         return rows;
     } catch (err) {
-        console.error('Error getKomponenPenilaian:', err);
         throw new Error('Gagal mengambil komponen penilaian');
     }
 };
 
-// Ambil bobot per komponen (prioritas: spesifik kelas > global)
+/**
+ * Ambil bobot per komponen untuk mata pelajaran tertentu.
+ */
 const getBobotByMapel = async (mapelId, semesterId, kelasId = null) => {
     try {
         let query = QUERY_GET_BOBOT_BY_MAPEL;
         const params = [mapelId, semesterId];
-        
+
         if (kelasId) {
             query += ' AND (kelas_id = ? OR kelas_id IS NULL)';
             params.push(kelasId);
         } else {
             query += ' AND kelas_id IS NULL';
         }
-        
+
         const [rows] = await db.execute(query, params);
-        
-        // Prioritas: bobot spesifik kelas > bobot global
+
         const bobotMap = new Map();
         rows.forEach(row => {
             const existing = bobotMap.get(row.komponen_id);
@@ -218,147 +221,171 @@ const getBobotByMapel = async (mapelId, semesterId, kelasId = null) => {
                 bobotMap.set(row.komponen_id, parseFloat(row.bobot) || 0);
             }
         });
-        
+
         return bobotMap;
     } catch (err) {
-        console.error('Error getBobotByMapel:', err);
         throw new Error('Gagal mengambil bobot per komponen');
     }
 };
 
-// Ambil konfigurasi kategori nilai rapor
-const getKonfigurasiNilaiRapor = async (mapelId, semesterId, kelasId = null) => {
+/**
+ * Ambil konfigurasi nilai rapor untuk mata pelajaran tertentu.
+ */
+const getKonfigurasiNilaiRapor = async (mapelId, semesterId, kelasId = null, jenisPenilaian = null) => {
     try {
         let query = QUERY_GET_KONFIGURASI_NILAI_RAPOR;
         const params = [mapelId, semesterId];
-        
+
+        if (jenisPenilaian && ['PTS', 'PAS'].includes(jenisPenilaian)) {
+            query += ' AND jenis_penilaian = ?';
+            params.push(jenisPenilaian);
+        }
+
         if (kelasId) {
             query += ' AND (kelas_id = ? OR kelas_id IS NULL) ORDER BY CASE WHEN kelas_id = ? THEN 0 ELSE 1 END, min_nilai DESC';
             params.push(kelasId, kelasId);
         } else {
             query += ' AND kelas_id IS NULL ORDER BY min_nilai DESC';
         }
-        
+
         const [rows] = await db.execute(query, params);
         return rows;
     } catch (err) {
-        console.error('Error getKonfigurasiNilaiRapor:', err);
         throw new Error('Gagal mengambil konfigurasi nilai rapor');
     }
 };
 
-// Ambil nilai detail per komponen untuk 1 siswa
+/**
+ * Ambil nilai detail untuk siswa tertentu.
+ */
 const getNilaiDetail = async (siswaId, mapelId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NILAI_DETAIL, [siswaId, mapelId, semesterId]);
         return rows;
     } catch (err) {
-        console.error('Error getNilaiDetail:', err);
         throw new Error('Gagal mengambil nilai detail');
     }
 };
 
-// Ambil nilai detail untuk banyak siswa sekaligus (batch)
+/**
+ * Ambil nilai detail untuk banyak siswa sekaligus.
+ */
 const getNilaiDetailBatch = async (siswaIds, mapelId, semesterId) => {
     try {
         if (siswaIds.length === 0) return [];
-        
+
         const placeholders = siswaIds.map(() => '?').join(',');
         const query = `
-            SELECT siswa_id, komponen_id, nilai 
-            FROM nilai_detail 
-            WHERE mapel_id = ? AND tahun_ajaran_id = ? AND siswa_id IN (${placeholders})
-        `;
-        
+        SELECT siswa_id, komponen_id, nilai 
+        FROM nilai_detail 
+        WHERE mapel_id = ? AND tahun_ajaran_id = ? AND siswa_id IN (${placeholders})
+    `;
+
         const [rows] = await db.execute(query, [mapelId, semesterId, ...siswaIds]);
         return rows;
     } catch (err) {
-        console.error('Error getNilaiDetailBatch:', err);
         throw new Error('Gagal mengambil nilai detail batch');
     }
 };
 
-// Ambil nilai rapor PTS & PAS
+/**
+ * Ambil nilai rapor untuk mata pelajaran tertentu.
+ */
 const getNilaiRapor = async (mapelId, semesterId, semester) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NILAI_RAPOR, [mapelId, semesterId, semester]);
         return rows;
     } catch (err) {
-        console.error('Error getNilaiRapor:', err);
         throw new Error('Gagal mengambil nilai rapor');
     }
 };
 
-// Ambil nilai rapor PTS saja
+/**
+ * Ambil nilai rapor PTS untuk siswa tertentu.
+ */
 const getNilaiRaporPTS = async (siswaId, mapelId, semesterId, semester) => {
     try {
         const [rows] = await db.execute(QUERY_GET_NILAI_RAPOR_PTS, [siswaId, mapelId, semesterId, semester]);
         return rows.length > 0 ? rows[0].nilai_rapor : 0;
     } catch (err) {
-        console.error('Error getNilaiRaporPTS:', err);
         throw new Error('Gagal mengambil nilai rapor PTS');
     }
 };
 
-// Cek apakah nilai rapor sudah dikunci
+/**
+ * Cek apakah nilai rapor sudah dikunci.
+ */
 const isNilaiRaporLocked = async (siswaId, mapelId, semesterId, semester, jenisPenilaian) => {
     try {
         const [rows] = await db.execute(QUERY_IS_NILAI_RAPOR_LOCKED, [siswaId, mapelId, semesterId, semester, jenisPenilaian]);
         return rows.length > 0 && rows[0].is_locked === 1;
     } catch (err) {
-        console.error('Error isNilaiRaporLocked:', err);
         throw new Error('Gagal mengecek status kunci nilai rapor');
     }
 };
 
-// Simpan/update nilai detail komponen
+/**
+ * Simpan nilai detail dengan clamping untuk mencegah human error.
+ */
 const simpanNilaiDetail = async (siswaId, mapelId, komponenId, nilai, semesterId, userId) => {
     try {
-        await db.execute(QUERY_SIMPAN_NILAI_DETAIL, [siswaId, mapelId, komponenId, nilai, semesterId, userId]);
+        const safeNilai = Math.max(0, Math.min(100, Math.round(parseFloat(nilai) || 0)));
+        await db.execute(QUERY_SIMPAN_NILAI_DETAIL, [siswaId, mapelId, komponenId, safeNilai, semesterId, userId]);
     } catch (err) {
-        console.error('Error simpanNilaiDetail:', err);
         throw new Error('Gagal menyimpan nilai detail');
     }
 };
 
-// Hapus nilai detail komponen
+/**
+ * Hapus nilai detail.
+ */
 const hapusNilaiDetail = async (siswaId, mapelId, komponenId, semesterId) => {
     try {
         await db.execute(QUERY_HAPUS_NILAI_DETAIL, [siswaId, mapelId, komponenId, semesterId]);
     } catch (err) {
-        console.error('Error hapusNilaiDetail:', err);
         throw new Error('Gagal menghapus nilai detail');
     }
 };
 
-// Simpan/update nilai rapor
+/**
+ * Simpan nilai rapor dengan sanitasi nilai.
+ */
 const simpanNilaiRapor = async (data) => {
     try {
         const { siswaId, mapelId, kelasId, semesterId, semester, jenisPenilaian, nilaiRapor, deskripsi, userId } = data;
+        const safeNilaiRapor = nilaiRapor !== null && nilaiRapor !== undefined ? Math.round(parseFloat(nilaiRapor)) : null;
+
         await db.execute(QUERY_SIMPAN_NILAI_RAPOR, [
-            siswaId, mapelId, kelasId, semesterId, semester, jenisPenilaian, nilaiRapor, deskripsi, userId
+            siswaId, mapelId, kelasId, semesterId, semester, jenisPenilaian, safeNilaiRapor, deskripsi, userId
         ]);
     } catch (err) {
-        console.error('Error simpanNilaiRapor:', err);
         throw new Error('Gagal menyimpan nilai rapor');
     }
 };
 
-// Ambil kelas tempat siswa belajar mapel tertentu
+/**
+ * Ambil kelas siswa berdasarkan mata pelajaran dan guru.
+ */
 const getKelasBySiswa = async (siswaId, mapelId, userId, semesterId) => {
     try {
         const [rows] = await db.execute(QUERY_GET_KELAS_BY_SISWA, [siswaId, mapelId, userId, semesterId]);
         return rows[0]?.kelas_id || null;
     } catch (err) {
-        console.error('Error getKelasBySiswa:', err);
         throw new Error('Gagal mengambil kelas siswa');
     }
 };
 
-// Cari deskripsi berdasarkan nilai rapor
+/**
+ * Dapatkan deskripsi nilai berdasarkan konfigurasi.
+ */
 const getDeskripsiNilai = (nilai, configRows) => {
+    if (nilai === null || nilai === undefined || isNaN(nilai)) {
+        return null;
+    }
+
+    const nilaiNum = parseFloat(nilai);
     for (const config of configRows) {
-        if (nilai >= config.min_nilai && nilai <= config.max_nilai) {
+        if (nilaiNum >= parseFloat(config.min_nilai) && nilaiNum <= parseFloat(config.max_nilai)) {
             return config.deskripsi;
         }
     }
@@ -366,8 +393,23 @@ const getDeskripsiNilai = (nilai, configRows) => {
 };
 
 module.exports = {
-    getTahunAjaranAktif, validateAksesGuru, validateAksesGuruMapel, validateSiswaAktif, getNamaKelas,
-    getSiswaByKelas, getKomponenPenilaian, getBobotByMapel, getKonfigurasiNilaiRapor, getNilaiDetail,
-    getNilaiDetailBatch, getNilaiRapor, getNilaiRaporPTS, isNilaiRaporLocked, simpanNilaiDetail,
-    hapusNilaiDetail, simpanNilaiRapor, getKelasBySiswa, getDeskripsiNilai,
+    getTahunAjaranAktif,
+    validateAksesGuru,
+    validateAksesGuruMapel,
+    validateSiswaAktif,
+    getNamaKelas,
+    getSiswaByKelas,
+    getKomponenPenilaian,
+    getBobotByMapel,
+    getKonfigurasiNilaiRapor,
+    getNilaiDetail,
+    getNilaiDetailBatch,
+    getNilaiRapor,
+    getNilaiRaporPTS,
+    isNilaiRaporLocked,
+    simpanNilaiDetail,
+    hapusNilaiDetail,
+    simpanNilaiRapor,
+    getKelasBySiswa,
+    getDeskripsiNilai
 };

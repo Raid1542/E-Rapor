@@ -1,9 +1,17 @@
+/*
+ * Nama File: NavigationGuard.tsx
+ * Fungsi: Menjaga navigasi pengguna, mencegah logout tidak sengaja saat menekan tombol back ke halaman login
+ * Pembuat: Raid Aqil Athallah - NIM: 3312401022
+ * Tanggal: 10 Juli 2026
+ */
+
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { LogOut, X } from 'lucide-react';
 
+// Konstanta konfigurasi path dan storage
 const LOGIN_PATH = '/login';
 const STORAGE_KEYS = {
     TOKEN: 'token',
@@ -15,6 +23,7 @@ interface NavigationGuardProps {
     children: React.ReactNode;
 }
 
+/* Komponen untuk menyuntikkan animasi global */
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes gk-fadeIn {
@@ -22,7 +31,7 @@ const GlobalStyles = () => (
             to { opacity: 1; }
         }
         @keyframes gk-scaleIn {
-            from { opacity: 0; transform: scale(0.93) translateY(10px); }
+            from { opacity: 0; transform: scale(0.93) translateY(0.625rem); }
             to { opacity: 1; transform: scale(1) translateY(0); }
         }
         @keyframes gk-pulse {
@@ -36,6 +45,7 @@ const GlobalStyles = () => (
     `}</style>
 );
 
+/* Komponen utama penjaga navigasi */
 export default function NavigationGuard({ children }: NavigationGuardProps) {
     const router = useRouter();
     const pathname = usePathname();
@@ -43,47 +53,46 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
     const [isClient, setIsClient] = useState(false);
     const navigationHistoryRef = useRef<string[]>([]);
 
+    // Tandai bahwa komponen sudah dimuat di sisi klien
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    // Track navigation history
+    // Lacak riwayat navigasi untuk menentukan asal pengguna
     useEffect(() => {
         if (pathname && isClient) {
-            // Simpan history di sessionStorage
             const history = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.NAVIGATION_HISTORY) || '[]');
             history.push(pathname);
-            // Simpan hanya 10 history terakhir
-            if (history.length > 10) history.shift();
+            
+            // Batasi riwayat maksimal 10 item terakhir
+            if (history.length > 10) {
+                history.shift();
+            }
+            
             sessionStorage.setItem(STORAGE_KEYS.NAVIGATION_HISTORY, JSON.stringify(history));
             navigationHistoryRef.current = history;
         }
     }, [pathname, isClient]);
 
-    // ✅ DIHAPUS: Event listener beforeunload yang menyebabkan popup browser
-    // Sekarang hanya menggunakan custom modal untuk konfirmasi logout
-
-    // Handle back button - hanya tampilkan jika akan ke login
+    // Tangani tombol back browser untuk mencegah logout tidak sengaja
     useEffect(() => {
         if (!isClient) return;
 
         const handlePopState = () => {
             const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
             
-            // Jika user masih login
+            // Tampilkan konfirmasi hanya jika pengguna masih login
             if (token) {
-                // Cek history navigasi
                 const history = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.NAVIGATION_HISTORY) || '[]');
                 
-                // Jika history hanya 1 item (langsung ke halaman ini dari login)
-                // atau halaman sebelumnya adalah login
+                // Cek apakah pengguna berasal dari halaman login
                 const isFromLogin = history.length === 1 || 
-                                   history[history.length - 2] === LOGIN_PATH ||
-                                   history[history.length - 2]?.includes('/login');
+                                    history[history.length - 2] === LOGIN_PATH ||
+                                    history[history.length - 2]?.includes('/login');
                 
                 if (isFromLogin) {
                     setShowConfirm(true);
-                    // Push state untuk mencegah back keluar
+                    // Mencegah browser keluar dari halaman saat ini
                     window.history.pushState(null, '', window.location.pathname);
                 }
             }
@@ -93,6 +102,7 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
         return () => window.removeEventListener('popstate', handlePopState);
     }, [isClient]);
 
+    /* Proses konfirmasi logout dan hapus sesi */
     const handleConfirmLeave = () => {
         setShowConfirm(false);
         localStorage.removeItem(STORAGE_KEYS.TOKEN);
@@ -101,6 +111,7 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
         window.location.href = LOGIN_PATH;
     };
 
+    /* Batalkan aksi logout */
     const handleCancelLeave = () => {
         setShowConfirm(false);
     };
@@ -120,17 +131,17 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                     />
                     <div
                         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 gk-scaleIn"
-                        style={{ border: '1px solid #fde0c8' }}
+                        style={{ border: '0.0625rem solid #fde0c8' }}
                     >
                         <button
                             onClick={handleCancelLeave}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
                         >
-                            <X size={18} />
+                            <X size="1.125rem" />
                         </button>
 
                         <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 gk-pulse">
-                            <LogOut size={32} style={{ color: '#e8690a' }} />
+                            <LogOut size="2rem" style={{ color: '#e8690a' }} />
                         </div>
 
                         <div className="text-center">
@@ -153,12 +164,8 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                                     color: '#7a3a0a',
                                     background: '#fff',
                                 }}
-                                onMouseEnter={(e) =>
-                                    (e.currentTarget.style.background = '#fff0e5')
-                                }
-                                onMouseLeave={(e) =>
-                                    (e.currentTarget.style.background = '#fff')
-                                }
+                                onMouseEnter={(e) => (e.currentTarget.style.background = '#fff0e5')}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
                             >
                                 Batal
                             </button>
@@ -166,17 +173,11 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                                 onClick={handleConfirmLeave}
                                 className="flex-1 py-3 rounded-xl text-white font-semibold text-sm transition-all"
                                 style={{
-                                    background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                    boxShadow: '0 3px 12px rgba(232,105,10,0.3)',
+                                    background: 'linear-gradient(135deg, #e8690a, #f5a623)',
+                                    boxShadow: '0 0.187rem 0.75rem rgba(232, 105, 10, 0.3)',
                                 }}
-                                onMouseEnter={(e) =>
-                                (e.currentTarget.style.background =
-                                    'linear-gradient(135deg,#c95b08,#e8690a)')
-                                }
-                                onMouseLeave={(e) =>
-                                (e.currentTarget.style.background =
-                                    'linear-gradient(135deg,#e8690a,#f5a623)')
-                                }
+                                onMouseEnter={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg, #c95b08, #e8690a)')}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = 'linear-gradient(135deg, #e8690a, #f5a623)')}
                             >
                                 Ya
                             </button>

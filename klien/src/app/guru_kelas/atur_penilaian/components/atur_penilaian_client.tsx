@@ -1,16 +1,16 @@
 /**
-* Nama File: atur_penilaian_client.tsx
-* Fungsi: Komponen klien untuk mengatur konfigurasi penilaian oleh guru kelas
-* UPDATE: ✅ Redesign UI - Modern, Simple, Clean dengan tema Oranye
-*         ✅ 4 Tab: Kokurikuler, Akademik, Deskripsi Rata-rata, Bobot
-*         ✅ Batch Edit Modal dengan validasi
-*         ✅ Coverage Warning untuk gap nilai
-*         ✅ Responsive & User-friendly
-*         ✅ Dropdown konsisten dengan Arsip Rapor
-*         ✅ FIX: Handle 403 NOT_ASSIGNED dari backend
-*/
+ * Nama File: atur_penilaian_client.tsx
+ * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian oleh guru kelas
+ * UPDATE: ✅ Fix validasi range < 3 poin di frontend
+ *         ✅ Fix pesan error spesifik dari backend agar mudah diperbaiki
+ *         ✅ Redesign UI - Konsisten dengan design system Data Pembelajaran
+ *         ✅ 4 Tab: Kokurikuler, Akademik, Deskripsi Rata-rata, Bobot
+ *         ✅ Batch Edit Modal dengan validasi real-time
+ *         ✅ Fix layout tabel: table-fixed + lebar kolom tetap agar header sejajar dengan isi
+ */
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+
+import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
     Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff,
     ShieldAlert, LogOut, Lock, Layers, BookOpen, BarChart3, TrendingUp,
@@ -25,21 +25,6 @@ const ASPEK_MUTABAAH_ID = 5;
 
 // ====== HELPER ======
 const getJenisParam = (jenis: 'PTS' | 'PAS' | null): string => jenis ? `jenis=${jenis}` : '';
-const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
-    try {
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await res.text();
-            if (res.status === 404) return { message: 'Endpoint tidak ditemukan.', code: 'NOT_FOUND' };
-            if (res.status === 500) return { message: 'Server error.', code: 'SERVER_ERROR' };
-            return { message: `Server error (${res.status}).`, code: 'INVALID_RESPONSE' };
-        }
-        const data = await res.json();
-        return { message: data.message || 'Terjadi kesalahan', code: data.code };
-    } catch {
-        return { message: 'Gagal memproses response dari server' };
-    }
-};
 
 // ====== TYPES ======
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
@@ -94,7 +79,7 @@ interface BobotItem {
 interface CoverageInfo {
     covered: boolean;
     gap?: string;
-    gaps?: Array<{ aspek: string; gap: string }>;
+    gaps?: Array<{ aspek: string; gap: string }> | string[];
 }
 
 interface BatchGradeItem {
@@ -106,126 +91,212 @@ interface BatchGradeItem {
     isNew?: boolean;
 }
 
+// ====== DESIGN TOKENS ======
+// Disamakan persis dengan data_pembelajaran_client.tsx agar seluruh halaman
+// Guru Kelas memiliki tampilan yang konsisten.
+
+const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
+
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+
+const labelCls = "block text-sm font-bold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
 // ====== GLOBAL STYLES ======
 const GlobalStyles = () => (
     <style jsx global>{`
-@keyframes ap-fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes ap-scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-@keyframes ap-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-.ap-fadeIn { animation: ap-fadeIn 0.3s ease-out; }
-.ap-scaleIn { animation: ap-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-.ap-pulse { animation: ap-pulse 0.6s ease; }
-.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 10px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: #fff7ed; }
-`}</style>
+    @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    .dg-fadeIn  { animation: dg-fadeIn  0.18s ease; }
+    .dg-scaleIn { animation: dg-scaleIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+    .dg-pulse   { animation: dg-pulse   0.6s ease 0.1s; }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+    .anim-in { animation: fadeInUp 0.4s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+    .d1 { animation-delay: 0.03s; }
+    .d2 { animation-delay: 0.07s; }
+    .d3 { animation-delay: 0.11s; }
+    .d4 { animation-delay: 0.15s; }
+    .row-in { animation: fadeInUp 0.28s ease forwards; opacity: 0; }
+
+    .card-flat { transition: box-shadow 0.2s ease; }
+    .card-flat:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+    .row-hover { position: relative; transition: background-color 0.15s ease; }
+    .row-hover::before {
+        content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+        background: ${BRAND_GRADIENT}; transform: scaleY(0); transition: transform 0.16s ease;
+    }
+    .row-hover:hover::before { transform: scaleY(1); }
+
+    .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+    .btn-action:hover  { filter: brightness(1.04); }
+    .btn-action:active { filter: brightness(0.98); }
+
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #f0c896; border-radius: 10px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #e8a865; }
+    .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #f0c896 transparent; }
+
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+        outline: 2.5px solid #f5a623;
+        outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .btn-action, .card-flat, .row-hover {
+            animation: none !important;
+            transition: none !important;
+        }
+    }
+  `}</style>
 );
 
+// ====== SISTEM TOMBOL AKSI (disamakan dengan Data Pembelajaran) ======
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent' | 'danger';
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
+    info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
+    warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
+    neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
+    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
+    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
+    danger: { background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca' },
+};
+
+const ActionButton = ({
+    onClick, children, variant = 'neutral', size = 'md', disabled = false, fullWidth = false, title,
+}: {
+    onClick?: () => void; children: ReactNode; variant?: BtnVariant; size?: 'md' | 'sm';
+    disabled?: boolean; fullWidth?: boolean; title?: string;
+}) => {
+    const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2.5 text-sm';
+    return (
+        <button
+            type="button"
+            title={title}
+            onClick={onClick}
+            disabled={disabled}
+            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            style={VARIANT_BASE[variant]}
+        >
+            {children}
+        </button>
+    );
+};
+
 // ====== NOTIF MODAL ======
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
-    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
+const MODAL_STYLES: Record<Exclude<ModalType, 'confirm'>, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-    const s = MODAL_STYLES[modal.type];
     const isConfirm = modal.type === 'confirm';
+    const s = isConfirm ? null : MODAL_STYLES[modal.type as Exclude<ModalType, 'confirm'>];
 
     return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 dg-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
                 {!isConfirm && (
-                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                    <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>
                 )}
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ap-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+                <div className={`w-16 h-16 rounded-full ${isConfirm ? 'bg-amber-50' : s!.iconBg} flex items-center justify-center ring-8 ${isConfirm ? 'ring-amber-100' : s!.ring} dg-pulse`}>
+                    {isConfirm ? <ShieldAlert size={38} className="text-amber-500" /> : s!.icon}
+                </div>
+                <div className="text-center w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
                 </div>
                 {isConfirm ? (
-                    <div className="flex gap-3 w-full">
-                        <button onClick={onClose} className="flex-1 py-3 rounded-xl text-sm font-semibold border-2 border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all">
-                            Batal
-                        </button>
-                        <button onClick={() => { modal.onConfirm?.(); onClose(); }} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
-                            Ya, Lanjutkan
-                        </button>
+                    <div className="flex gap-2.5 w-full mt-1">
+                        <ActionButton variant="neutral" onClick={onClose} fullWidth>Batal</ActionButton>
+                        <ActionButton variant="primary" onClick={() => { modal.onConfirm?.(); onClose(); }} fullWidth>Ya, Lanjutkan</ActionButton>
                     </div>
                 ) : (
-                    <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>OK, Mengerti</button>
+                    <button onClick={onClose} className={`btn-action w-full ${s!.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>OK, Mengerti</button>
                 )}
             </div>
         </div>
     );
 };
 
-// ====== COVERAGE WARNING ======
+// ✅ PERBAIKAN: CoverageWarning support array gaps (string[])
 const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     if (!coverage || coverage.covered) return null;
 
-    const gaps = coverage.gaps || (coverage.gap ? [{ aspek: 'Nilai', gap: coverage.gap }] : []);
-    if (gaps.length === 0) return null;
+    let gapsList: string[] = [];
+    if (coverage.gaps) {
+        if (Array.isArray(coverage.gaps)) {
+            if (coverage.gaps.length > 0) {
+                const first = coverage.gaps[0];
+                if (typeof first === 'string') {
+                    gapsList = coverage.gaps as string[];
+                } else {
+                    gapsList = (coverage.gaps as Array<{ aspek: string; gap: string }>).map(g => `${g.aspek}: ${g.gap}`);
+                }
+            }
+        }
+    } else if (coverage.gap) {
+        gapsList = [coverage.gap];
+    }
+
+    if (gapsList.length === 0) return null;
 
     return (
-        <div className="mb-4 p-4 rounded-xl flex items-start gap-3 ap-fadeIn" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}>
-                <AlertTriangle size={18} className="text-orange-700" />
+        <div className="mb-4 p-4 rounded-xl flex items-start gap-3 dg-fadeIn" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fde0c8' }}>
+                <AlertTriangle size={18} style={{ color: ACCENT_DARK }} />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-bold mb-1" style={{ color: '#9a3412' }}>Range Nilai 0-100 Belum Lengkap</p>
-                {gaps.length === 1 ? (
-                    <p className="text-xs" style={{ color: '#c2410c' }}>
-                        Ada gap pada <strong>{gaps[0].aspek}</strong> di rentang <span className="px-2 py-0.5 rounded-md bg-orange-200 font-semibold">{gaps[0].gap}</span>
+                <p className="text-sm font-bold mb-1" style={{ color: ACCENT_DARK }}>Range Nilai 0-100 Belum Lengkap</p>
+                {gapsList.length === 1 ? (
+                    <p className="text-xs" style={{ color: ACCENT_DARK }}>
+                        Ada gap pada rentang <span className="px-2 py-0.5 rounded-md font-semibold" style={{ background: '#fde0c8' }}>{gapsList[0]}</span>
                     </p>
                 ) : (
-                    <ul className="text-xs space-y-1 ml-4 list-disc" style={{ color: '#c2410c' }}>
-                        {gaps.map((g, i) => (
-                            <li key={i}><strong>{g.aspek}:</strong> gap pada rentang <span className="px-1.5 py-0.5 rounded bg-orange-200 font-semibold">{g.gap}</span></li>
-                        ))}
-                    </ul>
+                    <div className="text-xs" style={{ color: ACCENT_DARK }}>
+                        <p className="mb-2">Ada <strong>{gapsList.length} gap</strong> yang belum dibuat:</p>
+                        <ul className="space-y-1 ml-4 list-disc">
+                            {gapsList.map((gap, i) => (
+                                <li key={i}>
+                                    Rentang <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: '#fde0c8' }}>{gap}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 )}
             </div>
         </div>
     );
 };
 
-// ====== STYLE CONSTANTS (UPDATED - Konsisten dengan Arsip Rapor) ======
-const PAGE_BG = { background: '#faf8f5' };
-const CARD_STYLE = { border: '1px solid #fed7aa', boxShadow: '0 4px 20px rgba(234, 88, 12, 0.08)', background: '#ffffff' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 50%, #f97316 100%)' };
-const TH_GRAD = { background: 'linear-gradient(135deg, #c2410c 0%, #ea580c 60%, #f97316 100%)' };
-
-// ✅ UPDATED: Konsisten dengan Arsip Rapor
-const inputCls = "w-full border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200";
-
-// ✅ UPDATED: Konsisten dengan Arsip Rapor
-const selectCls = "border rounded-xl px-3 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 min-w-[200px]";
-
-const btnPrimary = {
-    base: "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-sm hover:shadow-md active:scale-95",
-    style: { background: 'linear-gradient(135deg, #ea580c, #f97316)', boxShadow: '0 4px 12px rgba(234, 88, 12, 0.25)' } as React.CSSProperties,
-};
-
-const BtnBatal = ({ onClick, children = 'Batal', disabled }: { onClick: () => void; children?: React.ReactNode; disabled?: boolean }) => (
-    <button onClick={onClick} disabled={disabled}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed border-2 border-gray-200 hover:border-orange-300 hover:bg-orange-50 text-gray-700"
-    >{children}</button>
-);
+// ====== SHARED STYLE CONSTANTS ======
+const inputCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400";
+const selectCls = "border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 min-w-[200px]";
 
 const BtnEdit = ({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) => (
     <button onClick={onClick} disabled={disabled}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="btn-action inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         style={{
-            background: disabled ? '#f3f4f6' : '#fff7ed',
-            border: disabled ? '1px solid #e5e7eb' : '1.5px solid #fb923c',
-            color: disabled ? '#9ca3af' : '#c2410c'
+            background: disabled ? '#f3f4f6' : '#fff5eb',
+            border: disabled ? '1px solid #d1d5db' : '1.5px solid #f0a94e',
+            color: disabled ? '#9ca3af' : ACCENT_DARK
         }}
-        onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#ffedd5'; }}
-        onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = '#fff7ed'; }}
+        onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#fde0c8'; }}
+        onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = '#fff5eb'; }}
     >{children}</button>
 );
 
@@ -240,6 +311,7 @@ export default function AturPenilaianGuruKelasClient() {
     const [statusPTS, setStatusPTS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [activeTab, setActiveTab] = useState<'kokurikuler' | 'akademik' | 'bobot' | 'deskripsi-rata-rata'>('kokurikuler');
+
     const [loading, setLoading] = useState(true);
     const [aspekList, setAspekList] = useState<AspekKokurikuler[]>([]);
     const [mapelList, setMapelList] = useState<MapelItem[]>([]);
@@ -247,6 +319,7 @@ export default function AturPenilaianGuruKelasClient() {
     const [kategoriList, setKategoriList] = useState<(KategoriAkademik | KategoriKokurikuler)[]>([]);
     const [kategoriLoading, setKategoriLoading] = useState(false);
     const [coverageInfo, setCoverageInfo] = useState<CoverageInfo | null>(null);
+
     const [deskripsiRataRataList, setDeskripsiRataRataList] = useState<any[]>([]);
     const [deskripsiRataRataLoading, setDeskripsiRataRataLoading] = useState(false);
     const [deskripsiRataRataCoverage, setDeskripsiRataRataCoverage] = useState<CoverageInfo | null>(null);
@@ -282,11 +355,10 @@ export default function AturPenilaianGuruKelasClient() {
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmAction, setConfirmAction] = useState<'save-bobot' | 'save-batch' | 'save-batch-akademik' | 'save-batch-deskripsi' | null>(null);
-
     const [modal, setModal] = useState<ModalConfig | null>(null);
+
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
-
     const [isNotAssigned, setIsNotAssigned] = useState(false);
 
     // ── Helper functions ──
@@ -325,7 +397,6 @@ export default function AturPenilaianGuruKelasClient() {
     }, [jenisPenilaianAktif, isReadOnly, readOnlyReason]);
 
     // ── Fetch Functions ──
-    // ✅ PERBAIKAN: Tambahkan pengecekan 403 NOT_ASSIGNED
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -338,7 +409,6 @@ export default function AturPenilaianGuruKelasClient() {
                 }
 
                 const headers = { Authorization: `Bearer ${token}` };
-
                 const [taRes, komponenRes, mapelRes, aspekRes] = await Promise.all([
                     fetch(`${API}/tahun-ajaran/aktif`, { headers }),
                     fetch(`${API}/atur-penilaian/komponen`, { headers }),
@@ -346,7 +416,6 @@ export default function AturPenilaianGuruKelasClient() {
                     fetch(`${API}/atur-penilaian/aspek-kokurikuler`, { headers }),
                 ]);
 
-                // ✅ PERBAIKAN: Cek jika ada response 403 NOT_ASSIGNED
                 const responses = [
                     { res: taRes, name: 'tahun-ajaran' },
                     { res: komponenRes, name: 'komponen' },
@@ -358,7 +427,7 @@ export default function AturPenilaianGuruKelasClient() {
                     if (res.status === 403) {
                         const errData = await res.json().catch(() => ({}));
                         if (errData.code === 'NOT_ASSIGNED') {
-                            console.log(`🔒 [atur-penilaian] Akses ditolak dari endpoint /${name}`);
+                            console.log(` [atur-penilaian] Akses ditolak dari endpoint /${name}`);
                             setIsNotAssigned(true);
                             setLoading(false);
                             return;
@@ -381,26 +450,22 @@ export default function AturPenilaianGuruKelasClient() {
                 const jenisAktif = status_pts === 'aktif' ? 'PTS' : status_pas === 'aktif' ? 'PAS' : null;
                 setJenisPenilaianAktif(jenisAktif);
 
-                if (status_pts === 'aktif' || status_pas === 'aktif') { 
-                    setIsReadOnly(false); 
-                    setReadOnlyReason(null); 
-                } else if (status_pts === 'selesai' || status_pas === 'selesai') { 
-                    setIsReadOnly(true); 
-                    setReadOnlyReason('locked'); 
-                } else { 
-                    setIsReadOnly(true); 
-                    setReadOnlyReason('not_open'); 
+                if (status_pts === 'aktif' || status_pas === 'aktif') {
+                    setIsReadOnly(false);
+                    setReadOnlyReason(null);
+                } else if (status_pts === 'selesai' || status_pas === 'selesai') {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('locked');
+                } else {
+                    setIsReadOnly(true);
+                    setReadOnlyReason('not_open');
                 }
 
                 setKomponenList(komponenData.data || []);
-
                 const mapelWajib = mapelData.data?.wajib || mapelData.wajib || [];
                 const mapelPilihan = mapelData.data?.pilihan || mapelData.pilihan || [];
                 setMapelList([...mapelWajib, ...mapelPilihan]);
-
                 setAspekList(aspekData.data || []);
-
-                // ✅ Reset isNotAssigned jika fetch berhasil
                 setIsNotAssigned(false);
             } catch (err: any) {
                 showModal({ type: 'network', title: 'Koneksi Gagal', message: err.message || 'Gagal memuat data.' });
@@ -408,19 +473,15 @@ export default function AturPenilaianGuruKelasClient() {
                 setLoading(false);
             }
         };
-
         fetchData();
     }, [showModal]);
 
-    // Fetch kategori
-    // ✅ PERBAIKAN: Handle NOT_ASSIGNED di fetchKategori juga
     useEffect(() => {
         if (loading || activeTab === 'bobot' || isNotAssigned) return;
 
         const fetchKategori = async () => {
             setKategoriLoading(true);
             setCoverageInfo(null);
-
             try {
                 const token = localStorage.getItem('token');
                 if (!token) return;
@@ -428,17 +489,29 @@ export default function AturPenilaianGuruKelasClient() {
                 const jenisParam = getJenisParam(jenisPenilaianAktif);
                 let endpoint = '';
 
-                if (activeTab === 'kokurikuler') endpoint = `${API}/atur-penilaian/kategori-kokurikuler?${jenisParam}`;
-                else if (activeTab === 'akademik') {
-                    if (selectedMapelAkademik !== null) endpoint = `${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`;
-                    else { setKategoriList([]); setCoverageInfo(null); setKategoriLoading(false); return; }
-                } else if (activeTab === 'deskripsi-rata-rata') endpoint = `${API}/atur-penilaian/deskripsi-rata-rata`;
+                if (activeTab === 'kokurikuler') {
+                    endpoint = `${API}/atur-penilaian/kategori-kokurikuler?${jenisParam}`;
+                } else if (activeTab === 'akademik') {
+                    if (selectedMapelAkademik !== null) {
+                        endpoint = `${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`;
+                    } else {
+                        setKategoriList([]);
+                        setCoverageInfo(null);
+                        setKategoriLoading(false);
+                        return;
+                    }
+                } else if (activeTab === 'deskripsi-rata-rata') {
+                    endpoint = `${API}/atur-penilaian/deskripsi-rata-rata`;
+                }
 
-                if (!endpoint) { setKategoriList([]); setCoverageInfo(null); setKategoriLoading(false); return; }
+                if (!endpoint) {
+                    setKategoriList([]);
+                    setCoverageInfo(null);
+                    setKategoriLoading(false);
+                    return;
+                }
 
                 const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
-                
-                // ✅ PERBAIKAN: Cek NOT_ASSIGNED di fetchKategori
                 if (res.status === 403) {
                     const errData = await res.json().catch(() => ({}));
                     if (errData.code === 'NOT_ASSIGNED') {
@@ -447,21 +520,27 @@ export default function AturPenilaianGuruKelasClient() {
                         return;
                     }
                 }
-                
                 if (!res.ok) throw new Error('Gagal memuat kategori');
 
                 const data = await res.json();
-
                 const formattedData = activeTab === 'deskripsi-rata-rata'
-                    ? (data.data || []).map((item: any) => ({ ...item, min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)), max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)) }))
-                    : (data.data || []).map((item: any) => ({ ...item, min_nilai: Math.floor(parseFloat(item.min_nilai)), max_nilai: Math.floor(parseFloat(item.max_nilai)) }));
+                    ? (data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+                        max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2))
+                    }))
+                    : (data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                        max_nilai: Math.floor(parseFloat(item.max_nilai))
+                    }));
 
-                if (activeTab === 'deskripsi-rata-rata') { 
-                    setDeskripsiRataRataList(formattedData); 
-                    setDeskripsiRataRataCoverage(data.coverage || null); 
-                } else { 
-                    setKategoriList(formattedData); 
-                    setCoverageInfo(data.coverage || null); 
+                if (activeTab === 'deskripsi-rata-rata') {
+                    setDeskripsiRataRataList(formattedData);
+                    setDeskripsiRataRataCoverage(data.coverage || null);
+                } else {
+                    setKategoriList(formattedData);
+                    setCoverageInfo(data.coverage || null);
                 }
             } catch (err: any) {
                 if (!err.message?.includes('belum ditugaskan')) {
@@ -471,17 +550,14 @@ export default function AturPenilaianGuruKelasClient() {
                 setKategoriLoading(false);
             }
         };
-
         fetchKategori();
     }, [activeTab, selectedMapelAkademik, jenisPenilaianAktif, loading, showModal, isNotAssigned]);
 
-    // Fetch bobot
-    // ✅ PERBAIKAN: Handle NOT_ASSIGNED di fetchBobot juga
     useEffect(() => {
-        if (selectedMapelId === null || activeTab !== 'bobot' || isNotAssigned) { 
-            setBobotList([]); 
-            initialBobotListRef.current = []; 
-            return; 
+        if (selectedMapelId === null || activeTab !== 'bobot' || isNotAssigned) {
+            setBobotList([]);
+            initialBobotListRef.current = [];
+            return;
         }
 
         const fetchBobot = async () => {
@@ -489,11 +565,10 @@ export default function AturPenilaianGuruKelasClient() {
             try {
                 const token = localStorage.getItem('token');
                 const jenisParam = getJenisParam(jenisPenilaianAktif);
-                const res = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`, { 
-                    headers: { Authorization: `Bearer ${token}` } 
+                const res = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`, {
+                    headers: { Authorization: `Bearer ${token}` }
                 });
-                
-                // ✅ PERBAIKAN: Cek NOT_ASSIGNED di fetchBobot
+
                 if (res.status === 403) {
                     const errData = await res.json().catch(() => ({}));
                     if (errData.code === 'NOT_ASSIGNED') {
@@ -502,12 +577,10 @@ export default function AturPenilaianGuruKelasClient() {
                         return;
                     }
                 }
-                
                 if (!res.ok) throw new Error('Gagal mengambil bobot');
 
                 const result = await res.json();
                 const bobotData: any[] = result.data || [];
-
                 const bobotMap = new Map<number, number>();
                 bobotData.forEach((b: any) => {
                     const numBobot = typeof b.bobot === 'number' ? b.bobot : parseFloat(b.bobot);
@@ -523,15 +596,27 @@ export default function AturPenilaianGuruKelasClient() {
                 setBobotLoading(false);
             }
         };
-
         fetchBobot();
     }, [selectedMapelId, komponenList, activeTab, showModal, jenisPenilaianAktif, isNotAssigned]);
 
-    // ── Tab change ──
     const handleTabChange = (tab: typeof activeTab) => {
-        if (tab !== 'akademik') { setSelectedMapelAkademik(null); setCoverageInfo(null); }
-        if (tab !== 'bobot') { setSelectedMapelId(null); }
-        if (tab !== 'deskripsi-rata-rata') { setDeskripsiRataRataList([]); setDeskripsiRataRataCoverage(null); }
+        // Hanya proses jika tab berbeda dari yang aktif
+        if (tab === activeTab) return;
+
+        // Clear data yang relevan saat pindah tab
+        if (tab !== 'akademik') {
+            setSelectedMapelAkademik(null);
+            setCoverageInfo(null);
+        }
+        if (tab !== 'bobot') {
+            setSelectedMapelId(null);
+        }
+        if (tab !== 'deskripsi-rata-rata') {
+            setDeskripsiRataRataList([]);
+            setDeskripsiRataRataCoverage(null);
+        }
+
+        // Clear kategori list saat pindah tab
         setKategoriList([]);
         setActiveTab(tab);
     };
@@ -546,15 +631,25 @@ export default function AturPenilaianGuruKelasClient() {
                 { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                 { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
             ];
-            setBatchGrades(defaults); setOriginalBatchGrades([]);
+            setBatchGrades(defaults);
+            setOriginalBatchGrades([]);
         } else {
             const existing = kategoriList
                 .filter(k => (k as KategoriKokurikuler).id_aspek_kokurikuler === aspekId)
-                .map(k => ({ id: k.id, grade: (k as KategoriKokurikuler).grade, min_nilai: Math.floor(k.min_nilai), max_nilai: Math.floor(k.max_nilai), deskripsi: k.deskripsi, isNew: false }))
+                .map(k => ({
+                    id: k.id,
+                    grade: (k as KategoriKokurikuler).grade,
+                    min_nilai: Math.floor(k.min_nilai),
+                    max_nilai: Math.floor(k.max_nilai),
+                    deskripsi: k.deskripsi,
+                    isNew: false
+                }))
                 .sort((a, b) => b.min_nilai - a.min_nilai);
 
-            if (existing.length > 0) { setBatchGrades(existing); setOriginalBatchGrades([...existing]); }
-            else {
+            if (existing.length > 0) {
+                setBatchGrades(existing);
+                setOriginalBatchGrades([...existing]);
+            } else {
                 const defaults = [
                     { grade: 'A', min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                     { grade: 'B', min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -562,7 +657,8 @@ export default function AturPenilaianGuruKelasClient() {
                     { grade: 'D', min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                     { grade: 'E', min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
                 ];
-                setBatchGrades(defaults); setOriginalBatchGrades([]);
+                setBatchGrades(defaults);
+                setOriginalBatchGrades([]);
             }
         }
     };
@@ -577,30 +673,36 @@ export default function AturPenilaianGuruKelasClient() {
         setShowBatchEdit(true);
     };
 
-    const closeBatchEdit = () => { setBatchEditClosing(true); setTimeout(() => { setShowBatchEdit(false); setBatchEditClosing(false); setBatchEditAspekId(null); setBatchGrades([]); setOriginalBatchGrades([]); }, 200); };
+    const closeBatchEdit = () => {
+        setBatchEditClosing(true);
+        setTimeout(() => {
+            setShowBatchEdit(false);
+            setBatchEditClosing(false);
+            setBatchEditAspekId(null);
+            setBatchGrades([]);
+            setOriginalBatchGrades([]);
+        }, 200);
+    };
 
     const addBatchGradeRow = () => setBatchGrades(prev => [...prev, { grade: '', min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
-
     const removeBatchGradeRow = (index: number) => setBatchGrades(prev => prev.filter((_, i) => i !== index));
-
     const updateBatchGrade = (index: number, field: keyof BatchGradeItem, value: any) => setBatchGrades(prev => prev.map((g, i) => i === index ? { ...g, [field]: value } : g));
 
     const validateBatchGrades = (): { valid: boolean; errors: string[] } => {
         const errors: string[] = [];
-
         if (batchGrades.length === 0) { errors.push('Minimal harus ada 1 grade.'); return { valid: false, errors }; }
 
         batchGrades.forEach((g, i) => {
             if (!g.grade || g.grade.trim().length === 0) errors.push(`Grade baris ${i + 1} tidak boleh kosong.`);
             if (g.grade && g.grade.length !== 1) errors.push(`Grade baris ${i + 1} harus tepat 1 karakter.`);
-
-            if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) errors.push(`Grade ${g.grade || i + 1}: Nilai min/max harus angka.`);
-            else {
-                if (g.min_nilai < 0 || g.max_nilai > 100) errors.push(`Grade ${g.grade}: Nilai harus antara 0-100.`);
-                if (g.min_nilai >= g.max_nilai) errors.push(`Grade ${g.grade}: Min (${g.min_nilai}) harus < Max (${g.max_nilai}).`);
+            if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) {
+                errors.push(`Grade baris ${i + 1}: Nilai min/max harus angka.`);
+            } else {
+                if (g.min_nilai < 0 || g.max_nilai > 100) errors.push(`Grade baris ${i + 1}: Nilai harus antara 0-100.`);
+                if (g.min_nilai >= g.max_nilai) errors.push(`Grade baris ${i + 1}: Min (${g.min_nilai}) harus < Max (${g.max_nilai}).`);
+                if ((g.max_nilai - g.min_nilai) < 3) errors.push(`Grade baris ${i + 1}: Range nilai minimal 3 poin.`);
             }
-
-            if (!g.deskripsi || g.deskripsi.trim().length < 3) errors.push(`Grade ${g.grade || i + 1}: Deskripsi minimal 3 karakter.`);
+            if (!g.deskripsi || g.deskripsi.trim().length < 3) errors.push(`Grade baris ${i + 1}: Deskripsi minimal 3 karakter.`);
         });
 
         const grades = batchGrades.map(g => g.grade?.toUpperCase()).filter(Boolean);
@@ -608,9 +710,15 @@ export default function AturPenilaianGuruKelasClient() {
         if (duplicates.length > 0) errors.push(`Grade duplikat: ${[...new Set(duplicates)].join(', ')}`);
 
         const sorted = [...batchGrades].sort((a, b) => a.min_nilai - b.min_nilai);
-        let covered = new Set<number>(); let hasOverlap = false;
-        sorted.forEach(g => { for (let i = g.min_nilai; i <= g.max_nilai; i++) { if (covered.has(i)) hasOverlap = true; covered.add(i); } });
-        if (hasOverlap) errors.push('Ada overlap pada range nilai.');
+        let covered = new Set<number>();
+        let hasOverlap = false;
+        sorted.forEach(g => {
+            for (let i = Math.floor(g.min_nilai); i <= Math.floor(g.max_nilai); i++) {
+                if (covered.has(i)) hasOverlap = true;
+                covered.add(i);
+            }
+        });
+        if (hasOverlap) errors.push('Terdapat overlap (tumpang tindih) pada range nilai antar kategori.');
 
         return { valid: errors.length === 0, errors };
     };
@@ -621,7 +729,6 @@ export default function AturPenilaianGuruKelasClient() {
 
         const sc = [...batchGrades].sort((a, b) => (a.grade || '').localeCompare(b.grade || ''));
         const so = [...originalBatchGrades].sort((a, b) => (a.grade || '').localeCompare(b.grade || ''));
-
         for (let i = 0; i < sc.length; i++) {
             if ((sc[i].grade || '').toUpperCase().trim() !== (so[i].grade || '').toUpperCase().trim()) return true;
             if (Number(sc[i].min_nilai) !== Number(so[i].min_nilai)) return true;
@@ -644,25 +751,40 @@ export default function AturPenilaianGuruKelasClient() {
         try {
             const token = localStorage.getItem('token');
             const payload = {
-                id_aspek_kokurikuler: batchEditAspekId, jenis: jenisPenilaianAktif,
-                grades: batchGrades.map(g => ({ id: g.id, grade: g.grade?.toUpperCase(), min_nilai: Math.floor(g.min_nilai), max_nilai: Math.floor(g.max_nilai), deskripsi: g.deskripsi.trim(), isNew: g.isNew }))
+                id_aspek_kokurikuler: batchEditAspekId,
+                jenis: jenisPenilaianAktif,
+                grades: batchGrades.map(g => ({
+                    id: g.id,
+                    grade: g.grade?.toUpperCase(),
+                    min_nilai: Math.floor(g.min_nilai),
+                    max_nilai: Math.floor(g.max_nilai),
+                    deskripsi: g.deskripsi.trim(),
+                    isNew: g.isNew
+                }))
             };
 
             const res = await fetch(`${API}/atur-penilaian/kategori-kokurikuler-batch`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload)
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(payload)
             });
 
             const result = await res.json();
-
             if (res.ok) {
-                setShowConfirmModal(false); closeBatchEdit();
-                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchGrades.length} grade berhasil disimpan.` });
+                setShowConfirmModal(false);
+                closeBatchEdit();
+                const successMessage = result.message || `${batchGrades.length} grade berhasil disimpan. Nilai siswa telah disesuaikan otomatis.`;
+                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: successMessage });
 
                 const jenisParam = getJenisParam(jenisPenilaianAktif);
                 const reloadRes = await fetch(`${API}/atur-penilaian/kategori-kokurikuler?${jenisParam}`, { headers: { Authorization: `Bearer ${token}` } });
                 if (reloadRes.ok) {
                     const data = await reloadRes.json();
-                    setKategoriList((data.data || []).map((item: any) => ({ ...item, min_nilai: Math.floor(parseFloat(item.min_nilai)), max_nilai: Math.floor(parseFloat(item.max_nilai)) })));
+                    setKategoriList((data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                        max_nilai: Math.floor(parseFloat(item.max_nilai))
+                    })));
                     setCoverageInfo(data.coverage || null);
                 }
             } else {
@@ -672,15 +794,26 @@ export default function AturPenilaianGuruKelasClient() {
         } catch (err: any) {
             setShowConfirmModal(false);
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
-        } finally { setIsSavingBatch(false); }
+        } finally {
+            setIsSavingBatch(false);
+        }
     };
 
     // ── Batch Edit - Akademik ──
     const loadBatchAkademik = () => {
-        const existing = kategoriList.map(k => ({ id: k.id, min_nilai: Math.floor(k.min_nilai), max_nilai: Math.floor(k.max_nilai), deskripsi: k.deskripsi, isNew: false })).sort((a, b) => b.min_nilai - a.min_nilai);
+        const existing = (kategoriList as KategoriAkademik[]).map(k => ({
+            id: k.id,
+            min_nilai: Math.floor(k.min_nilai),
+            max_nilai: Math.floor(k.max_nilai),
+            deskripsi: k.deskripsi,
+            isNew: false
+        })).sort((a, b) => b.min_nilai - a.min_nilai); // Sort HANYA untuk tampilan UI
 
-        if (existing.length > 0) { setBatchAkademik(existing); setOriginalBatchAkademik([...existing]); }
-        else {
+        if (existing.length > 0) {
+            setBatchAkademik(existing);
+            // ✅ PERBAIKAN: Gunakan deep copy dengan JSON parse/stringify
+            setOriginalBatchAkademik(JSON.parse(JSON.stringify(existing)));
+        } else {
             const defaults = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                 { min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -688,57 +821,106 @@ export default function AturPenilaianGuruKelasClient() {
                 { min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                 { min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
             ];
-            setBatchAkademik(defaults); setOriginalBatchAkademik([]);
+            setBatchAkademik(defaults);
+            setOriginalBatchAkademik([]);
         }
     };
 
     const openBatchEditAkademik = () => {
-        if (!canEditAkademik()) { showModal({ type: 'warning', title: 'Kategori Terkunci', message: 'Kategori akademik tidak dapat dikelola saat ini.' }); return; }
-        if (!selectedMapelAkademik) { showModal({ type: 'warning', title: 'Pilih Mapel', message: 'Silakan pilih mata pelajaran terlebih dahulu.' }); return; }
-        loadBatchAkademik(); setShowBatchEditAkademik(true);
+        if (!canEditAkademik()) {
+            showModal({ type: 'warning', title: 'Kategori Terkunci', message: 'Kategori akademik tidak dapat dikelola saat ini.' });
+            return;
+        }
+        if (!selectedMapelAkademik) {
+            showModal({ type: 'warning', title: 'Pilih Mapel', message: 'Silakan pilih mata pelajaran terlebih dahulu.' });
+            return;
+        }
+        loadBatchAkademik();
+        setShowBatchEditAkademik(true);
     };
 
-    const closeBatchEditAkademik = () => { setBatchEditAkademikClosing(true); setTimeout(() => { setShowBatchEditAkademik(false); setBatchEditAkademikClosing(false); setBatchAkademik([]); setOriginalBatchAkademik([]); }, 200); };
+    const closeBatchEditAkademik = () => {
+        setBatchEditAkademikClosing(true);
+        setTimeout(() => {
+            setShowBatchEditAkademik(false);
+            setBatchEditAkademikClosing(false);
+            setBatchAkademik([]);
+            setOriginalBatchAkademik([]);
+        }, 200);
+    };
 
     const addBatchAkademikRow = () => setBatchAkademik(prev => [...prev, { min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
-
     const removeBatchAkademikRow = (index: number) => setBatchAkademik(prev => prev.filter((_, i) => i !== index));
-
     const updateBatchAkademik = (index: number, field: keyof BatchGradeItem, value: any) => setBatchAkademik(prev => prev.map((g, i) => i === index ? { ...g, [field]: value } : g));
 
+    // ✅ PERBAIKAN: Validasi frontend yang lebih ketat dan sinkron dengan backend
     const validateBatchAkademik = (): { valid: boolean; errors: string[] } => {
         const errors: string[] = [];
-
-        if (batchAkademik.length === 0) { errors.push('Minimal harus ada 1 kategori.'); return { valid: false, errors }; }
+        if (batchAkademik.length === 0) {
+            errors.push('Minimal harus ada 1 kategori.');
+            return { valid: false, errors };
+        }
 
         batchAkademik.forEach((g, i) => {
-            if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) errors.push(`Kategori baris ${i + 1}: Nilai min/max harus angka.`);
-            else {
-                if (g.min_nilai < 0 || g.max_nilai > 100) errors.push(`Kategori baris ${i + 1}: Nilai harus antara 0-100.`);
-                if (g.min_nilai >= g.max_nilai) errors.push(`Kategori baris ${i + 1}: Min (${g.min_nilai}) harus < Max (${g.max_nilai}).`);
+            if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) {
+                errors.push(`Kategori baris ${i + 1}: Nilai min/max harus angka.`);
+            } else {
+                if (g.min_nilai < 0 || g.max_nilai > 100) {
+                    errors.push(`Kategori baris ${i + 1}: Nilai harus antara 0-100.`);
+                }
+                if (g.min_nilai >= g.max_nilai) {
+                    errors.push(`Kategori baris ${i + 1}: Min (${g.min_nilai}) harus < Max (${g.max_nilai}).`);
+                }
+                // ✅ TAMBAHAN: Validasi range minimal 3 poin agar sesuai dengan backend
+                if ((g.max_nilai - g.min_nilai) < 3) {
+                    errors.push(`Kategori baris ${i + 1}: Range nilai minimal 3 poin (saat ini: ${g.max_nilai - g.min_nilai}).`);
+                }
             }
-            if (!g.deskripsi || g.deskripsi.trim().length < 3) errors.push(`Kategori baris ${i + 1}: Deskripsi minimal 3 karakter.`);
+            if (!g.deskripsi || g.deskripsi.trim().length < 3) {
+                errors.push(`Kategori baris ${i + 1}: Deskripsi minimal 3 karakter.`);
+            }
         });
 
+        // ✅ TAMBAHAN: Validasi overlap yang lebih akurat
         const sorted = [...batchAkademik].sort((a, b) => a.min_nilai - b.min_nilai);
-        let covered = new Set<number>(); let hasOverlap = false;
-        sorted.forEach(g => { for (let i = g.min_nilai; i <= g.max_nilai; i++) { if (covered.has(i)) hasOverlap = true; covered.add(i); } });
-        if (hasOverlap) errors.push('Ada overlap pada range nilai.');
+        let covered = new Set<number>();
+        let hasOverlap = false;
+        sorted.forEach(g => {
+            for (let i = Math.floor(g.min_nilai); i <= Math.floor(g.max_nilai); i++) {
+                if (covered.has(i)) hasOverlap = true;
+                covered.add(i);
+            }
+        });
+        if (hasOverlap) errors.push('Terdapat overlap (tumpang tindih) pada range nilai antar kategori.');
 
         return { valid: errors.length === 0, errors };
     };
 
+    // ✅ PERBAIKAN FINAL: Gunakan Map berdasarkan ID, JANGAN sort untuk perbandingan
     const hasBatchAkademikChanges = (): boolean => {
+        if (originalBatchAkademik.length === 0 && batchAkademik.length === 0) return false;
         if (originalBatchAkademik.length === 0) return true;
         if (batchAkademik.length !== originalBatchAkademik.length) return true;
 
-        const sc = [...batchAkademik].sort((a, b) => a.min_nilai - b.min_nilai);
-        const so = [...originalBatchAkademik].sort((a, b) => a.min_nilai - b.min_nilai);
+        // Buat map untuk comparison berdasarkan ID
+        const originalMap = new Map(originalBatchAkademik.map(item => [item.id, item]));
 
-        for (let i = 0; i < sc.length; i++) {
-            if (Number(sc[i].min_nilai) !== Number(so[i].min_nilai)) return true;
-            if (Number(sc[i].max_nilai) !== Number(so[i].max_nilai)) return true;
-            if (sc[i].deskripsi.trim() !== so[i].deskripsi.trim()) return true;
+        for (const currentItem of batchAkademik) {
+            if (!currentItem.id) {
+                // Ini item baru
+                return true;
+            }
+
+            const originalItem = originalMap.get(currentItem.id);
+            if (!originalItem) {
+                // Item ini tidak ada di original
+                return true;
+            }
+
+            // Bandingkan field-fieldnya
+            if (Math.floor(currentItem.min_nilai) !== Math.floor(originalItem.min_nilai)) return true;
+            if (Math.floor(currentItem.max_nilai) !== Math.floor(originalItem.max_nilai)) return true;
+            if (currentItem.deskripsi.trim() !== originalItem.deskripsi.trim()) return true;
         }
         return false;
     };
@@ -747,47 +929,137 @@ export default function AturPenilaianGuruKelasClient() {
         const v = validateBatchAkademik();
         if (!v.valid) { showModal({ type: 'warning', title: 'Validasi Gagal', message: v.errors.join('\n') }); return; }
         if (!hasBatchAkademikChanges()) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Data yang Anda masukkan sama dengan data yang sudah ada.' }); return; }
-        setConfirmAction('save-batch-akademik'); setShowConfirmModal(true);
+        setConfirmAction('save-batch-akademik');
+        setShowConfirmModal(true);
     };
 
-    const executeSaveBatchAkademik = async () => {
-        setIsSavingBatchAkademik(true);
-        try {
-            const token = localStorage.getItem('token');
+    // ✅ PERBAIKAN: executeSaveBatchAkademik dengan strategi DELETE dulu, baru UPDATE/INSERT
+const executeSaveBatchAkademik = async () => {
+    setIsSavingBatchAkademik(true);
+    try {
+        const token = localStorage.getItem('token');
+        
+        // 1. Cari kategori yang dihapus (ada di original, tapi tidak ada di batch sekarang)
+        const currentIds = new Set(batchAkademik.map(b => b.id).filter(Boolean));
+        const deletedItems = originalBatchAkademik.filter(orig => orig.id && !currentIds.has(orig.id));
 
-            const deletePromises = originalBatchAkademik.filter(g => g.id).map(g => fetch(`${API}/atur-penilaian/kategori-akademik/${g.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }));
-            await Promise.all(deletePromises);
+        // 2. Hapus dulu kategori yang dihapus agar tidak terjadi error overlap saat update
+        if (deletedItems.length > 0) {
+            const deletePromises = deletedItems.map(orig =>
+                fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            );
+            const deleteResults = await Promise.all(deletePromises);
+            const deleteFailed = deleteResults.find(r => !r.ok);
+            if (deleteFailed) {
+                throw new Error('Gagal menghapus kategori yang dihapus.');
+            }
+        }
 
-            const insertPromises = batchAkademik.map(g => fetch(`${API}/atur-penilaian/kategori-akademik`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ min_nilai: Math.floor(g.min_nilai), max_nilai: Math.floor(g.max_nilai), deskripsi: g.deskripsi.trim(), urutan: 0, mapel_id: selectedMapelAkademik, jenis: jenisPenilaianAktif })
-            }));
+        // 3. Update kategori yang ada dan Insert kategori baru
+        const updateInsertPromises = [];
+        
+        // Update existing
+        originalBatchAkademik.forEach((orig) => {
+            const updated = batchAkademik.find(b => b.id === orig.id);
+            if (updated && orig.id) {
+                updateInsertPromises.push(
+                    fetch(`${API}/atur-penilaian/kategori-akademik/${orig.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                            min_nilai: Math.floor(updated.min_nilai),
+                            max_nilai: Math.floor(updated.max_nilai),
+                            deskripsi: updated.deskripsi.trim()
+                        })
+                    })
+                );
+            }
+        });
 
-            const results = await Promise.all(insertPromises);
-            const allSuccess = results.every(r => r.ok);
+        // Insert new
+        batchAkademik.filter(b => !b.id).forEach(newCat => {
+            updateInsertPromises.push(
+                fetch(`${API}/atur-penilaian/kategori-akademik`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                        min_nilai: Math.floor(newCat.min_nilai),
+                        max_nilai: Math.floor(newCat.max_nilai),
+                        deskripsi: newCat.deskripsi.trim(),
+                        urutan: 0,
+                        mapel_id: selectedMapelAkademik,
+                        jenis: jenisPenilaianAktif
+                    })
+                })
+            );
+        });
 
-            if (allSuccess) {
-                setShowConfirmModal(false); closeBatchEditAkademik();
-                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchAkademik.length} kategori berhasil disimpan.` });
+        const results = await Promise.all(updateInsertPromises);
+        const allSuccess = results.every(r => r.ok);
 
-                const jenisParam = getJenisParam(jenisPenilaianAktif);
-                const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, { headers: { Authorization: `Bearer ${token}` } });
-                if (reloadRes.ok) {
-                    const data = await reloadRes.json();
-                    setKategoriList((data.data || []).map((item: any) => ({ ...item, min_nilai: Math.floor(parseFloat(item.min_nilai)), max_nilai: Math.floor(parseFloat(item.max_nilai)) })));
-                    setCoverageInfo(data.coverage || null);
-                }
-            } else { setShowConfirmModal(false); showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' }); }
-        } catch (err: any) { setShowConfirmModal(false); showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message }); }
-        finally { setIsSavingBatchAkademik(false); }
-    };
+        if (allSuccess) {
+            setShowConfirmModal(false);
+            closeBatchEditAkademik();
+            showModal({
+                type: 'success',
+                title: 'Berhasil Disimpan!',
+                message: `${batchAkademik.length} kategori berhasil disimpan. Nilai rapor siswa telah dihitung ulang otomatis.`
+            });
+            
+            // Refresh data
+            const jenisParam = getJenisParam(jenisPenilaianAktif);
+            const reloadRes = await fetch(`${API}/atur-penilaian/kategori-akademik?mapel_id=${selectedMapelAkademik}&${jenisParam}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (reloadRes.ok) {
+                const data = await reloadRes.json();
+                setKategoriList((data.data || []).map((item: any) => ({
+                    ...item,
+                    min_nilai: Math.floor(parseFloat(item.min_nilai)),
+                    max_nilai: Math.floor(parseFloat(item.max_nilai))
+                })));
+                setCoverageInfo(data.coverage || null);
+            }
+        } else {
+            setShowConfirmModal(false);
+            const failedResult = results.find(r => !r.ok);
+            if (failedResult) {
+                const errData = await failedResult.json().catch(() => ({}));
+                showModal({
+                    type: 'error',
+                    title: 'Gagal Menyimpan',
+                    message: errData.message || 'Beberapa kategori gagal disimpan.'
+                });
+            } else {
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
+            }
+        }
+    } catch (err: any) {
+        setShowConfirmModal(false);
+        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
+    } finally {
+        setIsSavingBatchAkademik(false);
+    }
+};
 
     // ── Batch Edit - Deskripsi Rata-rata ──
     const loadBatchDeskripsi = () => {
-        const existing = deskripsiRataRataList.map(k => ({ id: k.id, min_nilai: parseFloat(k.min_nilai), max_nilai: parseFloat(k.max_nilai), deskripsi: k.deskripsi, isNew: false })).sort((a, b) => b.min_nilai - a.min_nilai);
+        const existing = deskripsiRataRataList.map(k => ({
+            id: k.id,
+            min_nilai: parseFloat(k.min_nilai),
+            max_nilai: parseFloat(k.max_nilai),
+            deskripsi: k.deskripsi,
+            isNew: false
+        })).sort((a, b) => b.min_nilai - a.min_nilai);
 
-        if (existing.length > 0) { setBatchDeskripsi(existing); setOriginalBatchDeskripsi([...existing]); }
-        else {
+        if (existing.length > 0) {
+            setBatchDeskripsi(existing);
+            // ✅ PERBAIKAN: Deep copy
+            setOriginalBatchDeskripsi(existing.map(item => ({ ...item })));
+        } else {
             const defaults = [
                 { min_nilai: 90, max_nilai: 100, deskripsi: 'Sangat Baik', isNew: true },
                 { min_nilai: 80, max_nilai: 89, deskripsi: 'Baik', isNew: true },
@@ -795,45 +1067,63 @@ export default function AturPenilaianGuruKelasClient() {
                 { min_nilai: 60, max_nilai: 69, deskripsi: 'Kurang', isNew: true },
                 { min_nilai: 0, max_nilai: 59, deskripsi: 'Perlu Bimbingan', isNew: true },
             ];
-            setBatchDeskripsi(defaults); setOriginalBatchDeskripsi([]);
+            setBatchDeskripsi(defaults);
+            setOriginalBatchDeskripsi([]);
         }
     };
 
     const openBatchEditDeskripsi = () => {
-        if (!canEditDeskripsiRataRata()) { showModal({ type: 'warning', title: 'Deskripsi Terkunci', message: getDeskripsiRataRataLockReason() + '\nDeskripsi rata-rata hanya dapat diatur saat periode PTS aktif.' }); return; }
-        loadBatchDeskripsi(); setShowBatchEditDeskripsi(true);
+        if (!canEditDeskripsiRataRata()) {
+            showModal({ type: 'warning', title: 'Deskripsi Terkunci', message: getDeskripsiRataRataLockReason() + '\nDeskripsi rata-rata hanya dapat diatur saat periode PTS aktif.' });
+            return;
+        }
+        loadBatchDeskripsi();
+        setShowBatchEditDeskripsi(true);
     };
 
-    const closeBatchEditDeskripsi = () => { setBatchEditDeskripsiClosing(true); setTimeout(() => { setShowBatchEditDeskripsi(false); setBatchEditDeskripsiClosing(false); setBatchDeskripsi([]); setOriginalBatchDeskripsi([]); }, 200); };
+    const closeBatchEditDeskripsi = () => {
+        setBatchEditDeskripsiClosing(true);
+        setTimeout(() => {
+            setShowBatchEditDeskripsi(false);
+            setBatchEditDeskripsiClosing(false);
+            setBatchDeskripsi([]);
+            setOriginalBatchDeskripsi([]);
+        }, 200);
+    };
 
     const addBatchDeskripsiRow = () => setBatchDeskripsi(prev => [...prev, { min_nilai: 0, max_nilai: 100, deskripsi: '', isNew: true }]);
-
     const removeBatchDeskripsiRow = (index: number) => setBatchDeskripsi(prev => prev.filter((_, i) => i !== index));
-
     const updateBatchDeskripsi = (index: number, field: keyof BatchGradeItem, value: any) => setBatchDeskripsi(prev => prev.map((g, i) => i === index ? { ...g, [field]: value } : g));
 
     const validateBatchDeskripsi = (): { valid: boolean; errors: string[] } => {
         const errors: string[] = [];
-
         if (batchDeskripsi.length === 0) { errors.push('Minimal harus ada 1 kategori.'); return { valid: false, errors }; }
 
         batchDeskripsi.forEach((g, i) => {
-            if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) errors.push(`Kategori baris ${i + 1}: Nilai min/max harus angka.`);
-            else {
+            if (isNaN(g.min_nilai) || isNaN(g.max_nilai)) {
+                errors.push(`Kategori baris ${i + 1}: Nilai min/max harus angka.`);
+            } else {
                 if (g.min_nilai < 0 || g.max_nilai > 100) errors.push(`Kategori baris ${i + 1}: Nilai harus antara 0-100.`);
                 if (g.min_nilai >= g.max_nilai) errors.push(`Kategori baris ${i + 1}: Min (${g.min_nilai}) harus < Max (${g.max_nilai}).`);
+                if ((g.max_nilai - g.min_nilai) < 0.01) errors.push(`Kategori baris ${i + 1}: Range nilai minimal 0.01.`);
             }
             if (!g.deskripsi || g.deskripsi.trim().length < 3) errors.push(`Kategori baris ${i + 1}: Deskripsi minimal 3 karakter.`);
         });
 
         const sorted = [...batchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
         let hasOverlap = false;
-        for (let i = 0; i < sorted.length - 1; i++) { if (sorted[i].max_nilai >= sorted[i + 1].min_nilai) { hasOverlap = true; break; } }
-        if (hasOverlap) errors.push('Ada overlap pada range nilai.');
+        for (let i = 0; i < sorted.length - 1; i++) {
+            if (sorted[i].max_nilai >= sorted[i + 1].min_nilai) {
+                hasOverlap = true;
+                break;
+            }
+        }
+        if (hasOverlap) errors.push('Terdapat overlap (tumpang tindih) pada range nilai antar kategori.');
 
         return { valid: errors.length === 0, errors };
     };
 
+    // ✅ PERBAIKAN FINAL: Gunakan Map berdasarkan ID
     const hasBatchDeskripsiChanges = (): boolean => {
         if (originalBatchDeskripsi.length === 0) return true;
         if (batchDeskripsi.length !== originalBatchDeskripsi.length) return true;
@@ -842,10 +1132,18 @@ export default function AturPenilaianGuruKelasClient() {
         const so = [...originalBatchDeskripsi].sort((a, b) => a.min_nilai - b.min_nilai);
 
         for (let i = 0; i < sc.length; i++) {
-            if (Number(sc[i].min_nilai) !== Number(so[i].min_nilai)) return true;
-            if (Number(sc[i].max_nilai) !== Number(so[i].max_nilai)) return true;
-            if (sc[i].deskripsi.trim() !== so[i].deskripsi.trim()) return true;
+            const curr = sc[i];
+            const orig = so[i];
+            const currMin = parseFloat(curr.min_nilai.toFixed(2));
+            const currMax = parseFloat(curr.max_nilai.toFixed(2));
+            const origMin = parseFloat(orig.min_nilai.toFixed(2));
+            const origMax = parseFloat(orig.max_nilai.toFixed(2));
+
+            if (currMin !== origMin) return true;
+            if (currMax !== origMax) return true;
+            if (curr.deskripsi.trim() !== orig.deskripsi.trim()) return true;
         }
+
         return false;
     };
 
@@ -853,7 +1151,8 @@ export default function AturPenilaianGuruKelasClient() {
         const v = validateBatchDeskripsi();
         if (!v.valid) { showModal({ type: 'warning', title: 'Validasi Gagal', message: v.errors.join('\n') }); return; }
         if (!hasBatchDeskripsiChanges()) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Data yang Anda masukkan sama dengan data yang sudah ada.' }); return; }
-        setConfirmAction('save-batch-deskripsi'); setShowConfirmModal(true);
+        setConfirmAction('save-batch-deskripsi');
+        setShowConfirmModal(true);
     };
 
     const executeSaveBatchDeskripsi = async () => {
@@ -861,30 +1160,59 @@ export default function AturPenilaianGuruKelasClient() {
         try {
             const token = localStorage.getItem('token');
 
-            const deletePromises = originalBatchDeskripsi.filter(g => g.id).map(g => fetch(`${API}/atur-penilaian/deskripsi-rata-rata/${g.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }));
+            // Delete all existing
+            const deletePromises = originalBatchDeskripsi.filter(g => g.id).map(g =>
+                fetch(`${API}/atur-penilaian/deskripsi-rata-rata/${g.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            );
             await Promise.all(deletePromises);
 
-            const insertPromises = batchDeskripsi.map(g => fetch(`${API}/atur-penilaian/deskripsi-rata-rata`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ min_nilai: parseFloat(g.min_nilai.toFixed(2)), max_nilai: parseFloat(g.max_nilai.toFixed(2)), deskripsi: g.deskripsi.trim() })
-            }));
-
+            // Insert all new
+            const insertPromises = batchDeskripsi.map(g =>
+                fetch(`${API}/atur-penilaian/deskripsi-rata-rata`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                        min_nilai: parseFloat(g.min_nilai.toFixed(2)),
+                        max_nilai: parseFloat(g.max_nilai.toFixed(2)),
+                        deskripsi: g.deskripsi.trim()
+                    })
+                })
+            );
             const results = await Promise.all(insertPromises);
             const allSuccess = results.every(r => r.ok);
 
             if (allSuccess) {
-                setShowConfirmModal(false); closeBatchEditDeskripsi();
-                showModal({ type: 'success', title: 'Berhasil Disimpan!', message: `${batchDeskripsi.length} kategori berhasil disimpan.` });
+                setShowConfirmModal(false);
+                closeBatchEditDeskripsi();
+                showModal({
+                    type: 'success',
+                    title: 'Berhasil Disimpan!',
+                    message: `${batchDeskripsi.length} kategori berhasil disimpan. Deskripsi rata-rata siswa telah diperbarui otomatis.`
+                });
 
                 const reloadRes = await fetch(`${API}/atur-penilaian/deskripsi-rata-rata`, { headers: { Authorization: `Bearer ${token}` } });
                 if (reloadRes.ok) {
                     const data = await reloadRes.json();
-                    setDeskripsiRataRataList((data.data || []).map((item: any) => ({ ...item, min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)), max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2)) })));
+                    setDeskripsiRataRataList((data.data || []).map((item: any) => ({
+                        ...item,
+                        min_nilai: parseFloat(parseFloat(item.min_nilai).toFixed(2)),
+                        max_nilai: parseFloat(parseFloat(item.max_nilai).toFixed(2))
+                    })));
                     setDeskripsiRataRataCoverage(data.coverage || null);
                 }
-            } else { setShowConfirmModal(false); showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' }); }
-        } catch (err: any) { setShowConfirmModal(false); showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message }); }
-        finally { setIsSavingBatchDeskripsi(false); }
+            } else {
+                setShowConfirmModal(false);
+                showModal({ type: 'error', title: 'Gagal Menyimpan', message: 'Beberapa kategori gagal disimpan.' });
+            }
+        } catch (err: any) {
+            setShowConfirmModal(false);
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan: ' + err.message });
+        } finally {
+            setIsSavingBatchDeskripsi(false);
+        }
     };
 
     // ── Bobot handlers ──
@@ -906,42 +1234,84 @@ export default function AturPenilaianGuruKelasClient() {
             const initial = initialBobotListRef.current.find((i) => i.komponen_id === b.komponen_id);
             return initial && Math.abs(b.bobot - initial.bobot) < 0.01;
         });
+        if (isUnchanged) {
+            showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+            return false;
+        }
 
-        if (isUnchanged) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' }); return false; }
+        if (bobotList.some(b => b.bobot < 0)) {
+            showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' });
+            return false;
+        }
 
-        if (bobotList.some(b => b.bobot < 0)) { showModal({ type: 'warning', title: 'Bobot Tidak Valid', message: 'Bobot tidak boleh negatif.' }); return false; }
+        const hasNonZeroBobot = bobotList.some(b => b.bobot > 0);
+        if (!hasNonZeroBobot) {
+            showModal({
+                type: 'warning',
+                title: 'Bobot Tidak Valid',
+                message: 'Minimal harus ada 1 komponen dengan bobot > 0%.'
+            });
+            return false;
+        }
 
         const total = bobotList.reduce((sum, b) => sum + b.bobot, 0);
-        if (Math.abs(total - 100) > 0.01) { showModal({ type: 'warning', title: 'Total Bobot Salah', message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%` }); return false; }
+        if (Math.abs(total - 100) > 0.01) {
+            showModal({
+                type: 'warning',
+                title: 'Total Bobot Salah',
+                message: `Total bobot harus tepat 100%.\nSaat ini: ${total.toFixed(2)}%`
+            });
+            return false;
+        }
 
-        if (isPTSActive) { showModal({ type: 'warning', title: 'Periode PTS Aktif', message: 'Bobot tidak dapat diubah saat periode PTS aktif.' }); return false; }
+        if (isPTSActive) {
+            showModal({ type: 'warning', title: 'Periode PTS Aktif', message: 'Bobot tidak dapat diubah saat periode PTS aktif.' });
+            return false;
+        }
 
         return true;
     };
 
-    const openConfirmSaveBobot = () => { if (!validateBobot()) return; setConfirmAction('save-bobot'); setShowConfirmModal(true); };
+    const openConfirmSaveBobot = () => {
+        if (!validateBobot()) return;
+        setConfirmAction('save-bobot');
+        setShowConfirmModal(true);
+    };
 
     const executeSaveBobot = async () => {
         if (!selectedMapelId) return;
-
         setIsSavingBobot(true);
         try {
             const token = localStorage.getItem('token');
             const jenisParam = getJenisParam(jenisPenilaianAktif);
-
             const res = await fetch(`${API}/atur-penilaian/bobot-akademik/${selectedMapelId}?${jenisParam}`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ bobot: bobotList, jenis: jenisPenilaianAktif })
             });
 
             const result = await res.json();
-
             if (res.ok) {
-                showModal({ type: 'success', title: 'Bobot Disimpan!', message: result.message || 'Bobot penilaian berhasil disimpan.' });
+                const successMessage = result.message || 'Bobot penilaian berhasil disimpan. Nilai rapor siswa telah dihitung ulang otomatis.';
+                showModal({ type: 'success', title: 'Bobot Disimpan!', message: successMessage });
                 initialBobotListRef.current = JSON.parse(JSON.stringify(bobotList));
-            } else { showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Gagal menyimpan bobot.' }); }
-        } catch (err) { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan bobot.' }); }
-        finally { setIsSavingBobot(false); setShowConfirmModal(false); }
+            } else {
+                if (result.code === 'BOBOT_NOT_100') {
+                    showModal({
+                        type: 'error',
+                        title: 'Total Bobot Salah',
+                        message: result.message || 'Total bobot harus tepat 100%.'
+                    });
+                } else {
+                    showModal({ type: 'error', title: 'Gagal Menyimpan', message: result.message || 'Gagal menyimpan bobot.' });
+                }
+            }
+        } catch (err) {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Gagal menyimpan bobot.' });
+        } finally {
+            setIsSavingBobot(false);
+            setShowConfirmModal(false);
+        }
     };
 
     const totalBobot = bobotList.reduce((sum, b) => {
@@ -959,8 +1329,8 @@ export default function AturPenilaianGuruKelasClient() {
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 <div className="text-center">
-                    <div className="w-12 h-12 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-4" />
-                    <p className="text-sm font-medium" style={{ color: '#c2410c' }}>Memuat data...</p>
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-gray-400">Memuat data...</p>
                 </div>
             </div>
         );
@@ -971,10 +1341,9 @@ export default function AturPenilaianGuruKelasClient() {
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
-
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ap-fadeIn">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ap-scaleIn">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
                         <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100">
                             <AlertCircle size={48} className="text-red-500" />
                         </div>
@@ -982,9 +1351,9 @@ export default function AturPenilaianGuruKelasClient() {
                             <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
                             <p className="text-sm text-gray-600 leading-relaxed">Anda belum ditugaskan sebagai guru kelas di semester ini.</p>
                         </div>
-                        <button onClick={handleLogout} className="w-full py-3 rounded-xl text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #ea580c, #f97316)' }}>
-                            <LogOut size={18} className="inline mr-2" /> Logout
-                        </button>
+                        <ActionButton variant="primary" onClick={handleLogout} fullWidth>
+                            <LogOut size={16} /> Logout
+                        </ActionButton>
                     </div>
                 </div>
             </div>
@@ -998,34 +1367,34 @@ export default function AturPenilaianGuruKelasClient() {
     }));
 
     return (
-        <div className="flex-1 p-6 min-h-screen" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             {/* Header */}
-            <div className="mb-6 ap-fadeIn">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #ea580c, #f97316)' }}>
-                        <Settings size={20} className="text-white" />
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <div className="flex items-center gap-3 mb-1">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: BRAND_GRADIENT }}>
+                        <Settings size={17} className="text-white" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Atur Penilaian</h1>
-                        <p className="text-sm" style={{ color: '#c2410c' }}>Kelola kategori dan bobot penilaian kelas Anda</p>
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Atur Penilaian</h1>
+                        <p className="text-xs sm:text-sm mt-0.5 text-gray-500">Kelola kategori dan bobot penilaian kelas Anda</p>
                     </div>
                 </div>
             </div>
 
             {/* Read Only Banner */}
             {isReadOnly && (
-                <div className="mb-5 p-4 rounded-xl flex items-start gap-3 ap-fadeIn"
-                    style={{ background: readOnlyReason === 'locked' ? '#fef2f2' : '#fff7ed', border: `1.5px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fdba74'}` }}>
-                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-orange-600'}`} />
+                <div className="mb-4 p-4 rounded-xl flex items-start gap-3 anim-in d2"
+                    style={{ background: readOnlyReason === 'locked' ? '#fef2f2' : '#fff8f2', border: `1.5px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#f0a94e'}` }}>
+                    <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: readOnlyReason === 'locked' ? '#dc2626' : ACCENT_DARK }} />
                     <div className="flex-1">
-                        <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-orange-900'}`}>
+                        <p className="text-sm font-bold mb-1" style={{ color: readOnlyReason === 'locked' ? '#991b1b' : ACCENT_DARK }}>
                             Mode Baca Saja (Read Only)
                         </p>
-                        <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-orange-800'}`}>
+                        <p className="text-xs" style={{ color: readOnlyReason === 'locked' ? '#b91c1c' : '#9a5b1f' }}>
                             {readOnlyReason === 'locked'
                                 ? 'Periode penilaian telah selesai dan data sudah dikunci.'
                                 : 'Periode penilaian belum aktif. Silakan hubungi admin.'}
@@ -1036,19 +1405,19 @@ export default function AturPenilaianGuruKelasClient() {
 
             {/* Active Period Banner */}
             {jenisPenilaianAktif && (
-                <div className="mb-5 p-4 rounded-xl flex items-center gap-3 ap-fadeIn"
+                <div className="mb-4 p-4 rounded-xl flex items-center gap-3 anim-in d2"
                     style={{
-                        background: jenisPenilaianAktif === 'PTS' ? 'linear-gradient(135deg, #fff7ed, #ffedd5)' : 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
-                        border: `1.5px solid ${jenisPenilaianAktif === 'PTS' ? '#fdba74' : '#86efac'}`
+                        background: jenisPenilaianAktif === 'PTS' ? '#fff8f2' : '#ecfdf5',
+                        border: `1.5px solid ${jenisPenilaianAktif === 'PTS' ? '#f0a94e' : '#86efac'}`
                     }}>
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${jenisPenilaianAktif === 'PTS' ? 'bg-orange-200' : 'bg-green-200'}`}>
-                        {jenisPenilaianAktif === 'PTS' ? <Award className="w-5 h-5 text-orange-700" /> : <CheckCircle2 className="w-5 h-5 text-green-700" />}
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: jenisPenilaianAktif === 'PTS' ? '#fde0c8' : '#bbf7d0' }}>
+                        {jenisPenilaianAktif === 'PTS' ? <Award className="w-4 h-4" style={{ color: ACCENT_DARK }} /> : <CheckCircle2 className="w-4 h-4 text-green-700" />}
                     </div>
                     <div className="flex-1">
-                        <p className={`text-sm font-bold ${jenisPenilaianAktif === 'PTS' ? 'text-orange-900' : 'text-green-900'}`}>
-                            📋 Mode Konfigurasi: {jenisPenilaianAktif === 'PTS' ? 'PTS (Penilaian Tengah Semester)' : 'PAS (Penilaian Akhir Semester)'}
+                        <p className="text-sm font-bold" style={{ color: jenisPenilaianAktif === 'PTS' ? ACCENT_DARK : '#166534' }}>
+                            Mode Konfigurasi: {jenisPenilaianAktif === 'PTS' ? 'PTS (Penilaian Tengah Semester)' : 'PAS (Penilaian Akhir Semester)'}
                         </p>
-                        <p className={`text-xs mt-0.5 ${jenisPenilaianAktif === 'PTS' ? 'text-orange-700' : 'text-green-700'}`}>
+                        <p className="text-xs mt-0.5" style={{ color: jenisPenilaianAktif === 'PTS' ? '#9a5b1f' : '#15803d' }}>
                             {jenisPenilaianAktif === 'PTS' ? 'Anda sedang mengatur konfigurasi untuk PTS' : 'Anda sedang mengatur konfigurasi untuk PAS'}
                         </p>
                     </div>
@@ -1056,9 +1425,9 @@ export default function AturPenilaianGuruKelasClient() {
             )}
 
             {/* Main Card */}
-            <div className="bg-white rounded-2xl overflow-hidden ap-fadeIn" style={CARD_STYLE}>
+            <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 {/* Tabs */}
-                <div className="px-5 py-3 border-b" style={{ borderColor: '#fed7aa', background: 'linear-gradient(to right, #fff7ed, #ffffff)' }}>
+                <div className="px-5 py-3 border-b" style={{ borderColor: '#ececec', background: '#fafafa' }}>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {[
                             { id: 'kokurikuler', label: 'Kokurikuler', icon: Layers },
@@ -1069,11 +1438,11 @@ export default function AturPenilaianGuruKelasClient() {
                             <button key={tab.id}
                                 onClick={() => !tab.disabled && handleTabChange(tab.id as typeof activeTab)}
                                 disabled={tab.disabled}
-                                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
-                                    ? 'text-white shadow-md'
-                                    : tab.disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-600 hover:bg-orange-50 hover:text-orange-600 border-2 border-orange-200'
+                                className={`btn-action flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
+                                    ? 'text-white'
+                                    : tab.disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-white text-gray-600 hover:bg-orange-50 hover:text-orange-700 border border-gray-200'
                                     }`}
-                                style={activeTab === tab.id ? { background: 'linear-gradient(135deg, #ea580c, #f97316)' } : {}}
+                                style={activeTab === tab.id ? { background: BRAND_GRADIENT, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' } : {}}
                                 title={tab.disabled ? getDeskripsiRataRataLockReason() : ''}
                             >
                                 <tab.icon size={15} />
@@ -1085,21 +1454,21 @@ export default function AturPenilaianGuruKelasClient() {
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                     {/* KOKURIKULER TAB */}
                     {activeTab === 'kokurikuler' && (
                         <div>
                             <CoverageWarning coverage={coverageInfo} />
                             {kategoriLoading ? (
                                 <div className="py-16 text-center">
-                                    <div className="w-10 h-10 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />
-                                    <p className="text-sm text-gray-500">Memuat data...</p>
+                                    <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                    <p className="text-sm text-gray-400">Memuat data...</p>
                                 </div>
                             ) : groupedKokurikuler.length === 0 ? (
-                                <div className="py-16 text-center rounded-2xl" style={{ background: '#fff7ed', border: '2px dashed #fdba74' }}>
-                                    <Layers size={56} className="mx-auto mb-4" style={{ color: '#fdba74' }} />
-                                    <p className="text-base font-bold" style={{ color: '#c2410c' }}>Belum ada kategori kokurikuler</p>
-                                    <p className="text-sm text-gray-500 mt-2">Klik tombol "Edit" pada aspek untuk mulai menambahkan grade</p>
+                                <div className="py-12 text-center rounded-2xl flex flex-col items-center gap-2" style={{ background: '#fafafa', border: '2px dashed #e5e5e5' }}>
+                                    <Layers size={30} className="text-gray-300" />
+                                    <p className="text-sm font-bold text-gray-500">Belum ada kategori kokurikuler</p>
+                                    <p className="text-xs text-gray-400">Klik tombol "Edit" pada aspek untuk mulai menambahkan grade</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
@@ -1109,13 +1478,13 @@ export default function AturPenilaianGuruKelasClient() {
 
                                         return (
                                             <div key={aspek.id_aspek_kokurikuler} className="rounded-xl overflow-hidden transition-all"
-                                                style={{ border: `1.5px solid ${isEditable ? '#fed7aa' : '#e5e7eb'}`, opacity: isEditable ? 1 : 0.75 }}>
+                                                style={{ border: `1.5px solid ${isEditable ? '#fde0c8' : '#e5e7eb'}`, opacity: isEditable ? 1 : 0.75 }}>
                                                 <div className="px-5 py-3 flex items-center justify-between gap-3"
-                                                    style={{ background: isEditable ? '#fff7ed' : '#f9fafb', borderBottom: `1.5px solid ${isEditable ? '#fed7aa' : '#e5e7eb'}` }}>
+                                                    style={{ background: isEditable ? '#fff8f2' : '#f9fafb', borderBottom: `1.5px solid ${isEditable ? '#fde0c8' : '#e5e7eb'}` }}>
                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                                         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                                            style={{ background: isEditable ? '#fed7aa' : '#e5e7eb' }}>
-                                                            <Layers size={16} style={{ color: isEditable ? '#c2410c' : '#6b7280' }} />
+                                                            style={{ background: isEditable ? '#fde0c8' : '#e5e7eb' }}>
+                                                            <Layers size={16} style={{ color: isEditable ? ACCENT_DARK : '#6b7280' }} />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-2 flex-wrap">
@@ -1126,37 +1495,36 @@ export default function AturPenilaianGuruKelasClient() {
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>{grades.length} grade</p>
+                                                            <p className="text-xs text-gray-400">{grades.length} grade</p>
                                                         </div>
                                                     </div>
                                                     <BtnEdit onClick={() => openBatchEdit(aspek.id_aspek_kokurikuler)} disabled={!isEditable}>
                                                         {isEditable ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
                                                     </BtnEdit>
                                                 </div>
-
                                                 {grades.length > 0 ? (
                                                     <div className="overflow-x-auto scrollbar-thin">
-                                                        <table className="w-full text-sm">
-                                                            <thead style={{ background: '#fff7ed' }}>
+                                                        <table className="w-full text-sm table-fixed">
+                                                            <thead style={{ background: '#fafafa' }}>
                                                                 <tr>
-                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Grade</th>
-                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Range Nilai</th>
-                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Deskripsi</th>
+                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-20">Grade</th>
+                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-36">Range Nilai</th>
+                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Deskripsi</th>
                                                                 </tr>
                                                             </thead>
-                                                            <tbody className="divide-y divide-orange-100">
+                                                            <tbody className="divide-y" style={{ borderColor: '#f0f0f0' }}>
                                                                 {grades.map((g) => (
-                                                                    <tr key={g.id} className="transition-colors hover:bg-orange-50/50">
-                                                                        <td className="px-5 py-3">
+                                                                    <tr key={g.id} className="transition-colors row-hover" onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                                        <td className="px-5 py-3 align-top">
                                                                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold"
-                                                                                style={{ background: '#fff7ed', color: '#c2410c', border: '1.5px solid #fdba74' }}>
+                                                                                style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1.5px solid #f0a94e' }}>
                                                                                 {(g as KategoriKokurikuler).grade}
                                                                             </span>
                                                                         </td>
-                                                                        <td className="px-5 py-3 text-gray-700 font-medium">
+                                                                        <td className="px-5 py-3 align-top text-gray-700 font-medium whitespace-nowrap">
                                                                             {Math.floor(g.min_nilai)} – {Math.floor(g.max_nilai)}
                                                                         </td>
-                                                                        <td className="px-5 py-3 text-gray-600">{g.deskripsi}</td>
+                                                                        <td className="px-5 py-3 align-top text-gray-600 break-words">{g.deskripsi}</td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
@@ -1177,7 +1545,7 @@ export default function AturPenilaianGuruKelasClient() {
                     {activeTab === 'akademik' && (
                         <div>
                             <div className="mb-5 max-w-md">
-                                <label className="block text-sm font-bold mb-2" style={{ color: '#7a3a0a' }}>Mata Pelajaran</label>
+                                <label className={labelCls} style={labelColor}>Mata Pelajaran</label>
                                 <select value={selectedMapelAkademik || ''}
                                     onChange={(e) => { setSelectedMapelAkademik(e.target.value ? Number(e.target.value) : null); }}
                                     className={selectCls + ' w-full'}
@@ -1192,52 +1560,50 @@ export default function AturPenilaianGuruKelasClient() {
                             {selectedMapelAkademik ? (
                                 <>
                                     <CoverageWarning coverage={coverageInfo} />
-
                                     {kategoriLoading ? (
                                         <div className="py-16 text-center">
-                                            <div className="w-10 h-10 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />
-                                            <p className="text-sm text-gray-500">Memuat data...</p>
+                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                            <p className="text-sm text-gray-400">Memuat data...</p>
                                         </div>
                                     ) : (
-                                        <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditAkademik() ? '#fed7aa' : '#e5e7eb'}`, opacity: canEditAkademik() ? 1 : 0.75 }}>
+                                        <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditAkademik() ? '#fde0c8' : '#e5e7eb'}`, opacity: canEditAkademik() ? 1 : 0.75 }}>
                                             <div className="px-5 py-3 flex items-center justify-between gap-3"
-                                                style={{ background: canEditAkademik() ? '#fff7ed' : '#f9fafb', borderBottom: `1.5px solid ${canEditAkademik() ? '#fed7aa' : '#e5e7eb'}` }}>
+                                                style={{ background: canEditAkademik() ? '#fff8f2' : '#f9fafb', borderBottom: `1.5px solid ${canEditAkademik() ? '#fde0c8' : '#e5e7eb'}` }}>
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-                                                        style={{ background: canEditAkademik() ? '#fed7aa' : '#e5e7eb' }}>
-                                                        <BookOpen size={16} style={{ color: canEditAkademik() ? '#c2410c' : '#6b7280' }} />
+                                                        style={{ background: canEditAkademik() ? '#fde0c8' : '#e5e7eb' }}>
+                                                        <BookOpen size={16} style={{ color: canEditAkademik() ? ACCENT_DARK : '#6b7280' }} />
                                                     </div>
                                                     <div>
                                                         <h3 className="text-sm font-bold" style={{ color: canEditAkademik() ? '#7a3a0a' : '#6b7280' }}>Kategori Akademik</h3>
-                                                        <p className="text-xs" style={{ color: '#a89a8c' }}>{kategoriList.length} kategori</p>
+                                                        <p className="text-xs text-gray-400">{kategoriList.length} kategori</p>
                                                     </div>
                                                 </div>
                                                 <BtnEdit onClick={openBatchEditAkademik} disabled={!canEditAkademik()}>
                                                     {canEditAkademik() ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
                                                 </BtnEdit>
                                             </div>
-
                                             {(kategoriList as KategoriAkademik[]).length > 0 ? (
                                                 <div className="overflow-x-auto scrollbar-thin">
-                                                    <table className="w-full text-sm">
-                                                        <thead style={{ background: '#fff7ed' }}>
+                                                    <table className="w-full text-sm table-fixed">
+                                                        <thead style={{ background: '#fafafa' }}>
                                                             <tr>
-                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-16">No</th>
-                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Range Nilai</th>
-                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Deskripsi</th>
+                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-16">No</th>
+                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-36">Range Nilai</th>
+                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Deskripsi</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-orange-100">
+                                                        <tbody className="divide-y" style={{ borderColor: '#f0f0f0' }}>
                                                             {(kategoriList as KategoriAkademik[]).sort((a, b) => b.min_nilai - a.min_nilai).map((k, idx) => (
-                                                                <tr key={k.id} className="transition-colors hover:bg-orange-50/50">
-                                                                    <td className="px-5 py-3 text-gray-500 font-medium">{idx + 1}</td>
-                                                                    <td className="px-5 py-3">
+                                                                <tr key={k.id} className="transition-colors row-hover" onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                                    <td className="px-5 py-3 align-top text-gray-400 font-medium">{idx + 1}</td>
+                                                                    <td className="px-5 py-3 align-top whitespace-nowrap">
                                                                         <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold"
-                                                                            style={{ background: '#fff7ed', color: '#c2410c', border: '1.5px solid #fdba74' }}>
+                                                                            style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1.5px solid #f0a94e' }}>
                                                                             {Math.floor(k.min_nilai)} – {Math.floor(k.max_nilai)}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-5 py-3 text-gray-700">{k.deskripsi}</td>
+                                                                    <td className="px-5 py-3 align-top text-gray-700 break-words">{k.deskripsi}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -1250,9 +1616,9 @@ export default function AturPenilaianGuruKelasClient() {
                                     )}
                                 </>
                             ) : (
-                                <div className="py-16 text-center rounded-2xl" style={{ background: '#fff7ed', border: '2px dashed #fdba74' }}>
-                                    <BookOpen size={56} className="mx-auto mb-4" style={{ color: '#fdba74' }} />
-                                    <p className="text-base font-bold" style={{ color: '#c2410c' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
+                                <div className="py-12 text-center rounded-2xl flex flex-col items-center gap-2" style={{ background: '#fafafa', border: '2px dashed #e5e5e5' }}>
+                                    <BookOpen size={30} className="text-gray-300" />
+                                    <p className="text-sm font-bold text-gray-500">Pilih Mata Pelajaran Terlebih Dahulu</p>
                                 </div>
                             )}
                         </div>
@@ -1272,11 +1638,11 @@ export default function AturPenilaianGuruKelasClient() {
                             )}
 
                             {canEditDeskripsiRataRata() && (
-                                <div className="mb-5 p-4 rounded-xl flex items-center gap-3" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
-                                    <Calendar size={18} className="text-orange-600 flex-shrink-0" />
+                                <div className="mb-5 p-4 rounded-xl flex items-center gap-3" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                    <Calendar size={18} style={{ color: ACCENT_DARK }} className="flex-shrink-0" />
                                     <div>
-                                        <p className="text-sm font-bold text-orange-900">Periode PTS Sedang Aktif</p>
-                                        <p className="text-xs text-orange-700">Deskripsi rata-rata digunakan untuk rapor PTS</p>
+                                        <p className="text-sm font-bold" style={{ color: ACCENT_DARK }}>Periode PTS Sedang Aktif</p>
+                                        <p className="text-xs" style={{ color: '#9a5b1f' }}>Deskripsi rata-rata digunakan untuk rapor PTS</p>
                                     </div>
                                 </div>
                             )}
@@ -1285,49 +1651,48 @@ export default function AturPenilaianGuruKelasClient() {
 
                             {deskripsiRataRataLoading ? (
                                 <div className="py-16 text-center">
-                                    <div className="w-10 h-10 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />
-                                    <p className="text-sm text-gray-500">Memuat data...</p>
+                                    <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                    <p className="text-sm text-gray-400">Memuat data...</p>
                                 </div>
                             ) : (
-                                <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditDeskripsiRataRata() ? '#fed7aa' : '#e5e7eb'}`, opacity: canEditDeskripsiRataRata() ? 1 : 0.75 }}>
+                                <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditDeskripsiRataRata() ? '#fde0c8' : '#e5e7eb'}`, opacity: canEditDeskripsiRataRata() ? 1 : 0.75 }}>
                                     <div className="px-5 py-3 flex items-center justify-between gap-3"
-                                        style={{ background: canEditDeskripsiRataRata() ? '#fff7ed' : '#f9fafb', borderBottom: `1.5px solid ${canEditDeskripsiRataRata() ? '#fed7aa' : '#e5e7eb'}` }}>
+                                        style={{ background: canEditDeskripsiRataRata() ? '#fff8f2' : '#f9fafb', borderBottom: `1.5px solid ${canEditDeskripsiRataRata() ? '#fde0c8' : '#e5e7eb'}` }}>
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-                                                style={{ background: canEditDeskripsiRataRata() ? '#fed7aa' : '#e5e7eb' }}>
-                                                <BarChart3 size={16} style={{ color: canEditDeskripsiRataRata() ? '#c2410c' : '#6b7280' }} />
+                                                style={{ background: canEditDeskripsiRataRata() ? '#fde0c8' : '#e5e7eb' }}>
+                                                <BarChart3 size={16} style={{ color: canEditDeskripsiRataRata() ? ACCENT_DARK : '#6b7280' }} />
                                             </div>
                                             <div>
                                                 <h3 className="text-sm font-bold" style={{ color: canEditDeskripsiRataRata() ? '#7a3a0a' : '#6b7280' }}>Deskripsi Rata-rata Nilai</h3>
-                                                <p className="text-xs" style={{ color: '#a89a8c' }}>{deskripsiRataRataList.length} kategori</p>
+                                                <p className="text-xs text-gray-400">{deskripsiRataRataList.length} kategori</p>
                                             </div>
                                         </div>
                                         <BtnEdit onClick={openBatchEditDeskripsi} disabled={!canEditDeskripsiRataRata()}>
                                             {canEditDeskripsiRataRata() ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
                                         </BtnEdit>
                                     </div>
-
                                     {deskripsiRataRataList.length > 0 ? (
                                         <div className="overflow-x-auto scrollbar-thin">
-                                            <table className="w-full text-sm">
-                                                <thead style={{ background: '#fff7ed' }}>
+                                            <table className="w-full text-sm table-fixed">
+                                                <thead style={{ background: '#fafafa' }}>
                                                     <tr>
-                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-16">No</th>
-                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Range Nilai</th>
-                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Deskripsi</th>
+                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-16">No</th>
+                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-44">Range Nilai</th>
+                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Deskripsi</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-orange-100">
+                                                <tbody className="divide-y" style={{ borderColor: '#f0f0f0' }}>
                                                     {[...deskripsiRataRataList].sort((a, b) => b.min_nilai - a.min_nilai).map((k, idx) => (
-                                                        <tr key={k.id} className="transition-colors hover:bg-orange-50/50">
-                                                            <td className="px-5 py-3 text-gray-500 font-medium">{idx + 1}</td>
-                                                            <td className="px-5 py-3">
+                                                        <tr key={k.id} className="transition-colors row-hover" onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                            <td className="px-5 py-3 align-top text-gray-400 font-medium">{idx + 1}</td>
+                                                            <td className="px-5 py-3 align-top whitespace-nowrap">
                                                                 <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold"
-                                                                    style={{ background: '#fff7ed', color: '#c2410c', border: '1.5px solid #fdba74' }}>
+                                                                    style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1.5px solid #f0a94e' }}>
                                                                     {parseFloat(k.min_nilai).toFixed(2)} – {parseFloat(k.max_nilai).toFixed(2)}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-5 py-3 text-gray-700">{k.deskripsi}</td>
+                                                            <td className="px-5 py-3 align-top text-gray-700 break-words">{k.deskripsi}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -1345,17 +1710,31 @@ export default function AturPenilaianGuruKelasClient() {
                     {activeTab === 'bobot' && (
                         <div>
                             {isPTSActive && (
-                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
-                                    <Info size={18} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                    <Info size={18} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
                                     <div>
-                                        <p className="text-sm font-bold text-orange-900 mb-1">Periode PTS Sedang Aktif</p>
-                                        <p className="text-xs text-orange-800">Sistem otomatis menetapkan <strong>PTS = 100%</strong>. Anda tidak perlu mengatur bobot manual.</p>
+                                        <p className="text-sm font-bold mb-1" style={{ color: ACCENT_DARK }}>Periode PTS Sedang Aktif</p>
+                                        <p className="text-xs" style={{ color: '#9a5b1f' }}>Sistem otomatis menetapkan <strong>PTS = 100%</strong>. Anda tidak perlu mengatur bobot manual.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!isPTSActive && !isReadOnly && selectedMapelId && (
+                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: '#eff6ff', border: '1.5px solid #93c5fd' }}>
+                                    <Info size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-bold text-blue-900 mb-1">Info Bobot</p>
+                                        <p className="text-xs text-blue-800">
+                                            Bobot <strong>0% diizinkan</strong> untuk komponen yang tidak digunakan (misal: UH3 jika mapel hanya punya UH1, UH2, UH4, UH5).
+                                            <br />
+                                            Total bobot harus tetap <strong>100%</strong> dan minimal ada <strong>1 komponen dengan bobot &gt; 0%</strong>.
+                                        </p>
                                     </div>
                                 </div>
                             )}
 
                             <div className="mb-5 max-w-md">
-                                <label className="block text-sm font-bold mb-2" style={{ color: '#7a3a0a' }}>Mata Pelajaran</label>
+                                <label className={labelCls} style={labelColor}>Mata Pelajaran</label>
                                 <select value={selectedMapelId || ''}
                                     onChange={(e) => setSelectedMapelId(e.target.value ? Number(e.target.value) : null)}
                                     className={selectCls + ' w-full'}
@@ -1370,8 +1749,8 @@ export default function AturPenilaianGuruKelasClient() {
                             {selectedMapelId ? (
                                 bobotLoading ? (
                                     <div className="py-16 text-center">
-                                        <div className="w-10 h-10 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-3" />
-                                        <p className="text-sm text-gray-500">Memuat bobot...</p>
+                                        <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                        <p className="text-sm text-gray-400">Memuat bobot...</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
@@ -1384,20 +1763,19 @@ export default function AturPenilaianGuruKelasClient() {
                                             return (
                                                 <div key={bobot.komponen_id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl transition-all"
                                                     style={{
-                                                        background: isPTSActive && isPTS ? '#fff7ed' : isEditable ? '#ffffff' : '#f9fafb',
-                                                        border: `1.5px solid ${isPTSActive && isPTS ? '#fdba74' : isEditable ? '#fed7aa' : '#e5e7eb'}`
+                                                        background: isPTSActive && isPTS ? '#fff8f2' : isEditable ? '#ffffff' : '#f9fafb',
+                                                        border: `1.5px solid ${isPTSActive && isPTS ? '#f0a94e' : isEditable ? '#fde0c8' : '#e5e7eb'}`
                                                     }}>
                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                                         <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                                                            style={{ background: isPTSActive && isPTS ? '#fed7aa' : '#fff7ed' }}>
-                                                            <TrendingUp size={16} style={{ color: '#c2410c' }} />
+                                                            style={{ background: isPTSActive && isPTS ? '#fde0c8' : '#fff5eb' }}>
+                                                            <TrendingUp size={16} style={{ color: ACCENT_DARK }} />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <p className="font-bold text-sm" style={{ color: '#7a3a0a' }}>{komponen?.nama_komponen || 'Komponen'}</p>
-                                                            <p className="text-xs" style={{ color: '#a89a8c' }}>Komponen Penilaian</p>
+                                                            <p className="text-xs text-gray-400">Komponen Penilaian</p>
                                                         </div>
                                                     </div>
-
                                                     <div className="flex items-center gap-2">
                                                         <input
                                                             type="text" inputMode="decimal" pattern="[0-9]*" value={displayBobot}
@@ -1414,23 +1792,23 @@ export default function AturPenilaianGuruKelasClient() {
                                                             }}
                                                             disabled={!isEditable} maxLength={5}
                                                             className={`w-24 h-11 px-3 text-center font-bold text-base rounded-xl border-2 transition-all outline-none ${isEditable
-                                                                ? 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'
+                                                                ? 'bg-white border-orange-200 text-gray-800 focus:ring-4 focus:ring-orange-100 focus:border-orange-400'
                                                                 : 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed'
                                                                 }`}
                                                             readOnly={!isEditable} placeholder="0"
                                                         />
-                                                        <span className="text-base font-bold" style={{ color: '#c2410c' }}>%</span>
+                                                        <span className="text-base font-bold" style={{ color: ACCENT_DARK }}>%</span>
                                                     </div>
                                                 </div>
                                             );
                                         })}
 
                                         {/* Total Bobot */}
-                                        <div className="p-5 rounded-xl mt-4" style={{ background: 'linear-gradient(135deg, #fff7ed, #ffedd5)', border: '1.5px solid #fdba74' }}>
+                                        <div className="p-5 rounded-xl mt-4" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fed7aa' }}>
-                                                        <TrendingUp size={16} className="text-orange-700" />
+                                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fde0c8' }}>
+                                                        <TrendingUp size={16} style={{ color: ACCENT_DARK }} />
                                                     </div>
                                                     <span className="font-bold text-sm" style={{ color: '#7a3a0a' }}>Total Bobot</span>
                                                 </div>
@@ -1444,31 +1822,29 @@ export default function AturPenilaianGuruKelasClient() {
                                                     background: isBobotValid ? 'linear-gradient(90deg, #16a34a, #22c55e)' : 'linear-gradient(90deg, #dc2626, #ef4444)'
                                                 }} />
                                             </div>
-                                            <p className="text-xs mt-2" style={{ color: '#c2410c' }}>
+                                            <p className="text-xs mt-2" style={{ color: ACCENT_DARK }}>
                                                 {isBobotValid ? '✓ Bobot sudah tepat 100%' : `Total harus tepat 100% (saat ini ${totalBobot.toFixed(2)}%)`}
                                             </p>
                                         </div>
 
                                         {/* Save Button */}
                                         {!isPTSActive && !isReadOnly && (
-                                            <div className="flex justify-end pt-4 mt-4" style={{ borderTop: '1.5px solid #fed7aa' }}>
-                                                <button onClick={openConfirmSaveBobot} disabled={isSavingBobot || !isBobotValid}
-                                                    className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'}
-                                                    style={btnPrimary.style}>
+                                            <div className="flex justify-end pt-4 mt-4" style={{ borderTop: '1.5px solid #ececec' }}>
+                                                <ActionButton variant="primary" onClick={openConfirmSaveBobot} disabled={isSavingBobot || !isBobotValid}>
                                                     {isSavingBobot ? (
                                                         <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>
                                                     ) : (
                                                         <><Save size={16} />Simpan Bobot</>
                                                     )}
-                                                </button>
+                                                </ActionButton>
                                             </div>
                                         )}
                                     </div>
                                 )
                             ) : (
-                                <div className="py-16 text-center rounded-2xl" style={{ background: '#fff7ed', border: '2px dashed #fdba74' }}>
-                                    <TrendingUp size={56} className="mx-auto mb-4" style={{ color: '#fdba74' }} />
-                                    <p className="text-base font-bold" style={{ color: '#c2410c' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
+                                <div className="py-12 text-center rounded-2xl flex flex-col items-center gap-2" style={{ background: '#fafafa', border: '2px dashed #e5e5e5' }}>
+                                    <TrendingUp size={30} className="text-gray-300" />
+                                    <p className="text-sm font-bold text-gray-500">Pilih Mata Pelajaran Terlebih Dahulu</p>
                                 </div>
                             )}
                         </div>
@@ -1478,12 +1854,12 @@ export default function AturPenilaianGuruKelasClient() {
 
             {/* MODAL BATCH EDIT KOKURIKULER */}
             {showBatchEdit && (
-                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditClosing ? 'opacity-0' : 'opacity-100'}`}
+                <div className={`fixed inset-0 flex items-center justify-center z-[1000] p-4 transition-opacity duration-200 ${batchEditClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeBatchEdit(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${batchEditClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
-                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
                                 <Layers size={20} className="text-white" />
                                 <h2 className="text-base font-bold text-white">Edit Grade Aspek Kokurikuler</h2>
@@ -1492,28 +1868,25 @@ export default function AturPenilaianGuruKelasClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
-                                    <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                    <Info size={16} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Isi semua grade sekaligus untuk aspek ini. Sistem akan menyimpan semua grade dalam 1 aksi.</p>
                                 </div>
-
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Grade ({batchGrades.length})</h3>
                                         <button onClick={addBatchGradeRow}
-                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff7ed', border: '1.5px solid #fb923c', color: '#c2410c' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#ffedd5')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff7ed')}>
+                                            className="btn-action flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = '#fde0c8')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff5eb')}>
                                             <Plus size={14} /> Tambah Baris
                                         </button>
                                     </div>
-
                                     {batchGrades.map((grade, index) => (
-                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
+                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fde0c8' }}>
                                             <div className="flex items-start gap-3">
                                                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-3">
                                                     <div>
@@ -1541,18 +1914,12 @@ export default function AturPenilaianGuruKelasClient() {
                                                             className={inputCls} placeholder="Sangat Baik" />
                                                     </div>
                                                 </div>
-
                                                 {batchGrades.length > 1 && (
-                                                    <button onClick={() => removeBatchGradeRow(index)}
-                                                        className="mt-7 p-2 rounded-lg transition-all"
-                                                        style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
-                                                        onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}>
+                                                    <ActionButton size="sm" variant="danger" onClick={() => removeBatchGradeRow(index)} title="Hapus baris">
                                                         <Trash2 size={16} />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                             </div>
-
                                             {(() => {
                                                 const errors: string[] = [];
                                                 if (!grade.grade) errors.push('Grade kosong');
@@ -1560,7 +1927,6 @@ export default function AturPenilaianGuruKelasClient() {
                                                 if (isNaN(grade.min_nilai) || isNaN(grade.max_nilai)) errors.push('Nilai tidak valid');
                                                 else if (grade.min_nilai >= grade.max_nilai) errors.push(`Min (${grade.min_nilai}) >= Max (${grade.max_nilai})`);
                                                 if (!grade.deskripsi || grade.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
-
                                                 if (errors.length > 0) {
                                                     return (
                                                         <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
@@ -1573,13 +1939,12 @@ export default function AturPenilaianGuruKelasClient() {
                                         </div>
                                     ))}
                                 </div>
-
                                 {(() => {
                                     const validation = validateBatchGrades();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? '#f0fdf4' : '#fff7ed',
-                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#fdba74'}`,
+                                            background: validation.valid ? '#f0fdf4' : '#fff8f2',
+                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#f0a94e'}`,
                                             color: validation.valid ? '#166534' : '#7a3a0a'
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
@@ -1589,13 +1954,11 @@ export default function AturPenilaianGuruKelasClient() {
                                 })()}
                             </div>
                         </div>
-
-                        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
-                            <BtnBatal onClick={closeBatchEdit} disabled={isSavingBatch}>Batal</BtnBatal>
-                            <button onClick={openConfirmSaveBatch} disabled={isSavingBatch}
-                                className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'} style={btnPrimary.style}>
+                        <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1.5px solid #ececec', background: '#fafafa' }}>
+                            <ActionButton variant="neutral" onClick={closeBatchEdit} disabled={isSavingBatch}>Batal</ActionButton>
+                            <ActionButton variant="primary" onClick={openConfirmSaveBatch} disabled={isSavingBatch}>
                                 {isSavingBatch ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchGrades.length} Grade</>)}
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
@@ -1603,12 +1966,12 @@ export default function AturPenilaianGuruKelasClient() {
 
             {/* MODAL BATCH EDIT AKADEMIK */}
             {showBatchEditAkademik && (
-                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditAkademikClosing ? 'opacity-0' : 'opacity-100'}`}
+                <div className={`fixed inset-0 flex items-center justify-center z-[1000] p-4 transition-opacity duration-200 ${batchEditAkademikClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeBatchEditAkademik(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${batchEditAkademikClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
-                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
                                 <BookOpen size={20} className="text-white" />
                                 <h2 className="text-base font-bold text-white">Edit Kategori Akademik</h2>
@@ -1617,28 +1980,25 @@ export default function AturPenilaianGuruKelasClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
-                                    <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                    <Info size={16} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Isi semua kategori sekaligus. Sistem akan menyimpan semua kategori dalam 1 aksi.</p>
                                 </div>
-
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchAkademik.length})</h3>
                                         <button onClick={addBatchAkademikRow}
-                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff7ed', border: '1.5px solid #fb923c', color: '#c2410c' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#ffedd5')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff7ed')}>
+                                            className="btn-action flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = '#fde0c8')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff5eb')}>
                                             <Plus size={14} /> Tambah Baris
                                         </button>
                                     </div>
-
                                     {batchAkademik.map((kategori, index) => (
-                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
+                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fde0c8' }}>
                                             <div className="flex items-start gap-3">
                                                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                     <div>
@@ -1660,24 +2020,17 @@ export default function AturPenilaianGuruKelasClient() {
                                                             className={inputCls} placeholder="Sangat Baik" />
                                                     </div>
                                                 </div>
-
                                                 {batchAkademik.length > 1 && (
-                                                    <button onClick={() => removeBatchAkademikRow(index)}
-                                                        className="mt-7 p-2 rounded-lg transition-all"
-                                                        style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
-                                                        onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}>
+                                                    <ActionButton size="sm" variant="danger" onClick={() => removeBatchAkademikRow(index)} title="Hapus baris">
                                                         <Trash2 size={16} />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                             </div>
-
                                             {(() => {
                                                 const errors: string[] = [];
                                                 if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
                                                 else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
                                                 if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
-
                                                 if (errors.length > 0) {
                                                     return (
                                                         <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
@@ -1690,13 +2043,12 @@ export default function AturPenilaianGuruKelasClient() {
                                         </div>
                                     ))}
                                 </div>
-
                                 {(() => {
                                     const validation = validateBatchAkademik();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? '#f0fdf4' : '#fff7ed',
-                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#fdba74'}`,
+                                            background: validation.valid ? '#f0fdf4' : '#fff8f2',
+                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#f0a94e'}`,
                                             color: validation.valid ? '#166534' : '#7a3a0a'
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
@@ -1706,13 +2058,11 @@ export default function AturPenilaianGuruKelasClient() {
                                 })()}
                             </div>
                         </div>
-
-                        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
-                            <BtnBatal onClick={closeBatchEditAkademik} disabled={isSavingBatchAkademik}>Batal</BtnBatal>
-                            <button onClick={openConfirmSaveBatchAkademik} disabled={isSavingBatchAkademik}
-                                className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'} style={btnPrimary.style}>
+                        <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1.5px solid #ececec', background: '#fafafa' }}>
+                            <ActionButton variant="neutral" onClick={closeBatchEditAkademik} disabled={isSavingBatchAkademik}>Batal</ActionButton>
+                            <ActionButton variant="primary" onClick={openConfirmSaveBatchAkademik} disabled={isSavingBatchAkademik}>
                                 {isSavingBatchAkademik ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchAkademik.length} Kategori</>)}
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
@@ -1720,12 +2070,12 @@ export default function AturPenilaianGuruKelasClient() {
 
             {/* MODAL BATCH EDIT DESKRIPSI RATA-RATA */}
             {showBatchEditDeskripsi && (
-                <div className={`fixed inset-0 flex items-center justify-center z-[80] p-4 transition-opacity duration-200 ${batchEditDeskripsiClosing ? 'opacity-0' : 'opacity-100'}`}
+                <div className={`fixed inset-0 flex items-center justify-center z-[1000] p-4 transition-opacity duration-200 ${batchEditDeskripsiClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={(e) => { if (e.target === e.currentTarget) closeBatchEditDeskripsi(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden transform transition-all duration-200 ${batchEditDeskripsiClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
                         style={CARD_STYLE}>
-                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                        <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
                                 <BarChart3 size={20} className="text-white" />
                                 <h2 className="text-base font-bold text-white">Edit Deskripsi Rata-rata</h2>
@@ -1734,28 +2084,25 @@ export default function AturPenilaianGuruKelasClient() {
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1.5px solid #fdba74' }}>
-                                    <Info size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                    <Info size={16} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
                                     <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Nilai menggunakan desimal (2 digit). Contoh: 85.50</p>
                                 </div>
-
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchDeskripsi.length})</h3>
                                         <button onClick={addBatchDeskripsiRow}
-                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff7ed', border: '1.5px solid #fb923c', color: '#c2410c' }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#ffedd5')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff7ed')}>
+                                            className="btn-action flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = '#fde0c8')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff5eb')}>
                                             <Plus size={14} /> Tambah Baris
                                         </button>
                                     </div>
-
                                     {batchDeskripsi.map((kategori, index) => (
-                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fed7aa' }}>
+                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fde0c8' }}>
                                             <div className="flex items-start gap-3">
                                                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                     <div>
@@ -1777,24 +2124,17 @@ export default function AturPenilaianGuruKelasClient() {
                                                             className={inputCls} placeholder="Sangat Baik" />
                                                     </div>
                                                 </div>
-
                                                 {batchDeskripsi.length > 1 && (
-                                                    <button onClick={() => removeBatchDeskripsiRow(index)}
-                                                        className="mt-7 p-2 rounded-lg transition-all"
-                                                        style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
-                                                        onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2')}
-                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fef2f2')}>
+                                                    <ActionButton size="sm" variant="danger" onClick={() => removeBatchDeskripsiRow(index)} title="Hapus baris">
                                                         <Trash2 size={16} />
-                                                    </button>
+                                                    </ActionButton>
                                                 )}
                                             </div>
-
                                             {(() => {
                                                 const errors: string[] = [];
                                                 if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
                                                 else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
                                                 if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
-
                                                 if (errors.length > 0) {
                                                     return (
                                                         <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
@@ -1807,13 +2147,12 @@ export default function AturPenilaianGuruKelasClient() {
                                         </div>
                                     ))}
                                 </div>
-
                                 {(() => {
                                     const validation = validateBatchDeskripsi();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? '#f0fdf4' : '#fff7ed',
-                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#fdba74'}`,
+                                            background: validation.valid ? '#f0fdf4' : '#fff8f2',
+                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#f0a94e'}`,
                                             color: validation.valid ? '#166534' : '#7a3a0a'
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
@@ -1823,13 +2162,11 @@ export default function AturPenilaianGuruKelasClient() {
                                 })()}
                             </div>
                         </div>
-
-                        <div className="px-6 py-4 flex justify-end gap-3" style={{ borderTop: '1.5px solid #fed7aa', background: '#fffaf6' }}>
-                            <BtnBatal onClick={closeBatchEditDeskripsi} disabled={isSavingBatchDeskripsi}>Batal</BtnBatal>
-                            <button onClick={openConfirmSaveBatchDeskripsi} disabled={isSavingBatchDeskripsi}
-                                className={btnPrimary.base + ' disabled:opacity-50 disabled:cursor-not-allowed'} style={btnPrimary.style}>
+                        <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1.5px solid #ececec', background: '#fafafa' }}>
+                            <ActionButton variant="neutral" onClick={closeBatchEditDeskripsi} disabled={isSavingBatchDeskripsi}>Batal</ActionButton>
+                            <ActionButton variant="primary" onClick={openConfirmSaveBatchDeskripsi} disabled={isSavingBatchDeskripsi}>
                                 {isSavingBatchDeskripsi ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchDeskripsi.length} Kategori</>)}
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
@@ -1837,13 +2174,13 @@ export default function AturPenilaianGuruKelasClient() {
 
             {/* MODAL KONFIRMASI */}
             {showConfirmModal && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 ap-fadeIn"
+                <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dg-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ap-scaleIn">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#fff7ed' }}>
-                                <ShieldAlert size={24} className="text-orange-500" />
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#fff8f2' }}>
+                                <ShieldAlert size={24} style={{ color: ACCENT }} />
                             </div>
                             <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
                         </div>
@@ -1854,23 +2191,26 @@ export default function AturPenilaianGuruKelasClient() {
                                         confirmAction === 'save-batch-deskripsi' ? `Apakah Anda yakin ingin menyimpan ${batchDeskripsi.length} kategori deskripsi rata-rata?` :
                                             'Apakah Anda yakin ingin menyimpan data ini?'}
                         </p>
-                        <div className="flex gap-3">
-                            <BtnBatal onClick={() => setShowConfirmModal(false)}>Batal</BtnBatal>
-                            <button onClick={() => {
-                                setShowConfirmModal(false);
-                                if (confirmAction === 'save-bobot') executeSaveBobot();
-                                else if (confirmAction === 'save-batch') executeSaveBatch();
-                                else if (confirmAction === 'save-batch-akademik') executeSaveBatchAkademik();
-                                else if (confirmAction === 'save-batch-deskripsi') executeSaveBatchDeskripsi();
-                            }}
+                        <div className="flex gap-2.5">
+                            <ActionButton variant="neutral" onClick={() => setShowConfirmModal(false)} fullWidth>Batal</ActionButton>
+                            <ActionButton
+                                variant="primary"
+                                fullWidth
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    if (confirmAction === 'save-bobot') executeSaveBobot();
+                                    else if (confirmAction === 'save-batch') executeSaveBatch();
+                                    else if (confirmAction === 'save-batch-akademik') executeSaveBatchAkademik();
+                                    else if (confirmAction === 'save-batch-deskripsi') executeSaveBatchDeskripsi();
+                                }}
                                 disabled={isSavingBobot || isSavingBatch || isSavingBatchAkademik || isSavingBatchDeskripsi}
-                                className={btnPrimary.base + ' flex-1 disabled:opacity-50 disabled:cursor-not-allowed'} style={btnPrimary.style}>
+                            >
                                 {(isSavingBobot || isSavingBatch || isSavingBatchAkademik || isSavingBatchDeskripsi) ? (
-                                    <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />Menyimpan...</>
+                                    <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>
                                 ) : (
                                     <>Ya, Simpan</>
                                 )}
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>

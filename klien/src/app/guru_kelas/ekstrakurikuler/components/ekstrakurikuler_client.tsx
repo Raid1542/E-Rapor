@@ -1,19 +1,3 @@
-/**
- * Nama File: ekskul_client.tsx
- * Fungsi: Komponen klien untuk mengelola ekstrakurikuler siswa
- * UPDATE: 
- *   - Kondisi 1: Modal "Akses Ditolak" + Logout jika belum ditugaskan
- *   - Kondisi 2: Read-Only mode jika PAS belum aktif atau sudah selesai
- *   - Tambah: Popup konfirmasi dengan template yang sama seperti kokurikuler
- *   - 🆕 BARU: Fitur Import Ekstrakurikuler dari Excel
- *   - ✅ DIPERBAIKI: Konsisten dengan backend (4 Human Error Prevention)
- *   - ✅ DIPERBAIKI: Tampilkan info NIS duplikat
- *   - ✅ DIPERBAIKI: Tambahkan kolom NIS di CSV error report
- *   - ✅ DIPERBAIKI: Tutup modal import setelah download template
- *   - ✅ DIPERBAIKI: Validasi duplikasi ekskul di frontend
- *   - ✅ DIPERBAIKI: Info import lebih lengkap
- */
-
 'use client';
 import { useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Eye, Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Award, Lock, Upload, Download } from 'lucide-react';
@@ -92,7 +76,7 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
     return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 ap-fadeIn">
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 ap-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ap-scaleIn">
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
@@ -115,7 +99,7 @@ const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5
 
 const btnPrimary = {
     base: "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all",
-    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' },
+    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
     hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
     leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
 };
@@ -168,7 +152,7 @@ export default function EkskulClient() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
 
-    // 🆕 BARU: STATE untuk Import Ekstrakurikuler
+    //  BARU: STATE untuk Import Ekstrakurikuler
     const [showImportModal, setShowImportModal] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -266,12 +250,6 @@ export default function EkskulClient() {
                                 message: errData.message || 'Input ekstrakurikuler sudah dikunci karena PAS telah selesai.'
                             });
                         }, 500);
-                    } else if (errData.code === 'NO_ACTIVE_YEAR') {
-                        showModal({
-                            type: 'warning',
-                            title: 'Tahun Ajaran Belum Diatur',
-                            message: errData.message || 'Tahun ajaran aktif belum diatur oleh admin.'
-                        });
                     } else {
                         showModal({ type: 'error', title: 'Gagal Memuat', message: errData.message || 'Terjadi kesalahan.' });
                     }
@@ -348,6 +326,12 @@ export default function EkskulClient() {
     const handleEkskulChange = (index: number, field: 'ekskul_id' | 'deskripsi', value: any) => {
         const newData = [...editData];
         newData[index] = { ...newData[index], [field]: value };
+        
+        // Jika mengubah ID ekskul, reset deskripsi agar diisi ulang
+        if (field === 'ekskul_id' && Number(value) > 0) {
+            newData[index].deskripsi = '';
+        }
+        
         setEditData(newData);
     };
 
@@ -366,7 +350,7 @@ export default function EkskulClient() {
             return;
         }
 
-        // ✅ DIPERBAIKI: Validasi duplikasi ekskul
+        // ✅ Validasi duplikasi ekskul
         const ekskulIds = validEkskul.map(e => e.ekskul_id);
         if (new Set(ekskulIds).size !== ekskulIds.length) {
             showModal({
@@ -382,13 +366,12 @@ export default function EkskulClient() {
                 showModal({
                     type: 'warning',
                     title: 'Deskripsi Kosong',
-                    message: `Deskripsi ekstrakurikuler ke-${i + 1} wajib diisi.`
+                    message: `Deskripsi ekstrakurikuler ke-${i + 1} (${validEkskul[i].ekskul_id ? daftarEkskul.find(d => d.id_ekskul === validEkskul[i].ekskul_id)?.nama_ekskul : 'Pilihan'}) wajib diisi.`
                 });
                 return;
             }
         }
 
-        // ✅ Set nama siswa untuk ditampilkan di modal konfirmasi
         setConfirmSiswaNama(editSiswa.nama);
         setShowConfirmModal(true);
     };
@@ -504,17 +487,17 @@ export default function EkskulClient() {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            // ✅ DIPERBAIKI: Tutup modal import DULU
+            // ✅ Tutup modal import DULU
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // ✅ DIPERBAIKI: Tampilkan notifikasi success SETELAH modal import tertutup
+            // ✅ Tampilkan notifikasi success SETELAH modal import tertutup
             setTimeout(() => {
                 showModal({
                     type: 'success',
                     title: 'Template Berhasil Diunduh',
-                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
+                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
                 });
             }, 300);
         } catch (err: any) {
@@ -562,7 +545,7 @@ export default function EkskulClient() {
         setImportFile(file);
     };
 
-    // ✅ DIPERBAIKI: Tambahkan kolom NIS di CSV error report
+    // ✅ DIPERBAIKI: Tambahkan kolom NIS di CSV error report dengan regex yang lebih robust
     const downloadErrorReportEkskul = (errors: any[]) => {
         const headers = ['No', 'Baris', 'NIS', 'Nama Siswa', 'Alasan Error'];
 
@@ -571,10 +554,11 @@ export default function EkskulClient() {
             const rowMatch = message.match(/Baris\s+(\d+)/i);
             const rowNumber = rowMatch ? rowMatch[1] : '-';
 
-            const nisMatch = message.match(/NIS\s+"([^"]+)"/i);
+            // Regex yang lebih fleksibel untuk menangkap NIS
+            const nisMatch = message.match(/NIS\s+"([^"]+)"/i) || message.match(/NIS\s+([0-9]+)/i);
             const nis = nisMatch ? nisMatch[1] : '-';
 
-            const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
+            const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/\(([^\)]+)\)/i);
             const namaSiswa = namaMatch ? namaMatch[1] : '-';
 
             const escapedMessage = message.replace(/"/g, '""');
@@ -657,7 +641,7 @@ export default function EkskulClient() {
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // 🆕 AUTO-DOWNLOAD CSV JIKA ERROR > 4
+            //  AUTO-DOWNLOAD CSV JIKA ERROR > 4
             const errors = data.data?.errors || [];
             const totalErrors = errors.length;
 
@@ -677,7 +661,7 @@ export default function EkskulClient() {
                 }
             }
 
-            // ✅ DIPERBAIKI: Tampilkan info NIS duplikat
+            // ✅ Tampilkan info NIS duplikat
             if (data.data?.nis_duplikat_count && data.data.nis_duplikat_count > 0) {
                 const duplikatInfo = data.data.nis_duplikat_detail
                     .map((d: any) => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`)
@@ -685,7 +669,7 @@ export default function EkskulClient() {
                 successMessage += `\n\n⚠️ DITEMUKAN ${data.data.nis_duplikat_count} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses.`;
             }
 
-            // ✅ DIPERBAIKI: Tampilkan pesan penting
+            // ✅ Tampilkan pesan penting
             if (data.data?.pesan_penting) {
                 successMessage += `\n\n💡 ${data.data.pesan_penting}`;
             }

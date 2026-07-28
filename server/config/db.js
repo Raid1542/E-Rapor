@@ -7,42 +7,39 @@
 
 const mysql = require('mysql2/promise');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// DATABASE CONNECTION POOL
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Connection pool untuk database MariaDB/MySQL (config dari environment variables)
+// Konfigurasi connection pool untuk database MariaDB/MySQL
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 200,        // ✅ Penting untuk load testing
-    connectTimeout: 30000,       // ✅ Timeout saat connect (pengganti acquireTimeout)
-    idleTimeout: 60000,          // ✅ Timeout koneksi idle (pengganti timeout)
-    queueLimit: 0,               // ✅ Antrian tidak terbatas
+    connectionLimit: 30,
+    connectTimeout: 30000,
+    idleTimeout: 60000,
+    queueLimit: 0,
     dateStrings: true,
-    enableKeepAlive: true,       // ✅ Jaga koneksi tetap hidup
+    enableKeepAlive: true,
     keepAliveInitialDelay: 0
 });
 
-
-// ═════════════════════════════════════════════════════════════════════════════
-// CONNECTION TEST
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Test 1: Verifikasi koneksi database
+// Verifikasi koneksi database saat inisialisasi
 pool.getConnection()
-    .then(() => console.log('Koneksi ke MariaDB berhasil'))
-    .catch(err => {
+    .then(() => {
+        console.log('Koneksi ke MariaDB berhasil');
+    })
+    .catch((err) => {
         console.error('Gagal koneksi ke MariaDB:', err.message);
-        process.exit(1); // Hentikan proses jika koneksi gagal
+        process.exit(1);
     });
 
-// Test 2: Verifikasi query execution
+// Verifikasi eksekusi query dasar
 pool.execute('SELECT 1')
-    .then(() => console.log('Query test berhasil'))
-    .catch(err => console.error('Query test gagal:', err.message));
+    .then(() => {
+        console.log('Query test berhasil');
+    })
+    .catch((err) => {
+        console.error('Query test gagal:', err.message);
+    });
 
 module.exports = pool;

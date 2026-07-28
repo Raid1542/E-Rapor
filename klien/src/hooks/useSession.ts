@@ -1,8 +1,8 @@
-/**
+/*
  * Nama File: useSession.ts
- * Fungsi: Custom hook untuk monitoring token JWT (multiple trigger) + handler logout
+ * Fungsi: Custom hook untuk monitoring token JWT dan handler logout
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
- * Tanggal: 1 Oktober 2025
+ * Tanggal: 10 Juli 2026
  */
 
 'use client';
@@ -10,11 +10,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { isTokenExpired, getToken } from '@/lib/auth';
 
-// Hook: monitoring token JWT (interval 60s, focus, visibility, storage, custom event)
+/* Hook untuk monitoring status sesi pengguna secara real-time */
 export function useSession() {
-    const [showSessionExpired, setShowSessionExpired] = useState(false);
+    const [showSessionExpired, setShowSessionExpired] = useState<boolean>(false);
 
-    // Validasi token JWT (existence & expiration)
+    // Validasi keberadaan dan masa berlaku token JWT
     const checkToken = useCallback(() => {
         const token = getToken();
         if (!token) {
@@ -30,16 +30,22 @@ export function useSession() {
 
     // Setup multiple event listeners untuk monitoring token
     useEffect(() => {
-        checkToken(); // Cek initial
+        checkToken(); // Cek initial saat komponen mount
 
         // Interval check setiap 60 detik
         const checkInterval = setInterval(() => checkToken(), 60000);
 
-        // Handlers: focus, visibility, storage sync, custom event
+        // Handler untuk berbagai event window/document
         const handleFocus = () => checkToken();
-        const handleVisibilityChange = () => { if (!document.hidden) checkToken(); };
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                checkToken();
+            }
+        };
         const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'token' && !e.newValue) setShowSessionExpired(true);
+            if (e.key === 'token' && !e.newValue) {
+                setShowSessionExpired(true);
+            }
         };
         const handleSessionExpired = () => setShowSessionExpired(true);
 
@@ -49,7 +55,7 @@ export function useSession() {
         window.addEventListener('storage', handleStorageChange);
         window.addEventListener('sessionExpired', handleSessionExpired);
 
-        // Cleanup: unregister semua event listeners
+        // Cleanup: unregister semua event listeners saat unmount
         return () => {
             clearInterval(checkInterval);
             window.removeEventListener('focus', handleFocus);
@@ -59,7 +65,7 @@ export function useSession() {
         };
     }, [checkToken]);
 
-    // Handler logout: clear localStorage + redirect ke login
+    // Handler logout: clear localStorage dan redirect ke halaman login
     const handleLogout = useCallback(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');

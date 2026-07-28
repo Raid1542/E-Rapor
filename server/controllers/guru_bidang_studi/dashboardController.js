@@ -1,15 +1,17 @@
 /**
  * Nama File: dashboardController.js
- * Fungsi: Controller dashboard guru bidang studi (statistik, progress, detail komponen)
- *         Menampilkan konfigurasi detail dengan validasi range gap
+ * Fungsi: Controller dashboard guru bidang studi (statistik, progress, detail komponen).
+ *         Menampilkan konfigurasi detail dengan validasi range gap.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
-// Helper: Cek gap dalam range nilai
-function checkRangeGaps(rows, minExpected = 0, maxExpected = 100, minField = 'min_nilai', maxField = 'max_nilai') {
+/**
+ * Cek gap dalam range nilai.
+ */
+const checkRangeGaps = (rows, minExpected = 0, maxExpected = 100, minField = 'min_nilai', maxField = 'max_nilai') => {
     const gaps = [];
     if (rows.length === 0) return gaps;
 
@@ -32,9 +34,11 @@ function checkRangeGaps(rows, minExpected = 0, maxExpected = 100, minField = 'mi
     }
 
     return gaps;
-}
+};
 
-// Ambil data dashboard lengkap untuk guru bidang studi
+/**
+ * Ambil data dashboard lengkap untuk guru bidang studi.
+ */
 exports.getDashboardData = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -43,14 +47,16 @@ exports.getDashboardData = async (req, res) => {
         const [taRows] = await db.execute(`
         SELECT id_tahun_ajaran, id_tahun_ajaran_induk, tahun_ajaran, semester,
                 status_pts, status_pas, tanggal_pembagian_pts, tanggal_pembagian_pas
-        FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
+        FROM tahun_ajaran 
+        WHERE status = 'aktif' 
+        LIMIT 1
     `);
 
         if (taRows.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Tahun ajaran aktif tidak ditemukan.',
-                code: 'NO_ACTIVE_YEAR',
+                code: 'NO_ACTIVE_YEAR'
             });
         }
 
@@ -59,9 +65,12 @@ exports.getDashboardData = async (req, res) => {
         const indukId = ta.id_tahun_ajaran_induk;
 
         // Tentukan jenis penilaian aktif (PTS/PAS)
-        let jenis_penilaian_aktif = null;
-        if (ta.status_pts === 'aktif') jenis_penilaian_aktif = 'PTS';
-        else if (ta.status_pas === 'aktif') jenis_penilaian_aktif = 'PAS';
+        let jenisPenilaianAktif = null;
+        if (ta.status_pts === 'aktif') {
+            jenisPenilaianAktif = 'PTS';
+        } else if (ta.status_pas === 'aktif') {
+            jenisPenilaianAktif = 'PAS';
+        }
 
         // Hitung total kelas unik
         const [kelasUnikResult] = await db.execute(
@@ -72,7 +81,8 @@ exports.getDashboardData = async (req, res) => {
 
         // Hitung total siswa unik
         const [siswaUnikResult] = await db.execute(`
-        SELECT COUNT(DISTINCT sk.siswa_id) AS total FROM siswa_kelas sk
+        SELECT COUNT(DISTINCT sk.siswa_id) AS total 
+        FROM siswa_kelas sk
         WHERE sk.kelas_id IN (SELECT DISTINCT kelas_id FROM pembelajaran WHERE user_id = ? AND tahun_ajaran_id = ?)
         AND sk.id_tahun_ajaran_induk = ?
     `, [userId, semesterId, indukId]);
@@ -92,7 +102,7 @@ exports.getDashboardData = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: 'Anda belum ditugaskan mengajar mapel apapun.',
-                code: 'NOT_ASSIGNED',
+                code: 'NOT_ASSIGNED'
             });
         }
 
@@ -112,7 +122,7 @@ exports.getDashboardData = async (req, res) => {
         const konfigurasiDetail = {
             akademik: { lengkap: true, missing: [], gaps: [] },
             bobot: { lengkap: true, missing: [] },
-            summary: [],
+            summary: []
         };
 
         // Loop setiap mapel
@@ -134,7 +144,7 @@ exports.getDashboardData = async (req, res) => {
             // Hitung siswa yang sudah lengkap
             let sudahLengkap = 0;
 
-            if (jenis_penilaian_aktif === 'PTS' && ptsKomponen) {
+            if (jenisPenilaianAktif === 'PTS' && ptsKomponen) {
                 const [ptsResult] = await db.execute(`
             SELECT COUNT(DISTINCT nd.siswa_id) AS total
             FROM nilai_detail nd
@@ -146,7 +156,7 @@ exports.getDashboardData = async (req, res) => {
             )
         `, [mapel.id_mata_pelajaran, semesterId, ptsKomponen.id_komponen, userId, mapel.id_mata_pelajaran, semesterId, indukId]);
                 sudahLengkap = ptsResult[0]?.total || 0;
-            } else if (jenis_penilaian_aktif === 'PAS') {
+            } else if (jenisPenilaianAktif === 'PAS') {
                 const [lengkapResult] = await db.execute(`
             SELECT COUNT(*) AS total FROM (
                 SELECT nd.siswa_id, COUNT(DISTINCT nd.komponen_id) as jumlah_komponen
@@ -169,7 +179,7 @@ exports.getDashboardData = async (req, res) => {
             // Ambil data nilai rapor per siswa dengan detail komponen
             const nilaiRaporList = [];
 
-            if (jenis_penilaian_aktif) {
+            if (jenisPenilaianAktif) {
                 const [raporRows] = await db.execute(`
             SELECT 
                 s.id_siswa, s.nama_lengkap, s.nis,
@@ -188,8 +198,8 @@ exports.getDashboardData = async (req, res) => {
             ORDER BY k.nama_kelas, s.nama_lengkap
         `, [
                     mapel.id_mata_pelajaran, semesterId,
-                    mapel.id_mata_pelajaran, semesterId, ta.semester, jenis_penilaian_aktif,
-                    userId, mapel.id_mata_pelajaran, semesterId, indukId,
+                    mapel.id_mata_pelajaran, semesterId, ta.semester, jenisPenilaianAktif,
+                    userId, mapel.id_mata_pelajaran, semesterId, indukId
                 ]);
 
                 for (const row of raporRows) {
@@ -215,16 +225,11 @@ exports.getDashboardData = async (req, res) => {
                         komponen_detail: komponenDetailRows.map(komp => ({
                             nama_komponen: komp.nama_komponen,
                             nilai: komp.nilai,
-                            status: komp.status,
+                            status: komp.status
                         })),
-                        status:
-                            jenis_penilaian_aktif === 'PTS'
-                                ? row.jumlah_komponen_terisi > 0
-                                    ? 'Sudah Input PTS'
-                                    : 'Belum Input PTS'
-                                : row.jumlah_komponen_terisi === totalKomponen
-                                    ? 'Lengkap'
-                                    : `${row.jumlah_komponen_terisi}/${totalKomponen} komponen`,
+                        status: jenisPenilaianAktif === 'PTS'
+                            ? (row.jumlah_komponen_terisi > 0 ? 'Sudah Input PTS' : 'Belum Input PTS')
+                            : (row.jumlah_komponen_terisi === totalKomponen ? 'Lengkap' : `${row.jumlah_komponen_terisi}/${totalKomponen} komponen`)
                     });
                 }
             }
@@ -234,7 +239,7 @@ exports.getDashboardData = async (req, res) => {
                 `SELECT min_nilai, max_nilai, deskripsi FROM konfigurasi_nilai_rapor 
             WHERE mapel_id = ? AND tahun_ajaran_id = ? AND jenis_penilaian = ?
             ORDER BY min_nilai ASC`,
-                [mapel.id_mata_pelajaran, semesterId, jenis_penilaian_aktif || 'PTS']
+                [mapel.id_mata_pelajaran, semesterId, jenisPenilaianAktif || 'PTS']
             );
 
             let kategoriTerconfig = false;
@@ -253,8 +258,8 @@ exports.getDashboardData = async (req, res) => {
             }
 
             // Cek konfigurasi bobot (hanya untuk PAS)
-            let bobotTerconfig = jenis_penilaian_aktif === 'PTS' ? true : false;
-            if (jenis_penilaian_aktif !== 'PTS') {
+            let bobotTerconfig = jenisPenilaianAktif === 'PTS' ? true : false;
+            if (jenisPenilaianAktif !== 'PTS') {
                 const [bobotResult] = await db.execute(
                     'SELECT COUNT(*) AS total FROM konfigurasi_mapel_komponen WHERE mapel_id = ? AND is_active = 1 AND bobot > 0',
                     [mapel.id_mata_pelajaran]
@@ -279,18 +284,18 @@ exports.getDashboardData = async (req, res) => {
                 konfigurasi: {
                     bobot: bobotTerconfig,
                     kategori: kategoriTerconfig,
-                    lengkap: bobotTerconfig && kategoriTerconfig,
-                },
+                    lengkap: bobotTerconfig && kategoriTerconfig
+                }
             });
         }
 
-        // Generate summary (format sama dengan dashboard guru kelas)
+        // Generate summary
         if (!konfigurasiDetail.akademik.lengkap) {
             if (konfigurasiDetail.akademik.missing.length > 0) {
                 konfigurasiDetail.summary.push({
                     type: 'missing',
                     title: 'Kategori Akademik',
-                    message: `Mapel ${konfigurasiDetail.akademik.missing.join(', ')} belum diatur kategorinya`,
+                    message: `Mapel ${konfigurasiDetail.akademik.missing.join(', ')} belum diatur kategorinya`
                 });
             }
             if (konfigurasiDetail.akademik.gaps.length > 0) {
@@ -298,7 +303,7 @@ exports.getDashboardData = async (req, res) => {
                     konfigurasiDetail.summary.push({
                         type: 'gap',
                         title: 'Kategori Akademik',
-                        message: `Mapel ${gap.mapel} ada gap di rentang ${gap.gaps.join(', ')}`,
+                        message: `Mapel ${gap.mapel} ada gap di rentang ${gap.gaps.join(', ')}`
                     });
                 });
             }
@@ -309,33 +314,24 @@ exports.getDashboardData = async (req, res) => {
                 konfigurasiDetail.summary.push({
                     type: 'missing',
                     title: 'Bobot Penilaian',
-                    message: `Mapel ${konfigurasiDetail.bobot.missing.join(', ')} belum diatur bobotnya`,
+                    message: `Mapel ${konfigurasiDetail.bobot.missing.join(', ')} belum diatur bobotnya`
                 });
             }
         }
 
         // Hitung overall progress
-        const overallProgress =
-            totalPenilaianDibutuhkan > 0
-                ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100)
-                : 0;
+        const overallProgress = totalPenilaianDibutuhkan > 0
+            ? Math.round((totalPenilaianAda / totalPenilaianDibutuhkan) * 100)
+            : 0;
 
         // Format jadwal
         const jadwal = {
             pts: ta.tanggal_pembagian_pts
-                ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                })
+                ? new Date(ta.tanggal_pembagian_pts).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
                 : null,
             pas: ta.tanggal_pembagian_pas
-                ? new Date(ta.tanggal_pembagian_pas).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                })
-                : null,
+                ? new Date(ta.tanggal_pembagian_pas).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                : null
         };
 
         // Return response
@@ -346,7 +342,7 @@ exports.getDashboardData = async (req, res) => {
                 semester: ta.semester,
                 status_pts: ta.status_pts || 'nonaktif',
                 status_pas: ta.status_pas || 'nonaktif',
-                jenis_penilaian_aktif,
+                jenis_penilaian_aktif: jenisPenilaianAktif,
                 jadwal,
                 total_kelas: totalKelasUnik,
                 total_siswa: totalSiswaUnik,
@@ -357,11 +353,10 @@ exports.getDashboardData = async (req, res) => {
                 mata_pelajaran_list: mataPelajaranList,
                 total_komponen: totalKomponen,
                 konfigurasi_lengkap: konfigurasiLengkap,
-                konfigurasi_detail: konfigurasiDetail,
-            },
+                konfigurasi_detail: konfigurasiDetail
+            }
         });
     } catch (err) {
-        console.error('Error getDashboardData:', err);
         res.status(500).json({ success: false, message: 'Gagal memuat data dashboard: ' + err.message });
     }
 };

@@ -43,7 +43,7 @@ const cekStatusPAS = async (req, res, next) => {
         req.penilaianContext.status_pas = status_pas;
 
         // Cek jenis operasi (write atau read)
-        const isWriteOperation = WRITE_METHODS.includes(req.method);
+const isWriteOperation = WRITE_METHODS.includes(req.method.toUpperCase());
 
         // Validasi berdasarkan status PAS
         if (status_pas === 'aktif') {

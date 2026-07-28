@@ -1,4 +1,4 @@
-/**
+/*
  * Nama File: page.tsx
  * Fungsi: Halaman login (server component wrapper untuk LoginClient)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
@@ -8,10 +8,12 @@
 import { Metadata } from 'next';
 import LoginClient from './components/login_client';
 
+// Metadata default untuk halaman login
 export const metadata: Metadata = {
-  title: 'E-Rapor - Login',
+    title: 'E-Rapor - Login',
 };
 
+// Komponen utama halaman login
 export default function LoginPage() {
-  return <LoginClient />;
+    return <LoginClient />;
 }

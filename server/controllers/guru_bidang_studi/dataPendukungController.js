@@ -1,22 +1,28 @@
 /**
  * Nama File: dataPendukungController.js
- * Fungsi: Controller data pendukung guru bidang studi (mapel, kelas, komponen, TA)
+ * Fungsi: Controller data pendukung guru bidang studi (mapel, kelas, komponen, TA).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
 
 const db = require('../../config/db');
 
-// Ambil data tahun ajaran aktif dari database
+/**
+ * Ambil data tahun ajaran aktif dari database.
+ */
 const getTahunAjaranAktif = async () => {
     const [taRows] = await db.execute(`
     SELECT ta.id_tahun_ajaran, ta.id_tahun_ajaran_induk, ta.tahun_ajaran, ta.semester, ta.status_pts, ta.status_pas
-    FROM tahun_ajaran ta WHERE ta.status = 'aktif' LIMIT 1
+    FROM tahun_ajaran ta 
+    WHERE ta.status = 'aktif' 
+    LIMIT 1
     `);
     return taRows.length > 0 ? taRows[0] : null;
 };
 
-// Ambil daftar kelas yang diajar guru untuk mapel tertentu
+/**
+ * Ambil daftar kelas yang diajar guru untuk mapel tertentu.
+ */
 exports.getKelasByMapel = async (req, res) => {
     try {
         const { mapel_id } = req.query;
@@ -47,12 +53,13 @@ exports.getKelasByMapel = async (req, res) => {
 
         res.json({ success: true, data: rows });
     } catch (err) {
-        console.error('Error getKelasByMapel:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas: ' + err.message });
     }
 };
 
-// Ambil daftar mapel pilihan yang diajar guru di semester aktif
+/**
+ * Ambil daftar mapel pilihan yang diajar guru di semester aktif.
+ */
 exports.getDaftarMapel = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -69,12 +76,13 @@ exports.getDaftarMapel = async (req, res) => {
 
         res.json({ success: true, data: rows });
     } catch (err) {
-        console.error('Error getDaftarMapel:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar mata pelajaran' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar mata pelajaran: ' + err.message });
     }
 };
 
-// Ambil daftar semua kelas yang diajar guru di semester aktif
+/**
+ * Ambil daftar semua kelas yang diajar guru di semester aktif.
+ */
 exports.getDaftarKelas = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -91,15 +99,16 @@ exports.getDaftarKelas = async (req, res) => {
 
         res.json({
             success: true,
-            data: kelasRows.map(row => ({ kelas_id: row.id_kelas, nama_kelas: row.nama_kelas })),
+            data: kelasRows.map(row => ({ kelas_id: row.id_kelas, nama_kelas: row.nama_kelas }))
         });
     } catch (err) {
-        console.error('Error getDaftarKelas:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas: ' + err.message });
     }
 };
 
-// Ambil daftar komponen penilaian untuk dropdown
+/**
+ * Ambil daftar komponen penilaian untuk dropdown.
+ */
 exports.getKomponenPenilaian = async (req, res) => {
     try {
         const [komponen] = await db.execute(
@@ -107,12 +116,13 @@ exports.getKomponenPenilaian = async (req, res) => {
         );
         res.json({ success: true, data: komponen });
     } catch (err) {
-        console.error('Error get komponen:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil komponen' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil komponen: ' + err.message });
     }
 };
 
-// Ambil info tahun ajaran aktif beserta status PTS dan PAS
+/**
+ * Ambil info tahun ajaran aktif beserta status PTS dan PAS.
+ */
 exports.getTahunAjaranAktif = async (req, res) => {
     try {
         const taAktif = await getTahunAjaranAktif();
@@ -129,11 +139,10 @@ exports.getTahunAjaranAktif = async (req, res) => {
                 tahun_ajaran: taAktif.tahun_ajaran,
                 semester: taAktif.semester,
                 status_pts: taAktif.status_pts,
-                status_pas: taAktif.status_pas,
-            },
+                status_pas: taAktif.status_pas
+            }
         });
     } catch (err) {
-        console.error('Error getTahunAjaranAktif:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil tahun ajaran aktif' });
+        res.status(500).json({ success: false, message: 'Gagal mengambil tahun ajaran aktif: ' + err.message });
     }
 };

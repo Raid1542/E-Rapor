@@ -1,6 +1,6 @@
 /**
  * Nama File: dashboardController.js
- * Fungsi: Controller dashboard admin (statistik, progress guru, kelengkapan rapor)
+ * Fungsi: Controller dashboard admin (statistik, progress guru, kelengkapan rapor).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
  */
@@ -8,16 +8,15 @@
 const db = require('../../config/db');
 const guruModel = require('../../models/admin/guruModel');
 
-/* ==========================================================================
-   GET: Ambil statistik dashboard (jumlah guru, siswa, admin, ekskul, kelas, mapel)
-   ========================================================================== */
-
-const getDashboardStats = async (req, res) => {
+/**
+ * Ambil statistik dashboard (jumlah guru, siswa, admin, ekskul, kelas, mapel).
+ */
+exports.getDashboardStats = async (req, res) => {
     try {
         const [taAktif] = await db.execute(`
-            SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran, status_pts, status_pas
-            FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
-        `);
+        SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, tahun_ajaran, status_pts, status_pas
+        FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1
+    `);
 
         if (taAktif.length === 0) {
             return res.json({
@@ -32,7 +31,6 @@ const getDashboardStats = async (req, res) => {
         const taIdDetail = taAktif[0].id_tahun_ajaran;
         const taIdInduk = taAktif[0].id_tahun_ajaran_induk;
 
-        // Count semua entitas
         const [guruRows] = await db.execute(
             'SELECT COUNT(DISTINCT u.id_user) AS total FROM user u INNER JOIN user_role ur ON u.id_user = ur.id_user WHERE ur.role IN (\'guru_kelas\', \'guru_bidang_studi\') AND u.status = \'aktif\''
         );
@@ -61,41 +59,42 @@ const getDashboardStats = async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Error getDashboardStats:', err);
-        res.status(500).json({ success: false, message: 'Gagal memuat statistik dashboard' });
+        res.status(500).json({ success: false, message: 'Gagal memuat statistik dashboard: ' + err.message });
     }
 };
 
-/* ==========================================================================
-   PUT: Upload foto profil admin/guru
-   ========================================================================== */
-
-const uploadFotoProfil = async (req, res) => {
+/**
+ * Upload foto profil admin/guru.
+ */
+exports.uploadFotoProfil = async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ message: 'File foto diperlukan' });
+        if (!req.file) {
+            return res.status(400).json({ message: 'File foto diperlukan' });
+        }
+
         const userId = req.user.id;
         const fotoPath = `/uploads/${req.file.filename}`;
         const success = await guruModel.updateFoto(userId, fotoPath);
-        if (!success) return res.status(404).json({ message: 'Guru tidak ditemukan' });
+
+        if (!success) {
+            return res.status(404).json({ message: 'Guru tidak ditemukan' });
+        }
+
         res.json({ success: true, message: 'Foto profil berhasil diupload', fotoPath });
     } catch (err) {
-        console.error('Error upload foto profil:', err);
-        res.status(500).json({ message: 'Gagal mengupload foto profil' });
+        res.status(500).json({ message: 'Gagal mengupload foto profil: ' + err.message });
     }
 };
 
-/* ==========================================================================
-   HELPER — ambil tahun ajaran aktif + jenis penilaian yang sedang berjalan
-   Dipakai oleh getProgressGuru & getKelengkapanRapor di bawah.
-   ========================================================================== */
-
+/**
+ * Ambil tahun ajaran aktif dan jenis penilaian yang sedang berjalan.
+ */
 const getPeriodeAktif = async () => {
     const [taAktif] = await db.execute(`
-        SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester,
-               status_pts, status_pas
-        FROM tahun_ajaran
-        WHERE status = 'aktif'
-        LIMIT 1
+    SELECT id_tahun_ajaran, id_tahun_ajaran_induk, semester, status_pts, status_pas
+    FROM tahun_ajaran
+    WHERE status = 'aktif'
+    LIMIT 1
     `);
 
     if (taAktif.length === 0) return null;
@@ -108,15 +107,14 @@ const getPeriodeAktif = async () => {
         taIdDetail: taAktif[0].id_tahun_ajaran,
         taIdInduk: taAktif[0].id_tahun_ajaran_induk,
         semester: taAktif[0].semester,
-        jenisAktif,
+        jenisAktif
     };
 };
 
-/* ==========================================================================
-   PROGRESS INPUT NILAI GURU (versi optimized — JOIN+GROUP BY)
-   ========================================================================== */
-
-const getProgressGuru = async (req, res) => {
+/**
+ * Ambil progress input nilai guru.
+ */
+exports.getProgressGuru = async (req, res) => {
     try {
         const periode = await getPeriodeAktif();
 
@@ -130,18 +128,18 @@ const getProgressGuru = async (req, res) => {
         const { taIdDetail, taIdInduk, semester, jenisAktif } = periode;
 
         const [assignments] = await db.execute(`
-            SELECT
-                p.user_id,
-                p.mapel_id,
-                p.kelas_id,
-                (
-                    SELECT COUNT(*) FROM siswa_kelas sk
-                    WHERE sk.kelas_id = p.kelas_id
-                      AND sk.id_tahun_ajaran_induk = ?
-                ) AS total_siswa
-            FROM pembelajaran p
-            WHERE p.tahun_ajaran_id IN (?, ?)
-        `, [taIdInduk, taIdDetail, taIdInduk]);
+        SELECT
+        p.user_id,
+        p.mapel_id,
+        p.kelas_id,
+        (
+            SELECT COUNT(*) FROM siswa_kelas sk
+            WHERE sk.kelas_id = p.kelas_id
+            AND sk.id_tahun_ajaran_induk = ?
+        ) AS total_siswa
+        FROM pembelajaran p
+        WHERE p.tahun_ajaran_id IN (?, ?)
+    `, [taIdInduk, taIdDetail, taIdInduk]);
 
         if (assignments.length === 0) {
             return res.json({
@@ -152,16 +150,16 @@ const getProgressGuru = async (req, res) => {
 
         const placeholdersJenis = jenisAktif.map(() => '?').join(',');
         const [terisiRows] = await db.execute(`
-            SELECT
-                nr.mapel_id,
-                nr.kelas_id,
-                nr.jenis_penilaian,
-                COUNT(DISTINCT nr.siswa_id) AS jumlah_terisi
-            FROM nilai_rapor nr
-            WHERE nr.semester = ?
-              AND nr.jenis_penilaian IN (${placeholdersJenis})
-            GROUP BY nr.mapel_id, nr.kelas_id, nr.jenis_penilaian
-        `, [semester, ...jenisAktif]);
+        SELECT
+        nr.mapel_id,
+        nr.kelas_id,
+        nr.jenis_penilaian,
+        COUNT(DISTINCT nr.siswa_id) AS jumlah_terisi
+        FROM nilai_rapor nr
+        WHERE nr.semester = ?
+        AND nr.jenis_penilaian IN (${placeholdersJenis})
+        GROUP BY nr.mapel_id, nr.kelas_id, nr.jenis_penilaian
+    `, [semester, ...jenisAktif]);
 
         const terisiMap = new Map();
         for (const row of terisiRows) {
@@ -171,8 +169,6 @@ const getProgressGuru = async (req, res) => {
 
         let sudahInput = 0;
         let belumInput = 0;
-
-        // Map: user_id -> apakah SEMUA assignment guru ini sudah lengkap
         const statusPerGuru = new Map();
 
         for (const a of assignments) {
@@ -185,12 +181,8 @@ const getProgressGuru = async (req, res) => {
                 return terisi >= totalSiswa;
             });
 
-            // Guru dianggap "sudah input" hanya jika SEMUA assignment-nya lengkap.
-            // Begitu ditemukan satu assignment yang belum lengkap, guru itu
-            // langsung ditandai "belum" dan tidak akan berubah lagi.
             const statusSaatIni = statusPerGuru.get(a.user_id);
             if (statusSaatIni === false) {
-                // sudah ditandai belum, tetap belum
                 continue;
             }
             statusPerGuru.set(a.user_id, lengkapAssignmentIni);
@@ -206,23 +198,21 @@ const getProgressGuru = async (req, res) => {
             data: {
                 total_guru: sudahInput + belumInput,
                 sudah_input: sudahInput,
-                belum_input: belumInput,
+                belum_input: belumInput
             }
         });
     } catch (err) {
-        console.error('Error getProgressGuru:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat progress input nilai guru'
+            message: 'Gagal memuat progress input nilai guru: ' + err.message
         });
     }
 };
 
-/* ==========================================================================
-   KELENGKAPAN RAPOR PER KELAS (versi optimized — JOIN+GROUP BY)
-   ========================================================================== */
-
-const getKelengkapanRapor = async (req, res) => {
+/**
+ * Ambil kelengkapan rapor per kelas.
+ */
+exports.getKelengkapanRapor = async (req, res) => {
     try {
         const periode = await getPeriodeAktif();
 
@@ -233,39 +223,39 @@ const getKelengkapanRapor = async (req, res) => {
         const { taIdDetail, taIdInduk, semester, jenisAktif } = periode;
 
         const [kelasRows] = await db.execute(`
-            SELECT id_kelas, nama_kelas
-            FROM kelas
-            WHERE tahun_ajaran_id IN (?, ?)
-        `, [taIdDetail, taIdInduk]);
+        SELECT id_kelas, nama_kelas
+        FROM kelas
+        WHERE tahun_ajaran_id IN (?, ?)
+    `, [taIdDetail, taIdInduk]);
 
         if (kelasRows.length === 0) {
             return res.json({ success: true, data: [] });
         }
 
         const [siswaRows] = await db.execute(`
-            SELECT siswa_id, kelas_id
-            FROM siswa_kelas
-            WHERE id_tahun_ajaran_induk = ?
-        `, [taIdInduk]);
+        SELECT siswa_id, kelas_id
+        FROM siswa_kelas
+        WHERE id_tahun_ajaran_induk = ?
+    `, [taIdInduk]);
 
         const [mapelRows] = await db.execute(`
-            SELECT DISTINCT kelas_id, mapel_id
-            FROM pembelajaran
-            WHERE tahun_ajaran_id IN (?, ?)
-        `, [taIdDetail, taIdInduk]);
+        SELECT DISTINCT kelas_id, mapel_id
+        FROM pembelajaran
+        WHERE tahun_ajaran_id IN (?, ?)
+    `, [taIdDetail, taIdInduk]);
 
         const placeholdersJenis = jenisAktif.map(() => '?').join(',');
         const [nilaiRows] = await db.execute(`
-            SELECT
-                siswa_id,
-                mapel_id,
-                kelas_id,
-                COUNT(DISTINCT jenis_penilaian) AS jenis_terisi
-            FROM nilai_rapor
-            WHERE semester = ?
-              AND jenis_penilaian IN (${placeholdersJenis})
-            GROUP BY siswa_id, mapel_id, kelas_id
-        `, [semester, ...jenisAktif]);
+        SELECT
+        siswa_id,
+        mapel_id,
+        kelas_id,
+        COUNT(DISTINCT jenis_penilaian) AS jenis_terisi
+        FROM nilai_rapor
+        WHERE semester = ?
+        AND jenis_penilaian IN (${placeholdersJenis})
+        GROUP BY siswa_id, mapel_id, kelas_id
+    `, [semester, ...jenisAktif]);
 
         const siswaPerKelas = new Map();
         for (const s of siswaRows) {
@@ -294,6 +284,7 @@ const getKelengkapanRapor = async (req, res) => {
 
             const totalSiswa = daftarSiswa.length;
             const totalMapel = daftarMapel.length;
+
             if (totalSiswa === 0 || totalMapel === 0) continue;
 
             let lengkap = 0;
@@ -320,27 +311,15 @@ const getKelengkapanRapor = async (req, res) => {
                 total_siswa: totalSiswa,
                 rapor_lengkap: lengkap,
                 rapor_proses: proses,
-                rapor_kosong: kosong,
+                rapor_kosong: kosong
             });
         }
 
         res.json({ success: true, data: hasil });
     } catch (err) {
-        console.error('Error getKelengkapanRapor:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat data kelengkapan rapor'
+            message: 'Gagal memuat data kelengkapan rapor: ' + err.message
         });
     }
-};
-
-/* ==========================================================================
-   EXPORTS
-   ========================================================================== */
-
-module.exports = {
-    getDashboardStats,
-    uploadFotoProfil,
-    getProgressGuru,
-    getKelengkapanRapor,
 };

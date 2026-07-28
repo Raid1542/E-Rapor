@@ -1,6 +1,6 @@
 /**
  * Nama File: catatanWaliController.js
- * Fungsi: Controller catatan wali kelas per siswa (sanitasi XSS, validasi naik tingkat)
+ * Fungsi: Controller catatan wali kelas per siswa (sanitasi XSS, validasi naik tingkat, pre-fill data).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  */
@@ -9,11 +9,9 @@ const db = require('../../config/db');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 
-// ═════════════════════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Hitung kesamaan string (Levenshtein Distance)
+/**
+ * Hitung kesamaan string menggunakan Levenshtein Distance.
+ */
 const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
@@ -32,7 +30,11 @@ const calculateSimilarity = (str1, str2) => {
     for (let i = 1; i <= len1; i++) {
         for (let j = 1; j <= len2; j++) {
             const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-            matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost
+            );
         }
     }
 
@@ -40,25 +42,30 @@ const calculateSimilarity = (str1, str2) => {
     return 1 - matrix[len1][len2] / maxLen;
 };
 
-// Sanitasi input untuk mencegah XSS
+/**
+ * Sanitasi input untuk mencegah serangan XSS.
+ */
 const sanitizeInput = (text) => {
     if (!text) return '';
-    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/\//g, '&#x2F;');
+    return text
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. GET CATATAN WALI KELAS
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Ambil catatan wali kelas untuk semua siswa di kelas guru
+/**
+ * GET /catatan-wali - Ambil data catatan wali kelas untuk semua siswa di kelas.
+ */
 exports.getCatatanWaliKelas = async (req, res) => {
     try {
         const userId = req.user.id;
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
-        const { semester, jenis: jenis_penilaian } = req.penilaianContext || {};
+        const { semester, jenis: jenisPenilaian } = req.penilaianContext || {};
 
-        if (!tahunAjaranIndukId || !semesterId || !semester || !jenis_penilaian) {
+        if (!tahunAjaranIndukId || !semesterId || !semester || !jenisPenilaian) {
             return res.status(400).json({ success: false, message: 'Data tahun ajaran atau semester tidak ditemukan' });
         }
 
@@ -84,24 +91,21 @@ exports.getCatatanWaliKelas = async (req, res) => {
             AND c.tahun_ajaran_id = ? AND c.semester = ? AND c.jenis_penilaian = ?
         WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
         ORDER BY s.nama_lengkap`,
-            [semesterId, semester, jenis_penilaian, kelas_id, tahunAjaranIndukId]
+            [semesterId, semester, jenisPenilaian, kelas_id, tahunAjaranIndukId]
         );
 
-        res.json({ success: true, data, kelas: nama_kelas, semester, jenis_penilaian });
+        res.json({ success: true, data, kelas: nama_kelas, semester, jenis_penilaian: jenisPenilaian });
     } catch (err) {
-        console.error('Error getCatatanWaliKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal mengambil data catatan' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. UPDATE CATATAN WALI KELAS
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Simpan atau update catatan wali kelas untuk siswa tertentu
+/**
+ * PUT /catatan-wali/:siswa_id - Update catatan wali kelas untuk satu siswa.
+ */
 exports.updateCatatanWaliKelas = async (req, res) => {
     try {
-        const siswa_id = parseInt(req.params.siswa_id);
+        const siswaId = parseInt(req.params.siswa_id);
         const { catatan_wali_kelas, naik_tingkat } = req.body;
         const userId = req.user.id;
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
@@ -109,7 +113,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
         const { semester, jenis: reqJenis } = req.penilaianContext || {};
         const { status_pts, status_pas } = req.tahunAjaranAktif || {};
 
-        if (isNaN(siswa_id) || siswa_id <= 0) {
+        if (isNaN(siswaId) || siswaId <= 0) {
             return res.status(400).json({ success: false, message: 'ID siswa tidak valid' });
         }
         if (!tahunAjaranIndukId || !semesterId || !semester || !reqJenis) {
@@ -126,16 +130,17 @@ exports.updateCatatanWaliKelas = async (req, res) => {
         if (trimmedCatatan.length < 20) {
             return res.status(400).json({ success: false, message: `Catatan minimal 20 karakter (saat ini ${trimmedCatatan.length})` });
         }
+
         const sanitizedCatatan = sanitizeInput(trimmedCatatan);
 
         if ((reqJenis === 'PTS' && status_pts !== 'aktif') || (reqJenis === 'PAS' && status_pas !== 'aktif')) {
             return res.status(403).json({ success: false, message: `Rapor ${reqJenis} sudah dikunci. Catatan tidak dapat diubah.` });
         }
 
-        const [guruKelasRows] = await db.execute('SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?', [
-            userId,
-            semesterId,
-        ]);
+        const [guruKelasRows] = await db.execute(
+            'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?',
+            [userId, semesterId]
+        );
         if (guruKelasRows.length === 0) {
             return res.status(404).json({ success: false, message: 'Kelas aktif tidak ditemukan.' });
         }
@@ -143,7 +148,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
 
         const [validSiswa] = await db.execute(
             'SELECT 1 FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?',
-            [siswa_id, kelas_id, tahunAjaranIndukId]
+            [siswaId, kelas_id, tahunAjaranIndukId]
         );
         if (validSiswa.length === 0) {
             return res.status(403).json({ success: false, message: 'Siswa tidak terdaftar di kelas Anda' });
@@ -164,21 +169,18 @@ exports.updateCatatanWaliKelas = async (req, res) => {
             catatan_wali_kelas = VALUES(catatan_wali_kelas), 
             naik_tingkat = VALUES(naik_tingkat), 
             updated_at = NOW()`,
-            [siswa_id, kelas_id, semesterId, semester, reqJenis, sanitizedCatatan, naikTingkatValue]
+            [siswaId, kelas_id, semesterId, semester, reqJenis, sanitizedCatatan, naikTingkatValue]
         );
 
         res.json({ success: true, message: `Catatan wali kelas (${reqJenis} ${semester}) berhasil diperbarui` });
     } catch (err) {
-        console.error('Error updateCatatanWaliKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui catatan wali kelas' });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. DOWNLOAD TEMPLATE IMPORT CATATAN WALI
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Generate template Excel untuk import catatan wali kelas
+/**
+ * GET /catatan-wali/import-template - Download template import catatan wali kelas.
+ */
 exports.downloadTemplateCatatanWali = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -204,7 +206,10 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
         const semesterId = taRows[0].id_tahun_ajaran;
         const indukId = taRows[0].id_tahun_ajaran_induk;
 
-        const [kelasRow] = await db.execute('SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?', [userId, semesterId]);
+        const [kelasRow] = await db.execute(
+            'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?',
+            [userId, semesterId]
+        );
 
         if (kelasRow.length === 0) {
             return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
@@ -215,13 +220,18 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
         const [namaKelasRow] = await db.execute('SELECT nama_kelas FROM kelas WHERE id_kelas = ?', [kelasId]);
         const namaKelas = namaKelasRow[0]?.nama_kelas || 'Kelas';
 
+        // Ambil data catatan yang sudah ada di database untuk di-pre-fill ke template
         const [siswaRows] = await db.execute(
-            `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap
+            `SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap,
+                COALESCE(c.catatan_wali_kelas, '') AS catatan_wali_kelas,
+                COALESCE(c.naik_tingkat, '') AS naik_tingkat
         FROM siswa s
         INNER JOIN siswa_kelas sk ON s.id_siswa = sk.siswa_id
+        LEFT JOIN catatan_wali_kelas c ON s.id_siswa = c.siswa_id 
+            AND c.tahun_ajaran_id = ? AND c.semester = ? AND c.jenis_penilaian = ?
         WHERE sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ? AND s.status = 'aktif'
         ORDER BY s.nama_lengkap ASC`,
-            [kelasId, indukId]
+            [semesterId, semesterName, jenisPenilaian, kelasId, indukId]
         );
 
         const workbook = new ExcelJS.Workbook();
@@ -230,11 +240,17 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
 
         const worksheet = workbook.addWorksheet('Catatan Wali Kelas');
 
-        // Header di row 1
         const headerRow = worksheet.getRow(1);
         headerRow.height = 28;
 
-        const headers = ['No', 'NIS', 'NISN', 'Nama Siswa', 'Catatan Wali Kelas', 'Naik Tingkat (Khusus PAS Genap)'];
+        // Kolom Naik Tingkat HANYA muncul jika PAS Genap
+        const showNaikTingkat = (jenisPenilaian === 'PAS' && semesterName === 'Genap');
+        const headers = ['No', 'NIS', 'NISN', 'Nama Siswa', 'Catatan Wali Kelas'];
+
+        if (showNaikTingkat) {
+            headers.push('Naik Tingkat (ya/tidak)');
+        }
+
         headers.forEach((header, colIdx) => {
             const cell = headerRow.getCell(colIdx + 1);
             cell.value = header;
@@ -244,20 +260,19 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
             };
             cell.fill = {
                 type: 'pattern',
                 pattern: 'solid',
-                fgColor: { argb: colIdx < 4 ? 'FF34495E' : 'FFE8690A' },
+                fgColor: { argb: colIdx < 4 ? 'FF34495E' : 'FFE8690A' }
             };
         });
 
-        // Data siswa mulai dari row 2
         siswaRows.forEach((siswa, index) => {
             const rowNum = 2 + index;
             const dataRow = worksheet.getRow(rowNum);
-            dataRow.height = 60;
+            dataRow.height = 80; // Diperlebar agar catatan panjang terbaca dengan baik
 
             const isEvenRow = index % 2 === 0;
 
@@ -272,66 +287,65 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
                     top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                     bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
                 };
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' },
+                    fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' }
                 };
                 cell.protection = { locked: true };
             });
 
-            // Kolom catatan
+            // Pre-fill kolom catatan dengan data dari database
             const catatanCell = dataRow.getCell(5);
-            catatanCell.value = '-';
-            catatanCell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF999999' } };
+            catatanCell.value = siswa.catatan_wali_kelas;
+            catatanCell.font = { name: 'Calibri', size: 11 };
             catatanCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
             catatanCell.border = {
                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
                 bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
             };
             catatanCell.fill = {
                 type: 'pattern',
                 pattern: 'solid',
-                fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' },
+                fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' }
             };
 
-            // Kolom naik tingkat
-            const naikTingkatCell = dataRow.getCell(6);
-            if (jenisPenilaian === 'PAS' && semesterName === 'Genap') {
-                naikTingkatCell.value = '';
+            // Kolom naik tingkat HANYA diproses jika PAS Genap
+            if (showNaikTingkat) {
+                const naikTingkatCell = dataRow.getCell(6);
+                naikTingkatCell.value = siswa.naik_tingkat || '';
                 naikTingkatCell.dataValidation = {
                     type: 'list',
                     allowBlank: false,
                     formulae: ['"ya,tidak"'],
                     showErrorMessage: true,
                     errorTitle: 'Pilihan Tidak Valid',
-                    error: 'Pilih "ya" atau "tidak"',
+                    error: 'Pilih "ya" atau "tidak"'
                 };
-            } else {
-                naikTingkatCell.value = '-';
-                naikTingkatCell.font = { italic: true, color: { argb: 'FF999999' } };
+                naikTingkatCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                naikTingkatCell.border = {
+                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                };
+                naikTingkatCell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' }
+                };
             }
-            naikTingkatCell.alignment = { vertical: 'middle', horizontal: 'center' };
-            naikTingkatCell.border = {
-                top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-            };
-            naikTingkatCell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' },
-            };
         });
 
         // Empty state
         if (siswaRows.length === 0) {
-            worksheet.mergeCells('A2:F2');
+            const lastCol = headers.length;
+            const colLetter = String.fromCharCode(64 + lastCol);
+            worksheet.mergeCells(`A2:${colLetter}2`);
             const emptyCell = worksheet.getCell('A2');
             emptyCell.value = 'Belum ada siswa di kelas ini. Silakan hubungi Admin.';
             emptyCell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF666666' } };
@@ -339,8 +353,20 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
             emptyCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E6' } };
         }
 
-        worksheet.columns = [{ width: 6 }, { width: 15 }, { width: 15 }, { width: 30 }, { width: 60 }, { width: 20 }];
+        // Bangun array definisi kolom terlebih dahulu, lalu assign sekaligus untuk menghindari error
+        const columnDefinitions = [
+            { key: 'no', width: 6 },
+            { key: 'nis', width: 15 },
+            { key: 'nisn', width: 15 },
+            { key: 'nama', width: 30 },
+            { key: 'catatan', width: 60 }
+        ];
 
+        if (showNaikTingkat) {
+            columnDefinitions.push({ key: 'naik_tingkat', width: 20 });
+        }
+
+        worksheet.columns = columnDefinitions;
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -350,19 +376,16 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
-        console.error('Error downloadTemplateCatatanWali:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal membuat template: ' + err.message,
+            message: 'Gagal membuat template: ' + err.message
         });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4. IMPORT CATATAN WALI DARI EXCEL
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Import catatan wali kelas dari Excel dengan validasi
+/**
+ * POST /catatan-wali/import - Import catatan wali kelas dari Excel.
+ */
 exports.importCatatanWaliExcel = async (req, res) => {
     const connection = await db.getConnection();
 
@@ -400,11 +423,14 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if ((jenisPenilaian === 'PTS' && status_pts !== 'aktif') || (jenisPenilaian === 'PAS' && status_pas !== 'aktif')) {
             return res.status(403).json({
                 success: false,
-                message: `Periode ${jenisPenilaian} sudah dikunci atau belum dibuka. Import tidak dapat dilakukan.`,
+                message: `Periode ${jenisPenilaian} sudah dikunci atau belum dibuka. Import tidak dapat dilakukan.`
             });
         }
 
-        const [kelasRow] = await db.execute('SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?', [userId, semesterId]);
+        const [kelasRow] = await db.execute(
+            'SELECT kelas_id FROM guru_kelas WHERE user_id = ? AND tahun_ajaran_id = ?',
+            [userId, semesterId]
+        );
 
         if (kelasRow.length === 0) {
             return res.status(403).json({ success: false, message: 'Anda tidak memiliki kelas aktif' });
@@ -420,7 +446,7 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if (data.length < 2) {
             return res.status(400).json({
                 success: false,
-                message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.',
+                message: 'File Excel tidak valid. Minimal harus ada header dan 1 baris data.'
             });
         }
 
@@ -436,7 +462,7 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if (headerRowIndex === -1) {
             return res.status(400).json({
                 success: false,
-                message: 'Header tidak ditemukan. Pastikan ada kolom "NIS" dan "Nama Siswa".',
+                message: 'Header tidak ditemukan. Pastikan ada kolom "NIS" dan "Nama Siswa".'
             });
         }
 
@@ -449,18 +475,23 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if (missingColumns.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Kolom wajib tidak ditemukan: ${missingColumns.join(', ')}`,
+                message: `Kolom wajib tidak ditemukan: ${missingColumns.join(', ')}`
             });
         }
 
-        const findColIndex = name => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+        // Gunakan includes agar bisa mendeteksi header dinamis seperti "Naik Tingkat (ya/tidak)"
+        const findColIndex = name => {
+            const exactMatch = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+            if (exactMatch !== -1) return exactMatch;
+            return headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+        };
+
         const idxNIS = findColIndex('NIS');
         const idxNISN = findColIndex('NISN');
         const idxNama = findColIndex('Nama Siswa');
         const idxCatatan = findColIndex('Catatan Wali Kelas');
         const idxNaikTingkat = findColIndex('Naik Tingkat');
 
-        // Validasi file tidak kosong
         let adaBarisDataValid = false;
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -473,37 +504,22 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if (!adaBarisDataValid) {
             return res.status(400).json({
                 success: false,
-                message:
-                    `File Excel kosong - tidak ada data sama sekali.\n\n` +
-                    `File hanya berisi header tanpa baris data siswa.\n\n` +
-                    `Solusi:\n` +
-                    `1. Download ulang template Excel\n` +
-                    `2. Pastikan ada baris data siswa\n` +
-                    `3. Isi catatan wali kelas (minimal 20 karakter)\n` +
-                    `4. Upload kembali file yang sudah diisi`,
+                message: `File Excel kosong - tidak ada data sama sekali.\n\nFile hanya berisi header tanpa baris data siswa.\n\nSolusi:\n1. Download ulang template Excel\n2. Pastikan ada baris data siswa\n3. Isi catatan wali kelas (minimal 20 karakter)\n4. Upload kembali file yang sudah diisi`,
                 data: {
-                    total_baris: 0,
-                    berhasil: 0,
-                    gagal: 0,
-                    dilewati: 0,
-                    errors: null,
+                    total_baris: 0, berhasil: 0, gagal: 0, dilewati: 0, errors: null,
                     warnings: [{ row: 0, message: 'File Excel kosong. Tidak ada baris data siswa.' }],
-                    periode: `${jenisPenilaian} ${semesterName}`,
-                },
+                    periode: `${jenisPenilaian} ${semesterName}`
+                }
             });
         }
 
-        // Validasi data siswa ada
         let adaDataSiswa = false;
         let barisDenganDataSiswa = 0;
-
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-
             const nis = String(row[idxNIS] || '').trim();
             const nama = String(row[idxNama] || '').trim();
-
             if (nis || nama) {
                 adaDataSiswa = true;
                 barisDenganDataSiswa++;
@@ -513,36 +529,21 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if (!adaDataSiswa) {
             return res.status(400).json({
                 success: false,
-                message:
-                    `File Excel tidak valid - tidak ada data siswa.\n\n` +
-                    `File berisi baris kosong tanpa data NIS atau Nama Siswa.\n\n` +
-                    `Solusi:\n` +
-                    `1. Download ulang template Excel\n` +
-                    `2. Pastikan kolom NIS dan Nama Siswa terisi\n` +
-                    `3. Isi catatan wali kelas (minimal 20 karakter)\n` +
-                    `4. Upload kembali file yang sudah diisi`,
+                message: `File Excel tidak valid - tidak ada data siswa.\n\nFile berisi baris kosong tanpa data NIS atau Nama Siswa.\n\nSolusi:\n1. Download ulang template Excel\n2. Pastikan kolom NIS dan Nama Siswa terisi\n3. Isi catatan wali kelas (minimal 20 karakter)\n4. Upload kembali file yang sudah diisi`,
                 data: {
-                    total_baris: data.length - dataStartIndex,
-                    berhasil: 0,
-                    gagal: 0,
-                    dilewati: data.length - dataStartIndex,
-                    errors: null,
+                    total_baris: data.length - dataStartIndex, berhasil: 0, gagal: 0, dilewati: data.length - dataStartIndex, errors: null,
                     warnings: [{ row: 0, message: 'File Excel tidak berisi data siswa. Kolom NIS dan Nama kosong.' }],
-                    periode: `${jenisPenilaian} ${semesterName}`,
-                },
+                    periode: `${jenisPenilaian} ${semesterName}`
+                }
             });
         }
 
-        // Validasi file memiliki catatan
         let adaCatatanDiFile = false;
         let barisDenganCatatan = 0;
-
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
             if (!row || row.length === 0) continue;
-
             const catatanStr = String(row[idxCatatan] || '').trim();
-
             if (catatanStr && catatanStr !== '-' && catatanStr.length > 0) {
                 adaCatatanDiFile = true;
                 barisDenganCatatan++;
@@ -552,24 +553,12 @@ exports.importCatatanWaliExcel = async (req, res) => {
         if (!adaCatatanDiFile) {
             return res.status(400).json({
                 success: false,
-                message:
-                    `File Excel tidak valid - tidak ada catatan yang diisi.\n\n` +
-                    `File hanya berisi data identitas siswa tanpa catatan wali kelas.\n\n` +
-                    `Solusi:\n` +
-                    `1. Download ulang template Excel\n` +
-                    `2. Isi kolom catatan wali kelas dengan minimal 20 karakter\n` +
-                    (jenisPenilaian === 'PAS' && semesterName === 'Genap' ? '3. Isi kolom naik tingkat (ya/tidak)\n' : '') +
-                    `4. Upload kembali file yang sudah diisi\n\n` +
-                    `Periode aktif: ${jenisPenilaian} ${semesterName}`,
+                message: `File Excel tidak valid - tidak ada catatan yang diisi.\n\nFile hanya berisi data identitas siswa tanpa catatan wali kelas.\n\nSolusi:\n1. Download ulang template Excel\n2. Isi kolom catatan wali kelas dengan minimal 20 karakter\n${(jenisPenilaian === 'PAS' && semesterName === 'Genap' ? '3. Isi kolom naik tingkat (ya/tidak)\n' : '')}4. Upload kembali file yang sudah diisi\n\nPeriode aktif: ${jenisPenilaian} ${semesterName}`,
                 data: {
-                    total_baris: data.length - dataStartIndex,
-                    berhasil: 0,
-                    gagal: 0,
-                    dilewati: data.length - dataStartIndex,
-                    errors: null,
+                    total_baris: data.length - dataStartIndex, berhasil: 0, gagal: 0, dilewati: data.length - dataStartIndex, errors: null,
                     warnings: [{ row: 0, message: 'File Excel tidak berisi catatan. Hanya data identitas siswa yang terdeteksi.' }],
-                    periode: `${jenisPenilaian} ${semesterName}`,
-                },
+                    periode: `${jenisPenilaian} ${semesterName}`
+                }
             });
         }
 
@@ -595,16 +584,10 @@ exports.importCatatanWaliExcel = async (req, res) => {
 
         const nisDiproses = new Set();
         const nisDuplikat = [];
-
         const nisnDiproses = new Set();
         const nisnDuplikat = [];
 
-        if (jenisPenilaian !== 'PAS' || semesterName !== 'Genap') {
-            warnings.push({
-                row: 0,
-                message: 'Kolom "Naik Tingkat" diabaikan karena hanya berlaku untuk PAS Semester Genap.',
-            });
-        }
+        const showNaikTingkat = (jenisPenilaian === 'PAS' && semesterName === 'Genap');
 
         for (let i = dataStartIndex; i < data.length; i++) {
             const row = data[i];
@@ -614,35 +597,25 @@ exports.importCatatanWaliExcel = async (req, res) => {
             const namaSiswa = String(row[idxNama] || '').trim();
 
             if (!nis) {
-                if (namaSiswa) {
-                    warnings.push({ row: i + 1, message: `Baris ${i + 1}: NIS kosong untuk "${namaSiswa}"` });
-                }
+                if (namaSiswa) warnings.push({ row: i + 1, message: `Baris ${i + 1}: NIS kosong untuk "${namaSiswa}"` });
                 skippedCount++;
                 continue;
             }
 
-            // Cek duplikasi NIS
             if (nisDiproses.has(nis)) {
                 nisDuplikat.push({ row: i + 1, nis, nama: namaSiswa });
-                warnings.push({
-                    row: i + 1,
-                    message: `Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.`,
-                });
+                warnings.push({ row: i + 1, message: `Baris ${i + 1}: NIS "${nis}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` });
                 skippedCount++;
                 continue;
             }
             nisDiproses.add(nis);
 
-            // Cek duplikasi NISN
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 if (nisnExcel) {
                     if (nisnDiproses.has(nisnExcel)) {
                         nisnDuplikat.push({ row: i + 1, nisn: nisnExcel, nama: namaSiswa });
-                        warnings.push({
-                            row: i + 1,
-                            message: `Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.`,
-                        });
+                        warnings.push({ row: i + 1, message: `Baris ${i + 1}: NISN "${nisnExcel}" (${namaSiswa}) DUPLIKAT - Data ini diabaikan. Hanya data pertama yang diproses.` });
                         skippedCount++;
                         continue;
                     }
@@ -652,48 +625,34 @@ exports.importCatatanWaliExcel = async (req, res) => {
 
             const siswa = siswaMapByNIS[nis];
             if (!siswa) {
-                errors.push({
-                    row: i + 1,
-                    message: `Baris ${i + 1}: Siswa dengan NIS "${nis}" tidak ditemukan di kelas ini`,
-                });
+                errors.push({ row: i + 1, message: `Baris ${i + 1}: Siswa dengan NIS "${nis}" tidak ditemukan di kelas ini` });
                 skippedCount++;
                 continue;
             }
 
             const siswaId = siswa.id_siswa;
 
-            // Validasi NISN
             if (idxNISN >= 0) {
                 const nisnExcel = String(row[idxNISN] || '').trim();
                 const nisnDB = String(siswa.nisn || '').trim();
                 if (nisnExcel && nisnDB && nisnExcel !== nisnDB) {
-                    errors.push({
-                        row: i + 1,
-                        message: `Baris ${i + 1}: NISN tidak cocok. Excel: "${nisnExcel}", DB: "${nisnDB}"`,
-                    });
+                    errors.push({ row: i + 1, message: `Baris ${i + 1}: NISN tidak cocok. Excel: "${nisnExcel}", DB: "${nisnDB}"` });
                     skippedCount++;
                     continue;
                 }
             }
 
-            // Validasi nama
             if (idxNama >= 0) {
                 const namaExcel = String(row[idxNama] || '').trim().toLowerCase();
                 const namaDB = String(siswa.nama_lengkap || '').trim().toLowerCase();
                 if (namaExcel && namaDB && namaExcel !== namaDB) {
                     const similarity = calculateSimilarity(namaExcel, namaDB);
                     if (similarity < 0.7) {
-                        errors.push({
-                            row: i + 1,
-                            message: `Baris ${i + 1}: Nama tidak cocok. Excel: "${row[idxNama]}", DB: "${siswa.nama_lengkap}"`,
-                        });
+                        errors.push({ row: i + 1, message: `Baris ${i + 1}: Nama tidak cocok. Excel: "${row[idxNama]}", DB: "${siswa.nama_lengkap}"` });
                         skippedCount++;
                         continue;
                     } else {
-                        warnings.push({
-                            row: i + 1,
-                            message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.`,
-                        });
+                        warnings.push({ row: i + 1, message: `Baris ${i + 1}: Nama sedikit berbeda (typo). Data tetap diimport.` });
                     }
                 }
             }
@@ -701,19 +660,13 @@ exports.importCatatanWaliExcel = async (req, res) => {
             const catatan = String(row[idxCatatan] || '').trim();
 
             if (!catatan || catatan === '-') {
-                errors.push({
-                    row: i + 1,
-                    message: `Baris ${i + 1}: Catatan wali kelas kosong untuk "${siswa.nama_lengkap}"`,
-                });
+                errors.push({ row: i + 1, message: `Baris ${i + 1}: Catatan wali kelas kosong untuk "${siswa.nama_lengkap}"` });
                 skippedCount++;
                 continue;
             }
 
             if (catatan.length < 20) {
-                errors.push({
-                    row: i + 1,
-                    message: `Baris ${i + 1}: Catatan minimal 20 karakter (saat ini ${catatan.length} karakter)`,
-                });
+                errors.push({ row: i + 1, message: `Baris ${i + 1}: Catatan minimal 20 karakter (saat ini ${catatan.length} karakter)` });
                 skippedCount++;
                 continue;
             }
@@ -721,24 +674,19 @@ exports.importCatatanWaliExcel = async (req, res) => {
             const sanitizedCatatan = sanitizeInput(catatan);
 
             let naikTingkatValue = null;
-            if (jenisPenilaian === 'PAS' && semesterName === 'Genap') {
+            // Validasi Naik Tingkat HANYA jika PAS Genap
+            if (showNaikTingkat) {
                 if (idxNaikTingkat >= 0) {
                     const naikTingkat = String(row[idxNaikTingkat] || '').trim().toLowerCase();
                     if (naikTingkat === 'ya' || naikTingkat === 'tidak') {
                         naikTingkatValue = naikTingkat;
                     } else {
-                        errors.push({
-                            row: i + 1,
-                            message: `Baris ${i + 1}: Naik tingkat harus "ya" atau "tidak" (diterima: "${naikTingkat}")`,
-                        });
+                        errors.push({ row: i + 1, message: `Baris ${i + 1}: Naik tingkat harus "ya" atau "tidak" (diterima: "${naikTingkat}")` });
                         skippedCount++;
                         continue;
                     }
                 } else {
-                    errors.push({
-                        row: i + 1,
-                        message: `Baris ${i + 1}: Kolom "Naik Tingkat" wajib diisi untuk PAS Genap`,
-                    });
+                    errors.push({ row: i + 1, message: `Baris ${i + 1}: Kolom "Naik Tingkat" tidak ditemukan di file Excel` });
                     skippedCount++;
                     continue;
                 }
@@ -778,26 +726,20 @@ exports.importCatatanWaliExcel = async (req, res) => {
 
         if (nisDuplikat.length > 0) {
             const duplikatInfo = nisDuplikat.map(d => `Baris ${d.row} (NIS: ${d.nis}, ${d.nama})`).join(', ');
-            warnings.unshift({
-                row: 0,
-                message: `DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`,
-            });
+            warnings.unshift({ row: 0, message: `DITEMUKAN ${nisDuplikat.length} NIS DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.` });
             message += `\n\nPERHATIAN: ${nisDuplikat.length} NIS duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
         }
 
         if (nisnDuplikat.length > 0) {
             const duplikatInfo = nisnDuplikat.map(d => `Baris ${d.row} (NISN: ${d.nisn}, ${d.nama})`).join(', ');
-            warnings.unshift({
-                row: 0,
-                message: `DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.`,
-            });
+            warnings.unshift({ row: 0, message: `DITEMUKAN ${nisnDuplikat.length} NISN DUPLIKAT: ${duplikatInfo}. Hanya data pertama yang diproses, duplikat diabaikan.` });
             message += `\n\nPERHATIAN: ${nisnDuplikat.length} NISN duplikat ditemukan dan diabaikan. Hanya data pertama yang diproses.`;
         }
 
         message += `\nINFO: Pastikan setiap siswa memiliki NIS dan NISN yang unik di file Excel.`;
 
-        if (jenisPenilaian !== 'PAS' || semesterName !== 'Genap') {
-            message += `\n\nINFO: Kolom "Naik Tingkat" diabaikan karena hanya berlaku untuk PAS Semester Genap.`;
+        if (!showNaikTingkat) {
+            message += `\n\nINFO: Kolom "Naik Tingkat" diabaikan karena fitur ini hanya berlaku untuk PAS Semester Genap.`;
         }
 
         res.json({
@@ -817,18 +759,14 @@ exports.importCatatanWaliExcel = async (req, res) => {
                 nisn_duplikat_detail: nisnDuplikat,
                 baris_dengan_catatan: barisDenganCatatan,
                 baris_dengan_data_siswa: barisDenganDataSiswa,
-                pesan_penting:
-                    nisDuplikat.length > 0 || nisnDuplikat.length > 0
-                        ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.`
-                        : null,
-            },
+                pesan_penting: (nisDuplikat.length > 0 || nisnDuplikat.length > 0) ? `${nisDuplikat.length + nisnDuplikat.length} duplikasi ditemukan. Hanya data pertama yang diproses.` : null
+            }
         });
     } catch (err) {
         await connection.rollback();
-        console.error('Error importCatatanWaliExcel:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengimport catatan wali kelas: ' + err.message,
+            message: 'Gagal mengimport catatan wali kelas: ' + err.message
         });
     } finally {
         connection.release();
