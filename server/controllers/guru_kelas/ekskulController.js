@@ -225,11 +225,23 @@ exports.updateEkskulSiswa = async (req, res) => {
 exports.downloadTemplateEkskul = async (req, res) => {
     try {
         const userId = req.user.id;
-        const tahunAjaranIndukId = req.idTahunAjaranInduk;
-        const semesterId = req.idSemesterAktif;
+        
+        // ✅ Fallback jika middleware belum menyuntikkan data tahun ajaran
+        let tahunAjaranIndukId = req.idTahunAjaranInduk;
+        let semesterId = req.idSemesterAktif;
 
         if (!tahunAjaranIndukId || !semesterId) {
-            return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
+            const [taRows] = await db.execute(
+                'SELECT id_tahun_ajaran, id_tahun_ajaran_induk FROM tahun_ajaran WHERE status = \'aktif\' LIMIT 1'
+            );
+            if (taRows.length > 0) {
+                tahunAjaranIndukId = taRows[0].id_tahun_ajaran_induk;
+                semesterId = taRows[0].id_tahun_ajaran;
+            }
+        }
+
+        if (!tahunAjaranIndukId || !semesterId) {
+            return res.status(400).json({ success: false, message: 'Data tahun ajaran aktif tidak ditemukan.' });
         }
 
         const [guruKelasRows] = await db.execute(
@@ -246,7 +258,8 @@ exports.downloadTemplateEkskul = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Anda belum ditugaskan sebagai wali kelas', code: 'NOT_ASSIGNED' });
         }
 
-        const { kelas_id, nama_kelas } = guruKelasRows[0];
+        const nama_kelas = guruKelasRows[0].nama_kelas || 'Kelas';
+        const kelas_id = guruKelasRows[0].kelas_id;
 
         const [daftarEkskul] = await db.execute(
             `SELECT id_ekskul, nama_ekskul FROM ekstrakurikuler WHERE tahun_ajaran_id = ?`,
@@ -262,16 +275,18 @@ exports.downloadTemplateEkskul = async (req, res) => {
             [kelas_id, tahunAjaranIndukId]
         );
 
-        // ✅ PERBAIKAN 2: Gunakan parameterized query untuk IN clause agar lebih aman
+        // ✅ PERBAIKAN UTAMA: Dynamic Placeholders untuk IN clause
         const siswaIds = siswaRows.length > 0 ? siswaRows.map(s => s.id_siswa) : [0];
+        const placeholders = siswaIds.map(() => '?').join(','); // Menghasilkan "?, ?, ?" sesuai jumlah siswa
+
         const [existingEkskulRows] = await db.execute(
             `SELECT pe.siswa_id, pe.ekskul_id, pe.deskripsi, e.nama_ekskul
             FROM peserta_ekstrakurikuler pe
             INNER JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul
-            WHERE pe.siswa_id IN (?)
+            WHERE pe.siswa_id IN (${placeholders})
             AND pe.tahun_ajaran_id = ?
             ORDER BY pe.siswa_id, pe.ekskul_id`,
-            [siswaIds, semesterId]
+            [...siswaIds, semesterId] // ✅ Spread array agar setiap ID mendapat '?' sendiri
         );
 
         const ekskulBySiswa = {};
@@ -294,9 +309,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
 
         const headers = [
             'No', 'NIS', 'NISN', 'Nama Siswa',
-            'Ekskul 1', 'Deskripsi 1',
-            'Ekskul 2', 'Deskripsi 2',
-            'Ekskul 3', 'Deskripsi 3'
+            'Ekskul 1', 'Deskripsi 1', 'Ekskul 2', 'Deskripsi 2', 'Ekskul 3', 'Deskripsi 3'
         ];
 
         headers.forEach((header, colIdx) => {
@@ -304,12 +317,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
             cell.value = header;
             cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
             cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-            cell.border = {
-                top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-            };
+            cell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colIdx < 4 ? 'FF34495E' : 'FFE8690A' } };
         });
 
@@ -326,12 +334,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
                 cell.value = val;
                 cell.font = { name: 'Calibri', size: 11, bold: colIdx === 3 };
                 cell.alignment = { vertical: 'middle', horizontal: colIdx === 3 ? 'left' : 'center' };
-                cell.border = {
-                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-                };
+                cell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEvenRow ? 'FFE8F4FD' : 'FFFFFFFF' } };
                 cell.protection = { locked: true };
             });
@@ -339,40 +342,23 @@ exports.downloadTemplateEkskul = async (req, res) => {
             for (let i = 0; i < 3; i++) {
                 const ekskulCol = 5 + i * 2;
                 const deskripsiCol = 6 + i * 2;
-
                 const ekskulCell = dataRow.getCell(ekskulCol);
                 ekskulCell.value = existingEkskul[i] ? existingEkskul[i].nama_ekskul : '';
 
                 if (daftarEkskul.length > 0) {
-                    const ekskulNames = daftarEkskul.map(e => e.nama_ekskul);
                     ekskulCell.dataValidation = {
-                        type: 'list',
-                        allowBlank: true,
-                        formulae: ['"' + ekskulNames.join(',') + '"'],
-                        showErrorMessage: true,
-                        errorTitle: 'Ekskul Tidak Valid',
-                        error: 'Pilih ekskul dari daftar yang tersedia'
+                        type: 'list', allowBlank: true, formulae: ['"' + daftarEkskul.map(e => e.nama_ekskul).join(',') + '"'],
+                        showErrorMessage: true, errorTitle: 'Ekskul Tidak Valid', error: 'Pilih ekskul dari daftar yang tersedia'
                     };
                 }
-
                 ekskulCell.alignment = { vertical: 'middle', horizontal: 'center' };
-                ekskulCell.border = {
-                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-                };
+                ekskulCell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
                 ekskulCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' } };
 
                 const deskripsiCell = dataRow.getCell(deskripsiCol);
                 deskripsiCell.value = existingEkskul[i] ? (existingEkskul[i].deskripsi || '') : '';
                 deskripsiCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
-                deskripsiCell.border = {
-                    top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
-                };
+                deskripsiCell.border = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
                 deskripsiCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEvenRow ? 'FFFFF5E6' : 'FFFFFFFF' } };
             }
         });
@@ -393,7 +379,9 @@ exports.downloadTemplateEkskul = async (req, res) => {
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
         const buffer = await workbook.xlsx.writeBuffer();
-        const fileName = `Template_Ekskul_${nama_kelas.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+        
+        const safeNamaKelas = nama_kelas.replace(/[^a-z0-9]/gi, '_');
+        const fileName = `Template_Ekskul_${safeNamaKelas}.xlsx`;
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
