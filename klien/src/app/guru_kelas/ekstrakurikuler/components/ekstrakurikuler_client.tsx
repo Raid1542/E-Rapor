@@ -463,7 +463,7 @@ export default function EkskulClient() {
         setShowImportModal(true);
     };
 
-    // ✅ DIPERBAIKI: Tutup modal import setelah download template
+        // ✅ DIPERBAIKI: Tambahkan safe check dan error parsing yang lebih detail
     const handleDownloadTemplate = async () => {
         setDownloadingTemplate(true);
         try {
@@ -473,38 +473,52 @@ export default function EkskulClient() {
             });
 
             if (!response.ok) {
-                const err = await response.json().catch(() => ({ message: 'Gagal download template' }));
-                throw new Error(err.message || 'Gagal download template');
+                // Coba baca error JSON dari backend, jika gagal baca pakai text biasa
+                let errMsg = 'Gagal download template';
+                try {
+                    const errData = await response.json();
+                    errMsg = errData.message || errMsg;
+                } catch (e) {
+                    errMsg = await response.text() || errMsg;
+                }
+                throw new Error(errMsg);
             }
 
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Template_Ekskul_${kelasNama.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
+            
+            // ✅ PERBAIKAN: Pastikan kelasNama adalah string dan ada fallback 'Kelas'
+            const safeKelasNama = (kelasNama || 'Kelas').replace(/[^a-z0-9]/gi, '_');
+            a.download = `Template_Ekskul_${safeKelasNama}.xlsx`;
+            
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
-            // ✅ Tutup modal import DULU
+            // Tutup modal import DULU
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
 
-            // ✅ Tampilkan notifikasi success SETELAH modal import tertutup
+            // Tampilkan notifikasi success SETELAH modal import tertutup
             setTimeout(() => {
                 showModal({
                     type: 'success',
                     title: 'Template Berhasil Diunduh',
-                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\n Langkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
+                    message: 'Template Excel berhasil diunduh ke folder Downloads.\n\nLangkah selanjutnya:\n1. Buka file Excel yang sudah diunduh\n2. Pilih ekskul dari dropdown (maks 3 per siswa)\n3. Isi deskripsi aktivitas\n4. Simpan file Excel\n5. Klik tombol "Import Ekskul" untuk upload file'
                 });
             }, 300);
         } catch (err: any) {
+            // ✅ PENTING: Lihat error detail di Console Browser (F12)
+            console.error('[ERROR] Download Template:', err); 
+            
             showModal({
                 type: 'error',
                 title: 'Gagal Mengunduh Template',
-                message: err.message || 'Terjadi kesalahan saat mengunduh template.'
+                message: err.message || 'Terjadi kesalahan saat mengunduh template. Pastikan Anda ditugaskan di kelas.'
             });
         } finally {
             setDownloadingTemplate(false);
