@@ -24,9 +24,9 @@ const TEMPLATES_PATH = path.join(__dirname, 'public', 'templates');
 
 // Konfigurasi opsi CORS
 const corsOptions = {
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'https://e-rapor-production.up.railway.app'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
 };
 
 // Terapkan middleware CORS
