@@ -6,7 +6,7 @@
  */
 
 const SiswaModel = require('../../models/admin/siswaModel');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const fs = require('fs');
 const db = require('../../config/db');
 
@@ -243,7 +243,7 @@ exports.hapusSiswaMaster = async (req, res) => {
 };
 
 /**
- * Import data siswa dari file Excel (.xlsx).
+ * Import data siswa dari file Excel 
  */
 exports.importSiswaMaster = async (req, res) => {
     const connection = await db.getConnection();
@@ -252,37 +252,64 @@ exports.importSiswaMaster = async (req, res) => {
             return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
         }
 
-        const workbook = XLSX.readFile(req.file.path);
-        const sheetName = workbook.SheetNames[0];
-        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-        if (data.length === 0) {
+        // 1. Baca file Excel dengan exceljs
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet || worksheet.rowCount < 2) {
             fs.unlinkSync(req.file.path);
-            return res.status(400).json({ success: false, message: 'File Excel kosong' });
+            return res.status(400).json({ success: false, message: 'File Excel kosong atau tidak ada data' });
         }
+
+        // 2. Ambil header dari baris pertama secara dinamis
+        const headers = [];
+        const headerRow = worksheet.getRow(1);
+        headerRow.eachCell((cell, colNumber) => {
+            headers[colNumber - 1] = String(cell.value || '').toLowerCase().trim();
+        });
+
+        // Map nama kolom ke index-nya
+        const colMap = {};
+        headers.forEach((header, idx) => {
+            if (header) colMap[header] = idx;
+        });
 
         await connection.beginTransaction();
         let processedCount = 0;
         const skipped = [];
 
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const rowNumber = i + 2;
+        // 3. Iterasi dari baris ke-2 (skip header)
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
+            const rowNumber = i;
 
-            // PERBAIKAN: Tambahkan validasi nisn di import
-            if (!row.nis || !row.nisn || !row.nama_lengkap || !row.jenis_kelamin) {
+            // Ambil nilai dari setiap kolom berdasarkan header
+            const rowData = {
+                nis: row.getCell((colMap['nis'] || 0) + 1)?.value,
+                nisn: row.getCell((colMap['nisn'] || 0) + 1)?.value,
+                nama_lengkap: row.getCell((colMap['nama_lengkap'] || 0) + 1)?.value,
+                tempat_lahir: row.getCell((colMap['tempat_lahir'] || 0) + 1)?.value,
+                tanggal_lahir: row.getCell((colMap['tanggal_lahir'] || 0) + 1)?.value,
+                jenis_kelamin: row.getCell((colMap['jenis_kelamin'] || 0) + 1)?.value,
+                alamat: row.getCell((colMap['alamat'] || 0) + 1)?.value
+            };
+
+            // Validasi kolom wajib
+            if (!rowData.nis || !rowData.nisn || !rowData.nama_lengkap || !rowData.jenis_kelamin) {
                 skipped.push({
                     row: rowNumber,
-                    nama: row.nama_lengkap || '-',
+                    nama: rowData.nama_lengkap || '-',
                     reason: 'Kolom wajib (NIS, NISN, nama lengkap, jenis kelamin) tidak lengkap'
                 });
                 continue;
             }
 
-            const trimmedNis = String(row.nis).trim();
-            const trimmedNisn = String(row.nisn).trim(); // PERBAIKAN: Pastikan string
-            const trimmedNama = String(row.nama_lengkap).trim();
+            const trimmedNis = String(rowData.nis).trim();
+            const trimmedNisn = String(rowData.nisn).trim();
+            const trimmedNama = String(rowData.nama_lengkap).trim();
 
+            // Cek duplikasi NIS
             const nisExists = await SiswaModel.checkNisExists(trimmedNis);
             if (nisExists) {
                 skipped.push({
@@ -293,6 +320,7 @@ exports.importSiswaMaster = async (req, res) => {
                 continue;
             }
 
+            // Cek duplikasi NISN
             const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
             if (nisnExists) {
                 skipped.push({
@@ -303,8 +331,11 @@ exports.importSiswaMaster = async (req, res) => {
                 continue;
             }
 
-            let tanggal_lahir = row.tanggal_lahir || null;
-            if (typeof tanggal_lahir === 'number') {
+            // 4. Konversi tanggal lahir (exceljs otomatis return Date object kalau formatnya tanggal)
+            let tanggal_lahir = rowData.tanggal_lahir || null;
+            if (tanggal_lahir instanceof Date) {
+                tanggal_lahir = `${tanggal_lahir.getFullYear()}-${String(tanggal_lahir.getMonth() + 1).padStart(2, '0')}-${String(tanggal_lahir.getDate()).padStart(2, '0')}`;
+            } else if (typeof tanggal_lahir === 'number') {
                 const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
                 if (!isNaN(date.getTime())) {
                     tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -323,10 +354,10 @@ exports.importSiswaMaster = async (req, res) => {
                     nis: trimmedNis,
                     nisn: trimmedNisn,
                     nama_lengkap: trimmedNama,
-                    tempat_lahir: row.tempat_lahir ? String(row.tempat_lahir).trim() : null,
+                    tempat_lahir: rowData.tempat_lahir ? String(rowData.tempat_lahir).trim() : null,
                     tanggal_lahir,
-                    jenis_kelamin: row.jenis_kelamin || 'Laki-laki',
-                    alamat: row.alamat ? String(row.alamat).trim() : null
+                    jenis_kelamin: rowData.jenis_kelamin || 'Laki-laki',
+                    alamat: rowData.alamat ? String(rowData.alamat).trim() : null
                 });
                 processedCount++;
             } catch (insertErr) {

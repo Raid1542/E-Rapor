@@ -7,7 +7,7 @@
 
 const pembinaEkskulModel = require('../../models/admin/pembinaEkskulModel');
 const db = require('../../config/db');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const fs = require('fs');
 
 /**
@@ -220,7 +220,7 @@ exports.editPembinaEkskul = async (req, res) => {
 };
 
 /**
- * Import data pembina dari file Excel (.xlsx) dengan skip error per baris.
+ * Import data pembina dari file Excel (.xlsx) 
  */
 exports.importPembinaEkskul = async (req, res) => {
     const connection = await db.getConnection();
@@ -230,18 +230,29 @@ exports.importPembinaEkskul = async (req, res) => {
             return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
         }
 
-        const workbook = XLSX.readFile(req.file.path);
-        const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-
-        if (data.length === 0) {
-            throw new Error('File Excel kosong');
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet || worksheet.rowCount < 2) {
+            throw new Error('File Excel kosong atau tidak ada data');
         }
 
-        const requiredCols = ['nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin'];
-        const firstRow = data[0];
+        // Ambil header dinamis
+        const headers = [];
+        const headerRow = worksheet.getRow(1);
+        headerRow.eachCell((cell, colNumber) => {
+            headers[colNumber - 1] = String(cell.value || '').toLowerCase().trim();
+        });
 
+        const colMap = {};
+        headers.forEach((header, idx) => {
+            if (header) colMap[header] = idx;
+        });
+
+        const requiredCols = ['nama_lengkap', 'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin'];
         for (const col of requiredCols) {
-            if (!(col in firstRow)) {
+            if (!(col in colMap)) {
                 throw new Error(`Kolom wajib "${col}" tidak ditemukan di template`);
             }
         }
@@ -250,66 +261,76 @@ exports.importPembinaEkskul = async (req, res) => {
         const skipped = [];
         let processedCount = 0;
 
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const rowNum = i + 2;
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
+            const rowNum = i;
+            const getCellVal = (colName) => colName in colMap ? row.getCell(colMap[colName] + 1)?.value : null;
+
+            const rowData = {
+                nama_lengkap: getCellVal('nama_lengkap'),
+                tempat_lahir: getCellVal('tempat_lahir'),
+                tanggal_lahir: getCellVal('tanggal_lahir'),
+                jenis_kelamin: getCellVal('jenis_kelamin'),
+                niy: getCellVal('niy'),
+                nuptk: getCellVal('nuptk'),
+                alamat: getCellVal('alamat'),
+                no_telepon: getCellVal('no_telepon')
+            };
 
             try {
-                if (!row.nama_lengkap || !row.tempat_lahir || !row.tanggal_lahir || !row.jenis_kelamin) {
-                    skipped.push({
-                        row: rowNum,
-                        nama: row.nama_lengkap || '-',
-                        reason: 'Data tidak lengkap (nama, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)'
-                    });
+                if (!rowData.nama_lengkap || !rowData.tempat_lahir || !rowData.tanggal_lahir || !rowData.jenis_kelamin) {
+                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap || '-', reason: 'Data tidak lengkap (nama, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)' });
                     continue;
                 }
 
-                if (!['Laki-laki', 'Perempuan'].includes(row.jenis_kelamin)) {
-                    skipped.push({
-                        row: rowNum,
-                        nama: row.nama_lengkap,
-                        reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${row.jenis_kelamin}"`
-                    });
+                if (!['Laki-laki', 'Perempuan'].includes(rowData.jenis_kelamin)) {
+                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${rowData.jenis_kelamin}"` });
                     continue;
                 }
 
-                const [existingNiy] = row.niy
-                    ? await connection.execute(
-                        'SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?',
-                        [row.niy]
-                    )
-                    : [[]];
+                let tanggal_lahir = rowData.tanggal_lahir;
+                if (tanggal_lahir instanceof Date) {
+                    tanggal_lahir = `${tanggal_lahir.getFullYear()}-${String(tanggal_lahir.getMonth() + 1).padStart(2, '0')}-${String(tanggal_lahir.getDate()).padStart(2, '0')}`;
+                } else if (typeof tanggal_lahir === 'number') {
+                    const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
+                    if (!isNaN(date.getTime())) {
+                        tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    } else {
+                        skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Format tanggal lahir tidak valid' });
+                        continue;
+                    }
+                } else if (typeof tanggal_lahir === 'string') {
+                    tanggal_lahir = tanggal_lahir.trim();
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                        skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Format tanggal lahir harus YYYY-MM-DD' });
+                        continue;
+                    }
+                } else {
+                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Tanggal lahir wajib diisi' });
+                    continue;
+                }
 
-                const [existingNuptk] = row.nuptk
-                    ? await connection.execute(
-                        'SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?',
-                        [row.nuptk]
-                    )
-                    : [[]];
+                const [existingNiy] = rowData.niy ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?', [String(rowData.niy).trim()]) : [[]];
+                const [existingNuptk] = rowData.nuptk ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?', [String(rowData.nuptk).trim()]) : [[]];
 
                 if (existingNiy.length > 0 || existingNuptk.length > 0) {
                     let reason = 'Data duplikat';
                     if (existingNiy.length > 0) reason = 'NIY sudah terdaftar';
                     else if (existingNuptk.length > 0) reason = 'NUPTK sudah terdaftar';
-
-                    skipped.push({
-                        row: rowNum,
-                        nama: row.nama_lengkap,
-                        reason
-                    });
+                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason });
                     continue;
                 }
 
                 await pembinaEkskulModel.create(
                     {
-                        nama_lengkap: row.nama_lengkap,
-                        niy: row.niy || null,
-                        nuptk: row.nuptk || null,
-                        tempat_lahir: row.tempat_lahir,
-                        tanggal_lahir: row.tanggal_lahir,
-                        jenis_kelamin: row.jenis_kelamin,
-                        alamat: row.alamat || null,
-                        no_telepon: row.no_telepon || null,
+                        nama_lengkap: String(rowData.nama_lengkap).trim(),
+                        niy: rowData.niy ? String(rowData.niy).trim() : null,
+                        nuptk: rowData.nuptk ? String(rowData.nuptk).trim() : null,
+                        tempat_lahir: String(rowData.tempat_lahir).trim(),
+                        tanggal_lahir,
+                        jenis_kelamin: rowData.jenis_kelamin,
+                        alamat: rowData.alamat ? String(rowData.alamat).trim() : null,
+                        no_telepon: rowData.no_telepon ? String(rowData.no_telepon).trim() : null,
                         status: 'aktif'
                     },
                     connection
@@ -317,11 +338,7 @@ exports.importPembinaEkskul = async (req, res) => {
 
                 processedCount++;
             } catch (rowErr) {
-                skipped.push({
-                    row: rowNum,
-                    nama: row.nama_lengkap || '-',
-                    reason: rowErr.message || 'Gagal memproses data'
-                });
+                skipped.push({ row: rowNum, nama: rowData.nama_lengkap || '-', reason: rowErr.message || 'Gagal memproses data' });
             }
         }
 
@@ -330,21 +347,14 @@ exports.importPembinaEkskul = async (req, res) => {
 
         res.json({
             success: true,
-            message: skipped.length > 0
-                ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati`
-                : `Import berhasil: ${processedCount} data pembina ditambahkan`,
+            message: skipped.length > 0 ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati` : `Import berhasil: ${processedCount} data pembina ditambahkan`,
             total: processedCount,
             skipped
         });
     } catch (err) {
         await connection.rollback();
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        res.status(400).json({
-            success: false,
-            message: err.message || 'Gagal mengimport data'
-        });
+        if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(400).json({ success: false, message: err.message || 'Gagal mengimport data' });
     } finally {
         connection.release();
     }

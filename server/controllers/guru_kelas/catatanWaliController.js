@@ -6,7 +6,6 @@
  */
 
 const db = require('../../config/db');
-const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 
 /**
@@ -438,10 +437,32 @@ exports.importCatatanWaliExcel = async (req, res) => {
 
         const kelasId = kelasRow[0].kelas_id;
 
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            return res.status(400).json({ success: false, message: 'File Excel tidak valid atau sheet kosong.' });
+        }
+
+        // Konversi ke array 2D agar 100% kompatibel dengan logika validasi di bawahnya
+        const data = [];
+        const maxRow = worksheet.rowCount;
+        const maxCol = worksheet.columnCount > 0 ? worksheet.columnCount : 10;
+        
+        for (let r = 1; r <= maxRow; r++) {
+            const row = worksheet.getRow(r);
+            const rowData = [];
+            for (let c = 1; c <= maxCol; c++) {
+                const cell = row.getCell(c);
+                let val = cell.value;
+                // Handle jika cell berisi formula atau rich text
+                if (val && typeof val === 'object' && val.result !== undefined) val = val.result;
+                if (val && typeof val === 'object' && val.richText) val = val.richText.map(rt => rt.text).join('');
+                rowData.push(val === null || val === undefined ? '' : val);
+            }
+            data.push(rowData);
+        }
 
         if (data.length < 2) {
             return res.status(400).json({

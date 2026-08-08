@@ -8,7 +8,6 @@
  */
 
 const db = require('../../config/db');
-const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 const nilaiModel = require('../../models/guru_kelas/nilaiModel');
 const komponenPenilaianModel = require('../../models/guru_kelas/komponenPenilaianModel');
@@ -619,10 +618,33 @@ exports.eksporNilaiExcel = async (req, res) => {
             return rowData;
         });
 
-        const worksheet = XLSX.utils.aoa_to_sheet([finalHeaders, ...rows]);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Nilai');
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+                const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Rekap Nilai');
+
+        // Tambah header dengan styling
+        const headerRow = worksheet.addRow(finalHeaders);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8690A' } };
+        headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+        headerRow.height = 25;
+
+        // Tambah data rows
+        rows.forEach((rowData) => {
+            const dataRow = worksheet.addRow(rowData);
+            dataRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        // Set column width otomatis
+        worksheet.columns.forEach((col, idx) => {
+            if (idx === 0) col.width = 5;         // No
+            else if (idx === 1) col.width = 30;  // Nama
+            else if (idx === 2 || idx === 3) col.width = 15; // NIS, NISN
+            else if (idx === finalHeaders.length - 1) col.width = 10; // Ranking
+            else if (idx === finalHeaders.length - 2) col.width = 12; // Nilai Rapor
+            else col.width = 12; // Komponen
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
 
         res.setHeader('Content-Disposition', `attachment; filename="Rekap_Nilai_${namaMapel.replace(/[^a-z0-9]/gi, '_')}.xlsx"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -901,8 +923,32 @@ exports.importNilaiExcel = async (req, res) => {
             });
         }
 
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-        const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+                const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            return res.status(400).json({ success: false, message: 'File Excel tidak valid atau sheet kosong.' });
+        }
+
+        // Konversi ke array 2D agar 100% kompatibel dengan logika validasi di bawahnya
+        const data = [];
+        const maxRow = worksheet.rowCount;
+        const maxCol = worksheet.columnCount > 0 ? worksheet.columnCount : 10;
+        
+        for (let r = 1; r <= maxRow; r++) {
+            const row = worksheet.getRow(r);
+            const rowData = [];
+            for (let c = 1; c <= maxCol; c++) {
+                const cell = row.getCell(c);
+                let val = cell.value;
+                // Handle jika cell berisi formula atau rich text
+                if (val && typeof val === 'object' && val.result !== undefined) val = val.result;
+                if (val && typeof val === 'object' && val.richText) val = val.richText.map(rt => rt.text).join('');
+                rowData.push(val === null || val === undefined ? '' : val);
+            }
+            data.push(rowData);
+        }
         if (data.length < 2) {
             return res.status(400).json({ success: false, message: 'File Excel kosong atau format tidak valid.' });
         }
