@@ -420,7 +420,7 @@ export default function LoginClient() {
             if (userData) {
                 const user = JSON.parse(userData);
                 const role = user.role;
-                const dashboardPath = DASHBOARD_PATHS[role as keyof typeof DASHBOARD_PATHS] || '/login';
+                const dashboardPath = DASHBOARD_PATHS[role as keyof typeof DASHBOARD_PATHS] || '/';
                 router.push(dashboardPath);
             }
         } catch (error) {
@@ -517,7 +517,7 @@ export default function LoginClient() {
 
             const urlParams = new URLSearchParams(window.location.search);
             const redirect = urlParams.get('redirect');
-            const defaultDashboard = DASHBOARD_PATHS[role as keyof typeof DASHBOARD_PATHS] || '/login';
+            const defaultDashboard = DASHBOARD_PATHS[role as keyof typeof DASHBOARD_PATHS] || '/';
             const redirectPath = redirect || defaultDashboard;
 
             showPopup({

@@ -335,7 +335,7 @@ export default function Header({ user: initialUser }: HeaderProps) {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');
         sessionStorage.clear();
-        router.push('/login');
+        router.push('/');
     };
 
     /* Handler: Batalkan logout */

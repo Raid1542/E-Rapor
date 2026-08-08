@@ -12,7 +12,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { LogOut, X } from 'lucide-react';
 
 // Konstanta konfigurasi path dan storage
-const LOGIN_PATH = '/login';
+const LOGIN_PATH = '/';
 const STORAGE_KEYS = {
     TOKEN: 'token',
     USER: 'currentUser',
@@ -87,8 +87,7 @@ export default function NavigationGuard({ children }: NavigationGuardProps) {
                 
                 // Cek apakah pengguna berasal dari halaman login
                 const isFromLogin = history.length === 1 || 
-                                    history[history.length - 2] === LOGIN_PATH ||
-                                    history[history.length - 2]?.includes('/login');
+                    history[history.length - 2] === LOGIN_PATH;
                 
                 if (isFromLogin) {
                     setShowConfirm(true);

@@ -44,7 +44,7 @@ export async function fetchWithAuth(
                 
                 // Memicu event global untuk memberi tahu komponen lain bahwa sesi telah berakhir
                 window.dispatchEvent(new CustomEvent('sessionExpired'));
-                window.location.href = '/login';
+                window.location.href = '/';
             }
         }
 

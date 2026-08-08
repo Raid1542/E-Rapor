@@ -28,7 +28,7 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
 
         // Langkah 1: Cek keberadaan token
         if (!token) {
-            router.replace(`/login?redirect=${window.location.pathname}`);
+            router.replace(`/?redirect=${window.location.pathname}`);
             setIsLoading(false);
             return;
         }
@@ -50,7 +50,7 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
                     } else if (userRole === 'guru_bidang_studi') {
                         router.replace('/guru_bidang_studi/dashboard');
                     } else {
-                        router.replace('/login');
+                        router.replace('/');
                     }
                     
                     setIsLoading(false);
@@ -66,7 +66,7 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
             // Penanganan error: Token tidak valid atau kadaluarsa
             console.error('Auth error:', error);
             localStorage.clear();
-            router.replace(`/login?redirect=${window.location.pathname}`);
+            router.replace(`/?redirect=${window.location.pathname}`);
             setIsLoading(false);
         }
     }, [router]);

@@ -256,7 +256,7 @@ export default function Header() {
     localStorage.removeItem('token');
     localStorage.removeItem('currentUser');
     sessionStorage.clear();
-    router.push('/login');
+    router.push('/');
   };
 
   const handleLogoutCancel = () => setShowLogoutConfirm(false);

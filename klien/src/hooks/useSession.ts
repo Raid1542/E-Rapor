@@ -69,7 +69,7 @@ export function useSession() {
     const handleLogout = useCallback(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');
-        window.location.href = '/login';
+        window.location.href = '/';
     }, []);
 
     return { showSessionExpired, setShowSessionExpired, handleLogout, checkToken };

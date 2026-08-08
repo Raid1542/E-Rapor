@@ -290,7 +290,7 @@ export default function BackupRestoreClient() {
                 localStorage.removeItem('token');
                 localStorage.removeItem('currentUser');
                 localStorage.removeItem('userRole');
-                window.location.href = '/login?restored=true';
+                window.location.href = '/?restored=true';
             }, 2500);
 
         } catch (err: any) {

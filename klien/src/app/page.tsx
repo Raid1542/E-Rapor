@@ -6,7 +6,7 @@
  */
 
 import { Metadata } from 'next';
-import LoginClient from './components/login_client';
+import LoginClient from './login/login_client';
 
 // Metadata default untuk halaman login
 export const metadata: Metadata = {

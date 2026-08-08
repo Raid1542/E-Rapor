@@ -9,7 +9,7 @@
 export const logout = (): void => {
     localStorage.removeItem('token');
     localStorage.removeItem('currentUser');
-    window.location.href = '/login';
+    window.location.href = '/';
 };
 
 /* Cek apakah user terautentikasi berdasarkan keberadaan token */
