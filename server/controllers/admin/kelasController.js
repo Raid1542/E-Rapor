@@ -128,7 +128,8 @@ exports.getKelas = async (req, res) => {
             locked_semester: lockedSemester
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data kelas: ' + err.message });
+    console.error('Error getKelas:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data kelas' });
     }
 };
 
@@ -162,7 +163,8 @@ exports.getKelasById = async (req, res) => {
 
         res.json({ success: true, data: kelas });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil detail kelas: ' + err.message });
+    console.error('Error getKelasById:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengambil detail kelas' });
     }
 };
 
@@ -183,7 +185,8 @@ exports.getKelasForDropdown = async (req, res) => {
 
         res.json({ success: true, data: rows });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas: ' + err.message });
+    console.error('Error getKelasForDropdown:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas' });
     }
 };
 
@@ -255,7 +258,8 @@ exports.tambahKelas = async (req, res) => {
                 message: `Kelas "${nama_kelas}" sudah ada di tahun ajaran ini`
             });
         }
-        res.status(500).json({ success: false, message: err.message || 'Gagal menambah kelas' });
+        console.error('Error tambahKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah kelas' });
     }
 };
 
@@ -348,7 +352,8 @@ exports.editKelas = async (req, res) => {
 
         res.json({ success: true, message: 'Data kelas berhasil diperbarui' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui data kelas: ' + err.message });
+        console.error('Error editKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui data kelas' });
     }
 };
 
@@ -408,7 +413,8 @@ exports.hapusKelas = async (req, res) => {
 
         res.json({ success: true, message: 'Kelas berhasil dihapus' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus kelas: ' + err.message });
+        console.error('Error hapusKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus kelas' });
     }
 };
 
@@ -468,7 +474,8 @@ exports.setWaliKelas = async (req, res) => {
 
         res.json({ success: true, message: 'Wali kelas berhasil ditetapkan' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menetapkan wali kelas: ' + err.message });
+        console.error('Error setWaliKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal menetapkan wali kelas' });
     }
 };
 

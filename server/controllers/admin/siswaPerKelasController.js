@@ -43,7 +43,8 @@ exports.getSiswaByKelas = async (req, res) => {
         const siswaList = await SiswaPerKelasModel.getSiswaByKelas(id, tahunAjaranId);
         res.json({ success: true, data: siswaList, total: siswaList.length });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa: ' + err.message });
+        console.error('Error getSiswaByKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
     }
 };
 
@@ -65,7 +66,8 @@ exports.getSiswaAvailable = async (req, res) => {
         const siswaList = await SiswaPerKelasModel.getSiswaBelumPunyaKelas(tahunAjaranId, search);
         res.json({ success: true, data: siswaList, total: siswaList.length });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa: ' + err.message });
+        console.error('Error getSiswaAvailable:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
     }
 };
 
@@ -126,7 +128,8 @@ exports.assignSiswaKeKelas = async (req, res) => {
                 await SiswaPerKelasModel.assignSiswaKeKelas(siswaId, kelasId, tahunAjaranId, connection);
                 assignedCount++;
             } catch (err) {
-                skipped.push({ id: siswaId, reason: err.message });
+                console.error(`Error assign siswa ${siswaId}:`, err);
+                skipped.push({ id: siswaId, reason: 'Gagal memproses siswa ini' });
             }
         }
 
@@ -142,9 +145,10 @@ exports.assignSiswaKeKelas = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
-        res.status(500).json({ success: false, message: 'Gagal assign siswa: ' + err.message });
+        console.error('Error assignSiswaKeKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal assign siswa' });
     } finally {
-        connection.release();
+        connection.release(``);
     }
 };
 
@@ -184,6 +188,7 @@ exports.keluarkanSiswaDariKelas = async (req, res) => {
             message: `Siswa "${siswaInKelas.nama_lengkap}" berhasil dikeluarkan dari kelas (data master tetap aman)`
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengeluarkan siswa: ' + err.message });
+        console.error('Error keluarkanSiswaDariKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengeluarkan siswa' });
     }
 };

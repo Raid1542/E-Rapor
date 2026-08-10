@@ -24,7 +24,8 @@ exports.getSiswaMaster = async (req, res) => {
         );
         res.json({ success: true, data: result.data, pagination: result.pagination });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa: ' + err.message });
+        console.error('Error getSiswaMaster:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
     }
 };
 
@@ -40,7 +41,8 @@ exports.getSiswaMasterById = async (req, res) => {
         }
         res.json({ success: true, data: siswa });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil detail siswa: ' + err.message });
+        console.error('Error getSiswaMasterById:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil detail siswa' });
     }
 };
 
@@ -111,7 +113,8 @@ exports.tambahSiswaMaster = async (req, res) => {
                 code: 'DUPLICATE_ENTRY'
             });
         }
-        res.status(500).json({ success: false, message: 'Gagal menambah siswa: ' + err.message });
+        console.error('Error tambahSiswaMaster:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah siswa' });
     }
 };
 
@@ -203,7 +206,8 @@ exports.editSiswaMaster = async (req, res) => {
                 code: 'DUPLICATE_ENTRY'
             });
         }
-        res.status(500).json({ success: false, message: 'Gagal memperbarui data siswa: ' + err.message });
+        console.error('Error editSiswaMaster:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui data siswa' });
     }
 };
 
@@ -238,7 +242,8 @@ exports.hapusSiswaMaster = async (req, res) => {
             message: `Siswa "${existingSiswa.nama_lengkap}" berhasil dihapus (soft delete)`
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus siswa: ' + err.message });
+        console.error('Error hapusSiswaMaster:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus siswa' });
     }
 };
 
@@ -368,7 +373,8 @@ exports.importSiswaMaster = async (req, res) => {
                         reason: `NIS "${trimmedNis}" atau NISN "${trimmedNisn}" sudah terdaftar`
                     });
                 } else {
-                    skipped.push({ row: rowNumber, nama: trimmedNama, reason: 'Gagal menyimpan data: ' + insertErr.message });
+                    console.error(`Error import row ${rowNumber}:`, insertErr);
+                    skipped.push({ row: rowNumber, nama: trimmedNama, reason: 'Gagal menyimpan data' });
                 }
             }
         }
@@ -386,10 +392,11 @@ exports.importSiswaMaster = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
+        console.error('Error importSiswaMaster:', err);
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
-        res.status(500).json({ success: false, message: 'Gagal import siswa: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal import siswa' });
     } finally {
         connection.release();
     }

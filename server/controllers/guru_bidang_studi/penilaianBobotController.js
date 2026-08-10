@@ -125,12 +125,13 @@ exports.getBobotPenilaian = async (req, res) => {
             kelas_list: req.penugasanMapel?.kelas_list || []
         });
     } catch (err) {
+        console.error('Error getBobotPenilaian:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil bobot: ' + err.message
+            message: 'Gagal mengambil bobot'
         });
     }
-};
+}
 
 /**
  * PUT /bobot/:mapelId - Update konfigurasi bobot penilaian untuk mapel dan kelas tertentu.
@@ -217,12 +218,13 @@ exports.updateBobotPenilaian = async (req, res) => {
             recomputed: recomputeResult
         });
     } catch (err) {
+        console.error('Error updateBobotPenilaian:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal menyimpan bobot: ' + err.message
+            message: 'Gagal menyimpan bobot'
         });
     }
-};
+}
 
 // Export untuk keperluan unit testing
 exports._validateKelasId = validateKelasId;

@@ -90,7 +90,8 @@ exports.getAspekKokurikuler = async (req, res) => {
         const aspek = await model.getAspekKokurikuler();
         res.json({ success: true, data: aspek });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil aspek kokurikuler: ' + err.message });
+        console.error('Error getAspekKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil aspek kokurikuler' });
     }
 };
 
@@ -99,7 +100,8 @@ exports.getKomponenPenilaian = async (req, res) => {
         const komponen = await model.getKomponenPenilaian();
         res.json({ success: true, data: komponen });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil komponen penilaian: ' + err.message });
+        console.error('Error getKomponenPenilaian:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil komponen penilaian' });
     }
 };
 
@@ -143,7 +145,8 @@ exports.createAspekKokurikuler = async (req, res) => {
             data: { id_aspek_kokurikuler: result.insertId, kode: kodeAspek, nama: nama.trim(), urutan: nextUrutan }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal membuat aspek kokurikuler: ' + err.message });
+        console.error('Error createAspekKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal membuat aspek kokurikuler' });
     }
 };
 
@@ -197,7 +200,8 @@ exports.getKategoriNilaiAkademik = async (req, res) => {
             mapel_id: mapelId
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil kategori akademik: ' + err.message });
+        console.error('Error getKategoriNilaiAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil kategori akademik' });
     }
 };
 
@@ -256,7 +260,8 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
         const newId = await model.createKategoriAkademik(mapel_id, taAktif.id_tahun_ajaran, kelasId, minNilai, maxNilai, deskripsi.trim(), jenis);
         res.json({ success: true, message: `Kategori akademik untuk ${jenis} berhasil ditambahkan`, id: newId });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menambah kategori: ' + err.message });
+        console.error('Error createKategoriNilaiAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah kategori' });
     }
 };
 
@@ -306,10 +311,6 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
             return res.status(403).json({ success: false, message: `Kategori ini milik periode ${existing.jenis_penilaian}, bukan ${jenis}` });
         }
 
-        /* PERBAIKAN: Hapus pengecekan "Tidak ada perubahan data" di backend. 
-           Frontend sudah menanganinya via hasBatchAkademikChanges(). 
-           Pengecekan di sini sering menyebabkan false positive karena perbedaan tipe data (string vs number). */
-
         const mengajarMapel = await model.cekGuruMengajarMapelDiKelas(userId, existing.mapel_id, kelasId, taAktif.id_tahun_ajaran);
         if (!mengajarMapel) {
             return res.status(403).json({ success: false, message: 'Anda tidak mengajar mata pelajaran ini di kelas Anda' });
@@ -336,7 +337,8 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
 
         res.json({ success: true, message: `Kategori akademik ${jenis} berhasil diperbarui.${warning}` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
+        console.error('Error updateKategoriNilaiAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori' });
     }
 };
 
@@ -380,7 +382,8 @@ exports.deleteKategoriNilaiAkademik = async (req, res) => {
 
         res.json({ success: true, message: `Kategori akademik ${jenis} berhasil dihapus` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus kategori: ' + err.message });
+        console.error('Error deleteKategoriNilaiAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus kategori' });
     }
 };
 
@@ -443,7 +446,8 @@ exports.getKategoriNilaiKokurikuler = async (req, res) => {
             status_pas: taAktif.status_pas
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil kategori kokurikuler: ' + err.message });
+        console.error('Error getKategoriNilaiKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil kategori kokurikuler' });
     }
 };
 
@@ -507,7 +511,8 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
         const newId = await model.createKategoriKokurikuler(id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, gradeClean, deskripsi.trim(), jenis);
         res.json({ success: true, message: `Kategori kokurikuler untuk ${jenis} berhasil ditambahkan`, id: newId });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menambah kategori: ' + err.message });
+        console.error('Error createKategoriNilaiKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah kategori' });
     }
 };
 
@@ -565,8 +570,6 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
             return res.status(403).json({ success: false, code: 'ASPEK_LOCKED', reason: accessCheck.reason, message: accessCheck.message });
         }
 
-        /* PERBAIKAN: Hapus pengecekan "Tidak ada perubahan data" di backend untuk konsistensi. */
-
         const gradeValidation = await validateGradeOrder(existing.id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, gradeClean, minNilai, maxNilai, parseInt(id, 10));
         if (!gradeValidation.valid) {
             return res.status(400).json({ success: false, code: 'INVALID_GRADE_ORDER', message: gradeValidation.message });
@@ -596,7 +599,8 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
 
         res.json({ success: true, message: `Kategori kokurikuler ${jenis} berhasil diperbarui.${warning}` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
+        console.error('Error updateKategoriNilaiKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori' });
     }
 };
 
@@ -638,7 +642,8 @@ exports.deleteKategoriNilaiKokurikuler = async (req, res) => {
 
         res.json({ success: true, message: `Kategori kokurikuler ${jenis} berhasil dihapus` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus kategori: ' + err.message });
+        console.error('Error deleteKategoriNilaiKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus kategori' });
     }
 };
 
@@ -695,7 +700,8 @@ exports.getBobotAkademikByMapel = async (req, res) => {
             jenis_penilaian: jenis
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil bobot: ' + err.message });
+        console.error('Error getBobotAkademikByMapel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil bobot' });
     }
 };
 
@@ -770,7 +776,8 @@ exports.updateBobotAkademikByMapel = async (req, res) => {
 
         res.json({ success: true, message: `Bobot penilaian ${jenis} berhasil disimpan.${warning}` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menyimpan bobot: ' + err.message });
+        console.error('Error updateBobotAkademikByMapel:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan bobot' });
     }
 };
 
@@ -805,7 +812,8 @@ exports.getKategoriDeskripsiRataRata = async (req, res) => {
         const coverage = await model.cekCoverageDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId);
         res.json({ success: true, data: kategoriParsed, coverage, jenis_penilaian: 'PTS' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil kategori deskripsi rata-rata: ' + err.message });
+        console.error('Error getKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil kategori deskripsi rata-rata' });
     }
 };
 
@@ -854,7 +862,8 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
         const newId = await model.createKategoriDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, deskripsi.trim());
         res.json({ success: true, message: 'Kategori deskripsi rata-rata berhasil ditambahkan', id: newId });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menambah kategori: ' + err.message });
+        console.error('Error createKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah kategori' });
     }
 };
 
@@ -902,8 +911,6 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan di kelas Anda' });
         }
 
-        /* PERBAIKAN: Hapus pengecekan "Tidak ada perubahan data" di backend untuk konsistensi. */
-
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai, parseInt(id, 10));
         if (overlaps.length > 0) {
             return res.status(400).json({ success: false, code: 'RANGE_OVERLAP', message: `Range sudah digunakan oleh kategori "${overlaps[0].deskripsi}".` });
@@ -921,7 +928,8 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
 
         res.json({ success: true, message: `Kategori deskripsi rata-rata berhasil diperbarui.${warning}` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
+        console.error('Error updateKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori' });
     }
 };
 
@@ -951,7 +959,8 @@ exports.deleteKategoriDeskripsiRataRata = async (req, res) => {
         await model.deleteKategoriDeskripsiRataRata(id, kelasId);
         res.json({ success: true, message: 'Kategori deskripsi rata-rata berhasil dihapus' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus kategori: ' + err.message });
+        console.error('Error deleteKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus kategori' });
     }
 };
 
@@ -1026,7 +1035,8 @@ exports.saveBatchKategoriDeskripsiRataRata = async (req, res) => {
 
         res.json({ success: true, message: `${categories.length} kategori deskripsi rata-rata berhasil disimpan.${warning}` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menyimpan: ' + err.message });
+        console.error('Error saveBatchKategoriDeskripsiRataRata:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan' });
     }
 };
 

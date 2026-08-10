@@ -138,9 +138,8 @@ class SiswaModel {
             ]);
             return result.insertId;
         } catch (err) {
-            console.error("=== ERROR DETAIL DARI DATABASE (createSiswa) ===");
-            console.error(err);
-            throw new Error('Gagal membuat data siswa: ' + err.message);
+            console.error('DB Error createSiswa:', err);
+            throw new Error('Gagal membuat data siswa');
         }
     }
 
@@ -163,9 +162,8 @@ class SiswaModel {
             ]);
             return result.affectedRows > 0;
         } catch (err) {
-            console.error("=== ERROR DETAIL DARI DATABASE (updateSiswa) ===");
-            console.error(err);
-            throw new Error('Gagal mengupdate data siswa: ' + err.message);
+            console.error('DB Error updateSiswa:', err);
+            throw new Error('Gagal mengupdate data siswa');
         }
     }
 
@@ -177,6 +175,7 @@ class SiswaModel {
             const [result] = await db.execute(QUERY_DELETE_SISWA, [id]);
             return result.affectedRows > 0;
         } catch (err) {
+            console.error('DB Error deleteSiswa:', err);
             throw new Error('Gagal menghapus data siswa');
         }
     }

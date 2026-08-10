@@ -80,7 +80,8 @@ exports.getTahunAjaran = async (req, res) => {
 
         res.json({ success: true, data: formattedData, total: formattedData.length });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memuat data tahun ajaran: ' + err.message });
+        console.error('Error getTahunAjaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal memuat data tahun ajaran' });
     }
 };
 
@@ -110,7 +111,8 @@ exports.getSemesterList = async (req, res) => {
 
         res.json({ success: true, data: formattedData, total: formattedData.length });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memuat data semester: ' + err.message });
+        console.error('Error getSemesterList:', err);
+        res.status(500).json({ success: false, message: 'Gagal memuat data semester' });
     }
 };
 
@@ -193,7 +195,8 @@ exports.tambahTahunAjaran = async (req, res) => {
             connection.release();
         }
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message || 'Gagal menambah tahun ajaran' });
+        console.error('Error tambahTahunAjaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah tahun ajaran' });
     }
 };
 
@@ -297,9 +300,10 @@ exports.updateTahunAjaran = async (req, res) => {
 
         res.json({ success: true, message: 'Data tahun ajaran berhasil diperbarui.' });
     } catch (err) {
+        console.error('Error updateTahunAjaran:', err);
         res.status(500).json({
             success: false,
-            message: err.message || 'Gagal memperbarui data tahun ajaran'
+            message: 'Gagal memperbarui data tahun ajaran'
         });
     }
 };
@@ -463,9 +467,10 @@ exports.gantiSemester = async (req, res) => {
             connection.release();
         }
     } catch (err) {
+        console.error('Error gantiSemester:', err);
         res.status(500).json({
             success: false,
-            message: `Gagal mengganti semester: ${err.message}`,
+            message: 'Gagal mengganti semester',
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }

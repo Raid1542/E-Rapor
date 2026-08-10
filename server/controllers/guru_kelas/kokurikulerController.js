@@ -290,7 +290,8 @@ exports.getNilaiKokurikuler = async (req, res) => {
             tahunAjaranId: semesterId
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Error getNilaiKokurikuler:', error);
+        res.status(500).json({ success: false, message: 'Gagal mengambil nilai kokurikuler' });
     }
 };
 
@@ -326,6 +327,7 @@ exports.getNilaiKokurikulerBySiswa = async (req, res) => {
 
         res.json({ success: true, data: rows });
     } catch (err) {
+        console.error('Error getNilaiKokurikulerBySiswa:', err);
         res.status(500).json({ success: false, message: 'Gagal mengambil data kokurikuler.' });
     }
 };
@@ -497,7 +499,8 @@ exports.updateNilaiKokurikuler = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai: ' + err.message });
+        console.error('Error updateNilaiKokurikuler:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai' });
     }
 };
 
@@ -521,7 +524,8 @@ exports.getJudulProyek = async (req, res) => {
         const proyek = await proyekModel.getJudulProyekByKelas(kelasId, taAktif.id_tahun_ajaran);
         res.json({ success: true, data: proyek || { id_judul_proyek: null, judul: '' } });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil judul proyek: ' + err.message });
+        console.error('Error getJudulProyek:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil judul proyek' });
     }
 };
 
@@ -567,10 +571,11 @@ exports.saveJudulProyek = async (req, res) => {
             data: result
         });
     } catch (err) {
+        console.error('Error saveJudulProyek:', err);
         if (err.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, message: 'Judul proyek sudah ada untuk kelas ini' });
         }
-        res.status(500).json({ success: false, message: 'Gagal menyimpan judul proyek: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal menyimpan judul proyek' });
     }
 };
 
@@ -765,9 +770,10 @@ exports.downloadTemplateKokurikuler = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
+        console.error('Error downloadTemplateKokurikuler:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal membuat template: ' + err.message
+            message: 'Gagal membuat template'
         });
     }
 };
@@ -1352,9 +1358,10 @@ exports.importNilaiKokurikuler = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
+        console.error('Error importNilaiKokurikuler:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengimport nilai: ' + err.message
+            message: 'Gagal mengimport nilai'
         });
     } finally {
         connection.release();
@@ -1428,9 +1435,10 @@ exports.cekStatusKategoriKokurikuler = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error cekStatusKategoriKokurikuler:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengecek status kategori: ' + err.message
+            message: 'Gagal mengecek status kategori'
         });
     }
 };

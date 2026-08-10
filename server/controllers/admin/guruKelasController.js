@@ -64,7 +64,8 @@ exports.getWaliKelas = async (req, res) => {
         const waliKelas = rows.length > 0 ? rows[0] : null;
         res.json({ success: true, data: waliKelas });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil data wali kelas: ' + err.message });
+    console.error('Error getWaliKelas:', err);
+    res.status(500).json({ message: 'Gagal mengambil data wali kelas' });
     }
 };
 
@@ -126,7 +127,8 @@ exports.setWaliKelas = async (req, res) => {
 
         res.json({ success: true, message: 'Wali kelas berhasil ditetapkan' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menetapkan wali kelas: ' + err.message });
+        console.error('Error setWaliKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal menetapkan wali kelas' });
     }
 };
 
@@ -144,6 +146,7 @@ exports.getGuruKelasList = async (req, res) => {
         );
         res.json({ success: true, data: rows });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil daftar guru kelas: ' + err.message });
+    console.error('Error getGuruKelasList:', err);
+    res.status(500).json({ message: 'Gagal mengambil daftar guru kelas' });
     }
 };

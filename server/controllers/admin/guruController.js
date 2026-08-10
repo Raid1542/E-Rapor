@@ -16,10 +16,13 @@ const fs = require('fs');
 const getFullPhotoUrl = (fotoPath) => {
     if (!fotoPath) return null;
     if (fotoPath.startsWith('http')) return fotoPath;
+    
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    
     if (fotoPath.startsWith('/uploads/')) {
-        return `http://localhost:${process.env.PORT || 5000}${fotoPath}`;
+        return `${baseUrl}${fotoPath}`;
     }
-    return `http://localhost:${process.env.PORT || 5000}/uploads/${fotoPath.replace(/^\/+/, '')}`;
+    return `${baseUrl}/uploads/${fotoPath.replace(/^\/+/, '')}`;
 };
 
 /**
@@ -47,7 +50,8 @@ exports.getGuru = async (req, res) => {
 
         res.json({ success: true, data: guruList });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil data guru: ' + err.message });
+        console.error('Error getGuru:', err);
+        res.status(500).json({ message: 'Gagal mengambil data guru' });
     }
 };
 
@@ -71,7 +75,8 @@ exports.getGuruById = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil detail guru: ' + err.message });
+    console.error('Error getGuruById:', err);
+    res.status(500).json({ message: 'Gagal mengambil detail guru' });
     }
 };
 
@@ -116,7 +121,8 @@ exports.tambahGuru = async (req, res) => {
             }
             return res.status(400).json({ message: `${duplicateField} sudah terdaftar. Silakan gunakan data yang berbeda.` });
         }
-        res.status(500).json({ message: 'Gagal menambah guru: ' + err.message });
+        console.error('Error tambahGuru:', err);
+        res.status(500).json({ message: 'Gagal menambah guru' });
     }
 };
 
@@ -161,7 +167,8 @@ exports.editGuru = async (req, res) => {
             }
             return res.status(400).json({ message: `${duplicateField} sudah terdaftar. Silakan gunakan data yang berbeda.` });
         }
-        res.status(500).json({ message: 'Gagal memperbarui data guru: ' + err.message });
+        console.error('Error editGuru:', err);
+        res.status(500).json({ message: 'Gagal memperbarui data guru' });
     }
 };
 
@@ -328,7 +335,8 @@ exports.importGuru = async (req, res) => {
     } catch (err) {
         await connection.rollback();
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        res.status(500).json({ success: false, message: err.message || 'Gagal mengimport data guru' });
+        console.error('Error importGuru:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengimport data guru' });
     } finally {
         connection.release();
     }

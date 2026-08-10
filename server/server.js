@@ -22,9 +22,11 @@ const PORT = process.env.PORT || 5000;
 const UPLOADS_PATH = path.join(__dirname, 'public', 'uploads');
 const TEMPLATES_PATH = path.join(__dirname, 'public', 'templates');
 
-// Konfigurasi opsi CORS
+// Konfigurasi opsi CORS (support multi-origin via env)
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000').split(',');
+
 const corsOptions = {
-  origin: 'http://localhost:3000',
+  origin: allowedOrigins,
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 };
@@ -64,21 +66,23 @@ app.use('/api/guru-kelas', guruKelasRoutes);
 app.use('/api/guru-bidang-studi', guruBidangStudiRoutes);
 app.use('/api/sekolah', sekolahPublicRoutes);
 
-// Endpoint debug untuk memeriksa isi folder uploads
-app.get('/debug/uploads', (req, res) => {
-  try {
-    const files = fs.readdirSync(UPLOADS_PATH);
-    
-    res.json({
-      uploadsPath: UPLOADS_PATH,
-      files: files,
-      fileCount: files.length,
-      exists: fs.existsSync(UPLOADS_PATH)
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Endpoint debug HANYA aktif di mode development
+if (process.env.NODE_ENV === 'development') {
+  app.get('/debug/uploads', (req, res) => {
+    try {
+      const files = fs.readdirSync(UPLOADS_PATH);
+      
+      res.json({
+        uploadsPath: UPLOADS_PATH,
+        files: files,
+        fileCount: files.length,
+        exists: fs.existsSync(UPLOADS_PATH)
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
 
 // Endpoint root untuk health check aplikasi
 app.get('/', (req, res) => {

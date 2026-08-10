@@ -7,7 +7,7 @@
  */
 
 const db = require('../../config/db');
-const bcrypt = require('bcrypt');
+const hashUtils = require('../../utils/hash');
 const guruModel = require('../../models/admin/guruModel');
 
 /**
@@ -67,6 +67,7 @@ exports.editProfil = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error editProfil:', err);
         res.status(500).json({ message: 'Gagal memperbarui profil' });
     }
 };
@@ -95,14 +96,14 @@ exports.gantiPassword = async (req, res) => {
             return res.status(404).json({ message: 'User tidak ditemukan' });
         }
 
-        // Verifikasi password lama dengan bcrypt
-        const isMatch = await bcrypt.compare(oldPassword, rows[0].password);
+                // Verifikasi password lama dengan hashUtils
+        const isMatch = await hashUtils.comparePassword(oldPassword, rows[0].password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Kata sandi lama salah' });
         }
 
         // Hash password baru dan update ke database
-        const newHashedPassword = await bcrypt.hash(newPassword, 10);
+        const newHashedPassword = await hashUtils.hashPassword(newPassword);
         await db.execute('UPDATE user SET password = ? WHERE id_user = ?', [
             newHashedPassword,
             userId
@@ -110,6 +111,7 @@ exports.gantiPassword = async (req, res) => {
 
         res.json({ message: 'Kata sandi berhasil diubah' });
     } catch (err) {
+        console.error('Error gantiPassword:', err);
         res.status(500).json({ message: 'Gagal mengubah kata sandi' });
     }
 };
@@ -139,6 +141,7 @@ exports.uploadFotoProfil = async (req, res) => {
             fotoPath
         });
     } catch (err) {
+        console.error('Error uploadFotoProfil:', err);
         res.status(500).json({ message: 'Gagal mengupload foto' });
     }
 };

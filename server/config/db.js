@@ -33,13 +33,15 @@ pool.getConnection()
         process.exit(1);
     });
 
-// Verifikasi eksekusi query dasar
-pool.execute('SELECT 1')
-    .then(() => {
-        console.log('Query test berhasil');
-    })
-    .catch((err) => {
-        console.error('Query test gagal:', err.message);
-    });
+// Verifikasi eksekusi query dasar (hanya di development)
+if (process.env.NODE_ENV === 'development') {
+    pool.execute('SELECT 1')
+        .then(() => {
+            console.log('Query test berhasil');
+        })
+        .catch((err) => {
+            console.error('Query test gagal:', err.message);
+        });
+}
 
 module.exports = pool;

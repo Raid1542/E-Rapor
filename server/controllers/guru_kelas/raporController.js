@@ -271,7 +271,8 @@ exports.generateRaporPDF = async (req, res) => {
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.send(buf);
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal membuat rapor: ' + error.message });
+        console.error('Error generateRaporPDF:', error);
+        res.status(500).json({ success: false, message: 'Gagal membuat rapor' });
     }
 };
 
@@ -428,8 +429,9 @@ exports.generateRaporBulk = async (req, res) => {
 
         await archive.finalize();
     } catch (error) {
+        console.error('Error generateRaporBulk:', error);
         if (!res.headersSent) {
-            res.status(500).json({ success: false, message: 'Gagal membuat rapor bulk: ' + error.message });
+            res.status(500).json({ success: false, message: 'Gagal membuat rapor bulk' });
         }
     }
 };
@@ -639,13 +641,13 @@ async function generateRaporData(
     const i = jenisNorm === 'PTS' ? (abs[0]?.izin_pts || 0) : (abs[0]?.izin_total || 0);
     const a = jenisNorm === 'PTS' ? (abs[0]?.alpha_pts || 0) : (abs[0]?.alpha_total || 0);
 
-    // Ambil data ekstrakurikuler siswa (maksimal 4 ekskul)
+    // Ambil data ekstrakurikuler siswa (maksimal 3 ekskul - sesuai validasi di ekskulController)
     const [ekskulRows] = await db.execute(
         `SELECT e.nama_ekskul, pe.deskripsi 
         FROM peserta_ekstrakurikuler pe 
         JOIN ekstrakurikuler e ON pe.ekskul_id = e.id_ekskul 
         WHERE pe.siswa_id = ? AND pe.tahun_ajaran_id = ? 
-        LIMIT 4`,
+        LIMIT 3`,
         [siswaId, semesterId]
     );
 
@@ -655,8 +657,6 @@ async function generateRaporData(
     const dekskul2 = ekskulRows[1]?.deskripsi || '–';
     const ekskul3 = ekskulRows[2]?.nama_ekskul || '–';
     const dekskul3 = ekskulRows[2]?.deskripsi || '–';
-    const ekskul4 = ekskulRows[3]?.nama_ekskul || '–';
-    const dekskul4 = ekskulRows[3]?.deskripsi || '–';
 
     // Ambil catatan wali kelas
     const [catatan] = await db.execute(
@@ -740,8 +740,6 @@ async function generateRaporData(
         dekskul2,
         ekskul3,
         dekskul3,
-        ekskul4,
-        dekskul4,
         cttwalikelas,
         tingkat,
         naikkelas: naikKelas

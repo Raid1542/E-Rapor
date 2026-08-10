@@ -50,7 +50,8 @@ exports.getEkskul = async (req, res) => {
         const ekskulList = await ekstrakurikulerModel.getAllByTahunAjaran(validation.data.semester_id);
         res.json({ success: true, data: ekskulList, semester_info: validation.data });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil data ekstrakurikuler: ' + err.message });
+        console.error('Error getEkskul:', err);
+        res.status(500).json({ message: 'Gagal mengambil data ekstrakurikuler' });
     }
 };
 
@@ -100,7 +101,8 @@ exports.tambahEkskul = async (req, res) => {
 
         res.status(201).json({ success: true, message: 'Ekstrakurikuler berhasil ditambahkan', id: ekskulId });
     } catch (err) {
-        res.status(500).json({ message: err.message || 'Gagal menambah ekstrakurikuler' });
+        console.error('Error tambahEkskul:', err);
+        res.status(500).json({ message: 'Gagal menambah ekstrakurikuler' });
     }
 };
 
@@ -165,7 +167,8 @@ exports.editEkskul = async (req, res) => {
 
         res.json({ success: true, message: 'Data ekstrakurikuler berhasil diperbarui' });
     } catch (err) {
-        res.status(500).json({ message: err.message || 'Gagal memperbarui ekstrakurikuler' });
+        console.error('Error editEkskul:', err);
+        res.status(500).json({ message: 'Gagal memperbarui ekstrakurikuler' });
     }
 };
 
@@ -199,7 +202,8 @@ exports.hapusEkskul = async (req, res) => {
 
         res.json({ success: true, message: 'Ekstrakurikuler berhasil dihapus' });
     } catch (err) {
-        res.status(500).json({ message: err.message || 'Gagal menghapus ekstrakurikuler' });
+        console.error('Error hapusEkskul:', err);
+        res.status(500).json({ message: 'Gagal menghapus ekstrakurikuler' });
     }
 };
 
@@ -242,7 +246,8 @@ exports.getPesertaByEkskul = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil daftar peserta ekstrakurikuler: ' + err.message });
+        console.error('Error getPesertaByEkskul:', err);
+        res.status(500).json({ message: 'Gagal mengambil daftar peserta ekstrakurikuler' });
     }
 };
 
@@ -267,7 +272,8 @@ exports.getEkskulBySiswa = async (req, res) => {
         const ekskulList = await ekstrakurikulerModel.getEkskulSiswa(siswaIdNum, validation.data.semester_id);
         res.json({ success: true, data: ekskulList, semester_info: validation.data });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil data ekstrakurikuler siswa: ' + err.message });
+        console.error('Error getEkskulBySiswa:', err);
+        res.status(500).json({ message: 'Gagal mengambil data ekstrakurikuler siswa' });
     }
 };
 
@@ -279,6 +285,7 @@ exports.getPembinaDropdown = async (req, res) => {
         const pembinaList = await ekstrakurikulerModel.getAllPembinaAktif();
         res.json({ success: true, data: pembinaList });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil data pembina: ' + err.message });
+        console.error('Error getPembinaDropdown:', err);
+        res.status(500).json({ message: 'Gagal mengambil data pembina' });
     }
 };

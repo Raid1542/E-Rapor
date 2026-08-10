@@ -3,11 +3,6 @@
  * Fungsi: Controller CRUD mata pelajaran per semester (validasi kode/nama/urutan).
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 1 Oktober 2025
- * Update: 🐛 FIX BUG "Cannot read properties of undefined (reading 'tahun_ajaran_id')"
- *         Penyebab: mapelModel.getById() mengembalikan SATU OBJEK (atau null),
- *         tapi controller memperlakukannya seolah ARRAY (existingRows.length,
- *         existingRows[0]). Diperbaiki di getMataPelajaranById, editMataPelajaran,
- *         dan hapusMataPelajaran. Tidak ada perubahan logika lain.
  */
 
 const mapelModel = require('../../models/admin/mapelModel');
@@ -62,15 +57,13 @@ exports.getMataPelajaran = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data mata pelajaran: ' + err.message });
+    console.error('Error getMataPelajaran:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data mata pelajaran' });
     }
 };
 
 /**
  * Ambil detail mata pelajaran berdasarkan ID.
- *
- * ✅ FIX: mapelModel.getById() mengembalikan SATU OBJEK (atau null),
- *    bukan array — jadi tidak perlu .length atau [0] lagi.
  */
 exports.getMataPelajaranById = async (req, res) => {
     try {
@@ -88,7 +81,8 @@ exports.getMataPelajaranById = async (req, res) => {
 
         res.json({ success: true, data: mapel });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil detail mata pelajaran: ' + err.message });
+        console.error('Error getMataPelajaranById:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil detail mata pelajaran' });
     }
 };
 
@@ -177,17 +171,13 @@ exports.tambahMataPelajaran = async (req, res) => {
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({ success: false, message: 'Kode, nama, atau urutan rapor sudah terdaftar di semester ini.' });
         }
-        res.status(500).json({ success: false, message: err.message || 'Gagal menambah mata pelajaran' });
+        console.error('Error tambahMataPelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah mata pelajaran' });
     }
 };
 
 /**
  * Update data mata pelajaran.
- *
- * ✅ FIX: mapelModel.getById() mengembalikan SATU OBJEK (atau null).
- *    Sebelumnya kode memperlakukan hasilnya sebagai array
- *    (existingRows.length, existingRows[0]) sehingga oldData selalu
- *    undefined dan menyebabkan crash saat membaca oldData.tahun_ajaran_id.
  */
 exports.editMataPelajaran = async (req, res) => {
     try {
@@ -200,11 +190,6 @@ exports.editMataPelajaran = async (req, res) => {
 
         const { kode_mapel, nama_mapel, jenis, kurikulum, urutan_rapor } = req.body;
 
-        // ── Sebelumnya (BUG): ─────────────────────────────────────────────
-        // const existingRows = await mapelModel.getById(idNum);
-        // if (existingRows.length === 0) { ... }   // objek tidak punya .length
-        // const oldData = existingRows[0];         // selalu undefined
-        // ── Sesudah (FIX): ────────────────────────────────────────────────
         const oldData = await mapelModel.getById(idNum);
         if (!oldData) {
             return res.status(404).json({ success: false, message: 'Mata pelajaran tidak ditemukan.' });
@@ -284,15 +269,13 @@ exports.editMataPelajaran = async (req, res) => {
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({ success: false, message: 'Kode, nama, atau urutan rapor sudah terdaftar.' });
         }
-        res.status(500).json({ success: false, message: err.message || 'Gagal memperbarui mata pelajaran' });
+        console.error('Error editMataPelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui mata pelajaran' });
     }
 };
 
 /**
  * Hapus mata pelajaran.
- *
- * ✅ FIX: mapelModel.getById() mengembalikan SATU OBJEK (atau null),
- *    bukan array — sama seperti fix di editMataPelajaran di atas.
  */
 exports.hapusMataPelajaran = async (req, res) => {
     try {
@@ -332,6 +315,7 @@ exports.hapusMataPelajaran = async (req, res) => {
 
         res.json({ success: true, message: 'Mata pelajaran berhasil dihapus' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus mata pelajaran: ' + err.message });
+        console.error('Error hapusMataPelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus mata pelajaran' });
     }
 };

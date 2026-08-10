@@ -186,9 +186,10 @@ exports.getRekapanNilai = async (req, res) => {
             mapel_list: mapelList
         });
     } catch (error) {
+        console.error('Error getRekapanNilai:', error);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat rekapan: ' + error.message
+            message: 'Gagal memuat rekapan nilai'
         });
     }
 };
@@ -434,9 +435,10 @@ exports.exportRekapanNilaiExcel = async (req, res) => {
         await workbook.xlsx.write(res);
         res.end();
     } catch (err) {
+        console.error('Error exportRekapanNilaiExcel:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal export Excel: ' + err.message
+            message: 'Gagal export Excel'
         });
     }
 };

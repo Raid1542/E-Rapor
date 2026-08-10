@@ -18,7 +18,8 @@ exports.getPembinaEkskul = async (req, res) => {
         const pembinaList = await pembinaEkskulModel.getAll();
         res.json({ success: true, data: pembinaList });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengambil data pembina: ' + err.message });
+        console.error('Error getPembinaEkskul:', err);
+        res.status(500).json({ message: 'Gagal mengambil data pembina' });
     }
 };
 
@@ -41,7 +42,8 @@ exports.getPembinaEkskulById = async (req, res) => {
 
         res.json({ success: true, data: pembina });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil detail pembina: ' + err.message });
+        console.error('Error getPembinaEkskulById:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil detail pembina' });
     }
 };
 
@@ -143,7 +145,8 @@ exports.tambahPembinaEkskul = async (req, res) => {
                 message: `${duplicateField} sudah terdaftar. Silakan gunakan data yang berbeda.`
             });
         }
-        res.status(500).json({ success: false, message: 'Gagal menambah pembina: ' + err.message });
+        console.error('Error tambahPembinaEkskul:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah pembina' });
     }
 };
 
@@ -215,7 +218,8 @@ exports.editPembinaEkskul = async (req, res) => {
 
         res.json({ success: true, message: 'Data pembina berhasil diperbarui' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui data pembina: ' + err.message });
+        console.error('Error editPembinaEkskul:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui data pembina' });
     }
 };
 
@@ -353,8 +357,9 @@ exports.importPembinaEkskul = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
+        console.error('Error importPembinaEkskul:', err);
         if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        res.status(400).json({ success: false, message: err.message || 'Gagal mengimport data' });
+        res.status(400).json({ success: false, message: 'Gagal mengimport data pembina' });
     } finally {
         connection.release();
     }

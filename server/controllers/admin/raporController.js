@@ -178,9 +178,10 @@ exports.getKelasByTahunAjaran = async (req, res) => {
 
         res.json({ success: true, data: rows, semester_info: semesterInfo });
     } catch (err) {
+        console.error('Error getKelasByTahunAjaran:', err);
         res.status(500).json({
             success: false,
-            message: `Gagal memuat daftar kelas: ${err.message}. Silakan coba lagi.`
+            message: 'Gagal memuat daftar kelas. Silakan coba lagi.'
         });
     }
 };
@@ -251,9 +252,10 @@ exports.getDaftarSiswaUntukRapor = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error getDaftarSiswaUntukRapor:', err);
         res.status(500).json({
             success: false,
-            message: `Gagal memuat data siswa: ${err.message}. Silakan coba lagi.`
+            message: 'Gagal memuat data siswa. Silakan coba lagi.'
         });
     }
 };
@@ -358,9 +360,10 @@ exports.aturStatusPenilaian = async (req, res) => {
             }
         });
     } catch (error) {
+        console.error('Error aturStatusPenilaian:', error);
         res.status(500).json({
             success: false,
-            message: `Gagal mengubah status penilaian: ${error.message}. Silakan coba lagi.`
+            message: 'Gagal mengubah status penilaian. Silakan coba lagi.'
         });
     }
 };
@@ -452,9 +455,10 @@ exports.arsipkanRapor = async (req, res) => {
             error_count: errorCount
         });
     } catch (err) {
+        console.error('Error arsipkanRapor:', err);
         res.status(500).json({
             success: false,
-            message: `Gagal mengarsipkan rapor: ${err.message}. Silakan coba lagi.`
+            message: 'Gagal mengarsipkan rapor. Silakan coba lagi.'
         });
     }
 };

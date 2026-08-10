@@ -67,9 +67,10 @@ exports.getKategoriAkademik = async (req, res) => {
             jenis_penilaian: jenisPenilaianAktif
         });
     } catch (err) {
+        console.error('Error getKategoriAkademik:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil kategori akademik: ' + err.message
+            message: 'Gagal mengambil kategori akademik'
         });
     }
 };
@@ -159,7 +160,8 @@ exports.createKategoriAkademik = async (req, res) => {
             jenis_penilaian: jenisPenilaianAktif
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menambah kategori: ' + err.message });
+        console.error('Error createKategoriAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah kategori' });
     }
 };
 
@@ -253,7 +255,8 @@ exports.updateKategoriAkademik = async (req, res) => {
             mapel: req.penugasanMapel?.nama_mapel
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori: ' + err.message });
+        console.error('Error updateKategoriAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui kategori' });
     }
 };
 
@@ -294,6 +297,7 @@ exports.deleteKategoriAkademik = async (req, res) => {
             mapel: req.penugasanMapel?.nama_mapel
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus kategori: ' + err.message });
+        console.error('Error deleteKategoriAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus kategori' });
     }
 };

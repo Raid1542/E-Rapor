@@ -165,7 +165,8 @@ exports.getMapelForGuruKelas = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar mata pelajaran: ' + err.message });
+        console.error('Error getMapelForGuruKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar mata pelajaran' });
     }
 };
 
@@ -293,7 +294,8 @@ exports.getNilaiByMapel = async (req, res) => {
             bobotSudahDiatur
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data nilai: ' + err.message });
+        console.error('Error getNilaiByMapel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data nilai' });
     }
 };
 
@@ -462,7 +464,8 @@ exports.updateNilaiKomponen = async (req, res) => {
             jenis_penilaian: jenis
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai komponen', error: err.message });
+        console.error('Error updateNilaiKomponen:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai komponen' });
     }
 };
 
@@ -516,7 +519,8 @@ exports.simpanNilai = async (req, res) => {
 
         return res.status(200).json({ success: true, message: 'Nilai berhasil disimpan', data: saved });
     } catch (controllerError) {
-        return res.status(500).json({ success: false, message: 'Gagal menyimpan nilai: ' + (controllerError.message || controllerError) });
+        console.error('Error simpanNilai:', controllerError);
+        return res.status(500).json({ success: false, message: 'Gagal menyimpan nilai' });
     }
 };
 
@@ -563,6 +567,7 @@ exports.updateNilaiRapor = async (req, res) => {
             data: { siswa_id: siswaId, mapel_id: mapelId, nilai_rapor: nilaiRaporInt, deskripsi: deskripsi || '' }
         });
     } catch (err) {
+        console.error('Error updateNilaiRapor:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui nilai rapor' });
     }
 };
@@ -650,7 +655,8 @@ exports.eksporNilaiExcel = async (req, res) => {
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengekspor data ke Excel' });
+        console.error('Error eksporNilaiExcel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengekspor data ke Excel' });
     }
 };
 
@@ -863,7 +869,8 @@ exports.downloadTemplateNilai = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal membuat template: ' + err.message });
+        console.error('Error downloadTemplateNilai:', err);
+        res.status(500).json({ success: false, message: 'Gagal membuat template' });
     }
 };
 
@@ -1289,7 +1296,8 @@ exports.importNilaiExcel = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
-        res.status(500).json({ success: false, message: 'Gagal mengimport nilai: ' + err.message });
+        console.error('Error importNilaiExcel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengimport nilai' });
     } finally {
         connection.release();
     }
@@ -1339,7 +1347,8 @@ exports.cekStatusKategoriAkademik = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengecek status kategori: ' + err.message });
+        console.error('Error cekStatusKategoriAkademik:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengecek status kategori' });
     }
 };
 

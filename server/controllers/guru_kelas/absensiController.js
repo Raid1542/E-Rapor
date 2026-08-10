@@ -117,9 +117,10 @@ exports.getAbsensiSiswa = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error getAbsensiSiswa:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil data absensi: ' + err.message
+            message: 'Gagal mengambil data absensi'
         });
     }
 };
@@ -204,9 +205,10 @@ exports.upsertAbsensi = async (req, res) => {
 
         res.json({ success: true, message: `Absensi ${jenis} berhasil disimpan` });
     } catch (err) {
+        console.error('Error upsertAbsensi:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal menyimpan absensi: ' + err.message
+            message: 'Gagal menyimpan absensi'
         });
     }
 };
@@ -379,7 +381,8 @@ exports.downloadTemplateAbsensi = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal membuat template: ' + err.message });
+        console.error('Error downloadTemplateAbsensi:', err);
+        res.status(500).json({ success: false, message: 'Gagal membuat template' });
     }
 };
 
@@ -746,7 +749,8 @@ exports.importAbsensiExcel = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
-        res.status(500).json({ success: false, message: 'Gagal mengimport absensi: ' + err.message });
+        console.error('Error importAbsensiExcel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengimport absensi' });
     } finally {
         connection.release();
     }

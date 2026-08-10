@@ -53,7 +53,8 @@ exports.getKelasByMapel = async (req, res) => {
 
         res.json({ success: true, data: rows });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas: ' + err.message });
+        console.error('Error getKelasByMapel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas' });
     }
 };
 
@@ -76,7 +77,8 @@ exports.getDaftarMapel = async (req, res) => {
 
         res.json({ success: true, data: rows });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar mata pelajaran: ' + err.message });
+        console.error('Error getDaftarMapel:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar mata pelajaran' });
     }
 };
 
@@ -102,7 +104,8 @@ exports.getDaftarKelas = async (req, res) => {
             data: kelasRows.map(row => ({ kelas_id: row.id_kelas, nama_kelas: row.nama_kelas }))
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas: ' + err.message });
+        console.error('Error getDaftarKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil daftar kelas' });
     }
 };
 
@@ -116,7 +119,8 @@ exports.getKomponenPenilaian = async (req, res) => {
         );
         res.json({ success: true, data: komponen });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil komponen: ' + err.message });
+        console.error('Error getKomponenPenilaian:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil komponen' });
     }
 };
 
@@ -143,6 +147,7 @@ exports.getTahunAjaranAktif = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil tahun ajaran aktif: ' + err.message });
+        console.error('Error getTahunAjaranAktif:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil tahun ajaran aktif' });
     }
 };

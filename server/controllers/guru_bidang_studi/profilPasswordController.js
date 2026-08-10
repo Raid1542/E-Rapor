@@ -6,7 +6,7 @@
  */
 
 const db = require('../../config/db');
-const bcrypt = require('bcrypt');
+const hashUtils = require('../../utils/hash');
 
 // Ambil data profil guru bidang studi lengkap
 exports.getProfil = async (req, res) => {
@@ -43,7 +43,7 @@ exports.getProfil = async (req, res) => {
         res.json({ success: true, user });
     } catch (err) {
         console.error('Error getProfil:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil profil: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal mengambil profil' });
     }
 };
 
@@ -114,7 +114,7 @@ exports.editProfil = async (req, res) => {
         res.json({ success: true, message: 'Profil berhasil diperbarui', user });
     } catch (err) {
         console.error('Error editProfil:', err);
-        res.status(500).json({ success: false, message: 'Gagal memperbarui profil: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal memperbarui profil' });
     }
 };
 
@@ -138,13 +138,13 @@ exports.gantiPassword = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
         }
 
-        const isMatch = await bcrypt.compare(oldPassword, rows[0].password);
+        const isMatch = await hashUtils.comparePassword(oldPassword, rows[0].password);
 
         if (!isMatch) {
             return res.status(400).json({ success: false, message: 'Kata sandi lama salah' });
         }
 
-        const newHashedPassword = await bcrypt.hash(newPassword, 10);
+        const newHashedPassword = await hashUtils.hashPassword(newPassword);
         await db.execute('UPDATE user SET password = ? WHERE id_user = ?', [newHashedPassword, userId]);
 
         res.json({ success: true, message: 'Kata sandi berhasil diubah' });

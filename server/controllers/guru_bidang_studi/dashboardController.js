@@ -357,6 +357,7 @@ exports.getDashboardData = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memuat data dashboard: ' + err.message });
+        console.error('Error getDashboardData:', err);
+        res.status(500).json({ success: false, message: 'Gagal memuat data dashboard' });
     }
 };

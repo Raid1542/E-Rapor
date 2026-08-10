@@ -35,10 +35,10 @@ exports.getTahunAjaranAktif = async (req, res) => {
             data: rows[0]
         });
     } catch (err) {
+        console.error('Error getTahunAjaranAktif:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil tahun ajaran aktif',
-            error: err.message
+            message: 'Gagal mengambil tahun ajaran aktif'
         });
     }
 };

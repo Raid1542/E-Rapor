@@ -115,9 +115,12 @@ const login = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error saat login:', err); // Log ke terminal server biar kamu bisa debug
         return res.status(500).json({
             success: false,
-            message: 'Terjadi kesalahan server: ' + err.message
+            message: 'Terjadi kesalahan pada server',
+            // Hanya tampilkan detail error kalau lagi di laptop (development)
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }
 };

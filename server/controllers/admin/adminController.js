@@ -7,7 +7,7 @@
 
 const userModel = require('../../models/admin/adminModel');
 const db = require('../../config/db');
-const bcrypt = require('bcrypt');
+const hashUtils = require('../../utils/hash');
 
 // GET: Ambil daftar semua admin dengan data profil lengkap
 const getAdmin = async (req, res) => {
@@ -148,12 +148,12 @@ const gantiPasswordAdmin = async (req, res) => {
         const user = await userModel.findById(userId);
         if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
 
-        // Verifikasi password lama
-        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        // Verifikasi password lama (Pakai hashUtils yang aman untuk Linux)
+        const isMatch = await hashUtils.comparePassword(oldPassword, user.password);
         if (!isMatch) return res.status(400).json({ message: 'Kata sandi lama salah' });
 
         // Hash dan update password baru
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        const hashedPassword = await hashUtils.hashPassword(newPassword);
         const success = await userModel.updatePassword(userId, hashedPassword);
         if (!success) return res.status(500).json({ message: 'Gagal memperbarui password' });
 

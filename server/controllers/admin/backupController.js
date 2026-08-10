@@ -120,7 +120,8 @@ exports.downloadBackup = async (req, res) => {
         archive.finalize();
 
     } catch (err) {
-        res.status(500).json({ message: 'Gagal melakukan backup database', error: err.message });
+        console.error('Error backup:', err);
+        res.status(500).json({ message: 'Gagal melakukan backup database' });
     }
 };
 
@@ -171,7 +172,7 @@ exports.uploadRestore = async (req, res) => {
             `-u${dbConfig.user}`,
             `-p${dbConfig.password}`,
             dbConfig.database
-        ], { shell: true });
+        ]);
 
         let stderrData = '';
 

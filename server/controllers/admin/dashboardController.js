@@ -59,7 +59,8 @@ exports.getDashboardStats = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal memuat statistik dashboard: ' + err.message });
+        console.error('Error getDashboardStats:', err);
+        res.status(500).json({ success: false, message: 'Gagal memuat statistik dashboard' });
     }
 };
 
@@ -82,7 +83,8 @@ exports.uploadFotoProfil = async (req, res) => {
 
         res.json({ success: true, message: 'Foto profil berhasil diupload', fotoPath });
     } catch (err) {
-        res.status(500).json({ message: 'Gagal mengupload foto profil: ' + err.message });
+        console.error('Error uploadFotoProfil:', err);
+        res.status(500).json({ message: 'Gagal mengupload foto profil' });
     }
 };
 
@@ -202,9 +204,10 @@ exports.getProgressGuru = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error getProgressGuru:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat progress input nilai guru: ' + err.message
+            message: 'Gagal memuat progress input nilai guru'
         });
     }
 };
@@ -317,9 +320,10 @@ exports.getKelengkapanRapor = async (req, res) => {
 
         res.json({ success: true, data: hasil });
     } catch (err) {
+        console.error('Error getKelengkapanRapor:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat data kelengkapan rapor: ' + err.message
+            message: 'Gagal memuat data kelengkapan rapor'
         });
     }
 };

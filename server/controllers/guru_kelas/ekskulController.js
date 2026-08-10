@@ -118,7 +118,7 @@ exports.getEkskulSiswa = async (req, res) => {
         });
     } catch (err) {
         console.error('[ERROR] getEkskulSiswa:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengambil data ekskul: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal mengambil data ekskul' });
     }
 };
 
@@ -214,7 +214,7 @@ exports.updateEkskulSiswa = async (req, res) => {
         res.json({ success: true, message: 'Data ekstrakurikuler berhasil diperbarui' });
     } catch (err) {
         console.error('[ERROR] updateEkskulSiswa:', err);
-        res.status(500).json({ success: false, message: 'Gagal update ekskul: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal update ekskul' });
     }
 };
 
@@ -225,7 +225,6 @@ exports.downloadTemplateEkskul = async (req, res) => {
     try {
         const userId = req.user.id;
         
-        // ✅ Fallback jika middleware belum menyuntikkan data tahun ajaran
         let tahunAjaranIndukId = req.idTahunAjaranInduk;
         let semesterId = req.idSemesterAktif;
 
@@ -274,7 +273,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
             [kelas_id, tahunAjaranIndukId]
         );
 
-        // ✅ PERBAIKAN UTAMA: Dynamic Placeholders untuk IN clause
+        // Dynamic Placeholders untuk IN clause
         const siswaIds = siswaRows.length > 0 ? siswaRows.map(s => s.id_siswa) : [0];
         const placeholders = siswaIds.map(() => '?').join(','); // Menghasilkan "?, ?, ?" sesuai jumlah siswa
 
@@ -285,7 +284,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
             WHERE pe.siswa_id IN (${placeholders})
             AND pe.tahun_ajaran_id = ?
             ORDER BY pe.siswa_id, pe.ekskul_id`,
-            [...siswaIds, semesterId] // ✅ Spread array agar setiap ID mendapat '?' sendiri
+            [...siswaIds, semesterId] 
         );
 
         const ekskulBySiswa = {};
@@ -387,7 +386,7 @@ exports.downloadTemplateEkskul = async (req, res) => {
         res.send(buffer);
     } catch (err) {
         console.error('[ERROR] downloadTemplateEkskul:', err);
-        res.status(500).json({ success: false, message: 'Gagal membuat template: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal membuat template' });
     }
 };
 
@@ -738,7 +737,7 @@ exports.importEkskulExcel = async (req, res) => {
     } catch (err) {
         await connection.rollback();
         console.error('[ERROR] importEkskulExcel:', err);
-        res.status(500).json({ success: false, message: 'Gagal mengimport ekskul: ' + err.message });
+        res.status(500).json({ success: false, message: 'Gagal mengimport ekskul' });
     } finally {
         connection.release();
     }

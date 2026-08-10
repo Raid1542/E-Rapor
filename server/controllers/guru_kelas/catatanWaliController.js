@@ -95,6 +95,7 @@ exports.getCatatanWaliKelas = async (req, res) => {
 
         res.json({ success: true, data, kelas: nama_kelas, semester, jenis_penilaian: jenisPenilaian });
     } catch (err) {
+        console.error('Error getCatatanWaliKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal mengambil data catatan' });
     }
 };
@@ -173,6 +174,7 @@ exports.updateCatatanWaliKelas = async (req, res) => {
 
         res.json({ success: true, message: `Catatan wali kelas (${reqJenis} ${semester}) berhasil diperbarui` });
     } catch (err) {
+        console.error('Error updateCatatanWaliKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal memperbarui catatan wali kelas' });
     }
 };
@@ -375,9 +377,10 @@ exports.downloadTemplateCatatanWali = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
+        console.error('Error downloadTemplateCatatanWali:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal membuat template: ' + err.message
+            message: 'Gagal membuat template'
         });
     }
 };
@@ -785,9 +788,10 @@ exports.importCatatanWaliExcel = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
+        console.error('Error importCatatanWaliExcel:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengimport catatan wali kelas: ' + err.message
+            message: 'Gagal mengimport catatan wali kelas'
         });
     } finally {
         connection.release();

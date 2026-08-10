@@ -60,7 +60,8 @@ exports.getPembelajaran = async (req, res) => {
         const rows = await pembelajaranModel.getAllByTahunAjaran(Number(tahun_ajaran_id));
         res.json({ success: true, data: rows });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data penugasan mengajar: ' + err.message });
+        console.error('Error getPembelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data penugasan mengajar' });
     }
 };
 
@@ -124,7 +125,8 @@ exports.getPembelajaranByKelas = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data pembelajaran kelas: ' + err.message });
+        console.error('Error getPembelajaranByKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data pembelajaran kelas' });
     }
 };
 
@@ -170,7 +172,8 @@ exports.getDropdownPembelajaran = async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data dropdown: ' + err.message });
+        console.error('Error getDropdownPembelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data dropdown' });
     }
 };
 
@@ -241,8 +244,9 @@ exports.tambahMapelWajib = async (req, res) => {
             inserted_ids: inserted
         });
     } catch (err) {
+        console.error('Error tambahMapelWajib:', err);
         await connection.rollback();
-        res.status(500).json({ success: false, message: err.message || 'Gagal menambah mata pelajaran wajib' });
+        res.status(500).json({ success: false, message: 'Gagal menambah mata pelajaran wajib' });
     } finally {
         connection.release();
     }
@@ -322,10 +326,11 @@ exports.tambahMapelPilihan = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
+        console.error('Error tambahMapelPilihan:', err);
         if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
             return res.status(400).json({ success: false, message: 'Kombinasi ini sudah ada.' });
         }
-        res.status(500).json({ success: false, message: err.message || 'Gagal menambah mata pelajaran pilihan' });
+        res.status(500).json({ success: false, message: 'Gagal menambah mata pelajaran pilihan' });
     } finally {
         connection.release();
     }
@@ -413,7 +418,8 @@ exports.tambahPembelajaran = async (req, res) => {
         res.status(201).json({ success: true, message: `Penugasan "${namaMapel}" berhasil ditambahkan.`, id });
     } catch (err) {
         await connection.rollback();
-        res.status(500).json({ success: false, message: err.message || 'Gagal menambah penugasan' });
+        console.error('Error tambahPembelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal menambah penugasan' });
     } finally {
         connection.release();
     }
@@ -516,7 +522,8 @@ exports.editPembelajaran = async (req, res) => {
         res.json({ success: true, message: `Penugasan "${namaMapel}" berhasil diperbarui.` });
     } catch (err) {
         await connection.rollback();
-        res.status(500).json({ success: false, message: err.message || 'Gagal memperbarui' });
+        console.error('Error editPembelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal memperbarui' });
     } finally {
         connection.release();
     }
@@ -573,6 +580,7 @@ exports.hapusPembelajaran = async (req, res) => {
 
         res.json({ success: true, message: `Penugasan "${data.nama_mapel}" dari ${data.nama_guru} di kelas ${data.nama_kelas} berhasil dihapus.` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus penugasan: ' + err.message });
+        console.error('Error hapusPembelajaran:', err);
+        res.status(500).json({ success: false, message: 'Gagal menghapus penugasan' });
     }
 };

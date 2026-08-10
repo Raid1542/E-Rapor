@@ -577,10 +577,10 @@ exports.getDashboardData = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error getDashboardData:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal memuat data dashboard: ' + err.message,
-            error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+            message: 'Gagal memuat data dashboard'
         });
     }
 };

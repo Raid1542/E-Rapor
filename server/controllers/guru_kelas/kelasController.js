@@ -46,9 +46,10 @@ exports.getKelasSaya = async (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Error getKelasSaya:', err);
         res.status(500).json({
             success: false,
-            message: 'Gagal mengambil data kelas: ' + err.message
+            message: 'Gagal mengambil data kelas'
         });
     }
 };
@@ -111,6 +112,7 @@ exports.getSiswaByKelas = async (req, res) => {
             }))
         });
     } catch (err) {
+        console.error('Error getSiswaByKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal mengambil data siswa' });
     }
 };
@@ -211,6 +213,7 @@ exports.getProgressPenilaian = async (req, res) => {
             jenis_penilaian: jenisPenilaianAktif
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        console.error('Error getProgressPenilaian:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil progress penilaian' });
     }
 };

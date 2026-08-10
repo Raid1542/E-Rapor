@@ -304,7 +304,8 @@ exports.getNilaiByMapelAndKelas = async (req, res) => {
             bobot_sudah_diatur: bobotSudahDiatur
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data nilai: ' + err.message });
+        console.error('Error getNilaiByMapelAndKelas:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengambil data nilai' });
     }
 };
 
@@ -354,7 +355,8 @@ exports.simpanNilai = async (req, res) => {
 
         res.json({ success: true, message: 'Nilai berhasil disimpan' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai: ' + err.message });
+        console.error('Error simpanNilai:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai' });
     }
 };
 
@@ -614,7 +616,8 @@ exports.simpanNilaiKomponenBanyak = async (req, res) => {
             jumlah_perubahan: perubahanList.length
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai: ' + err.message });
+        console.error('Error simpanNilaiKomponenBanyak:', err);
+        res.status(500).json({ success: false, message: 'Gagal menyimpan nilai' });
     }
 };
 
@@ -827,7 +830,8 @@ exports.downloadTemplateNilaiGBS = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.send(buffer);
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal membuat template: ' + err.message });
+        console.error('Error downloadTemplateNilaiGBS:', err);
+        res.status(500).json({ success: false, message: 'Gagal membuat template' });
     }
 };
 
@@ -1185,7 +1189,8 @@ exports.importNilaiExcelGBS = async (req, res) => {
         });
     } catch (err) {
         await connection.rollback();
-        res.status(500).json({ success: false, message: 'Gagal mengimport nilai: ' + err.message });
+        console.error('Error importNilaiExcelGBS:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengimport nilai' });
     } finally {
         connection.release();
     }
@@ -1222,7 +1227,8 @@ exports.cekStatusKategoriAkademikGBS = async (req, res) => {
 
         res.json({ success: true, data: statusCheck });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal mengecek status konfigurasi: ' + err.message });
+        console.error('Error cekStatusKategoriAkademikGBS:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengecek status konfigurasi' });
     }
 };
 
