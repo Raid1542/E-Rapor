@@ -1,15 +1,16 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend aplikasi E-Rapor SDIT Ulil Albab",
   "main": "server.js",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "nodemon server.js",
     "start": "node server.js",
+    "seed": "node scripts/seedAdmin.js",
     "test": "jest"
   },
   "keywords": [],
-  "author": "",
+  "author": "Raid Aqil Athallah",
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -20,9 +21,12 @@
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "libreoffice": "^0.4.5",
+    "mariadb": "^3.4.0",
     "multer": "^2.0.2",
     "mysql2": "^3.15.3",
     "pizzip": "^3.2.0",

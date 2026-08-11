@@ -17,7 +17,6 @@ const TEMP_DIR = path.join(__dirname, '../../temp_backup');
 /* Fungsi: Backup seluruh database dan folder uploads ke file ZIP. */
 exports.downloadBackup = async (req, res) => {
     try {
-        // Buat direktori temporary jika belum ada
         if (!fs.existsSync(TEMP_DIR)) {
             fs.mkdirSync(TEMP_DIR, { recursive: true });
         }
@@ -35,7 +34,6 @@ exports.downloadBackup = async (req, res) => {
         sqlDump += `-- Total Tabel: ${tableNames.length}\n\n`;
         sqlDump += `SET FOREIGN_KEY_CHECKS = 0;\n\n`;
 
-        // Loop setiap tabel untuk mengambil struktur dan data
         for (const tableName of tableNames) {
             try {
                 sqlDump += `DROP TABLE IF EXISTS \`${tableName}\`;\n\n`;
@@ -52,9 +50,7 @@ exports.downloadBackup = async (req, res) => {
                         const values = columns.map(col => {
                             const val = row[col];
                             
-                            if (val === null) {
-                                return 'NULL';
-                            }
+                            if (val === null) return 'NULL';
                             if (typeof val === 'string') {
                                 const escaped = val
                                     .replace(/\\/g, '\\\\')
@@ -67,9 +63,7 @@ exports.downloadBackup = async (req, res) => {
                                 const jsonStr = JSON.stringify(val).replace(/'/g, "''");
                                 return `'${jsonStr}'`;
                             }
-                            if (typeof val === 'boolean') {
-                                return val ? 1 : 0;
-                            }
+                            if (typeof val === 'boolean') return val ? 1 : 0;
                             
                             return val;
                         }).join(', ');
@@ -79,25 +73,20 @@ exports.downloadBackup = async (req, res) => {
                     sqlDump += `\n`;
                 }
             } catch (err) {
-                // Abaikan error tabel spesifik agar proses backup tetap berjalan
+                console.warn(`Peringatan: Tabel ${tableName} gagal di-backup. Error: ${err.message}`);
             }
         }
 
         sqlDump += `SET FOREIGN_KEY_CHECKS = 1;\n`;
         fs.writeFileSync(sqlPath, sqlDump, 'utf8');
 
-        // Buat arsip ZIP
         const output = fs.createWriteStream(zipPath);
         const archive = archiver('zip', { zlib: { level: 9 } });
 
         output.on('close', () => {
             res.download(zipPath, fileName, (err) => {
-                if (fs.existsSync(zipPath)) {
-                    fs.unlinkSync(zipPath);
-                }
-                if (fs.existsSync(sqlPath)) {
-                    fs.unlinkSync(sqlPath);
-                }
+                if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+                if (fs.existsSync(sqlPath)) fs.unlinkSync(sqlPath);
 
                 if (err && !res.headersSent) {
                     res.status(500).json({ message: 'Gagal mendownload backup' });
@@ -135,7 +124,6 @@ exports.uploadRestore = async (req, res) => {
         let filePath = req.file.path;
         let sqlFilePath = filePath;
 
-        // Ekstrak file jika formatnya ZIP
         if (req.file.originalname.toLowerCase().endsWith('.zip')) {
             try {
                 const zip = new AdmZip(filePath);
@@ -158,7 +146,6 @@ exports.uploadRestore = async (req, res) => {
             return res.status(400).json({ message: 'Format file tidak didukung. Gunakan file .sql atau .zip' });
         }
 
-        // Konfigurasi database dari environment variables
         const dbConfig = {
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'root',
@@ -166,13 +153,14 @@ exports.uploadRestore = async (req, res) => {
             database: process.env.DB_NAME || 'erapor_db'
         };
 
-        // Gunakan spawn + pipe untuk kestabilan proses di Windows
+        // PERBAIKAN: Password disembunyikan via MYSQL_PWD, tidak lewat argumen command line
         const mysqlProcess = spawn('mysql', [
             `-h${dbConfig.host}`,
             `-u${dbConfig.user}`,
-            `-p${dbConfig.password}`,
             dbConfig.database
-        ]);
+        ], {
+            env: { ...process.env, MYSQL_PWD: dbConfig.password }
+        });
 
         let stderrData = '';
 
@@ -180,7 +168,6 @@ exports.uploadRestore = async (req, res) => {
             stderrData += data.toString();
         });
 
-        // Bungkus dalam Promise untuk menunggu proses selesai
         await new Promise((resolve, reject) => {
             mysqlProcess.on('close', (code) => {
                 if (code === 0) {
@@ -191,10 +178,9 @@ exports.uploadRestore = async (req, res) => {
             });
 
             mysqlProcess.on('error', (err) => {
-                reject(new Error(`Gagal memulai proses MySQL: ${err.message}. Pastikan 'mysql' sudah terdaftar di Environment Variables (PATH).`));
+                reject(new Error(`Gagal memulai proses MySQL: ${err.message}. Pastikan 'mysql' sudah terdaftar di PATH.`));
             });
 
-            // Pipe isi file SQL langsung ke input proses mysql
             const fileStream = fs.createReadStream(sqlFilePath);
             fileStream.pipe(mysqlProcess.stdin);
 
@@ -204,7 +190,6 @@ exports.uploadRestore = async (req, res) => {
             });
         });
 
-        // Bersihkan file temporary setelah berhasil
         fs.unlinkSync(filePath);
         if (sqlFilePath !== filePath && fs.existsSync(sqlFilePath)) {
             fs.unlinkSync(sqlFilePath);
@@ -217,7 +202,6 @@ exports.uploadRestore = async (req, res) => {
         });
 
     } catch (err) {
-        // Bersihkan file temporary jika proses gagal
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }

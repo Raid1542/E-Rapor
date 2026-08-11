@@ -13,6 +13,8 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 // Inisialisasi aplikasi Express
 const app = express();
@@ -22,35 +24,61 @@ const PORT = process.env.PORT || 5000;
 const UPLOADS_PATH = path.join(__dirname, 'public', 'uploads');
 const TEMPLATES_PATH = path.join(__dirname, 'public', 'templates');
 
-// Konfigurasi opsi CORS (support multi-origin via env)
+// Konfigurasi opsi CORS
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000').split(',');
-
 const corsOptions = {
   origin: allowedOrigins,
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
-// Terapkan middleware CORS
+// Middleware keamanan dengan CSP diperketat
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"]
+      }
+    }
+  })
+);
 app.use(cors(corsOptions));
 
-// Terapkan middleware untuk parsing body request
+// Rate limiter untuk mencegah brute force pada login
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { message: 'Terlalu banyak percobaan login, coba lagi nanti.' }
+});
+
+// Rate limiter umum untuk API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  message: { message: 'Terlalu banyak request API.' }
+});
+
+// Parsing body
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Buat direktori uploads jika belum tersedia
-if (!fs.existsSync(UPLOADS_PATH)) {
-  fs.mkdirSync(UPLOADS_PATH, { recursive: true });
-}
+// Buat direktori uploads dan templates jika belum tersedia
+if (!fs.existsSync(UPLOADS_PATH)) fs.mkdirSync(UPLOADS_PATH, { recursive: true });
+if (!fs.existsSync(TEMPLATES_PATH)) fs.mkdirSync(TEMPLATES_PATH, { recursive: true });
 
-// Buat direktori templates jika belum tersedia
-if (!fs.existsSync(TEMPLATES_PATH)) {
-  fs.mkdirSync(TEMPLATES_PATH, { recursive: true });
-}
-
-// Sediakan akses file statis untuk folder uploads dan templates
+// Sediakan akses file statis untuk folder uploads
 app.use('/uploads', express.static(UPLOADS_PATH));
-app.use('/templates', express.static(TEMPLATES_PATH));
+
+// Folder templates tidak diakses publik langsung (aman)
+// Jika butuh akses, gunakan controller dengan middleware authenticate
 
 // Impor modul routing API
 const authRoutes = require('./routes/authRoutes');
@@ -59,8 +87,9 @@ const guruKelasRoutes = require('./routes/guruKelasRoutes');
 const guruBidangStudiRoutes = require('./routes/guruBidangStudiRoutes');
 const sekolahPublicRoutes = require('./routes/sekolahPublicRoutes');
 
-// Daftarkan routing ke aplikasi
-app.use('/api/auth', authRoutes);
+// Daftarkan routing dengan rate limiter
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api', apiLimiter);
 app.use('/api/admin', adminRoutes);
 app.use('/api/guru-kelas', guruKelasRoutes);
 app.use('/api/guru-bidang-studi', guruBidangStudiRoutes);
@@ -71,7 +100,6 @@ if (process.env.NODE_ENV === 'development') {
   app.get('/debug/uploads', (req, res) => {
     try {
       const files = fs.readdirSync(UPLOADS_PATH);
-      
       res.json({
         uploadsPath: UPLOADS_PATH,
         files: files,
@@ -89,38 +117,31 @@ app.get('/', (req, res) => {
   res.send('Backend E-Rapor SDIT Ulil Albab berjalan!');
 });
 
+// Handler untuk endpoint yang tidak ditemukan (404 Not Found)
+// PENTING: Handler 404 harus sebelum error handler global
+app.use((req, res) => {
+  res.status(404).json({ message: 'Endpoint tidak ditemukan' });
+});
+
 // Global error handler untuk menangani error di seluruh aplikasi
 app.use((err, req, res, next) => {
-  // Tangani error khusus dari multer saat upload file
-  if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        message: 'Ukuran file terlalu besar (maksimal 5MB)'
-      });
-    }
+  if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ message: 'Ukuran file terlalu besar (maksimal 5MB)' });
   }
 
-  // Daftar pesan error format file yang tidak valid
   const invalidFileErrors = [
     'Format file tidak didukung',
     'Hanya file .png, .jpg, .jpeg, .webp yang diizinkan'
   ];
 
-  // Tangani error format file yang tidak didukung
   if (invalidFileErrors.includes(err.message)) {
     return res.status(400).json({ message: err.message });
   }
 
-  // Tangani error umum pada server
   res.status(500).json({
     message: 'Terjadi kesalahan pada server',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
-});
-
-// Handler untuk endpoint yang tidak ditemukan (404 Not Found)
-app.use((req, res) => {
-  res.status(404).json({ message: 'Endpoint tidak ditemukan' });
 });
 
 // Jalankan server dan tampilkan status aktif

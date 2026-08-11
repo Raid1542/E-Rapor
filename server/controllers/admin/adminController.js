@@ -8,6 +8,8 @@
 const userModel = require('../../models/admin/adminModel');
 const db = require('../../config/db');
 const hashUtils = require('../../utils/hash');
+const fs = require('fs');
+const path = require('path');
 
 // GET: Ambil daftar semua admin dengan data profil lengkap
 const getAdmin = async (req, res) => {
@@ -172,14 +174,19 @@ const uploadFotoProfil = async (req, res) => {
 
         const fotoPath = '/uploads/' + req.file.filename;
 
-        // Cek apakah data guru sudah ada
-        const [guruRows] = await db.execute('SELECT 1 FROM guru WHERE user_id = ?', [userId]);
+        // PERBAIKAN: Hapus foto lama sebelum update
+        const [guruRows] = await db.execute('SELECT foto_path FROM guru WHERE user_id = ?', [userId]);
 
-        if (guruRows.length > 0) {
-            // Update foto
+        if (guruRows.length > 0 && guruRows[0].foto_path) {
+            // Hapus file foto lama dari disk
+            const oldFotoPath = path.join(__dirname, '../../public', guruRows[0].foto_path);
+            if (fs.existsSync(oldFotoPath)) {
+                fs.unlinkSync(oldFotoPath);
+            }
+            // Update foto_path di database
             await db.execute('UPDATE guru SET foto_path = ? WHERE user_id = ?', [fotoPath, userId]);
         } else {
-            // Insert data guru baru
+            // Insert data guru baru jika belum ada
             await db.execute('INSERT INTO guru (user_id, foto_path) VALUES (?, ?)', [userId, fotoPath]);
         }
 
