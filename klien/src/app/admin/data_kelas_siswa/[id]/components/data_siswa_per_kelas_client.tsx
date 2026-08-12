@@ -19,6 +19,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
@@ -57,8 +60,6 @@ interface KelasInfo {
 }
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
-// Disamakan dengan data_guru_client.tsx / data_pembina_ekskul_client.tsx /
-// data_kelas_client.tsx / data_tahun_ajaran_client.tsx / data_sekolah_client.tsx.
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -67,7 +68,6 @@ const ACCENT_DARK = '#c95b08';
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — No, Nama Siswa, NIS, NISN, L/P, Aksi */
 const GRID_COLS = 'minmax(56px,0.5fr) minmax(180px,2.3fr) minmax(100px,1fr) minmax(100px,1fr) minmax(70px,0.6fr) minmax(150px,1.4fr)';
 
 const labelColor = { color: '#7a3a0a' };
@@ -244,24 +244,20 @@ export default function SiswaPerKelasClient() {
     const kelasId = Number(params.id);
     const { showSessionExpired, handleLogout } = useSession();
 
-    // State data
     const [kelasInfo, setKelasInfo] = useState<KelasInfo | null>(null);
     const [siswaList, setSiswaList] = useState<Siswa[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // State UI
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'nama-asc' | 'nama-desc' | 'nis-asc'>('nama-asc');
     const [filterGender, setFilterGender] = useState<'all' | 'Laki-laki' | 'Perempuan'>('all');
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Modal states
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-    // Modal Assign
     const [showAssign, setShowAssign] = useState(false);
     const [availableSiswa, setAvailableSiswa] = useState<Siswa[]>([]);
     const [loadingAvailable, setLoadingAvailable] = useState(false);
@@ -272,43 +268,45 @@ export default function SiswaPerKelasClient() {
     // ── FETCH FUNCTIONS ──────────────────────────────────────────────────────
 
     const fetchKelasInfo = useCallback(async () => {
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
 
-        const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            setKelasInfo({
-                id_kelas: data.data.id_kelas || data.data.id,
-                nama_kelas: data.data.nama_kelas,
-                wali_kelas: data.data.wali_kelas || '-',
-                fase: data.data.fase,
-                tahun_ajaran_id: data.data.tahun_ajaran_id,
-                id_tahun_ajaran_induk: data.data.id_tahun_ajaran_induk || null,
-                tahun_ajaran: data.data.tahun_ajaran,
-                is_aktif: data.data.is_aktif || false,
-                is_read_only: data.data.is_read_only || false,
-                locked_by: data.data.locked_by || null,
-                locked_semester: data.data.locked_semester || null,
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/kelas/${kelasId}`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-        } else {
-            showModal({ type: 'error', title: 'Kelas Tidak Ditemukan', message: data.message || 'Data kelas tidak ditemukan.' });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                setKelasInfo({
+                    id_kelas: data.data.id_kelas || data.data.id,
+                    nama_kelas: data.data.nama_kelas,
+                    wali_kelas: data.data.wali_kelas || '-',
+                    fase: data.data.fase,
+                    tahun_ajaran_id: data.data.tahun_ajaran_id,
+                    id_tahun_ajaran_induk: data.data.id_tahun_ajaran_induk || null,
+                    tahun_ajaran: data.data.tahun_ajaran,
+                    is_aktif: data.data.is_aktif || false,
+                    is_read_only: data.data.is_read_only || false,
+                    locked_by: data.data.locked_by || null,
+                    locked_semester: data.data.locked_semester || null,
+                });
+            } else {
+                showModal({ type: 'error', title: 'Kelas Tidak Ditemukan', message: data.message || 'Data kelas tidak ditemukan.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         }
-    } catch {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-    }
-}, [kelasId, showModal]);
+    }, [kelasId, showModal]);
 
     const fetchSiswaByKelas = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}/siswa`, {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/kelas/${kelasId}/siswa`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
@@ -326,35 +324,34 @@ export default function SiswaPerKelasClient() {
     }, [kelasId]);
 
     const fetchAvailableSiswa = useCallback(async (search = '') => {
-    setLoadingAvailable(true);
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+        setLoadingAvailable(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
 
-        const queryParams = new URLSearchParams();
-        
-        if (kelasInfo?.id_tahun_ajaran_induk) {
-            queryParams.append('tahun_ajaran_id', String(kelasInfo.id_tahun_ajaran_induk));
+            const queryParams = new URLSearchParams();
+            
+            if (kelasInfo?.id_tahun_ajaran_induk) {
+                queryParams.append('tahun_ajaran_id', String(kelasInfo.id_tahun_ajaran_induk));
+            }
+            
+            if (search) queryParams.append('search', search);
+
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/siswa/available?${queryParams.toString()}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                setAvailableSiswa(Array.isArray(data.data) ? data.data : []);
+            }
+        } catch {
+            console.error('Error fetch available:', {});
+        } finally {
+            setLoadingAvailable(false);
         }
-        
-        if (search) queryParams.append('search', search);
-
-        const res = await fetch(`http://localhost:5000/api/admin/siswa/available?${queryParams.toString()}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-            setAvailableSiswa(Array.isArray(data.data) ? data.data : []);
-        }
-    } catch {
-        console.error('Error fetch available:', {});
-    } finally {
-        setLoadingAvailable(false);
-    }
-}, [kelasInfo?.id_tahun_ajaran_induk]);
-
-    // ── EFFECTS ──────────────────────────────────────────────────────────────
+    }, [kelasInfo?.id_tahun_ajaran_induk]);
 
     useEffect(() => {
         if (!kelasId || isNaN(kelasId)) {
@@ -372,8 +369,6 @@ export default function SiswaPerKelasClient() {
         }, 300);
         return () => clearTimeout(timer);
     }, [searchAvailable, showAssign, fetchAvailableSiswa]);
-
-    // ── FILTER & SORT ────────────────────────────────────────────────────────
 
     const filteredSiswa = siswaList
         .filter(siswa => {
@@ -396,8 +391,6 @@ export default function SiswaPerKelasClient() {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentSiswa = filteredSiswa.slice(startIndex, endIndex);
-
-    // ── HANDLERS ─────────────────────────────────────────────────────────────
 
     const openAssignModal = () => {
         setSelectedSiswaIds([]);
@@ -443,101 +436,102 @@ export default function SiswaPerKelasClient() {
     const deselectAll = () => setSelectedSiswaIds([]);
 
     const executeAssign = async () => {
-    if (selectedSiswaIds.length === 0) {
-        showModal({ type: 'warning', title: 'Belum Ada Siswa Dipilih', message: 'Pilih minimal 1 siswa untuk di-assign ke kelas.' });
-        return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-        showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
-        return;
-    }
-
-    try {
-        const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}/assign-siswa`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                Authorization: `Bearer ${token}` 
-            },
-            body: JSON.stringify({
-                siswa_ids: selectedSiswaIds,
-                tahun_ajaran_id: kelasInfo?.id_tahun_ajaran_induk
-            })
-        });
-
-        const result = await res.json();
-
-        if (res.ok && result.success) {
-            closeAssignModal();
-            await fetchSiswaByKelas();
-            
-            if (result.skipped && result.skipped.length > 0) {
-                showModal({
-                    type: 'warning',
-                    title: 'Assign Selesai dengan Peringatan',
-                    message: `${result.assigned} siswa berhasil di-assign.\n\n${result.skipped.length} siswa dilewati:\n` +
-                        result.skipped.map((s: any) => `• ${s.nama || 'Siswa #' + s.id}: ${s.reason}`).join('\n')
-                });
-            } else {
-                showModal({
-                    type: 'success',
-                    title: 'Berhasil Assign!',
-                    message: `${result.assigned} siswa berhasil ditambahkan ke kelas ${kelasInfo?.nama_kelas}.`
-                });
-            }
-        } else {
-            showModal({ type: 'error', title: 'Gagal Assign', message: result.message || 'Terjadi kesalahan.' });
+        if (selectedSiswaIds.length === 0) {
+            showModal({ type: 'warning', title: 'Belum Ada Siswa Dipilih', message: 'Pilih minimal 1 siswa untuk di-assign ke kelas.' });
+            return;
         }
-    } catch {
-        showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
-    }
-};
 
-    const handleKeluarkan = (siswa: Siswa) => {
-    showModal({
-        type: 'confirm',
-        title: 'Keluarkan Siswa dari Kelas',
-        message: `Apakah Anda yakin ingin mengeluarkan "${siswa.nama_lengkap}" dari kelas ${kelasInfo?.nama_kelas}?\n\nData master siswa akan tetap tersimpan.`,
-        onConfirm: async () => {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' });
+            return;
+        }
 
-            try {
-                const queryParams = new URLSearchParams();
-                if (kelasInfo?.id_tahun_ajaran_induk) {
-                    queryParams.append('tahun_ajaran_id', String(kelasInfo.id_tahun_ajaran_induk));
-                }
+        try {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/kelas/${kelasId}/assign-siswa`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    Authorization: `Bearer ${token}` 
+                },
+                body: JSON.stringify({
+                    siswa_ids: selectedSiswaIds,
+                    tahun_ajaran_id: kelasInfo?.id_tahun_ajaran_induk
+                })
+            });
 
-                const res = await fetch(
-                    `http://localhost:5000/api/admin/kelas/${kelasId}/siswa/${siswa.id_siswa}?${queryParams.toString()}`,
-                    {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token}` }
-                    }
-                );
+            const result = await res.json();
 
-                const result = await res.json();
-
-                if (res.ok && result.success) {
-                    await fetchSiswaByKelas();
+            if (res.ok && result.success) {
+                closeAssignModal();
+                await fetchSiswaByKelas();
+                
+                if (result.skipped && result.skipped.length > 0) {
                     showModal({
-                        type: 'success',
-                        title: 'Berhasil Dikeluarkan!',
-                        message: `"${siswa.nama_lengkap}" berhasil dikeluarkan dari kelas.`
+                        type: 'warning',
+                        title: 'Assign Selesai dengan Peringatan',
+                        message: `${result.assigned} siswa berhasil di-assign.\n\n${result.skipped.length} siswa dilewati:\n` +
+                            result.skipped.map((s: any) => `• ${s.nama || 'Siswa #' + s.id}: ${s.reason}`).join('\n')
                     });
                 } else {
-                    showModal({ type: 'error', title: 'Gagal Mengeluarkan', message: result.message || 'Terjadi kesalahan.' });
+                    showModal({
+                        type: 'success',
+                        title: 'Berhasil Assign!',
+                        message: `${result.assigned} siswa berhasil ditambahkan ke kelas ${kelasInfo?.nama_kelas}.`
+                    });
                 }
-            } catch {
-                showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+            } else {
+                showModal({ type: 'error', title: 'Gagal Assign', message: result.message || 'Terjadi kesalahan.' });
             }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         }
-    });
-};
+    };
 
-    // ── PAGINATION ───────────────────────────────────────────────────────────
+    const handleKeluarkan = (siswa: Siswa) => {
+        showModal({
+            type: 'confirm',
+            title: 'Keluarkan Siswa dari Kelas',
+            message: `Apakah Anda yakin ingin mengeluarkan "${siswa.nama_lengkap}" dari kelas ${kelasInfo?.nama_kelas}?\n\nData master siswa akan tetap tersimpan.`,
+            onConfirm: async () => {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                try {
+                    const queryParams = new URLSearchParams();
+                    if (kelasInfo?.id_tahun_ajaran_induk) {
+                        queryParams.append('tahun_ajaran_id', String(kelasInfo.id_tahun_ajaran_induk));
+                    }
+
+                    // ✅ PERUBAHAN 6: URL sekarang pakai API_BASE_URL
+                    const res = await fetch(
+                        `${API_BASE_URL}/api/admin/kelas/${kelasId}/siswa/${siswa.id_siswa}?${queryParams.toString()}`,
+                        {
+                            method: 'DELETE',
+                            headers: { Authorization: `Bearer ${token}` }
+                        }
+                    );
+
+                    const result = await res.json();
+
+                    if (res.ok && result.success) {
+                        await fetchSiswaByKelas();
+                        showModal({
+                            type: 'success',
+                            title: 'Berhasil Dikeluarkan!',
+                            message: `"${siswa.nama_lengkap}" berhasil dikeluarkan dari kelas.`
+                        });
+                    } else {
+                        showModal({ type: 'error', title: 'Gagal Mengeluarkan', message: result.message || 'Terjadi kesalahan.' });
+                    }
+                } catch {
+                    showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+                }
+            }
+        });
+    };
+
     const renderPagination = () => {
         const pages: ReactNode[] = [];
         const btnBase = "min-w-[30px] h-8 px-1.5 flex items-center justify-center rounded-lg text-xs font-bold border-2 transition-colors btn-action";
@@ -569,7 +563,6 @@ export default function SiswaPerKelasClient() {
         return pages;
     };
 
-    // ── LOADING STATE ────────────────────────────────────────────────────────
     if (loading && !kelasInfo) {
         return (
             <div className="flex-1 min-h-screen p-3 sm:p-6 flex items-center justify-center" style={PAGE_BG}>
@@ -581,14 +574,12 @@ export default function SiswaPerKelasClient() {
         );
     }
 
-    // ── MAIN RENDER ──────────────────────────────────────────────────────────
     return (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* ── HEADER ────────────────────────────────────────────────── */}
             <div className="mb-4 sm:mb-5 anim-in d1">
                 <button
                     onClick={() => router.push(`/admin/data_kelas_siswa${kelasInfo?.tahun_ajaran_id ? `?ta=${kelasInfo.tahun_ajaran_id}` : ''}`)}
@@ -602,7 +593,6 @@ export default function SiswaPerKelasClient() {
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Kelas {kelasInfo?.nama_kelas || '...'}</h1>
             </div>
 
-            {/* Card: Info Kelas */}
             <div className="card-flat bg-white rounded-2xl px-4 sm:px-5 py-3.5 mb-4 flex flex-wrap items-center gap-3 anim-in d2" style={CARD_STYLE}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
                     <GraduationCap size={16} style={{ color: ACCENT_DARK }} />
@@ -626,7 +616,6 @@ export default function SiswaPerKelasClient() {
                 )}
             </div>
 
-            {/* Banner read-only */}
             {kelasInfo?.is_read_only && (
                 <div className="mb-4 p-4 rounded-2xl flex items-start gap-3 anim-in d3" style={{ background: '#fffbeb', border: '1.5px solid #fcd34d' }}>
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fef3c7' }}>
@@ -642,7 +631,6 @@ export default function SiswaPerKelasClient() {
                 </div>
             )}
 
-            {/* Card: Toolbar */}
             <div className={`card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in ${kelasInfo?.is_read_only ? 'd4' : 'd3'}`} style={CARD_STYLE}>
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                     <div className="flex-shrink-0">
@@ -713,7 +701,6 @@ export default function SiswaPerKelasClient() {
                 </div>
             </div>
 
-            {/* Card: Tabel data siswa */}
             <div className={`card-flat bg-white rounded-2xl overflow-hidden anim-in ${kelasInfo?.is_read_only ? 'd5' : 'd4'}`} style={CARD_STYLE}>
                 <div className="overflow-x-auto">
                     <div style={{ width: '100%', minWidth: '740px' }}>
@@ -801,7 +788,6 @@ export default function SiswaPerKelasClient() {
                 </div>
             </div>
 
-            {/* Modal Assign Siswa */}
             {showAssign && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 transition-opacity duration-200 ${assignClosing ? 'opacity-0' : 'opacity-100'}`}
                     onClick={e => { if (e.target === e.currentTarget) closeAssignModal(); }}>

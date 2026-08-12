@@ -19,6 +19,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 /* ==========================================================================
    INTERFACES
    ========================================================================== */
@@ -168,7 +171,6 @@ const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-80
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — No, Nama Kelas, Guru Kelas, Fase, Jumlah Siswa, Aksi */
 const GRID_COLS = 'minmax(56px,0.5fr) minmax(130px,1.2fr) minmax(160px,1.7fr) minmax(90px,0.8fr) minmax(120px,1fr) minmax(230px,2.2fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
@@ -211,7 +213,6 @@ const ActionButton = ({
     );
 };
 
-/* Versi Link (Next.js) yang tampil identik dengan ActionButton, untuk aksi navigasi seperti "Lihat Siswa" */
 const LinkButton = ({ href, children, variant = 'neutral', size = 'sm', title }: {
     href: string; children: ReactNode; variant?: BtnVariant; size?: 'md' | 'sm'; title?: string;
 }) => {
@@ -229,10 +230,6 @@ const LinkButton = ({ href, children, variant = 'neutral', size = 'sm', title }:
 
 export default function DataKelasClient() {
     const { showSessionExpired, handleLogout } = useSession();
-
-    /* ------------------------------------------------------------------
-       STATE
-    ------------------------------------------------------------------ */
 
     const [kelasList, setKelasList] = useState<Kelas[]>([]);
     const [loading, setLoading] = useState(true);
@@ -263,15 +260,12 @@ export default function DataKelasClient() {
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
 
-    /* ------------------------------------------------------------------
-       DATA FETCHING
-    ------------------------------------------------------------------ */
-
     const fetchTahunAjaran = async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (res.ok && data.success) {
                 setTahunAjaranList(data.data.map((ta: any) => ({
@@ -291,7 +285,8 @@ export default function DataKelasClient() {
         const token = localStorage.getItem('token');
         if (!token) { setLoadingGuru(false); return; }
         try {
-            const res = await fetch('http://localhost:5000/api/admin/guru-kelas', { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/guru-kelas`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (res.ok && data.success) {
                 const filteredGurus = data.data
@@ -317,7 +312,8 @@ export default function DataKelasClient() {
         try {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-            const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${tahunAjaranId}`, { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/kelas?tahun_ajaran_id=${tahunAjaranId}`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (res.ok && data.success) {
                 setKelasList(data.data.map((k: any) => ({ ...k, wali_kelas_id: k.wali_kelas === '-' ? null : k.wali_kelas_id })));
@@ -351,10 +347,6 @@ export default function DataKelasClient() {
             }
         }
     }, [tahunAjaranList]);
-
-    /* ------------------------------------------------------------------
-       FORM HANDLERS & ANIMASI
-    ------------------------------------------------------------------ */
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -422,7 +414,8 @@ export default function DataKelasClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
         try {
-            const res = await fetch('http://localhost:5000/api/admin/kelas', {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/kelas`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -448,7 +441,8 @@ export default function DataKelasClient() {
         const token = localStorage.getItem('token');
         if (!token || !editId || !selectedTahunAjaranId) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' }); return; }
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/kelas/${editId}`, {
+            // ✅ PERUBAHAN 6: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/kelas/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -478,7 +472,8 @@ export default function DataKelasClient() {
                 const token = localStorage.getItem('token');
                 if (!token || !selectedTahunAjaranId) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Sesi tidak valid.' }); return; }
                 try {
-                    const res = await fetch(`http://localhost:5000/api/admin/kelas/${kelasId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                    // ✅ PERUBAHAN 7: URL sekarang pakai API_BASE_URL
+                    const res = await fetch(`${API_BASE_URL}/api/admin/kelas/${kelasId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
                     if (res.ok) {
                         fetchKelas(selectedTahunAjaranId);
                         showModal({ type: 'success', title: 'Kelas Dihapus', message: `Kelas "${namaKelas}" berhasil dihapus.` });
@@ -492,10 +487,6 @@ export default function DataKelasClient() {
             },
         });
     };
-
-    /* ------------------------------------------------------------------
-       FILTER & PAGINATION
-    ------------------------------------------------------------------ */
 
     const filteredKelas = kelasList.filter(kelas => {
         const q = searchQuery.toLowerCase().trim();
@@ -529,10 +520,6 @@ export default function DataKelasClient() {
         });
         return pages;
     };
-
-    /* ------------------------------------------------------------------
-       FORM RENDER (DENGAN ANIMASI)
-    ------------------------------------------------------------------ */
 
     const renderForm = (isEdit: boolean) => (
         <div className={`flex-1 min-h-screen p-3 sm:p-6 transition-all duration-300 ${formClosing ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`} style={PAGE_BG}>
@@ -611,10 +598,6 @@ export default function DataKelasClient() {
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
 
-    /* ------------------------------------------------------------------
-       MAIN LIST VIEW
-    ------------------------------------------------------------------ */
-
     return (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -626,7 +609,6 @@ export default function DataKelasClient() {
                 <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola data kelas dan wali kelas</p>
             </div>
 
-            {/* Card: Pemilih Tahun Ajaran — compact, jadi gerbang sebelum konten lain relevan */}
             <div className="card-flat bg-white rounded-2xl px-4 sm:px-5 py-3.5 mb-4 inline-flex items-center gap-3 anim-in d2" style={CARD_STYLE}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
                     <CalendarRange size={16} style={{ color: ACCENT_DARK }} />
@@ -692,7 +674,6 @@ export default function DataKelasClient() {
                         </div>
                     )}
 
-                    {/* Card: Toolbar — Tambah Kelas + Tampilkan data + Search */}
                     <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d3" style={CARD_STYLE}>
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                             <div className="flex-shrink-0">
@@ -735,7 +716,6 @@ export default function DataKelasClient() {
                         </div>
                     </div>
 
-                    {/* Card: Tabel data kelas */}
                     <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
                         <div className="overflow-x-auto">
                             <div style={{ width: '100%', minWidth: '780px' }}>

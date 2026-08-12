@@ -22,6 +22,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 /* ==========================================================================
    INTERFACES
    ========================================================================== */
@@ -173,8 +176,6 @@ const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-80
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — sama persis strukturnya dengan Data Admin (7 kolom),
-   dipakai identik oleh header dan setiap baris agar selalu sejajar. */
 const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(180px,1.6fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
@@ -243,10 +244,6 @@ const formatGender = (g?: string | null) => {
 export default function DataGuruClient() {
     const { showSessionExpired, handleLogout } = useSession();
 
-    /* ------------------------------------------------------------------
-       STATE
-    ------------------------------------------------------------------ */
-
     const [guruList, setGuruList] = useState<Guru[]>([]);
     const [loading, setLoading] = useState(true);
     const [showDetail, setShowDetail] = useState(false);
@@ -260,11 +257,10 @@ export default function DataGuruClient() {
     const [showImport, setShowImport] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     
-    // State untuk animasi tutup
     const [detailClosing, setDetailClosing] = useState(false);
     const [importClosing, setImportClosing] = useState(false);
     const [filterClosing, setFilterClosing] = useState(false);
-    const [formClosing, setFormClosing] = useState(false); // <-- Tambahan untuk animasi form
+    const [formClosing, setFormClosing] = useState(false);
     
     const [showFilter, setShowFilter] = useState(false);
     const [filterValues, setFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
@@ -283,15 +279,12 @@ export default function DataGuruClient() {
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    /* ------------------------------------------------------------------
-       FETCH
-    ------------------------------------------------------------------ */
-
     const fetchGuru = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-            const res = await fetch('http://localhost:5000/api/admin/guru', { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/guru`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (res.ok) {
                 const validRoles = ['guru_kelas', 'guru_bidang_studi'];
@@ -319,10 +312,6 @@ export default function DataGuruClient() {
 
     useEffect(() => { fetchGuru(); }, [fetchGuru]);
 
-    /* ------------------------------------------------------------------
-       FORM HANDLERS & ANIMASI
-    ------------------------------------------------------------------ */
-
     const handleDetail = (guru: Guru) => { setSelectedGuru(guru); setShowDetail(true); };
 
     const handleEdit = (guru: Guru) => {
@@ -337,7 +326,6 @@ export default function DataGuruClient() {
         setShowEdit(true);
     };
 
-    // Fungsi penutup dengan animasi
     const closeForm = () => {
         setFormClosing(true);
         setTimeout(() => {
@@ -424,13 +412,14 @@ export default function DataGuruClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
         try {
-            const res = await fetch('http://localhost:5000/api/admin/guru', {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/guru`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ nama_lengkap: formData.nama, email_sekolah: formData.email, roles: formData.roles, niy: formData.niy, nuptk: formData.nuptk, tempat_lahir: formData.tempatLahir, tanggal_lahir: formData.tanggalLahir, jenis_kelamin: formData.jenisKelamin, alamat: formData.alamat, no_telepon: formData.no_telepon }),
             });
             if (res.ok) {
-                closeForm(); // <-- Menggunakan closeForm agar animasi keluar berjalan
+                closeForm();
                 await fetchGuru();
                 showModal({ type: 'success', title: 'Data Ditambahkan!', message: `Data guru ${formData.nama} berhasil ditambahkan.` });
             } else {
@@ -445,13 +434,14 @@ export default function DataGuruClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/guru/${editId}`, {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/guru/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ nama_lengkap: formData.nama, email_sekolah: formData.email, roles: formData.roles, niy: formData.niy, nuptk: formData.nuptk, tempat_lahir: formData.tempatLahir, tanggal_lahir: formData.tanggalLahir, jenis_kelamin: formData.jenisKelamin, alamat: formData.alamat, no_telepon: formData.no_telepon, status: formData.statusGuru }),
             });
             if (res.ok) {
-                closeForm(); // <-- Menggunakan closeForm agar animasi keluar berjalan
+                closeForm();
                 await fetchGuru();
                 showModal({ type: 'success', title: 'Data Diperbarui!', message: `Data guru ${formData.nama} berhasil diperbarui.` });
             } else {
@@ -476,14 +466,15 @@ export default function DataGuruClient() {
         fd.append('file', importFile);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/admin/guru/import', {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/guru/import`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: fd
             });
             const result = await res.json();
             if (res.ok && result.success) {
-                closeImport(); // <-- Menggunakan closeImport
+                closeImport();
                 await fetchGuru();
                 if (result.skipped && result.skipped.length > 0) {
                     const skippedCount = result.skipped.length;
@@ -517,10 +508,6 @@ export default function DataGuruClient() {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         }
     };
-
-    /* ------------------------------------------------------------------
-       FILTER & PAGINATION
-    ------------------------------------------------------------------ */
 
     const filteredGuru = guruList.filter(guru => {
         const q = searchQuery.toLowerCase().trim();
@@ -561,10 +548,6 @@ export default function DataGuruClient() {
     const resetFilter = () => { const e = { role: '', jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
     const openFilterModal = () => { setTempFilterValues(filterValues); setShowFilter(true); };
     const applyFilter = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 300); };
-
-    /* ------------------------------------------------------------------
-       FORM RENDER (DENGAN ANIMASI)
-    ------------------------------------------------------------------ */
 
     const renderForm = (isEdit: boolean) => (
         <div className={`flex-1 min-h-screen p-3 sm:p-6 transition-all duration-300 ${formClosing ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`} style={PAGE_BG}>
@@ -732,10 +715,6 @@ export default function DataGuruClient() {
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
 
-    /* ------------------------------------------------------------------
-       MAIN LIST VIEW
-    ------------------------------------------------------------------ */
-
     return (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -790,11 +769,9 @@ export default function DataGuruClient() {
                 </div>
             </div>
 
-            {/* Table card — grid-based, sama persis strukturnya dengan Data Admin */}
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 <div className="overflow-x-auto">
                     <div style={{ width: '100%', minWidth: '850px' }}>
-                        {/* Header — grid kolom sama persis dengan setiap baris di bawahnya */}
                         <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
                             <div className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama</div>
@@ -805,7 +782,6 @@ export default function DataGuruClient() {
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
                         </div>
 
-                        {/* Body */}
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS, borderColor: '#f0f0f0' }}>
@@ -891,7 +867,6 @@ export default function DataGuruClient() {
                 </div>
             </div>
 
-            {/* Modal Detail dengan Animasi */}
             {showDetail && selectedGuru && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeDetail} />
@@ -977,7 +952,6 @@ export default function DataGuruClient() {
                 </div>
             )}
 
-            {/* Modal Import dengan Animasi */}
             {showImport && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${importClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${importClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeImport} />
@@ -1001,7 +975,8 @@ export default function DataGuruClient() {
                                 <FileSpreadsheet size={19} className="mt-0.5 flex-shrink-0" style={{ color: ACCENT }} />
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Format file: <strong>.xlsx</strong> atau <strong>.xls</strong></p>
-                                    <a href="http://localhost:5000/templates/template_import_guru.xlsx" download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
+                                    {/* ✅ PERUBAHAN 6: URL template sekarang pakai API_BASE_URL */}
+                                    <a href={`${API_BASE_URL}/templates/template_import_guru.xlsx`} download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
                                         <Download size={13} /> Unduh template Excel
                                     </a>
                                 </div>
@@ -1024,7 +999,6 @@ export default function DataGuruClient() {
                 </div>
             )}
 
-            {/* Modal Filter dengan Animasi */}
             {showFilter && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${filterClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${filterClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeFilterModal} />

@@ -70,7 +70,6 @@ const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
    KOMPONEN PENDUKUNG
    ========================================================================== */
 
-/* Fungsi: Menyuntikkan animasi global dan style dasar untuk halaman ini. */
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes fadeInUp {
@@ -102,7 +101,6 @@ const GlobalStyles = () => (
     `}</style>
 );
 
-/* Fungsi: Merender tombol aksi dengan varian warna yang konsisten. */
 const ActionButton = ({
     onClick,
     children,
@@ -135,25 +133,21 @@ export default function BackupRestoreClient() {
     const [activeTab, setActiveTab] = useState<Tab>('backup');
     const { showSessionExpired, handleLogout } = useSession();
 
-    // State untuk proses backup
     const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle');
     const [backupBlobUrl, setBackupBlobUrl] = useState<string>('');
     const [backupFileName, setBackupFileName] = useState<string>('backup_erapor.sql');
     const [backupError, setBackupError] = useState<string>('');
 
-    // State untuk proses restore
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [restoreStatus, setRestoreStatus] = useState<RestoreStatus>('idle');
     const [restoreMessage, setRestoreMessage] = useState<string>('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    /* Fungsi: Mengganti tab antara backup dan restore. */
     const handleTabChange = (tab: Tab) => {
         setActiveTab(tab);
     };
 
-    /* Fungsi: Memproses permintaan backup ke server. */
     const handleBackup = async () => {
         setBackupStatus('loading');
         setBackupError('');
@@ -170,7 +164,8 @@ export default function BackupRestoreClient() {
                 return;
             }
 
-            const res = await fetch('http://localhost:5000/api/admin/backup', {
+            // ✅ PERUBAHAN 1: URL sekarang pakai env variable
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/backup`, {
                 method: 'GET',
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -201,7 +196,6 @@ export default function BackupRestoreClient() {
         }
     };
 
-    /* Fungsi: Memicu unduhan file backup yang sudah siap. */
     const handleDownloadBackup = () => {
         if (!backupBlobUrl) return;
 
@@ -213,7 +207,6 @@ export default function BackupRestoreClient() {
         document.body.removeChild(link);
     };
 
-    /* Fungsi: Menangani perubahan saat user memilih file untuk restore. */
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
         setSelectedFile(file);
@@ -221,16 +214,13 @@ export default function BackupRestoreClient() {
         setRestoreMessage('');
     };
 
-    /* Fungsi: Memproses upload dan restore file backup ke server. */
     const handleRestore = async () => {
-        // Validasi keberadaan file
         if (!selectedFile) {
             setRestoreStatus('error');
             setRestoreMessage('⚠️ Pilih file backup terlebih dahulu.');
             return;
         }
 
-        // Validasi ekstensi file
         const allowedExtensions = ['.sql', '.zip'];
         const fileExt = `.${selectedFile.name.split('.').pop()?.toLowerCase()}`;
 
@@ -240,7 +230,6 @@ export default function BackupRestoreClient() {
             return;
         }
 
-        // Validasi ukuran file (Maksimal 500MB)
         const maxSize = 500 * 1024 * 1024;
         if (selectedFile.size > maxSize) {
             setRestoreStatus('error');
@@ -262,7 +251,8 @@ export default function BackupRestoreClient() {
             const formData = new FormData();
             formData.append('file', selectedFile);
 
-            const res = await fetch('http://localhost:5000/api/admin/backup/restore', {
+            // ✅ PERUBAHAN 2: URL sekarang pakai env variable
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/backup/restore`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -285,7 +275,6 @@ export default function BackupRestoreClient() {
                 fileInputRef.current.value = '';
             }
 
-            // Soft reset: hapus sesi dan redirect ke login agar data segar terbaca
             setTimeout(() => {
                 localStorage.removeItem('token');
                 localStorage.removeItem('currentUser');
@@ -314,9 +303,6 @@ export default function BackupRestoreClient() {
         }
     };
 
-    /* ==========================================================================
-       RENDER UI
-       ========================================================================== */
     return (
         <div className="flex-1 p-3 sm:p-6 min-h-screen" style={PAGE_BG}>
             <GlobalStyles />
@@ -325,7 +311,6 @@ export default function BackupRestoreClient() {
                 <SessionExpiredModal onConfirm={handleLogout} />
             )}
 
-            {/* Judul Halaman */}
             <div className="mb-4 sm:mb-5 anim-in d1">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Backup &amp; Restore</h1>
                 <p className="text-xs sm:text-sm mt-1 text-gray-500">
@@ -333,7 +318,6 @@ export default function BackupRestoreClient() {
                 </p>
             </div>
 
-            {/* Pengalih Tab */}
             <div className="card-flat bg-white rounded-2xl px-2 py-2 mb-4 flex items-center gap-2 w-fit anim-in d2" style={CARD_STYLE}>
                 <button
                     onClick={() => handleTabChange('backup')}
@@ -362,7 +346,6 @@ export default function BackupRestoreClient() {
                 </button>
             </div>
 
-            {/* Konten Tab: Backup Data */}
             {activeTab === 'backup' && (
                 <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                     <div className="px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
@@ -373,7 +356,6 @@ export default function BackupRestoreClient() {
                     </div>
 
                     <div className="p-4 sm:p-6">
-                        {/* Kotak Informasi */}
                         <div
                             className="flex items-start gap-2.5 rounded-xl p-3.5 mb-4"
                             style={{ background: '#fef9c3', border: '0.0625rem solid #fde68a' }}
@@ -385,7 +367,6 @@ export default function BackupRestoreClient() {
                             </p>
                         </div>
 
-                        {/* Status Sukses Backup */}
                         {backupStatus === 'ready' && (
                             <div className="flex items-center gap-2.5 rounded-xl p-3.5 mb-4" style={{ background: '#dcfce7', border: '0.0625rem solid #86efac' }}>
                                 <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: '#166534' }} />
@@ -395,14 +376,12 @@ export default function BackupRestoreClient() {
                             </div>
                         )}
 
-                        {/* Status Error Backup */}
                         {backupStatus === 'error' && (
                             <div className="rounded-xl p-4 mb-4" style={{ background: '#fef2f2', border: '0.0625rem solid #fecaca' }}>
                                 <p className="text-sm" style={{ color: '#b91c1c' }}>{backupError}</p>
                             </div>
                         )}
 
-                        {/* Tombol Aksi Backup */}
                         <div className="pt-5 flex flex-col sm:flex-row justify-end gap-2.5 border-t" style={{ borderColor: '#f0e0d0' }}>
                             {backupStatus === 'ready' && (
                                 <ActionButton variant="neutral" onClick={handleDownloadBackup}>
@@ -424,7 +403,6 @@ export default function BackupRestoreClient() {
                 </div>
             )}
 
-            {/* Konten Tab: Restore Data */}
             {activeTab === 'restore' && (
                 <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                     <div className="px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
@@ -435,7 +413,6 @@ export default function BackupRestoreClient() {
                     </div>
 
                     <div className="p-4 sm:p-6">
-                        {/* Langkah-langkah */}
                         <div className="flex flex-col gap-2.5 mb-5">
                             <div className="flex items-start gap-2.5">
                                 <div
@@ -461,7 +438,6 @@ export default function BackupRestoreClient() {
                             </div>
                         </div>
 
-                        {/* Status Sukses / Error Restore */}
                         {restoreStatus === 'success' && (
                             <div className="flex items-start gap-2.5 rounded-xl p-4 mb-5" style={{ background: '#dcfce7', border: '0.0625rem solid #86efac' }}>
                                 <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#166534' }} />
@@ -474,7 +450,6 @@ export default function BackupRestoreClient() {
                             </div>
                         )}
 
-                        {/* Pemilih File */}
                         <div className="mb-6">
                             <p className="text-sm font-bold mb-2.5" style={{ color: '#7a3a0a' }}>
                                 Pilih File Backup yang akan direstore
@@ -513,7 +488,6 @@ export default function BackupRestoreClient() {
                             )}
                         </div>
 
-                        {/* Tombol Aksi Restore */}
                         <div className="pt-5 flex justify-end border-t" style={{ borderColor: '#f0e0d0' }}>
                             <ActionButton variant="primary" disabled={restoreStatus === 'loading' || !selectedFile} onClick={handleRestore}>
                                 {restoreStatus === 'loading' ? (

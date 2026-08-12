@@ -10,6 +10,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 /* ==========================================================================
    INTERFACES
    ========================================================================== */
@@ -49,8 +52,6 @@ interface ModalConfig {
 
 /* ==========================================================================
    DESIGN TOKENS
-   Disamakan dengan data_guru_client.tsx / data_pembina_ekskul_client.tsx /
-   data_kelas_client.tsx — hanya lapisan tampilan, logika tidak diubah.
    ========================================================================== */
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
@@ -166,7 +167,6 @@ const labelColor = { color: '#7a3a0a' };
 
 /* ==========================================================================
    SISTEM TOMBOL AKSI
-   Disamakan persis dengan halaman Data Guru / Data Pembina / Data Kelas.
    ========================================================================== */
 
 type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent' | 'danger';
@@ -349,7 +349,8 @@ export default function DataTahunAjaranClient() {
                 return;
             }
 
-            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -442,7 +443,8 @@ export default function DataTahunAjaranClient() {
         }
 
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${editId}`, {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran/${editId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -482,7 +484,8 @@ export default function DataTahunAjaranClient() {
         }
 
         try {
-            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -574,7 +577,8 @@ export default function DataTahunAjaranClient() {
         setShowConfirmGantiSemester(false);
 
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/tahun-ajaran/${item.id_induk}/semester`, {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran/${item.id_induk}/semester`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -696,10 +700,6 @@ export default function DataTahunAjaranClient() {
         return pages;
     };
 
-    /* ------------------------------------------------------------------
-       FORM RENDER
-    ------------------------------------------------------------------ */
-
     const renderForm = (isEdit: boolean) => (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -742,7 +742,6 @@ export default function DataTahunAjaranClient() {
                     </div>
 
                     <div className="p-4 sm:p-6">
-                        {/* Tahun Ajaran */}
                         <div className="mb-6">
                             <label className={labelCls} style={labelColor}>
                                 Periode Tahun Ajaran <span className="text-red-500">*</span>
@@ -773,9 +772,7 @@ export default function DataTahunAjaranClient() {
                             {errors.tahun && <p className="text-red-600 text-xs font-semibold mt-1.5">{errors.tahun}</p>}
                         </div>
 
-                        {/* Semester Section */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            {/* Semester Ganjil */}
                             <div className="p-4 sm:p-5 rounded-xl border" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#fed7aa' }}>
@@ -813,7 +810,6 @@ export default function DataTahunAjaranClient() {
                                 </div>
                             </div>
 
-                            {/* Semester Genap */}
                             <div className="p-4 sm:p-5 rounded-xl border" style={{ borderColor: '#bbf7d0', background: '#f0fdf4' }}>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#bbf7d0' }}>
@@ -852,7 +848,6 @@ export default function DataTahunAjaranClient() {
                             </div>
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="flex flex-col sm:flex-row justify-end gap-2.5 pt-4 border-t" style={{ borderColor: '#f0e0d0' }}>
                             <ActionButton variant="neutral" onClick={() => { isEdit ? setShowEdit(false) : setShowTambah(false); resetForm(); }}>
                                 Batal
@@ -868,7 +863,6 @@ export default function DataTahunAjaranClient() {
                 </div>
             </div>
 
-            {/* Confirmation Modals */}
             {showConfirmTambah && (
                 <div
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
@@ -940,10 +934,6 @@ export default function DataTahunAjaranClient() {
 
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
-
-    /* ------------------------------------------------------------------
-       MAIN LIST VIEW
-    ------------------------------------------------------------------ */
 
     return (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>

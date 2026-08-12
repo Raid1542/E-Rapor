@@ -10,13 +10,15 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Penamaan konsisten dengan seluruh halaman admin lain
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; onConfirm?: () => void; }
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
-// Disamakan dengan seluruh halaman admin lainnya.
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -75,7 +77,6 @@ const GlobalStyles = () => (
 
 // ─── SHARED STYLE CONSTANTS ───────────────────────────────────────────────────
 
-// Input lebih lega: border 2px, padding lebih besar, transisi focus ring halus
 const inputBase = [
     "w-full border-2 rounded-xl px-3.5 py-3 pr-12 text-sm text-gray-800",
     "outline-none transition-all bg-white placeholder:text-gray-400",
@@ -230,7 +231,7 @@ const UbahPasswordClient = () => {
     const router = useRouter();
     const { showSessionExpired, handleLogout } = useSession();
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    // ✅ Variabel sudah pakai API_BASE_URL (konsisten dengan seluruh halaman admin)
 
     const [form, setForm] = useState({
         oldPassword: '',
@@ -289,7 +290,8 @@ const UbahPasswordClient = () => {
 
         setSaving(true);
         try {
-            const res = await fetch(`${API_URL}/api/admin/admin/ganti-password`, {
+            // ✅ URL sudah pakai API_BASE_URL (sudah benar sejak awal)
+            const res = await fetch(`${API_BASE_URL}/api/admin/admin/ganti-password`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ oldPassword: form.oldPassword, newPassword: form.newPassword }),

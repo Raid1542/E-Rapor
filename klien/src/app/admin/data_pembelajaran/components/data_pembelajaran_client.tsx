@@ -13,6 +13,9 @@ import { Pencil, Plus, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAler
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig { type: ModalType; title: string; message: string; }
@@ -384,7 +387,8 @@ export default function DataPembelajaranPage() {
     try {
       const token = getToken();
       if (!token) return;
-      const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+      // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -408,7 +412,8 @@ export default function DataPembelajaranPage() {
       const token = getToken();
       if (!token) return [];
 
-      const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+      // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/semester-list`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -437,8 +442,8 @@ export default function DataPembelajaranPage() {
       const token = getToken();
       if (!token) return;
 
-      // ✅ PERBAIKAN: Kirim sebagai query parameter
-      const res = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
+      // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/kelas?tahun_ajaran_id=${idInduk}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -457,7 +462,8 @@ export default function DataPembelajaranPage() {
     try {
       const token = getToken();
       if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/dropdown?semester_id=${semesterId}`, {
+      // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/pembelajaran/dropdown?semester_id=${semesterId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -490,7 +496,8 @@ export default function DataPembelajaranPage() {
     try {
       const token = getToken();
       if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/kelas/${kelasId}?semester_id=${semId}`, {
+      // ✅ PERUBAHAN 6: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/pembelajaran/kelas/${kelasId}?semester_id=${semId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -666,7 +673,8 @@ export default function DataPembelajaranPage() {
 
     setSubmittingWajib(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/pembelajaran/tambah-wajib', {
+      // ✅ PERUBAHAN 7: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/pembelajaran/tambah-wajib`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -731,7 +739,8 @@ export default function DataPembelajaranPage() {
 
     setSubmittingPilihan(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/pembelajaran/tambah-pilihan', {
+      // ✅ PERUBAHAN 8: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/pembelajaran/tambah-pilihan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -768,7 +777,8 @@ export default function DataPembelajaranPage() {
 
     setSubmittingPilihan(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${editId}`, {
+      // ✅ PERUBAHAN 9: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/pembelajaran/${editId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -831,7 +841,8 @@ export default function DataPembelajaranPage() {
         const token = getToken();
         if (!token || !selectedKelasId || !selectedSemesterId) return;
         try {
-          const res = await fetch(`http://localhost:5000/api/admin/pembelajaran/${id}`, {
+          // ✅ PERUBAHAN 10: URL sekarang pakai API_BASE_URL
+          const res = await fetch(`${API_BASE_URL}/api/admin/pembelajaran/${id}`, {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',

@@ -16,6 +16,9 @@ import {
     Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 interface DashboardStats {
     guru: number;
     siswa: number;
@@ -255,10 +258,10 @@ export default function DashboardClient() {
     useEffect(() => {
         const token    = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
-        if (!token) { window.location.href = '/login'; return; }
+        if (!token) { window.location.href = '/'; return; }
         if (userData) {
             const p: UserData = JSON.parse(userData);
-            if (p.role !== 'admin') { alert('Anda tidak memiliki akses ke halaman ini'); window.location.href = '/login'; return; }
+            if (p.role !== 'admin') { alert('Anda tidak memiliki akses ke halaman ini'); window.location.href = '/'; return; }
             setUser(p);
         }
 
@@ -266,7 +269,8 @@ export default function DashboardClient() {
 
         const fetchStats = async () => {
             try {
-                const res  = await fetch('http://localhost:5000/api/admin/dashboard/stats', hdr(token!));
+                // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+                const res  = await fetch(`${API_BASE_URL}/api/admin/dashboard/stats`, hdr(token!));
                 const data = await res.json();
                 if (res.ok && data.success) {
                     setStats(data.data);
@@ -278,14 +282,16 @@ export default function DashboardClient() {
         const fetchKelas = async (id: number, tk: string) => {
             setKelasLoading(true);
             try {
-                const res  = await fetch(`http://localhost:5000/api/admin/kelas?tahun_ajaran_id=${id}`, hdr(tk));
+                // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+                const res  = await fetch(`${API_BASE_URL}/api/admin/kelas?tahun_ajaran_id=${id}`, hdr(tk));
                 const data = await res.json();
                 if (res.ok && data.success) {
                     const rows: KelasWithSiswa[] = [];
                     await Promise.all(data.data.map(async (k: any) => {
                         const kid = k.id_kelas || k.id; if (!kid) return;
                         try {
-                            const r2 = await fetch(`http://localhost:5000/api/admin/kelas/${kid}/siswa`, hdr(tk));
+                            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+                            const r2 = await fetch(`${API_BASE_URL}/api/admin/kelas/${kid}/siswa`, hdr(tk));
                             const d2 = await r2.json();
                             if (d2.success) rows.push({ id_kelas: kid, nama_kelas: k.nama_kelas || k.nama, jumlah_siswa: d2.data.length });
                         } catch {}
@@ -298,7 +304,8 @@ export default function DashboardClient() {
         const fetchProgress = async () => {
             setProgressGuruLoading(true);
             try {
-                const res  = await fetch('http://localhost:5000/api/admin/dashboard/progress-guru', hdr(token!));
+                // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+                const res  = await fetch(`${API_BASE_URL}/api/admin/dashboard/progress-guru`, hdr(token!));
                 const data = await res.json();
                 if (res.ok && data.success) setProgressGuru(data.data);
             } catch (e) { console.error(e); } finally { setProgressGuruLoading(false); }
@@ -307,7 +314,8 @@ export default function DashboardClient() {
         const fetchKelengkapan = async () => {
             setKelengkapanLoading(true);
             try {
-                const res  = await fetch('http://localhost:5000/api/admin/dashboard/kelengkapan-rapor', hdr(token!));
+                // ✅ PERUBAHAN 6: URL sekarang pakai API_BASE_URL
+                const res  = await fetch(`${API_BASE_URL}/api/admin/dashboard/kelengkapan-rapor`, hdr(token!));
                 const data = await res.json();
                 if (res.ok && data.success) setKelengkapanRapor(data.data);
             } catch (e) { console.error(e); } finally { setKelengkapanLoading(false); }

@@ -35,6 +35,8 @@ const corsOptions = {
 // Middleware keamanan dengan CSP diperketat
 app.use(
   helmet({
+    // PERBAIKAN: Izinkan aset statis (foto/logo) dimuat oleh frontend (origin berbeda)
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],

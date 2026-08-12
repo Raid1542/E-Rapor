@@ -29,7 +29,7 @@ interface TahunAjaranAktif {
 }
 
 /* Konstanta: URL dasar API */
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 /* Komponen: Menyuntikkan animasi global untuk sidebar */
 const SidebarStyles = () => (

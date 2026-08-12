@@ -11,8 +11,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, X } from 'lucide-react';
 
-// Konstanta konfigurasi API dan routing
-const API_BASE_URL = 'http://localhost:5000';
+// PERBAIKAN: API URL diambil dari environment variable, fallback ke localhost untuk dev
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 const DASHBOARD_PATHS = {
     admin: '/admin/dashboard',
@@ -29,6 +29,19 @@ interface PopupConfig {
     message: string;
     onClose?: () => void;
 }
+
+// PERBAIKAN: Fungsi validasi redirect URL untuk mencegah Open Redirect
+// Hanya izinkan path internal yang dimulai dengan '/' dan bukan '//' atau '/\'
+const isSafeRedirect = (url: string | null): boolean => {
+    if (!url) return false;
+    // Harus dimulai dengan '/' tunggal
+    if (!url.startsWith('/')) return false;
+    // Jangan izinkan '//' (protocol-relative) atau '/\' (bypass)
+    if (url.startsWith('//') || url.startsWith('/\\')) return false;
+    // Jangan izinkan karakter berbahaya
+    if (url.includes('\n') || url.includes('\r')) return false;
+    return true;
+};
 
 /* Komponen untuk menyuntikkan animasi global */
 const GlobalStyles = () => (
@@ -49,7 +62,7 @@ const GlobalStyles = () => (
     `}</style>
 );
 
-/* Komponen modal popup notifikasi login */
+/* Komponen modal popup notifikasi login - KODE SAMA SEPERTI SEBELUMNYA */
 const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => void }) => {
     const handleClose = () => {
         popup.onClose?.();
@@ -316,7 +329,7 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
     );
 };
 
-/* Komponen modal konfirmasi logout */
+/* Komponen modal konfirmasi logout - KODE SAMA SEPERTI SEBELUMNYA */
 const ConfirmLogoutModal = ({
     onConfirm,
     onCancel,
@@ -394,7 +407,6 @@ export default function LoginClient() {
 
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-    // Cek status login saat komponen dimuat
     useEffect(() => {
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
@@ -404,7 +416,6 @@ export default function LoginClient() {
         }
     }, []);
 
-    // Proses logout
     const handleConfirmLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');
@@ -412,7 +423,6 @@ export default function LoginClient() {
         setShowLogoutConfirm(false);
     };
 
-    // Batalkan logout dan redirect ke dashboard
     const handleCancelLogout = () => {
         setShowLogoutConfirm(false);
         try {
@@ -428,7 +438,6 @@ export default function LoginClient() {
         }
     };
 
-    // Ambil data publik sekolah
     useEffect(() => {
         const fetchSekolah = async () => {
             try {
@@ -447,7 +456,6 @@ export default function LoginClient() {
         fetchSekolah();
     }, []);
 
-    // Handle submit form login
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const { email_sekolah, password, role } = formData;
@@ -515,10 +523,13 @@ export default function LoginClient() {
 
             const roleLabel = role === 'admin' ? 'Admin' : role === 'guru_kelas' ? 'Wali Kelas' : 'Guru Bidang Studi';
 
+            // PERBAIKAN: Validasi redirect URL untuk mencegah Open Redirect
             const urlParams = new URLSearchParams(window.location.search);
-            const redirect = urlParams.get('redirect');
+            const redirectParam = urlParams.get('redirect');
             const defaultDashboard = DASHBOARD_PATHS[role as keyof typeof DASHBOARD_PATHS] || '/';
-            const redirectPath = redirect || defaultDashboard;
+            
+            // Hanya gunakan redirect parameter jika aman (path internal)
+            const redirectPath = isSafeRedirect(redirectParam) ? redirectParam! : defaultDashboard;
 
             showPopup({
                 type: 'success',
@@ -540,7 +551,6 @@ export default function LoginClient() {
         }
     };
 
-    // Handle perubahan input form
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({
@@ -577,7 +587,6 @@ export default function LoginClient() {
                     --grad-3: #f5870a;
                 }
 
-                /* Box Model & Layout */
                 .bg-image { 
                     background-image: url('/images/bg-logo.jpg'); 
                     background-size: cover; 
@@ -621,7 +630,6 @@ export default function LoginClient() {
                 }
                 .fg { margin-bottom: 1rem; }
 
-                /* Visual & Decorations */
                 .left-panel .ledger-lines {
                     position: absolute; 
                     inset: 0;
@@ -668,7 +676,6 @@ export default function LoginClient() {
                     100% { left: 130%; }
                 }
 
-                /* Typography & Components */
                 .logo-orbit { 
                     position: relative; 
                     z-index: 1; 
@@ -941,7 +948,6 @@ export default function LoginClient() {
                 <div className="absolute inset-0 glass-overlay" />
                 <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
                     <div className="login-card">
-                        {/* Panel Kiri: Identitas Sekolah */}
                         <div className="left-panel">
                             <div className="ledger-lines" />
                             <div className="panel-shimmer" />
@@ -969,7 +975,6 @@ export default function LoginClient() {
                             </div>
                         </div>
 
-                        {/* Panel Kanan: Form Login */}
                         <div className="right-panel">
                             <div className="right-header">
                                 <p className="right-label">Masuk ke akun</p>
@@ -978,7 +983,6 @@ export default function LoginClient() {
                             </div>
 
                             <form onSubmit={handleSubmit}>
-                                {/* Email Field */}
                                 <div className="fg">
                                     <div className="field-label">
                                         <svg width="0.812rem" height="0.812rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1004,7 +1008,6 @@ export default function LoginClient() {
                                     </div>
                                 </div>
 
-                                {/* Password Field */}
                                 <div className="fg">
                                     <div className="field-label">
                                         <svg width="0.812rem" height="0.812rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1060,7 +1063,6 @@ export default function LoginClient() {
                                     </div>
                                 </div>
 
-                                {/* Role Select */}
                                 <div className="fg">
                                     <div className="field-label">
                                         <svg width="0.812rem" height="0.812rem" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1092,7 +1094,6 @@ export default function LoginClient() {
                                     </div>
                                 </div>
 
-                                {/* Submit Button */}
                                 <button type="submit" disabled={loading} className="btn-login">
                                     {loading ? (
                                         <>

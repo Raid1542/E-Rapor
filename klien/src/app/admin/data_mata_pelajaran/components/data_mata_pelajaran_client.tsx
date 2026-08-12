@@ -20,6 +20,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
@@ -64,7 +67,6 @@ interface FormDataType {
 }
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
-// Disamakan dengan seluruh halaman admin lainnya.
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -73,7 +75,6 @@ const ACCENT_DARK = '#c95b08';
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — No, Kode, Mata Pelajaran, Jenis, Kurikulum, Urutan Rapor, Aksi */
 const GRID_COLS = 'minmax(50px,0.5fr) minmax(90px,0.9fr) minmax(180px,2fr) minmax(90px,0.9fr) minmax(140px,1.3fr) minmax(100px,0.9fr) minmax(170px,1.6fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
@@ -169,7 +170,7 @@ const ActionButton = ({
     );
 };
 
-// ─── NOTIF MODAL (satu sistem untuk notifikasi & konfirmasi) ─────────────────
+// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
@@ -229,7 +230,6 @@ export default function DataMataPelajaranPage() {
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // State untuk dropdown
     const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
     const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
     const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
@@ -256,7 +256,8 @@ export default function DataMataPelajaranPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -289,7 +290,8 @@ export default function DataMataPelajaranPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/semester-list`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -334,7 +336,8 @@ export default function DataMataPelajaranPage() {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
                 return;
             }
-            const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran?tahun_ajaran_id=${semesterId}`, {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/mata-pelajaran?tahun_ajaran_id=${semesterId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
@@ -361,8 +364,6 @@ export default function DataMataPelajaranPage() {
         }
     };
 
-    // ── useEffect ──────────────────────────────────────────────────────────────
-
     useEffect(() => {
         fetchTahunAjaranList();
     }, []);
@@ -372,8 +373,6 @@ export default function DataMataPelajaranPage() {
             fetchSemesterByTahunAjaran(selectedTahunAjaranId);
         }
     }, [selectedTahunAjaranId]);
-
-    // ── Form Handlers ──────────────────────────────────────────────────────────
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -481,7 +480,8 @@ export default function DataMataPelajaranPage() {
                 semester_id: selectedSemesterId
             };
 
-            const res = await fetch('http://localhost:5000/api/admin/mata-pelajaran', {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/mata-pelajaran`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload)
@@ -522,7 +522,8 @@ export default function DataMataPelajaranPage() {
                 kurikulum: formData.kurikulum.trim(),
                 urutan_rapor
             };
-            const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran/${editId}`, {
+            // ✅ PERUBAHAN 6: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/mata-pelajaran/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload)
@@ -564,7 +565,8 @@ export default function DataMataPelajaranPage() {
                 const token = localStorage.getItem('token');
                 if (!token) return;
                 try {
-                    const res = await fetch(`http://localhost:5000/api/admin/mata-pelajaran/${id}`, {
+                    // ✅ PERUBAHAN 7: URL sekarang pakai API_BASE_URL
+                    const res = await fetch(`${API_BASE_URL}/api/admin/mata-pelajaran/${id}`, {
                         method: 'DELETE',
                         headers: { Authorization: `Bearer ${token}` }
                     });
@@ -596,8 +598,6 @@ export default function DataMataPelajaranPage() {
             handleReset();
         }, 300);
     };
-
-    // ── Filtering & Pagination ─────────────────────────────────────────────────
 
     const filteredMapel = mapelList.filter((mp) => {
         const query = searchQuery.toLowerCase().trim();
@@ -640,8 +640,6 @@ export default function DataMataPelajaranPage() {
         });
         return pages;
     };
-
-    // ── Render Form (Tambah / Edit) ─────────────────────────────────────────
 
     const renderForm = (isEdit: boolean) => (
         <div className={`flex-1 min-h-screen p-3 sm:p-6 transition-all duration-300 ${formClosing ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`} style={PAGE_BG}>
@@ -751,8 +749,6 @@ export default function DataMataPelajaranPage() {
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
 
-    // ── HALAMAN UTAMA ────────────────────────────────────────────────────────
-
     return (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
@@ -764,7 +760,6 @@ export default function DataMataPelajaranPage() {
                 <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola data mata pelajaran per semester</p>
             </div>
 
-            {/* Card: Pemilih Tahun Ajaran + Semester */}
             <div className="card-flat bg-white rounded-2xl px-4 sm:px-5 py-3.5 mb-4 flex flex-wrap items-center gap-x-5 gap-y-3 anim-in d2" style={CARD_STYLE}>
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
@@ -868,7 +863,6 @@ export default function DataMataPelajaranPage() {
                 </div>
             ) : (
                 <>
-                    {/* Card: Toolbar */}
                     <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d3" style={CARD_STYLE}>
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                             <div className="flex-shrink-0">
@@ -913,7 +907,6 @@ export default function DataMataPelajaranPage() {
                         </div>
                     </div>
 
-                    {/* Card: Tabel data mata pelajaran */}
                     <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
                         <div className="overflow-x-auto">
                             <div style={{ width: '100%', minWidth: '820px' }}>

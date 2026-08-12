@@ -26,6 +26,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 /* ==========================================================================
    INTERFACES  (tidak diubah)
    ========================================================================== */
@@ -314,7 +317,8 @@ export default function DataAdminClient() {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
                 return;
             }
-            const res  = await fetch('http://localhost:5000/api/admin/admin', { headers: { Authorization: `Bearer ${token}` } });
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res  = await fetch(`${API_BASE_URL}/api/admin/admin`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (res.ok) {
                 const normalizedAdmins = (data.data || []).map((admin: any) => ({
@@ -438,7 +442,8 @@ export default function DataAdminClient() {
                 jenis_kelamin: formData.jenisKelamin, alamat: formData.alamat,
                 no_telepon: formData.no_telepon,
             };
-            const res = await fetch('http://localhost:5000/api/admin/admin', {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/admin`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload),
@@ -467,7 +472,8 @@ export default function DataAdminClient() {
                 tanggal_lahir: formData.tanggal_lahir,  jenis_kelamin: formData.jenisKelamin,
                 alamat:        formData.alamat,         no_telepon:    formData.no_telepon,
             };
-            const res = await fetch(`http://localhost:5000/api/admin/admin/${editId}`, {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/admin/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload),

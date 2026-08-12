@@ -2,34 +2,6 @@
  * Nama File: data_ekstrakurikuler_client.tsx
  * Fungsi: Komponen utama halaman Data Ekstrakurikuler untuk admin.
  *         Menyediakan fitur CRUD ekstrakurikuler PER SEMESTER
- * Update:
- *   - Tambah dropdown Semester (TA → Semester → CRUD)
- *   - Kirim semester_id ke semua API call
- *   - Validasi semester aktif
- *   - REFACTOR: Struktur 3 card terpisah (TA+Semester, Toolbar, Tabel)
- *   - REFACTOR: Buttons konsisten dengan BtnBatal dan BtnReset
- *   - REFACTOR: Modal handling sesuai dengan data_mata_pelajaran_client
- *   - UPDATE: Tambah animasi fadeInUp + hover lift konsisten dengan Data Admin
- *   - 🎨 RESTYLE: Disamakan dengan design system Data Pembina Ekskul & Data
- *     Pembelajaran — kartu abu netral (#f6f7f9 / border #ececec), gradient
- *     header BRAND_GRADIENT, sistem ActionButton (primary/neutral/warning/
- *     danger/info), animasi anim-in/row-hover/btn-action yang konsisten.
- *     TIDAK ADA PERUBAHAN LOGIKA: seluruh state, effect, handler, dan
- *     endpoint API tetap identik dengan versi sebelumnya.
- *   - 🩹 FIX: Dropdown "Pembina Ekstrakurikuler" sebelumnya memakai <select>
- *     native, yang bisa membuka opsi ke ATAS (perilaku bawaan browser saat
- *     ruang di bawah dianggap kurang) sehingga menabrak/menutupi header modal.
- *     Diganti dengan dropdown kustom (PembinaDropdown) yang SELALU membuka
- *     ke bawah dengan tinggi maksimum + scroll. Secara fungsi tetap sama
- *     persis — hanya mengubah tampilan/posisi panel opsi, bukan cara data
- *     pembina_id disimpan atau divalidasi.
- *   - 🩹 FIX 2: Tabel data ekstrakurikuler sebelumnya memakai <table> native
- *     tanpa lebar kolom eksplisit yang sama antara header dan body, sehingga
- *     kolom header (gradient oranye) tidak sejajar dengan isi baris —
- *     terutama kolom Aksi yang "menggantung" jauh ke kanan dengan banyak
- *     ruang kosong. Diganti dengan tabel berbasis CSS grid (GRID_COLS_EKSKUL)
- *     yang dipakai identik oleh header maupun setiap baris, sama seperti pola
- *     di Data Guru/Admin/Siswa, sehingga kolom selalu sejajar dan rapi.
  */
 
 'use client';
@@ -37,6 +9,9 @@ import { useState, useEffect, useRef, useCallback, ChangeEvent, ReactNode } from
 import { Pencil, Plus, Search, X, Trash2, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, Lock, CalendarRange, RotateCcw, ChevronDown } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
+
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -88,7 +63,6 @@ interface FormDataType {
 }
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
-// Disamakan persis dengan data_pembina_ekskul_client.tsx & data_pembelajaran_client.tsx.
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -97,8 +71,6 @@ const ACCENT_DARK = '#c95b08';
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — dipakai identik oleh header dan setiap baris agar
-   selalu sejajar (pola sama seperti Data Guru/Admin/Siswa). */
 const GRID_COLS_EKSKUL = 'minmax(56px,0.5fr) minmax(200px,2.2fr) minmax(160px,1.6fr) minmax(130px,1.1fr) minmax(280px,2.4fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
@@ -169,7 +141,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ─── SISTEM TOMBOL AKSI (disamakan dengan Data Pembina Ekskul / Data Pembelajaran) ───
+// ─── SISTEM TOMBOL AKSI ──────────────────────────────────────────────────────
 
 type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent' | 'danger';
 
@@ -350,12 +322,7 @@ const inputCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 o
 const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-red-100 focus:border-red-400 bg-red-50/30 border-red-400 placeholder:text-gray-400";
 
 // ─── DROPDOWN KUSTOM PEMBINA ──────────────────────────────────────────────────
-// Menggantikan <select> native khusus untuk field "Pembina Ekstrakurikuler".
-// <select> native bisa membuka opsi ke ATAS bila browser menganggap ruang di
-// bawah kurang — pada modal ini itu menabrak/menutupi header. Dropdown kustom
-// ini SELALU membuka panel ke bawah (top-full) dengan tinggi maksimum + scroll,
-// jadi tidak pernah menabrak elemen di atasnya. Perilaku datanya identik: tetap
-// memanggil onChange dengan string id pembina (atau '' untuk "Tidak ada").
+
 const PembinaDropdown = ({
   value, options, onChange, hasError = false,
 }: {
@@ -432,7 +399,6 @@ export default function DataEkstrakurikulerPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // State untuk dropdown Tahun Ajaran & Semester
   const [tahunAjaranList, setTahunAjaranList] = useState<TahunAjaran[]>([]);
   const [selectedTahunAjaranId, setSelectedTahunAjaranId] = useState<number | null>(null);
   const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
@@ -441,17 +407,14 @@ export default function DataEkstrakurikulerPage() {
 
   const [pembinaList, setPembinaList] = useState<Pembina[]>([]);
 
-  // Modal Lihat Peserta
   const [showLihatPeserta, setShowLihatPeserta] = useState(false);
   const [selectedEkskul, setSelectedEkskul] = useState<Ekstrakurikuler | null>(null);
   const [pesertaList, setPesertaList] = useState<PesertaEkskul[]>([]);
   const [loadingPeserta, setLoadingPeserta] = useState(false);
 
-  // Modal konfirmasi tambah/edit
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'add' | 'edit' | null>(null);
 
-  // Modal konfirmasi hapus
   const [confirmCfg, setConfirmCfg] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const showConfirm = (message: string, onConfirm: () => void) => setConfirmCfg({ message, onConfirm });
 
@@ -473,7 +436,8 @@ export default function DataEkstrakurikulerPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch('http://localhost:5000/api/admin/tahun-ajaran', {
+      // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/tahun-ajaran`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -506,7 +470,8 @@ export default function DataEkstrakurikulerPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch('http://localhost:5000/api/admin/semester-list', {
+      // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/semester-list`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -549,7 +514,8 @@ export default function DataEkstrakurikulerPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch('http://localhost:5000/api/admin/ekstrakurikuler/pembina-dropdown', {
+      // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/ekstrakurikuler/pembina-dropdown`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -567,7 +533,8 @@ export default function DataEkstrakurikulerPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler?semester_id=${semesterId}`, {
+      // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/ekstrakurikuler?semester_id=${semesterId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -600,8 +567,9 @@ export default function DataEkstrakurikulerPage() {
         return;
       }
 
+      // ✅ PERUBAHAN 6: URL sekarang pakai API_BASE_URL
       const res = await fetch(
-        `http://localhost:5000/api/admin/ekstrakurikuler/${ekskulId}/anggota?semester_id=${selectedSemesterId}`,
+        `${API_BASE_URL}/api/admin/ekstrakurikuler/${ekskulId}/anggota?semester_id=${selectedSemesterId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -650,8 +618,6 @@ export default function DataEkstrakurikulerPage() {
     fetchPembinaList();
   }, []);
 
-  // ── Form Handlers ──────────────────────────────────────────────────────────
-
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -696,7 +662,8 @@ export default function DataEkstrakurikulerPage() {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/admin/ekstrakurikuler', {
+      // ✅ PERUBAHAN 7: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/ekstrakurikuler`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -730,7 +697,8 @@ export default function DataEkstrakurikulerPage() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${editId}`, {
+      // ✅ PERUBAHAN 8: URL sekarang pakai API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/admin/ekstrakurikuler/${editId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -780,7 +748,8 @@ export default function DataEkstrakurikulerPage() {
       }
 
       try {
-        const res = await fetch(`http://localhost:5000/api/admin/ekstrakurikuler/${id}?semester_id=${selectedSemesterId}`, {
+        // ✅ PERUBAHAN 9: URL sekarang pakai API_BASE_URL
+        const res = await fetch(`${API_BASE_URL}/api/admin/ekstrakurikuler/${id}?semester_id=${selectedSemesterId}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -832,8 +801,6 @@ export default function DataEkstrakurikulerPage() {
     setErrors({});
   };
 
-  // ── Filtering & Pagination ─────────────────────────────────────────────────
-
   const filteredEkskul = ekskulList.filter((e) => {
     const query = searchQuery.toLowerCase().trim();
     return !query ||
@@ -876,8 +843,6 @@ export default function DataEkstrakurikulerPage() {
 
     return pages;
   };
-
-  // ── Render Form (Tambah / Edit) ────────────────────────────────────────────
 
   const renderForm = (isEdit: boolean) => (
     <div className="flex-1 p-3 sm:p-6 min-h-screen" style={PAGE_BG}>
@@ -950,7 +915,6 @@ export default function DataEkstrakurikulerPage() {
         </div>
       </div>
 
-      {/* Modal Konfirmasi Simpan (Tambah/Edit) */}
       {showConfirmModal && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
@@ -999,8 +963,6 @@ export default function DataEkstrakurikulerPage() {
   if (showTambah) return renderForm(false);
   if (showEdit) return renderForm(true);
 
-  // ── HALAMAN UTAMA — 3 Card Terpisah ────────────────────────────────────────
-
   return (
     <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
       <GlobalStyles />
@@ -1027,9 +989,6 @@ export default function DataEkstrakurikulerPage() {
         <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola data kegiatan ekstrakurikuler per semester</p>
       </div>
 
-      {/* ====================================================================
-          CARD 1: Pilih Tahun Ajaran + Semester
-      ==================================================================== */}
       <div className="card-flat bg-white rounded-2xl px-4 sm:px-5 py-3.5 mb-4 flex flex-wrap items-center gap-x-5 gap-y-3 anim-in d2" style={CARD_STYLE}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
@@ -1143,9 +1102,6 @@ export default function DataEkstrakurikulerPage() {
         </div>
       ) : (
         <>
-          {/* ====================================================================
-              CARD 2: Toolbar — Tambah Ekstrakurikuler + Tampilkan data + Search
-          ==================================================================== */}
           <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d3" style={CARD_STYLE}>
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div className="flex-shrink-0">
@@ -1201,12 +1157,6 @@ export default function DataEkstrakurikulerPage() {
             </div>
           </div>
 
-          {/* ====================================================================
-              CARD 3: Tabel data ekstrakurikuler — berbasis CSS grid, kolom
-              header & body memakai GRID_COLS_EKSKUL yang identik sehingga
-              selalu sejajar (memperbaiki tabel native yang sebelumnya renggang
-              tidak rata pada kolom Aksi).
-          ==================================================================== */}
           <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
             <div className="px-4 sm:px-5 py-2.5" style={{ borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
               <p className="text-xs font-medium text-gray-500">
@@ -1216,7 +1166,6 @@ export default function DataEkstrakurikulerPage() {
 
             <div className="overflow-x-auto">
               <div style={{ width: '100%', minWidth: '850px' }}>
-                {/* Header */}
                 <div className="grid" style={{ gridTemplateColumns: GRID_COLS_EKSKUL, background: BRAND_GRADIENT }}>
                   <div className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
                   <div className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama Ekstrakurikuler</div>
@@ -1225,7 +1174,6 @@ export default function DataEkstrakurikulerPage() {
                   <div className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
                 </div>
 
-                {/* Body */}
                 {loading ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS_EKSKUL, borderColor: '#f0f0f0' }}>

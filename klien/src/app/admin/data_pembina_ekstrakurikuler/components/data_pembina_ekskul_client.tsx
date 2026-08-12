@@ -8,6 +8,7 @@
  * FIX: Payload ke backend memakai key "nama_lengkap" (sebelumnya "nama"), sesuai
  *      yang dibaca oleh pembinaEkskulController.js — memperbaiki error "Nama lengkap
  *      wajib diisi" saat Tambah/Edit padahal field nama sudah diisi.
+ * UPDATE 3: Ganti semua URL hardcoded localhost:5000 dengan API_BASE_URL untuk deployment.
  */
 
 'use client';
@@ -21,6 +22,9 @@ import {
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
+
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 /* ==========================================================================
    INTERFACES
@@ -287,7 +291,8 @@ export default function DataPembinaEkskulClient() {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
 
-            const res = await fetch(`http://localhost:5000/api/admin/pembina-ekskul?page=${page}&limit=${limit}`, {
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul?page=${page}&limit=${limit}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -427,7 +432,8 @@ export default function DataPembinaEkskulClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
         try {
-            const res = await fetch('http://localhost:5000/api/admin/pembina-ekskul', {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -455,7 +461,8 @@ export default function DataPembinaEkskulClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/pembina-ekskul/${editId}`, {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -492,7 +499,8 @@ export default function DataPembinaEkskulClient() {
         fd.append('file', importFile);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/admin/pembina-ekskul/import', {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul/import`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: fd,
@@ -963,7 +971,8 @@ export default function DataPembinaEkskulClient() {
                                 <FileSpreadsheet size={19} className="mt-0.5 flex-shrink-0" style={{ color: ACCENT }} />
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Format file: <strong>.xlsx</strong> atau <strong>.xls</strong></p>
-                                    <a href="http://localhost:5000/templates/template_import_pembina.xlsx" download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
+                                    {/* ✅ PERUBAHAN 6: URL template sekarang pakai API_BASE_URL */}
+                                    <a href={`${API_BASE_URL}/templates/template_import_pembina.xlsx`} download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
                                         <Download size={13} /> Unduh template Excel
                                     </a>
                                 </div>

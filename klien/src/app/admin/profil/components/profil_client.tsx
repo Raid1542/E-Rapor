@@ -19,6 +19,9 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
@@ -47,7 +50,6 @@ interface UserProfile {
 }
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
-// Disamakan dengan seluruh halaman admin lainnya.
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -223,9 +225,11 @@ const ProfilePage = () => {
 
             try {
                 const userData: UserProfile = JSON.parse(storedUser);
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+                // ✅ PERUBAHAN 2: Sekarang pakai API_BASE_URL (hapus deklarasi baseUrl terpisah)
+                const baseUrl = API_BASE_URL;
 
-                const res = await fetch(`http://localhost:5000/api/admin/admin/${userData.id}`, {
+                // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+                const res = await fetch(`${API_BASE_URL}/api/admin/admin/${userData.id}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -361,7 +365,8 @@ const ProfilePage = () => {
             const userData: UserProfile = JSON.parse(storedUser);
             const userId = userData.id;
 
-            const response = await fetch(`http://localhost:5000/api/admin/admin/${userId}`, {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const response = await fetch(`${API_BASE_URL}/api/admin/admin/${userId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -440,7 +445,8 @@ const ProfilePage = () => {
         formDataUpload.append('foto', file);
 
         try {
-            const response = await fetch('http://localhost:5000/api/admin/admin/upload-foto', {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const response = await fetch(`${API_BASE_URL}/api/admin/admin/upload-foto`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}` },
                 body: formDataUpload
@@ -455,7 +461,8 @@ const ProfilePage = () => {
                     localStorage.setItem('currentUser', JSON.stringify(userData));
                 }
                 window.dispatchEvent(new Event('profileImageUpdated'));
-                setProfileImage(`http://localhost:5000${result.fotoPath}`);
+                // ✅ PERUBAHAN 6: URL preview foto sekarang pakai API_BASE_URL
+                setProfileImage(`${API_BASE_URL}${result.fotoPath}`);
                 setPreviewImage(null);
                 setSelectedFileName('');
                 showModal({ type: 'success', title: 'Foto Diperbarui!', message: 'Foto profil Anda berhasil diupload.' });

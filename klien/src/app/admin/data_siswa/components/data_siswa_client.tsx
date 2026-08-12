@@ -26,6 +26,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 /* ==========================================================================
    NOTIFICATION MODAL TYPES
    ========================================================================== */
@@ -281,7 +284,7 @@ export default function DataSiswaClient() {
     const closeModal = useCallback(() => setModal(null), []);
 
     /* ------------------------------------------------------------------
-       FETCH  (tidak diubah)
+       FETCH  (URL sudah diperbaiki pakai API_BASE_URL)
     ------------------------------------------------------------------ */
 
     const fetchSiswa = useCallback(async (page = 1, limit = 100) => {
@@ -292,8 +295,9 @@ export default function DataSiswaClient() {
                 return;
             }
 
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
             const res = await fetch(
-                `http://localhost:5000/api/admin/siswa-master?page=${page}&limit=${limit}&status=semua`,
+                `${API_BASE_URL}/api/admin/siswa-master?page=${page}&limit=${limit}&status=semua`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -418,7 +422,8 @@ export default function DataSiswaClient() {
             return;
         }
         try {
-            const res = await fetch('http://localhost:5000/api/admin/siswa-master', {
+            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/siswa-master`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -452,7 +457,8 @@ export default function DataSiswaClient() {
             return;
         }
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/siswa-master/${editId}`, {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/siswa-master/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -515,7 +521,8 @@ export default function DataSiswaClient() {
 
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/admin/siswa-master/import', {
+            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/siswa-master/import`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: fd,
@@ -998,7 +1005,8 @@ export default function DataSiswaClient() {
                                 <FileSpreadsheet size={19} className="mt-0.5 flex-shrink-0" style={{ color: ACCENT }} />
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Format file: <strong>.xlsx</strong> atau <strong>.xls</strong></p>
-                                    <a href="http://localhost:5000/templates/template_import_siswa.xlsx" download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
+                                    {/* ✅ PERUBAHAN 6: URL template sekarang pakai API_BASE_URL */}
+                                    <a href={`${API_BASE_URL}/templates/template_import_siswa.xlsx`} download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
                                         <Download size={13} /> Unduh template Excel
                                     </a>
                                 </div>

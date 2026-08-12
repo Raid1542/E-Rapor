@@ -18,6 +18,9 @@ import { CheckCircle2, AlertCircle, WifiOff, ShieldAlert, X, Upload, ImageOff } 
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
 // Disamakan dengan data_guru_client.tsx / data_pembina_ekskul_client.tsx /
 // data_kelas_client.tsx / data_tahun_ajaran_client.tsx.
@@ -183,7 +186,8 @@ export default function DataSekolahPage() {
                 showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu untuk mengakses halaman ini.' });
                 return;
             }
-            const res = await fetch('http://localhost:5000/api/admin/sekolah', {
+            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/sekolah`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -197,7 +201,8 @@ export default function DataSekolahPage() {
                 };
                 setFormData(data);
                 setOriginalData(data);
-                setLogoPreview(s.logo_path ? `http://localhost:5000${s.logo_path}` : null);
+                // ✅ PERUBAHAN 3: Logo preview sekarang pakai API_BASE_URL
+                setLogoPreview(s.logo_path ? `${API_BASE_URL}${s.logo_path}` : null);
             } else {
                 const err = await res.json();
                 showModal({ type: 'error', title: 'Gagal Memuat Data', message: err.message || 'Terjadi kesalahan saat memuat data sekolah.' });
@@ -278,7 +283,8 @@ export default function DataSekolahPage() {
             }
 
             // Simpan data sekolah
-            const res = await fetch('http://localhost:5000/api/admin/sekolah', {
+            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
+            const res = await fetch(`${API_BASE_URL}/api/admin/sekolah`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
@@ -299,14 +305,16 @@ export default function DataSekolahPage() {
                 setUploading(true);
                 const formDataLogo = new FormData();
                 formDataLogo.append('logo', selectedFile);
-                const resLogo = await fetch('http://localhost:5000/api/admin/sekolah/logo', {
+                // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
+                const resLogo = await fetch(`${API_BASE_URL}/api/admin/sekolah/logo`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formDataLogo
                 });
                 const dataLogo = await resLogo.json();
                 if (resLogo.ok && dataLogo.logoPath) {
-                    setLogoPreview(`http://localhost:5000${dataLogo.logoPath}`);
+                    // ✅ PERUBAHAN 6: Logo path sekarang pakai API_BASE_URL
+                    setLogoPreview(`${API_BASE_URL}${dataLogo.logoPath}`);
                     window.dispatchEvent(new CustomEvent('logoUpdated', { detail: { logoPath: dataLogo.logoPath } }));
                     setSelectedFile(null);
                     setFileInputKey(prev => prev + 1);
