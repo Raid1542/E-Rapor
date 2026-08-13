@@ -1,30 +1,6 @@
 /**
  * Nama File: atur_penilaian_gbs_client.tsx
  * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian guru bidang studi
- * UPDATE (Redesign UI/UX):
- *   ✅ REDESIGN: Palet warna oranye dilembutkan (soft terracotta), tidak lagi mencolok
- *   ✅ REDESIGN: Warna tombol disesuaikan dengan konvensi umum aplikasi
- *       - Hijau  → aksi menyimpan (Simpan Bobot, Simpan Kategori, konfirmasi simpan)
- *       - Oranye → aksi utama/edit (Edit Semua) — identitas brand halaman ini
- *       - Biru   → aksi menambah (Tambah Baris)
- *       - Merah  → aksi menghapus/destruktif (Hapus baris)
- *       - Abu    → aksi batal/netral (Batal, Logout)
- *       - Amber  → status peringatan (periode belum aktif)
- *       - Slate  → status info terkunci (periode selesai)
- *   ✅ REDESIGN: Tab diubah jadi segmented control, status banner jadi kartu accent-border
- *   ✅ REDESIGN: Modal konfirmasi simpan tidak lagi tampil seperti peringatan (ikon & warna disesuaikan)
- *   ✅ REDESIGN: Animasi diperhalus (fade/scale lebih lembut, transisi lebih konsisten)
- *   - Semua logika bisnis (state, validasi, pemanggilan API) TIDAK diubah
- * UPDATE 2 (🎨 RESTYLE — konsistensi design system):
- *   Disamakan penuh dengan Data Guru/Admin/Siswa/Dashboard/Backup&Restore/
- *   Data Ekstrakurikuler: token BRAND_GRADIENT/ACCENT/ACCENT_DARK, kartu abu
- *   netral (#f6f7f9 / border #ececec), sistem ActionButton (primary/info/
- *   warning/neutral/danger), tabel Kategori Akademik diubah ke grid kolom
- *   sejajar (pola sama seperti tabel Data Guru/Admin/Siswa/Ekstrakurikuler),
- *   tab switcher & tombol simpan/edit warnanya disamakan dengan konvensi
- *   halaman lain (Simpan = oranye/primary, Edit = kuning/warning, Tambah
- *   Baris = biru/info, Hapus = merah/danger). TIDAK ADA PERUBAHAN LOGIKA:
- *   seluruh state, effect, handler, dan endpoint API tetap identik.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  */
 
@@ -40,8 +16,9 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ====== KONSTANTA API ======
-const API = 'http://localhost:5000/api/guru-bidang-studi';
+// ✅ PERUBAHAN: Gunakan API_BASE_URL dari environment variable
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API = `${API_BASE_URL}/api/guru-bidang-studi`;
 
 // ====== DESIGN TOKENS — disamakan penuh dengan Data Guru/Admin/Siswa/
 // Dashboard/Backup&Restore/Data Ekstrakurikuler. ======

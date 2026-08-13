@@ -22,6 +22,9 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 /* ==========================================================================
    INTERFACES
    ========================================================================== */
@@ -285,7 +288,8 @@ export default function DashboardClient() {
 
             const fetchDashboard = async () => {
                 try {
-                    const res = await fetch('http://localhost:5000/api/guru-bidang-studi/dashboard', {
+                    // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
+                    const res = await fetch(`${API_BASE_URL}/api/guru-bidang-studi/dashboard`, {
                         headers: { Authorization: `Bearer ${token}` },
                     });
 

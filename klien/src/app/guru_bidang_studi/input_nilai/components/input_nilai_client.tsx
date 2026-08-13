@@ -8,8 +8,11 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
+// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 // ====== KONSTANTA API ======
-const API = 'http://localhost:5000/api/guru-bidang-studi';
+const API = `${API_BASE_URL}/api/guru-bidang-studi`;
 const ERROR_CODES = {
     KONFIGURASI_BELUM_LENGKAP: 'KONFIGURASI_BELUM_LENGKAP',
 };
@@ -189,9 +192,6 @@ export default function InputNilaiGBSClient() {
     const readOnlyReason: 'not_open' | 'locked' | null = isPeriodLocked ? 'locked' : (isPeriodNotActive ? 'not_open' : null);
     const konfigurasiBelumLengkap = kategoriStatus ? !kategoriStatus.configured : false;
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // CEK STATUS KONFIGURASI PENILAIAN
-    // ═════════════════════════════════════════════════════════════════════════
     const cekStatusKategori = useCallback(async (mapelId: number, kelasId: number) => {
         setKategoriLoading(true);
         try {
@@ -222,9 +222,6 @@ export default function InputNilaiGBSClient() {
         return `Konfigurasi Penilaian Belum Lengkap\n\nMasalah yang ditemukan:\n${masalah.join('\n')}\n\nSolusi:\n1. Buka menu "Atur Penilaian"\n2. Atur bobot komponen agar total 100%\n3. Atur kategori nilai rapor agar rentang 0-100 tercover\n4. Setelah selesai, Anda dapat menginput nilai siswa`;
     };
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // VALIDASI & HANDLER NILAI (0-100)
-    // ═════════════════════════════════════════════════════════════════════════
     const validateNilai = (komponenId: number, nilai: number | null): string | null => {
         if (nilai === null) return null;
         if (typeof nilai !== 'number' || isNaN(nilai)) return 'Nilai harus berupa angka';
@@ -263,7 +260,6 @@ export default function InputNilaiGBSClient() {
         }
     };
 
-    // ====== FETCH DATA ======
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -419,7 +415,6 @@ export default function InputNilaiGBSClient() {
         fetchNilai();
     }, [selectedMapelId, selectedKelasId, mapelList, kelasFiltered, showModal, cekStatusKategori]);
 
-    // ====== FILTER & PAGINATION ======
     useEffect(() => {
         if (!searchQuery.trim()) {
             setFilteredSiswa(siswaList);
@@ -462,7 +457,6 @@ export default function InputNilaiGBSClient() {
         return pages;
     };
 
-    // ====== HANDLERS ======
     const handleDetail = (siswa: SiswaNilai) => { setSelectedSiswa(siswa); setShowDetail(true); };
     const closeDetail = () => { setDetailClosing(true); setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 200); };
 
@@ -560,9 +554,6 @@ export default function InputNilaiGBSClient() {
         }
     };
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // HANDLER IMPORT NILAI
-    // ═════════════════════════════════════════════════════════════════════════
     const openImportModal = () => {
         if (!selectedMapelId || !selectedKelasId) {
             showModal({ type: 'warning', title: 'Pilih Mapel dan Kelas', message: 'Silakan pilih mata pelajaran dan kelas terlebih dahulu.' });
@@ -740,7 +731,6 @@ export default function InputNilaiGBSClient() {
         );
     };
 
-    // ====== LOADING & ERROR STATES ======
     if (loading) {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={{ background: THEME.colors.background }}>
@@ -779,7 +769,6 @@ export default function InputNilaiGBSClient() {
 
     const canEditNilai = !isReadOnly;
 
-    // ====== RENDER ======
     return (
         <div className="flex-1 p-6 min-h-screen" style={{ background: THEME.colors.background }}>
             <GlobalStyles />
@@ -787,13 +776,11 @@ export default function InputNilaiGBSClient() {
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
             <PeriodNotActiveModal isOpen={showPeriodNotActiveModal} onClose={() => setShowPeriodNotActiveModal(false)} />
 
-            {/* HEADER */}
             <div className="mb-6 animate-fade-in-up">
                 <h1 className="text-2xl font-bold text-gray-900">Input Nilai Siswa</h1>
                 <p className="text-sm mt-1" style={{ color: THEME.colors.primary }}>Kelola nilai komponen & rapor siswa per mata pelajaran</p>
             </div>
 
-            {/* STATUS BANNERS */}
             {isReadOnly && (
                 <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl animate-fade-in-up" style={{ background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7', border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}` }}>
                     <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
@@ -847,7 +834,6 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* MAIN CARD */}
             <div className="bg-white rounded-2xl overflow-hidden animate-fade-in-up delay-1" style={{ border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadows.sm }}>
                 <div className="px-6 py-5 space-y-4" style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: '#fffaf6' }}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -968,7 +954,6 @@ export default function InputNilaiGBSClient() {
                 )}
             </div>
 
-            {/* ====== DETAIL MODAL ====== */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -1110,7 +1095,6 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ====== EDIT MODAL ====== */}
             {showEdit && editingSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`} onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -1145,7 +1129,6 @@ export default function InputNilaiGBSClient() {
                             <div>
                                 <div className="flex items-center gap-2 mb-4"><div className="w-1 h-5 rounded-full" style={{ background: THEME.colors.secondary }}></div><p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Komponen Penilaian</p></div>
                                 <div className="space-y-3">
-                                    {/* PTS */}
                                     {(() => {
                                         const ptsKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PTS');
                                         if (!ptsKomponen) return null;
@@ -1169,7 +1152,6 @@ export default function InputNilaiGBSClient() {
                                         );
                                     })()}
 
-                                    {/* PAS */}
                                     {(() => {
                                         const pasKomponen = komponenList.find(k => k.nama_komponen.toUpperCase() === 'PAS');
                                         if (!pasKomponen) return null;
@@ -1193,7 +1175,6 @@ export default function InputNilaiGBSClient() {
                                         );
                                     })()}
 
-                                    {/* UH */}
                                     {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).sort((a, b) => {
                                         const numA = parseInt(a.nama_komponen.match(/\d+/)?.[0] || '0');
                                         const numB = parseInt(b.nama_komponen.match(/\d+/)?.[0] || '0');
@@ -1228,7 +1209,6 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ====== CONFIRM MODAL ====== */}
             {showConfirmModal && editingSiswa && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 fade-in" onClick={(e) => { if (e.target === e.currentTarget && !saving) setShowConfirmModal(false); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -1248,7 +1228,6 @@ export default function InputNilaiGBSClient() {
                 </div>
             )}
 
-            {/* ====== IMPORT MODAL ====== */}
             {showImportModal && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 fade-in" onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
