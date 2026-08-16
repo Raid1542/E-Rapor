@@ -271,7 +271,7 @@ export default function DataMataPelajaranPage() {
                     }])).values()
                 );
 
-                setTahunAjaranList(uniqueTA);
+                setTahunAjaranList(uniqueTA as TahunAjaran[]);
 
                 const savedTA = localStorage.getItem('selectedTahunAjaranId_mapel');
                 if (savedTA) {
@@ -310,7 +310,7 @@ export default function DataMataPelajaranPage() {
                 const savedSemester = localStorage.getItem('selectedSemesterId_mapel');
                 if (savedSemester) {
                     const savedId = Number(savedSemester);
-                    const sem = semesters.find(s => s.id === savedId);
+                    const sem = semesters.find((s: SemesterOption) => s.id === savedId);
                     if (sem) {
                         setSelectedSemesterId(savedId);
                         setIsSemesterActive(sem.is_aktif);

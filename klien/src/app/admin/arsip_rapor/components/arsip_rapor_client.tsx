@@ -260,7 +260,7 @@ export default function ArsipRaporPage() {
                 if (taRes.ok && taData.success) {
                     const taInfo = taData.data.find((t: any) => t.id_induk === idInduk);
                     if (taInfo) {
-                        semesters.forEach(sem => {
+                        semesters.forEach((sem: SemesterOption) => {
                             if (sem.semester === 'Ganjil') {
                                 sem.status_pts = taInfo.status_pts_ganjil || 'nonaktif';
                                 sem.status_pas = taInfo.status_pas_ganjil || 'nonaktif';
@@ -823,7 +823,7 @@ export default function ArsipRaporPage() {
                             className={selectCls}
                         >
                             <option value="">-- Pilih Semester --</option>
-                            {semesterOptions.map(sem => (
+                            {semesterOptions.map((sem: SemesterOption) => (
                                 <option key={sem.id} value={sem.id}>
                                     {sem.semester} {sem.is_aktif ? '(Aktif)' : ''}
                                 </option>

@@ -36,6 +36,8 @@ interface ModalConfig {
 interface UserProfile {
     id: number;
     role: string;
+    nama?: string;           
+    email?: string;
     nama_lengkap: string;
     email_sekolah: string;
     roles: string[];
