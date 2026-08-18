@@ -5,6 +5,10 @@
  *   - Menambahkan animasi muncul dan tutup yang halus untuk semua popup (Detail, Filter, Import, Tambah, Edit)
  *   - Menggunakan transisi opacity dan transform (scale/translate) selama 300ms
  *   - Memperbaiki logika penutupan form agar animasi keluar berjalan sempurna
+ * UPDATE 13:
+ *   - Memperbaiki fetchGuru agar mengambil SEMUA data guru dari server (loop per halaman),
+ *     bukan hanya sejumlah data yang dikembalikan backend secara default. Ada pengaman
+ *     agar tidak infinite loop / duplikat data jika backend belum mendukung pagination.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
  * Tanggal: 20 Juli 2026
  */
@@ -279,30 +283,72 @@ export default function DataGuruClient() {
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    /* ------------------------------------------------------------------
+       FETCH — DIPERBAIKI: loop mengambil SEMUA halaman dari server,
+       bukan cuma satu request tunggal seperti sebelumnya (yang tidak
+       pernah kirim page/limit sama sekali, sehingga jumlah data yang
+       muncul sepenuhnya tergantung nilai default di backend).
+
+       Ada pengaman: kalau backend TIDAK mendukung page/limit dan selalu
+       mengembalikan seluruh data yang sama di setiap request (mengabaikan
+       parameter), loop akan otomatis berhenti setelah mendeteksi tidak
+       ada data baru — supaya tidak infinite loop atau data terduplikasi.
+       Dropdown "Tampilkan X data" (itemsPerPage) tetap hanya mengatur
+       jumlah baris per halaman di tabel — logika itu tidak berubah.
+    ------------------------------------------------------------------ */
+
     const fetchGuru = useCallback(async () => {
+        setLoading(true);
         try {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
-            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
-            const res = await fetch(`${API_BASE_URL}/api/admin/guru`, { headers: { Authorization: `Bearer ${token}` } });
-            const data = await res.json();
-            if (res.ok) {
-                const validRoles = ['guru_kelas', 'guru_bidang_studi'];
-                setGuruList(Array.isArray(data.data) ? data.data.map((g: any) => {
-                    let s = 'aktif';
-                    if (typeof g.status === 'string') { s = g.status.trim().toLowerCase(); if (s !== 'aktif') s = 'nonaktif'; }
-                    let roles: string[] = [];
-                    if (g.roles) { const r = Array.isArray(g.roles) ? g.roles : [g.roles]; roles = r.map((x: any) => String(x).toLowerCase().trim()).filter((x: string) => validRoles.includes(x)); }
-                    return {
-                        id: g.id_user || g.id, nama: g.nama_lengkap || g.nama, email: g.email_sekolah || g.email,
-                        niy: g.niy, nuptk: g.nuptk, tempat_lahir: g.tempat_lahir || '', tanggal_lahir: g.tanggal_lahir || '',
-                        jenisKelamin: g.jenis_kelamin || '', alamat: g.alamat, no_telepon: g.no_telepon || '',
-                        statusGuru: s, roles, profileImage: g.profileImage || null,
-                    };
-                }) : []);
-            } else {
-                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan saat memuat data guru.' });
+
+            const PAGE_SIZE = 100; // ukuran per request ke server (bukan batas total data)
+            let page = 1;
+            let rawList: any[] = [];
+            const seenIds = new Set<number>();
+
+            while (true) {
+                const res = await fetch(
+                    `${API_BASE_URL}/api/admin/guru?page=${page}&limit=${PAGE_SIZE}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan saat memuat data guru.' });
+                    return;
+                }
+
+                const chunk: any[] = Array.isArray(data.data) ? data.data : [];
+
+                // Pengaman anti-infinite-loop / anti-duplikat: kalau backend
+                // mengabaikan page/limit dan selalu mengembalikan data yang
+                // sama, semua id di chunk halaman ke-2+ pasti sudah pernah
+                // dilihat sebelumnya -> berhenti di sini.
+                const adaDataBaru = chunk.some(g => !seenIds.has(g.id_user || g.id));
+                if (page > 1 && !adaDataBaru) break;
+
+                chunk.forEach(g => seenIds.add(g.id_user || g.id));
+                rawList = rawList.concat(chunk);
+
+                if (chunk.length < PAGE_SIZE) break;
+                page += 1;
             }
+
+            const validRoles = ['guru_kelas', 'guru_bidang_studi'];
+            setGuruList(rawList.map((g: any) => {
+                let s = 'aktif';
+                if (typeof g.status === 'string') { s = g.status.trim().toLowerCase(); if (s !== 'aktif') s = 'nonaktif'; }
+                let roles: string[] = [];
+                if (g.roles) { const r = Array.isArray(g.roles) ? g.roles : [g.roles]; roles = r.map((x: any) => String(x).toLowerCase().trim()).filter((x: string) => validRoles.includes(x)); }
+                return {
+                    id: g.id_user || g.id, nama: g.nama_lengkap || g.nama, email: g.email_sekolah || g.email,
+                    niy: g.niy, nuptk: g.nuptk, tempat_lahir: g.tempat_lahir || '', tanggal_lahir: g.tanggal_lahir || '',
+                    jenisKelamin: g.jenis_kelamin || '', alamat: g.alamat, no_telepon: g.no_telepon || '',
+                    statusGuru: s, roles, profileImage: g.profileImage || null,
+                };
+            }));
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
         } finally {

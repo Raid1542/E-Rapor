@@ -6,13 +6,17 @@
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
  * Update: 15 Juli 2026 - Sinkronisasi dengan template dinamis backend & pesan user yang lebih jelas
+ * Update: 18 Agustus 2026 - Restyle UI mengikuti design system terbaru (warna, card, ActionButton, grid table, animasi)
+ * Update: 18 Agustus 2026 - Modal konfirmasi disatukan ke NotifModal (tipe 'confirm') agar konsisten
+ *         dengan sistem notifikasi di seluruh halaman lain. Tidak ada perubahan logika/validasi.
  */
 'use client';
 
 import { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import {
     Eye, Pencil, X, Search, CheckCircle2, AlertCircle, WifiOff,
-    ShieldAlert, LogOut, Lock, Upload, Download, Info, Save
+    ShieldAlert, LogOut, Lock, Upload, Download, Info, Save,
+    ChevronLeft, ChevronRight, Users, ClipboardList,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -29,12 +33,16 @@ const ERROR_CODES = {
 };
 
 // Types
-type ModalType = 'success' | 'error' | 'warning' | 'network';
+// ✅ PERBAIKAN TAMPILAN: tambahkan tipe 'confirm' supaya popup konfirmasi
+// memakai sistem notifikasi yang SAMA dengan NotifModal (bukan modal
+// terpisah seperti sebelumnya). Tidak ada perubahan pada logika/validasi.
+type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
 
 interface ModalConfig {
     type: ModalType;
     title: string;
     message: string;
+    onConfirm?: () => void;
 }
 
 interface MapelItem {
@@ -75,77 +83,187 @@ interface KategoriStatus {
     message: string;
 }
 
-// Global styles untuk animasi
+/* ==========================================================================
+   DESIGN TOKENS — disamakan penuh dengan design system terbaru
+   ========================================================================== */
+
+const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
+
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+
+const labelCls = 'block text-sm font-bold mb-1.5';
+const labelColor = { color: '#7a3a0a' };
+
+/* ==========================================================================
+   GLOBAL STYLES — identik dengan design system terbaru
+   ========================================================================== */
+
 const GlobalStyles = () => (
     <style jsx global>{`
-    @keyframes dg-fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-    @keyframes dg-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    .dg-fadeIn { animation: dg-fadeIn 0.2s ease; }
-    .dg-scaleIn { animation: dg-scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    .dg-pulse { animation: dg-pulse 0.6s ease 0.15s; }
+    @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    @keyframes dg-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+    .dg-fadeIn  { animation: dg-fadeIn  0.18s ease; }
+    .dg-scaleIn { animation: dg-scaleIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+    .dg-pulse   { animation: dg-pulse   0.6s ease 0.1s; }
+    .dg-shimmer {
+        background: linear-gradient(90deg, #f7f7f7 0%, #efefef 50%, #f7f7f7 100%);
+        background-size: 800px 100%;
+        animation: dg-shimmer 1.3s ease-in-out infinite;
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0);   }
+    }
+    .anim-in { animation: fadeInUp 0.35s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+    .d1 { animation-delay: 0.02s; }
+    .d2 { animation-delay: 0.06s; }
+    .d3 { animation-delay: 0.10s; }
+    .d4 { animation-delay: 0.14s; }
+    .d5 { animation-delay: 0.18s; }
+    .d6 { animation-delay: 0.22s; }
+    .row-in { animation: fadeInUp 0.28s ease forwards; opacity: 0; }
+
+    .card-flat { transition: box-shadow 0.2s ease; }
+    .card-flat:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+    .row-hover { position: relative; transition: background-color 0.15s ease; }
+    .row-hover::before {
+        content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+        background: ${BRAND_GRADIENT}; transform: scaleY(0); transition: transform 0.16s ease;
+    }
+    .row-hover:hover::before { transform: scaleY(1); }
+
+    .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+    .btn-action:hover  { filter: brightness(1.04); }
+    .btn-action:active { filter: brightness(0.98); }
+
+    .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #f0c9a0; border-radius: 10px; }
+
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+        outline: 2.5px solid #f5a623;
+        outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .dg-shimmer, .btn-action, .card-flat, .row-hover {
+            animation: none !important;
+            transition: none !important;
+        }
+    }
   `}</style>
 );
 
-// Konstanta style untuk modal notifikasi
+/* ==========================================================================
+   NOTIFICATION MODAL — disamakan penuh dengan design system terbaru
+   (sekarang juga menangani tipe 'confirm', menggantikan modal konfirmasi
+   terpisah agar tampilannya konsisten dengan file lain)
+   ========================================================================== */
+
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={38} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
-// Komponen modal notifikasi
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
+    const isConfirm = modal.type === 'confirm';
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 dg-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                    <X size={18} />
-                </button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>
-                    {s.icon}
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
+            <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                <div className="dg-scaleIn contents w-full">
+                    {!isConfirm && (
+                        <button
+                            onClick={onClose}
+                            aria-label="Tutup"
+                            className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            <X size={18} />
+                        </button>
+                    )}
+                    <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>
+                        {s.icon}
+                    </div>
+                    <div className="text-center w-full">
+                        <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
+                    </div>
+                    {isConfirm ? (
+                        <div className="flex gap-2.5 w-full mt-1">
+                            <button
+                                onClick={onClose}
+                                className="btn-action flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors"
+                                style={{ borderColor: '#e5e7eb', color: '#4b5563', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => { modal.onConfirm?.(); onClose(); }}
+                                className="btn-action flex-1 text-white font-bold py-2.5 rounded-xl transition-colors text-sm"
+                                style={{ background: BRAND_GRADIENT, boxShadow: '0 4px 14px rgba(232,105,10,0.30)' }}
+                            >
+                                Lanjutkan
+                            </button>
+                        </div>
+                    ) : (
+                        <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>
+                            OK, Mengerti
+                        </button>
+                    )}
                 </div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
-                </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK, Mengerti
-                </button>
             </div>
         </div>
     );
 };
 
-// Konstanta style
-const inputCls = 'w-full border rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400';
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+/* ==========================================================================
+   INPUT & SISTEM TOMBOL AKSI — identik dengan design system terbaru
+   ========================================================================== */
 
-const btnPrimary = {
-    base: 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all',
-    style: { background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' } as React.CSSProperties,
-    hover: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#c95b08,#e8690a)'; },
-    leave: (e: React.MouseEvent<HTMLButtonElement>) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#e8690a,#f5a623)'; },
+const inputCls = 'w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400';
+const inputDisabledCls = 'w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-400 outline-none bg-gray-100 border-gray-200 cursor-not-allowed';
+const inputErrorCls = 'w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-red-100 focus:border-red-400 bg-red-50 border-red-400';
+
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
+    info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
+    warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
+    neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
+    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
+    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
 };
 
-const BtnSecondary = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
-    <button
-        onClick={onClick}
-        disabled={disabled}
-        className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-        onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#fff0e5'; }}
-        onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = '#fff'; }}
-    >
-        {children}
-    </button>
-);
+const ActionButton = ({
+    onClick, children, variant = 'neutral', size = 'md', disabled = false, type = 'button', fullWidth = false, title,
+}: {
+    onClick?: () => void; children: ReactNode; variant?: BtnVariant; size?: 'md' | 'sm';
+    disabled?: boolean; type?: 'button' | 'submit'; fullWidth?: boolean; title?: string;
+}) => {
+    const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2.5 text-sm';
+    return (
+        <button
+            type={type}
+            title={title}
+            onClick={onClick}
+            disabled={disabled}
+            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            style={VARIANT_BASE[variant]}
+        >
+            {children}
+        </button>
+    );
+};
 
 // Komponen utama
 export default function InputNilaiClient() {
@@ -192,8 +310,6 @@ export default function InputNilaiClient() {
     const [editingNilai, setEditingNilai] = useState<Record<number, number | null>>({});
     const [editingErrors, setEditingErrors] = useState<Record<number, string>>({});
     const [saving, setSaving] = useState(false);
-    const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [confirmSiswaNama, setConfirmSiswaNama] = useState<string>('');
 
     // State untuk import nilai dari Excel
     const [showImportModal, setShowImportModal] = useState(false);
@@ -426,13 +542,9 @@ export default function InputNilaiClient() {
 
     const renderPagination = () => {
         const pages: ReactNode[] = [];
-        const btnBase = 'w-8 h-8 flex items-center justify-center rounded-lg text-sm font-semibold border transition-colors';
-        const btnActive = 'text-white border-orange-500';
-        const btnInactive = 'text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-600 bg-white';
-
-        pages.push(
-            <button key="prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className={`${btnBase} ${btnInactive} disabled:opacity-40`}>«</button>
-        );
+        const btnBase = 'min-w-[30px] h-8 px-1.5 flex items-center justify-center rounded-lg text-xs font-bold border-2 transition-colors btn-action';
+        const btnActive = 'text-white border-transparent';
+        const btnInactive = 'text-gray-600 border-transparent hover:bg-orange-50 bg-transparent';
 
         const range: number[] = [];
         if (totalPages <= 5) {
@@ -447,24 +559,20 @@ export default function InputNilaiClient() {
 
         range.forEach(p => {
             if (p < 0) {
-                pages.push(<span key={p} className="px-1 text-gray-400 text-sm">...</span>);
+                pages.push(<span key={p} className="px-1 text-gray-400 text-xs">…</span>);
             } else {
                 pages.push(
                     <button
                         key={p}
                         onClick={() => setCurrentPage(p)}
                         className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
-                        style={currentPage === p ? { background: 'linear-gradient(135deg,#e8690a,#f5a623)' } : {}}
+                        style={currentPage === p ? { background: BRAND_GRADIENT, boxShadow: '0 2px 6px rgba(232,105,10,0.30)' } : {}}
                     >
                         {p}
                     </button>
                 );
             }
         });
-
-        pages.push(
-            <button key="next" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className={`${btnBase} ${btnInactive} disabled:opacity-40`}>»</button>
-        );
 
         return pages;
     };
@@ -570,6 +678,9 @@ export default function InputNilaiClient() {
         }
     };
 
+    // ✅ Konfirmasi sekarang memakai showModal({ type: 'confirm', ... })
+    // supaya tampilannya konsisten dengan sistem notifikasi lainnya.
+    // Semua validasi di bawah ini TIDAK diubah sama sekali.
     const openConfirmSimpan = () => {
         if (!editingSiswa || !selectedMapelId) return;
 
@@ -605,8 +716,12 @@ export default function InputNilaiClient() {
             return;
         }
 
-        setConfirmSiswaNama(editingSiswa.nama);
-        setShowConfirmModal(true);
+        showModal({
+            type: 'confirm',
+            title: 'Konfirmasi Penyimpanan Nilai',
+            message: `Apakah Anda yakin ingin menyimpan nilai ${editingSiswa.nama}?`,
+            onConfirm: executeSimpanNilai,
+        });
     };
 
     const executeSimpanNilai = async () => {
@@ -642,22 +757,18 @@ export default function InputNilaiClient() {
             setSiswaList(prev => prev.map(s => (s.id === editingSiswa.id ? updated : s)));
             setFilteredSiswa(prev => prev.map(s => (s.id === editingSiswa.id ? updated : s)));
 
-            setShowConfirmModal(false);
             setShowEdit(false);
             setEditingSiswa(null);
             setEditingErrors({});
-            setConfirmSiswaNama('');
 
             setTimeout(() => {
                 showModal({ type: 'success', title: 'Nilai Disimpan!', message: `Nilai ${updated.nama} berhasil disimpan.` });
             }, 250);
 
         } catch (err: any) {
-            setShowConfirmModal(false);
             setShowEdit(false);
             setEditingSiswa(null);
             setEditingErrors({});
-            setConfirmSiswaNama('');
             setTimeout(() => {
                 showModal({ type: 'error', title: 'Gagal Menyimpan', message: err.message || 'Gagal menyimpan nilai.' });
             }, 250);
@@ -925,10 +1036,13 @@ export default function InputNilaiClient() {
     // Komponen badge nilai
     const NilaiBadge = ({ nilai }: { nilai: number | null }) => {
         if (nilai === null || nilai === undefined) {
-            return <span className="text-gray-700 text-xs">-</span>;
+            return <span className="text-gray-400 text-xs">-</span>;
         }
         return (
-            <span className="inline-block px-2 py-0.5 rounded-lg text-xs font-bold" style={{ background: '#fff0e5', color: '#c95b08', border: '1px solid #fde0c8' }}>
+            <span
+                className="inline-block px-2 py-0.5 rounded-lg text-xs font-bold"
+                style={{ background: '#fff0e5', color: ACCENT_DARK, border: '1px solid #fde0c8' }}
+            >
                 {nilai}
             </span>
         );
@@ -942,8 +1056,8 @@ export default function InputNilaiClient() {
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
                 <div className="text-center">
-                    <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-medium" style={{ color: '#c95b08' }}>Memuat data...</p>
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-semibold" style={{ color: ACCENT_DARK }}>Memuat data...</p>
                 </div>
             </div>
         );
@@ -956,7 +1070,7 @@ export default function InputNilaiClient() {
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
+                    <div className="relative bg-white rounded-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn" style={CARD_STYLE}>
                         <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dg-pulse">
                             <AlertCircle size={48} className="text-red-500" />
                         </div>
@@ -964,77 +1078,108 @@ export default function InputNilaiClient() {
                             <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
                             <p className="text-sm text-gray-600 leading-relaxed">Anda belum ditugaskan sebagai guru kelas di semester ini.<br />Silakan hubungi Administrator untuk penugasan kelas.</p>
                         </div>
-                        <button onClick={handleLogout} className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 12px rgba(232,105,10,0.3)' }}>
-                            <LogOut size={18} /> Logout
-                        </button>
+                        <ActionButton variant="primary" fullWidth onClick={handleLogout}>
+                            <LogOut size={16} /> Logout
+                        </ActionButton>
                     </div>
                 </div>
             </div>
         );
     }
 
-    const minTableWidth = 400 + komponenList.length * 100 + 240;
     const canEditNilai = currentMapel?.bisa_input && !isReadOnly;
     const konfigurasiBelumLengkap = kategoriStatus && !kategoriStatus.configured;
 
+    // Grid kolom tabel dibangun dinamis mengikuti jumlah komponen penilaian
+    const GRID_COLS = [
+        'minmax(48px,0.5fr)',
+        'minmax(170px,2fr)',
+        'minmax(70px,0.8fr)',
+        'minmax(70px,0.8fr)',
+        ...komponenList.map(() => 'minmax(90px,0.9fr)'),
+        'minmax(90px,0.9fr)',
+        'minmax(90px,0.9fr)',
+        'minmax(180px,1.6fr)',
+    ].join(' ');
+
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             {/* Banner read only */}
             {isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl" style={{ background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7', border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}` }}>
-                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
-                    <div className="flex-1">
-                        <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>Mode Baca Saja (Read Only)</p>
-                        <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
-                            {readOnlyReason === 'locked' ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat nilai siswa, tetapi tidak dapat mengedit.' : 'Periode penilaian belum aktif. Anda dapat melihat nilai siswa, tetapi belum dapat menginput nilai. Silakan hubungi admin untuk membuka periode penilaian.'}
-                        </p>
+                <div className="mb-5 rounded-2xl overflow-hidden card-flat" style={{ border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}` }}>
+                    <div className="flex items-center gap-3 px-5 py-3.5" style={{ background: readOnlyReason === 'locked' ? '#fee2e2' : '#fef3c7' }}>
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: readOnlyReason === 'locked' ? '#fecaca' : '#fde68a' }}>
+                            <Lock size={18} className={readOnlyReason === 'locked' ? 'text-red-700' : 'text-yellow-700'} />
+                        </div>
+                        <div>
+                            <p className={`text-sm font-bold ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>Mode Baca Saja (Read Only)</p>
+                            <p className={`text-xs mt-0.5 ${readOnlyReason === 'locked' ? 'text-red-700' : 'text-yellow-700'}`}>
+                                {readOnlyReason === 'locked' ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat nilai siswa, tetapi tidak dapat mengedit.' : 'Periode penilaian belum aktif. Anda dapat melihat nilai siswa, tetapi belum dapat menginput nilai. Silakan hubungi admin untuk membuka periode penilaian.'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Banner warning konfigurasi belum lengkap */}
             {konfigurasiBelumLengkap && !isReadOnly && selectedMapelId && (
-                <div className="mb-5 rounded-xl overflow-hidden" style={{ border: '1px solid #fca5a5', background: '#fff' }}>
-                    <div className="flex items-center gap-3 px-5 py-4" style={{ background: '#fee2e2' }}>
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fecaca' }}>
-                            <AlertCircle size={20} className="text-red-700" />
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-sm font-bold text-red-900 mb-1">Konfigurasi Penilaian Belum Lengkap</p>
-                            <p className="text-xs text-red-700">{kategoriStatus?.message || 'Ada masalah pada konfigurasi penilaian'}</p>
-                        </div>
-                    </div>
+                <div className="mb-5 rounded-2xl overflow-hidden card-flat" style={{ border: '1px solid #fecaca', background: '#fff' }}>
                     <div className="px-5 py-4">
-                        <div className="space-y-3">
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#fecaca' }}>
+                                <AlertCircle size={20} className="text-red-700" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-base font-bold text-red-900 mb-1">Konfigurasi Penilaian Belum Lengkap</h3>
+                                <p className="text-sm text-red-700">{kategoriStatus?.message || 'Ada masalah pada konfigurasi penilaian'}</p>
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl p-4 mb-3 space-y-2" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
                             {kategoriStatus?.bobot.status !== 'lengkap' && (
-                                <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
-                                    <AlertCircle size={16} className="text-yellow-600 flex-shrink-0 mt-0.5" />
-                                    <div className="flex-1">
-                                        <p className="text-xs font-bold text-yellow-900 mb-1">Bobot Komponen Belum 100%</p>
-                                        <p className="text-xs text-yellow-800">Total bobot saat ini: <strong>{kategoriStatus?.bobot.total || 0}%</strong></p>
-                                        <p className="text-xs text-yellow-700 mt-1">Silakan atur di menu "Atur Penilaian" &gt; "Bobot Akademik"</p>
+                                <div className="flex items-start gap-3 p-3 rounded-lg border" style={{ background: '#fff', borderColor: '#fcd34d' }}>
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#fef3c7' }}>
+                                        <AlertCircle size={16} className="text-yellow-600" />
                                     </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-bold text-gray-900 mb-1">Bobot Komponen Belum 100%</p>
+                                        <p className="text-xs text-gray-600">Total bobot saat ini: <strong>{kategoriStatus?.bobot.total || 0}%</strong></p>
+                                        <p className="text-xs text-gray-500 mt-1">Silakan atur di menu "Atur Penilaian" &gt; "Bobot Akademik"</p>
+                                    </div>
+                                    <div className="px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#fef3c7', color: '#92400e' }}>Belum 100%</div>
                                 </div>
                             )}
                             {!kategoriStatus?.kategori.covered && (
-                                <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
-                                    <AlertCircle size={16} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex items-start gap-3 p-3 rounded-lg border" style={{ background: '#fff', borderColor: '#fcd34d' }}>
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#fef3c7' }}>
+                                        <AlertCircle size={16} className="text-yellow-600" />
+                                    </div>
                                     <div className="flex-1">
-                                        <p className="text-xs font-bold text-yellow-900 mb-1">Kategori Nilai Rapor Belum Lengkap</p>
-                                        <p className="text-xs text-yellow-800 mb-2">Celah rentang yang belum tercover:</p>
+                                        <p className="text-sm font-bold text-gray-900 mb-1">Kategori Nilai Rapor Belum Lengkap</p>
+                                        <p className="text-xs text-gray-500 mb-2">Celah rentang yang belum tercover:</p>
                                         <div className="flex flex-wrap gap-2">
                                             {kategoriStatus?.kategori.celah.map((celah, idx) => (
-                                                <span key={idx} className="px-2 py-1 rounded text-xs font-bold" style={{ background: '#fcd34d', color: '#78350f', border: '1px solid #f59e0b' }}>{celah}</span>
+                                                <span key={idx} className="px-2 py-1 rounded text-xs font-semibold" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>{celah}</span>
                                             ))}
                                         </div>
-                                        <p className="text-xs text-yellow-700 mt-2">Silakan atur di menu "Atur Penilaian" &gt; "Kategori Akademik"</p>
+                                        <p className="text-xs text-gray-500 mt-2">Silakan atur di menu "Atur Penilaian" &gt; "Kategori Akademik"</p>
                                     </div>
+                                    <div className="px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#fef3c7', color: '#92400e' }}>Ada Celah</div>
                                 </div>
                             )}
+                        </div>
+
+                        <div className="p-4 rounded-xl" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                            <div className="flex items-start gap-2">
+                                <AlertCircle size={16} className="text-yellow-700 flex-shrink-0 mt-0.5" />
+                                <p className="text-sm text-yellow-800">
+                                    Tombol <strong>Edit</strong> dan <strong>Import Nilai</strong> tidak dapat digunakan sampai konfigurasi penilaian di atas dilengkapi.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1042,296 +1187,314 @@ export default function InputNilaiClient() {
 
             {/* Banner mata pelajaran belum diatur */}
             {mapelList.length === 0 && !isReadOnly && (
-                <div className="mb-6 p-4 rounded-2xl flex items-start gap-3" style={{ background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', border: '2px solid #fdba74', boxShadow: '0 2px 8px rgba(253,186,116,0.2)' }}>
-                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                        <AlertCircle size={20} style={{ color: '#c2410c' }} />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="font-bold text-sm mb-1" style={{ color: '#9a3412' }}>Mata Pelajaran Belum Diatur</h3>
-                        <p className="text-xs" style={{ color: '#7c2d12' }}>Belum ada mata pelajaran yang dikonfigurasi untuk tahun ajaran ini. Silakan hubungi <strong>Administrator</strong> untuk menambahkan mata pelajaran.</p>
+                <div className="mb-5 rounded-2xl overflow-hidden card-flat" style={{ border: '1px solid #fdba74' }}>
+                    <div className="flex items-start gap-3 px-5 py-4" style={{ background: '#fff7ed' }}>
+                        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                            <AlertCircle size={20} style={{ color: '#c2410c' }} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="font-bold text-sm mb-1" style={{ color: '#9a3412' }}>Mata Pelajaran Belum Diatur</h3>
+                            <p className="text-xs" style={{ color: '#7c2d12' }}>Belum ada mata pelajaran yang dikonfigurasi untuk tahun ajaran ini. Silakan hubungi <strong>Administrator</strong> untuk menambahkan mata pelajaran.</p>
+                        </div>
                     </div>
                 </div>
             )}
 
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Input Nilai Siswa</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>Kelola nilai komponen & rapor siswa per mata pelajaran</p>
+            {/* HEADER */}
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Input Nilai Siswa</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola nilai komponen &amp; rapor siswa per mata pelajaran</p>
             </div>
 
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <div className="flex items-center gap-3 flex-1 min-w-[300px]">
-                            <label className="text-sm font-semibold whitespace-nowrap" style={{ color: '#7a3a0a' }}>Mata Pelajaran</label>
-                            <select
-                                value={selectedMapelId === null ? '' : String(selectedMapelId)}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    setSelectedMapelId(val ? Number(val) : null);
-                                    setSearchQuery('');
-                                }}
-                                className={inputCls}
-                                style={{ maxWidth: '400px' }}
+            {/* TOOLBAR */}
+            <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d2" style={CARD_STYLE}>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                        <select
+                            value={selectedMapelId === null ? '' : String(selectedMapelId)}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setSelectedMapelId(val ? Number(val) : null);
+                                setSearchQuery('');
+                            }}
+                            className={inputCls}
+                            style={{ maxWidth: '340px' }}
+                        >
+                            <option value="">-- Pilih Mata Pelajaran --</option>
+                            {mapelList.map(mapel => (
+                                <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>{mapel.nama_mapel} ({mapel.jenis})</option>
+                            ))}
+                        </select>
+
+                        {selectedMapelId && canEditNilai && (
+                            <ActionButton
+                                variant={konfigurasiBelumLengkap ? 'neutral' : 'info'}
+                                disabled={!!konfigurasiBelumLengkap}
+                                onClick={openImportModal}
+                                title={konfigurasiBelumLengkap ? 'Konfigurasi penilaian belum lengkap' : ''}
                             >
-                                <option value="">-- Pilih Mata Pelajaran --</option>
-                                {mapelList.map(mapel => (
-                                    <option key={mapel.mata_pelajaran_id} value={mapel.mata_pelajaran_id}>{mapel.nama_mapel} ({mapel.jenis})</option>
-                                ))}
-                            </select>
+                                {konfigurasiBelumLengkap ? (<><AlertCircle size={16} /> Belum Diatur</>) : (<><Upload size={16} /> Import Nilai</>)}
+                            </ActionButton>
+                        )}
+                    </div>
 
-                            {selectedMapelId && canEditNilai && (
-                                <button
-                                    onClick={konfigurasiBelumLengkap ? undefined : openImportModal}
-                                    disabled={!!konfigurasiBelumLengkap}
-                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                    style={{
-                                        background: konfigurasiBelumLengkap ? '#d1d5db' : 'linear-gradient(135deg,#10b981,#059669)',
-                                        color: 'white',
-                                        boxShadow: konfigurasiBelumLengkap ? 'none' : '0 3px 10px rgba(16,185,129,0.3)',
-                                    }}
-                                    onMouseEnter={e => { if (!konfigurasiBelumLengkap) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#059669,#047857)'; }}
-                                    onMouseLeave={e => { if (!konfigurasiBelumLengkap) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#10b981,#059669)'; }}
-                                    title={konfigurasiBelumLengkap ? 'Konfigurasi penilaian belum lengkap' : ''}
-                                >
-                                    {konfigurasiBelumLengkap ? (<><AlertCircle size={16} /> Belum Diatur</>) : (<><Upload size={16} /> Import Nilai</>)}
-                                </button>
-                            )}
-                        </div>
-
+                    <div className="flex items-center gap-2 flex-wrap">
                         {selectedMapelId && (
-                            <div className="relative min-w-[220px]">
+                            <div className="relative w-full sm:w-56 flex-shrink-0">
                                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                                    <Search className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                                 </div>
                                 <input
                                     type="text"
                                     placeholder="Cari siswa..."
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                                    className="w-full border rounded-lg pl-8 pr-8 py-2 text-xs outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400"
                                 />
                                 {searchQuery && (
-                                    <button type="button" onClick={() => setSearchQuery('')} className="absolute inset-y-0 right-2 flex items-center" style={{ color: '#c95b08' }}>
-                                        <X className="w-4 h-4" />
+                                    <button type="button" onClick={() => setSearchQuery('')} className="absolute inset-y-0 right-2.5 flex items-center" style={{ color: ACCENT }}>
+                                        <X className="w-3.5 h-3.5" />
                                     </button>
                                 )}
                             </div>
                         )}
-                    </div>
 
-                    {selectedMapelId && currentMapel && (
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Kelas: <strong>{kelasNama}</strong></span>
-                            {currentMapel.bisa_input ? (
-                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#eaf7ef', color: '#1a7a3a', border: '1px solid #b6e8c8' }}>
-                                    <CheckCircle2 size={11} /> Dapat Input Nilai
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
-                                    <AlertCircle size={11} /> Hanya Lihat
-                                </span>
-                            )}
-                            <div className="flex items-center gap-2 ml-auto">
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Tampilkan</span>
+                        {selectedMapelId && (
+                            <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
+                                <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>Tampilkan</span>
                                 <select
                                     value={itemsPerPage}
                                     onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                    className="border rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-400 bg-orange-50/40 border-orange-200"
+                                    className="border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200"
                                 >
                                     <option value={10}>10</option>
                                     <option value={25}>25</option>
                                     <option value={50}>50</option>
                                 </select>
-                                <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>data</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedMapelId && currentMapel && (
-                        <p className="text-xs mt-3" style={{ color: '#c95b08' }}>
-                            Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} siswa
-                        </p>
-                    )}
-                </div>
-
-                {!selectedMapelId ? (
-                    <div className="m-6 text-center py-10 rounded-2xl" style={{ background: '#fff7f0', border: '2px dashed #fde0c8' }}>
-                        <p className="font-bold" style={{ color: '#c95b08' }}>Pilih Mata Pelajaran Terlebih Dahulu</p>
-                    </div>
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse" style={{ minWidth: `${minTableWidth}px` }}>
-                                <thead>
-                                    <tr style={TH_GRAD}>
-                                        {['No.', 'Nama Siswa', 'NIS', 'NISN', ...komponenList.map(k => k.nama_komponen), 'Rapor PTS', 'Rapor PAS', 'Aksi'].map((h, i) => (
-                                            <th key={i} className="px-4 py-3 text-center text-xs font-bold text-white tracking-wide whitespace-nowrap">{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {dataLoading ? (
-                                        <tr>
-                                            <td colSpan={7 + komponenList.length} className="py-12 text-center text-gray-400 text-sm">
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                                    Memuat data nilai...
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ) : currentSiswa.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7 + komponenList.length} className="py-12 text-center text-gray-400 text-sm">
-                                                {searchQuery ? 'Siswa tidak ditemukan.' : 'Belum ada data siswa.'}
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        currentSiswa.map((siswa, idx) => (
-                                            <tr
-                                                key={siswa.id}
-                                                className="transition-colors"
-                                                style={{ borderBottom: '1px solid #fde0c8', background: idx % 2 === 0 ? '#fff' : '#fffaf6' }}
-                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                                onMouseLeave={e => (e.currentTarget.style.background = idx % 2 === 0 ? '#fff' : '#fffaf6')}
-                                            >
-                                                <td className="px-4 py-3 text-center text-gray-500 font-medium">{startIndex + idx + 1}</td>
-                                                <td className="px-4 py-3 font-semibold text-gray-800">{siswa.nama}</td>
-                                                <td className="px-4 py-3 text-center text-gray-600">{siswa.nis}</td>
-                                                <td className="px-4 py-3 text-center text-gray-600">{siswa.nisn}</td>
-                                                {komponenList.map(k => (
-                                                    <td key={`${siswa.id}-${k.id_komponen}`} className="px-4 py-3 text-center text-gray-700">
-                                                        {siswa.nilai[k.id_komponen] !== null && siswa.nilai[k.id_komponen] !== undefined ? siswa.nilai[k.id_komponen] : <span className="text-gray-700">-</span>}
-                                                    </td>
-                                                ))}
-                                                <td className="px-4 py-3 text-center"><NilaiBadge nilai={siswa.nilai_rapor_pts} /></td>
-                                                <td className="px-4 py-3 text-center"><NilaiBadge nilai={siswa.nilai_rapor_pas} /></td>
-                                                <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                    <div className="flex justify-center gap-2">
-                                                        <button
-                                                            onClick={() => handleDetail(siswa)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                                            style={{ background: '#eaf7ef', border: '1px solid #b6e8c8', color: '#1a7a3a' }}
-                                                            onMouseEnter={e => (e.currentTarget.style.background = '#d4f0de')}
-                                                            onMouseLeave={e => (e.currentTarget.style.background = '#eaf7ef')}
-                                                        >
-                                                            <Eye size={13} /> Detail
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleEdit(siswa)}
-                                                            disabled={!canEditNilai || !!konfigurasiBelumLengkap}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            style={{
-                                                                background: canEditNilai && !konfigurasiBelumLengkap ? '#fff0e5' : '#e5e7eb',
-                                                                border: canEditNilai && !konfigurasiBelumLengkap ? '1px solid #f5a623' : '1px solid #d1d5db',
-                                                                color: canEditNilai && !konfigurasiBelumLengkap ? '#b35a08' : '#6b7280',
-                                                            }}
-                                                            onMouseEnter={e => { if (canEditNilai && !konfigurasiBelumLengkap) e.currentTarget.style.background = '#ffe4c8'; }}
-                                                            onMouseLeave={e => { if (canEditNilai && !konfigurasiBelumLengkap) e.currentTarget.style.background = '#fff0e5'; }}
-                                                            title={konfigurasiBelumLengkap ? 'Konfigurasi penilaian belum lengkap' : !canEditNilai ? 'Tidak dapat input nilai' : ''}
-                                                        >
-                                                            {konfigurasiBelumLengkap ? (<><AlertCircle size={13} /> Belum Diatur</>) : canEditNilai ? (<><Pencil size={13} /> Edit</>) : (<><Lock size={13} /> Terkunci</>)}
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                        {filteredSiswa.length > 0 && (
-                            <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: '1px solid #fde0c8' }}>
-                                <span className="text-sm font-medium" style={{ color: '#c95b08' }}>Halaman {currentPage} dari {totalPages}</span>
-                                <div className="flex items-center gap-1">{renderPagination()}</div>
+                                <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>data</span>
                             </div>
                         )}
-                    </>
+                    </div>
+                </div>
+
+                {selectedMapelId && currentMapel && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                        <span className="text-xs font-medium text-gray-500">Kelas: <strong className="text-gray-700">{kelasNama}</strong></span>
+                        {currentMapel.bisa_input ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#dcfce7', color: '#166534', border: '1px solid #86efac' }}>
+                                <CheckCircle2 size={11} /> Dapat Input Nilai
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' }}>
+                                <AlertCircle size={11} /> Hanya Lihat
+                            </span>
+                        )}
+                    </div>
+                )}
+
+                {selectedMapelId && currentMapel && (
+                    <p className="text-xs mt-3 text-gray-400">
+                        Menampilkan {filteredSiswa.length === 0 ? 0 : startIndex + 1}–{Math.min(endIndex, filteredSiswa.length)} dari {filteredSiswa.length} siswa
+                    </p>
                 )}
             </div>
+
+            {!selectedMapelId ? (
+                <div className="card-flat bg-white rounded-2xl anim-in d3" style={CARD_STYLE}>
+                    <div className="py-14 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                            <ClipboardList size={32} className="text-gray-300" />
+                            <p className="text-sm font-semibold text-gray-500">Pilih Mata Pelajaran Terlebih Dahulu</p>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {/* TABEL — CSS grid, konsisten dengan design system terbaru */}
+                    <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
+                        <div className="overflow-x-auto scrollbar-thin">
+                            <div style={{ width: '100%', minWidth: `${640 + komponenList.length * 100}px` }}>
+                                <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
+                                    {['No.', 'Nama Siswa', 'NIS', 'NISN', ...komponenList.map(k => k.nama_komponen), 'Rapor PTS', 'Rapor PAS', 'Aksi'].map((h, i) => (
+                                        <div key={i} className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">
+                                            {h}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {dataLoading ? (
+                                    Array.from({ length: 5 }).map((_, i) => (
+                                        <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS, borderColor: '#f0f0f0' }}>
+                                            {Array.from({ length: 7 + komponenList.length }).map((__, j) => (
+                                                <div key={j} className="px-4 py-4 flex items-center justify-center">
+                                                    <div className="dg-shimmer h-4 rounded w-full" style={{ maxWidth: j === 1 ? '85%' : '55%' }} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ))
+                                ) : currentSiswa.length === 0 ? (
+                                    <div className="py-14 text-center">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Users size={32} className="text-gray-300" />
+                                            <p className="text-sm font-semibold text-gray-500">
+                                                {searchQuery ? 'Siswa tidak ditemukan.' : 'Belum ada data siswa.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    currentSiswa.map((siswa, idx) => (
+                                        <div
+                                            key={siswa.id}
+                                            className="grid row-in row-hover border-b transition-colors"
+                                            style={{
+                                                gridTemplateColumns: GRID_COLS,
+                                                borderColor: '#f0f0f0',
+                                                background: '#fff',
+                                                animationDelay: `${Math.min(idx, 8) * 0.03}s`,
+                                            }}
+                                            onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                                        >
+                                            <div className="px-4 py-4 flex items-center justify-center text-center text-gray-400">{startIndex + idx + 1}</div>
+                                            <div className="px-4 py-4 flex items-center overflow-hidden">
+                                                <p className="font-bold text-gray-900 truncate" title={siswa.nama}>{siswa.nama}</p>
+                                            </div>
+                                            <div className="px-4 py-4 flex items-center justify-center text-center text-gray-600">{siswa.nis}</div>
+                                            <div className="px-4 py-4 flex items-center justify-center text-center text-gray-600">{siswa.nisn}</div>
+                                            {komponenList.map(k => (
+                                                <div key={`${siswa.id}-${k.id_komponen}`} className="px-4 py-4 flex items-center justify-center text-gray-700">
+                                                    {siswa.nilai[k.id_komponen] !== null && siswa.nilai[k.id_komponen] !== undefined ? siswa.nilai[k.id_komponen] : <span className="text-gray-300">-</span>}
+                                                </div>
+                                            ))}
+                                            <div className="px-4 py-4 flex items-center justify-center"><NilaiBadge nilai={siswa.nilai_rapor_pts} /></div>
+                                            <div className="px-4 py-4 flex items-center justify-center"><NilaiBadge nilai={siswa.nilai_rapor_pas} /></div>
+                                            <div className="px-4 py-4 flex items-center justify-center">
+                                                <div className="flex justify-center gap-1.5">
+                                                    <ActionButton size="sm" variant="info" onClick={() => handleDetail(siswa)}>
+                                                        <Eye size={13} /> Detail
+                                                    </ActionButton>
+                                                    <ActionButton
+                                                        size="sm"
+                                                        variant="warning"
+                                                        disabled={!canEditNilai || !!konfigurasiBelumLengkap}
+                                                        onClick={() => handleEdit(siswa)}
+                                                        title={konfigurasiBelumLengkap ? 'Konfigurasi penilaian belum lengkap' : !canEditNilai ? 'Tidak dapat input nilai' : ''}
+                                                    >
+                                                        {konfigurasiBelumLengkap ? (<><AlertCircle size={13} /> Belum Diatur</>) : canEditNilai ? (<><Pencil size={13} /> Edit</>) : (<><Lock size={13} /> Terkunci</>)}
+                                                    </ActionButton>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {filteredSiswa.length > 0 && (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-gray-200" style={{ background: '#fafafa' }}>
+                                <span className="text-xs font-medium text-gray-500">Halaman {currentPage} dari {totalPages}</span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                                        style={{ color: ACCENT_DARK }}
+                                    >
+                                        <ChevronLeft size={14} /> Sebelumnya
+                                    </button>
+                                    <div className="flex items-center gap-1 mx-1">{renderPagination()}</div>
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                                        style={{ color: ACCENT_DARK }}
+                                    >
+                                        Berikutnya <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
 
             {/* Modal detail */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={e => { if (e.target === e.currentTarget) closeDetail(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`} style={CARD_STYLE}>
-                        <div className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                    <div className={`relative bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${detailClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`} style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div>
                                 <h2 className="text-lg font-bold text-white">Detail Nilai Siswa</h2>
                                 <p className="text-xs text-orange-100 mt-0.5">{selectedSiswa.nama} - {kelasNama}</p>
                             </div>
-                            <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20" style={{ background: 'rgba(255,255,255,0.15)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
-                                    <p className="text-xs text-gray-500 mb-1">NIS</p>
+                        <div className="p-4 sm:p-6 space-y-6">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="p-3 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
+                                    <p className="text-xs text-gray-500 mb-0.5">NIS</p>
                                     <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{selectedSiswa.nis}</p>
                                 </div>
-                                <div className="p-4 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
-                                    <p className="text-xs text-gray-500 mb-1">NISN</p>
+                                <div className="p-3 rounded-xl" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
+                                    <p className="text-xs text-gray-500 mb-0.5">NISN</p>
                                     <p className="text-sm font-bold" style={{ color: '#7a3a0a' }}>{selectedSiswa.nisn}</p>
                                 </div>
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
-                                    <span className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></span>Nilai Rapor
+                                    <span className="w-1.5 h-5 rounded-full" style={{ background: ACCENT }}></span>Nilai Rapor
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="rounded-xl p-5 border-2" style={{ background: '#fff7ed', borderColor: '#fdba74', boxShadow: '0 2px 8px rgba(232,105,10,0.1)' }}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#fed7aa' }}>
-                                                    <span className="text-xs font-bold" style={{ color: '#c2410c' }}>PTS</span>
-                                                </div>
-                                                <span className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Rapor PTS</span>
-                                            </div>
+                                    <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: '#fdba74' }}>
+                                        <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: '#fff7ed' }}>
+                                            <span className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Rapor PTS</span>
                                             <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: statusPTS === 'aktif' ? '#fed7aa' : statusPTS === 'selesai' ? '#e5e7eb' : '#fef3c7', color: statusPTS === 'aktif' ? '#c2410c' : statusPTS === 'selesai' ? '#6b7280' : '#92400e' }}>
                                                 {statusPTS === 'aktif' ? 'Aktif' : statusPTS === 'selesai' ? 'Selesai' : 'Menunggu'}
                                             </span>
                                         </div>
-                                        <div className="text-center py-3">
-                                            <div className="text-4xl font-bold mb-2" style={{ color: '#c2410c' }}>
-                                                {selectedSiswa.nilai_rapor_pts !== null && selectedSiswa.nilai_rapor_pts !== undefined ? selectedSiswa.nilai_rapor_pts : '-'}
+                                        <div className="p-4 bg-white">
+                                            <div className="text-center py-2">
+                                                <div className="text-4xl font-bold mb-2" style={{ color: '#c2410c' }}>
+                                                    {selectedSiswa.nilai_rapor_pts !== null && selectedSiswa.nilai_rapor_pts !== undefined ? selectedSiswa.nilai_rapor_pts : '-'}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="pt-3 border-t" style={{ borderColor: '#fde0c8' }}>
-                                            <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
-                                            <p className="text-xs text-gray-600 leading-relaxed">
-                                                {selectedSiswa.deskripsi_pts || (<span className="text-gray-400 italic">Belum ada deskripsi</span>)}
-                                            </p>
+                                            <div className="pt-3 border-t" style={{ borderColor: '#fde0c8' }}>
+                                                <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
+                                                <p className="text-xs text-gray-600 leading-relaxed">
+                                                    {selectedSiswa.deskripsi_pts || (<span className="text-gray-400 italic">Belum ada deskripsi</span>)}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="rounded-xl p-5 border-2" style={{ background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f9fafb', borderColor: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb' }}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fed7aa' : '#e5e7eb' }}>
-                                                    <span className="text-xs font-bold" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : '#6b7280' }}>PAS</span>
-                                                </div>
-                                                <span className="text-sm font-bold" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#7a3a0a' : '#9ca3af' }}>Rapor PAS</span>
-                                            </div>
+                                    <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fdba74' : '#e5e7eb' }}>
+                                        <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#fff7ed' : '#f3f4f6' }}>
+                                            <span className="text-sm font-bold" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#7a3a0a' : '#9ca3af' }}>Rapor PAS</span>
                                             <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: statusPAS === 'aktif' ? '#fed7aa' : statusPAS === 'selesai' ? '#e5e7eb' : '#fef3c7', color: statusPAS === 'aktif' ? '#c2410c' : statusPAS === 'selesai' ? '#6b7280' : '#92400e' }}>
                                                 {statusPAS === 'aktif' ? 'Aktif' : statusPAS === 'selesai' ? 'Selesai' : 'Menunggu'}
                                             </span>
                                         </div>
-                                        <div className="text-center py-3">
-                                            <div className="text-4xl font-bold mb-2" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : '#d1d5db' }}>
-                                                {selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? selectedSiswa.nilai_rapor_pas : '-'}
+                                        <div className="p-4 bg-white">
+                                            <div className="text-center py-2">
+                                                <div className="text-4xl font-bold mb-2" style={{ color: selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? '#c2410c' : '#d1d5db' }}>
+                                                    {selectedSiswa.nilai_rapor_pas !== null && selectedSiswa.nilai_rapor_pas !== undefined && selectedSiswa.nilai_rapor_pas > 0 ? selectedSiswa.nilai_rapor_pas : '-'}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="pt-3 border-t" style={{ borderColor: '#fde0c8' }}>
-                                            <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
-                                            <p className="text-xs text-gray-600 leading-relaxed">
-                                                {selectedSiswa.deskripsi_pas || (<span className="text-gray-400 italic">Belum ada deskripsi</span>)}
-                                            </p>
+                                            <div className="pt-3 border-t" style={{ borderColor: '#fde0c8' }}>
+                                                <p className="text-xs font-semibold mb-1" style={{ color: '#7a3a0a' }}>Deskripsi:</p>
+                                                <p className="text-xs text-gray-600 leading-relaxed">
+                                                    {selectedSiswa.deskripsi_pas || (<span className="text-gray-400 italic">Belum ada deskripsi</span>)}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold mb-4 flex items-center gap-2" style={{ color: '#7a3a0a' }}>
-                                    <span className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></span>Nilai Komponen Penilaian
+                                    <span className="w-1.5 h-5 rounded-full" style={{ background: ACCENT }}></span>Nilai Komponen Penilaian
                                 </h3>
                                 <div className="mb-5">
                                     <div className="flex items-center gap-2 mb-3">
@@ -1342,9 +1505,9 @@ export default function InputNilaiClient() {
                                         {komponenList.filter(k => /^UH[\s\-_]*\d+$/i.test(k.nama_komponen)).map(k => {
                                             const nilai = selectedSiswa.nilai[k.id_komponen];
                                             return (
-                                                <div key={k.id_komponen} className="rounded-xl p-4 text-center border-2 transition-all" style={{ background: nilai !== null && nilai !== undefined ? '#fff' : '#f9fafb', borderColor: nilai !== null && nilai !== undefined ? '#fde0c8' : '#e5e7eb', boxShadow: nilai !== null && nilai !== undefined ? '0 2px 8px rgba(232,105,10,0.08)' : 'none' }}>
+                                                <div key={k.id_komponen} className="rounded-xl p-4 text-center border-2 transition-all" style={{ background: nilai !== null && nilai !== undefined ? '#fff' : '#f9fafb', borderColor: nilai !== null && nilai !== undefined ? '#fde0c8' : '#e5e7eb' }}>
                                                     <div className="text-xs font-bold mb-2" style={{ color: '#7a3a0a' }}>{k.nama_komponen}</div>
-                                                    <div className="text-2xl font-bold" style={{ color: nilai !== null && nilai !== undefined ? '#c95b08' : '#d1d5db' }}>
+                                                    <div className="text-2xl font-bold" style={{ color: nilai !== null && nilai !== undefined ? ACCENT_DARK : '#d1d5db' }}>
                                                         {nilai !== null && nilai !== undefined ? nilai : '-'}
                                                     </div>
                                                 </div>
@@ -1354,21 +1517,19 @@ export default function InputNilaiClient() {
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-1 h-4 rounded-full" style={{ background: '#e8690a' }}></div>
-                                        <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7a3a0a' }}>Penilaian Tengah & Akhir Semester</p>
+                                        <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }}></div>
+                                        <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7a3a0a' }}>Penilaian Tengah &amp; Akhir Semester</p>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(k => {
                                             const nilai = selectedSiswa.nilai[k.id_komponen];
                                             return (
-                                                <div key={k.id_komponen} className="rounded-xl p-5 text-center border-2 relative overflow-hidden" style={{ background: '#fff7ed', borderColor: '#fdba74', boxShadow: '0 2px 8px rgba(232,105,10,0.1)' }}>
-                                                    <div className="relative">
-                                                        <div className="text-center mb-3">
-                                                            <span className="text-sm font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>{k.nama_komponen}</span>
-                                                        </div>
-                                                        <div className="text-3xl font-bold mb-2" style={{ color: nilai !== null && nilai !== undefined ? '#c2410c' : '#d1d5db' }}>
-                                                            {nilai !== null && nilai !== undefined ? nilai : '-'}
-                                                        </div>
+                                                <div key={k.id_komponen} className="rounded-xl p-5 text-center border-2" style={{ background: '#fff7ed', borderColor: '#fdba74' }}>
+                                                    <div className="text-center mb-3">
+                                                        <span className="text-sm font-bold uppercase tracking-wide" style={{ color: '#c2410c' }}>{k.nama_komponen}</span>
+                                                    </div>
+                                                    <div className="text-3xl font-bold mb-2" style={{ color: nilai !== null && nilai !== undefined ? '#c2410c' : '#d1d5db' }}>
+                                                        {nilai !== null && nilai !== undefined ? nilai : '-'}
                                                     </div>
                                                 </div>
                                             );
@@ -1377,12 +1538,12 @@ export default function InputNilaiClient() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
-                            <BtnSecondary onClick={closeDetail}>Tutup</BtnSecondary>
+                        <div className="flex justify-end gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+                            <ActionButton variant="neutral" onClick={closeDetail}>Tutup</ActionButton>
                             {canEditNilai && !konfigurasiBelumLengkap && (
-                                <button onClick={() => { handleEdit(selectedSiswa); closeDetail(); }} className={btnPrimary.base} style={btnPrimary.style} onMouseEnter={btnPrimary.hover} onMouseLeave={btnPrimary.leave}>
+                                <ActionButton variant="warning" onClick={() => { handleEdit(selectedSiswa); closeDetail(); }}>
                                     <Pencil size={14} /> Edit Nilai
-                                </button>
+                                </ActionButton>
                             )}
                         </div>
                     </div>
@@ -1393,17 +1554,17 @@ export default function InputNilaiClient() {
             {showEdit && editingSiswa && (
                 <div className={`fixed inset-0 flex items-center justify-center z-50 p-4 transition-opacity duration-200 ${editClosing ? 'opacity-0' : 'opacity-100'}`} onClick={e => { if (e.target === e.currentTarget) closeEdit(); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`} style={CARD_STYLE}>
-                        <div className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 rounded-t-2xl" style={HEADER_GRAD}>
+                    <div className={`relative bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all duration-200 ${editClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`} style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div>
                                 <h2 className="text-lg font-bold text-white">Edit Nilai Siswa</h2>
                                 <p className="text-xs text-orange-100 mt-0.5">{editingSiswa.nama} - {kelasNama}</p>
                             </div>
-                            <button onClick={closeEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20" style={{ background: 'rgba(255,255,255,0.15)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
-                        <div className="p-6 space-y-6">
+                        <div className="p-4 sm:p-6 space-y-6">
                             {jenisPenilaianAktif && (
                                 <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
                                     <AlertCircle size={18} style={{ color: '#c2410c', flexShrink: 0 }} />
@@ -1413,15 +1574,15 @@ export default function InputNilaiClient() {
                                     </p>
                                 </div>
                             )}
-                            <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: '#eff6ff', border: '1px solid #93c5fd' }}>
-                                <AlertCircle size={18} style={{ color: '#1d4ed8', flexShrink: 0 }} className="mt-0.5" />
+                            <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                                <Info size={18} style={{ color: '#1d4ed8', flexShrink: 0 }} className="mt-0.5" />
                                 <p className="text-xs" style={{ color: '#1e40af' }}>
                                     <strong>Validasi Nilai:</strong> Nilai harus berupa angka antara <strong>0-100</strong>. Jika Anda input nilai di luar rentang, sistem akan menampilkan pesan error dan nilai akan direset.
                                 </p>
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-1 h-5 rounded-full" style={{ background: '#fbbf24' }}></div>
+                                    <div className="w-1.5 h-5 rounded-full" style={{ background: '#fbbf24' }}></div>
                                     <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Ulangan Harian</h3>
                                 </div>
                                 <div className="grid grid-cols-5 gap-3">
@@ -1442,8 +1603,7 @@ export default function InputNilaiClient() {
                                                     disabled={isDisabled}
                                                     placeholder="-"
                                                     maxLength={3}
-                                                    className={`w-full px-3 py-3 rounded-xl text-center font-bold transition-all border-2 ${isDisabled ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed' : error ? 'bg-red-50 border-red-500 text-gray-800 focus:ring-2 focus:ring-red-400 focus:border-red-400' : 'bg-white border-orange-200 text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'}`}
-                                                    style={isDisabled ? {} : error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 2px 8px rgba(232,105,10,0.08)' }}
+                                                    className={`text-center font-bold ${isDisabled ? inputDisabledCls : error ? inputErrorCls : inputCls}`}
                                                 />
                                                 {error && (<p className="text-xs text-red-600 mt-1 text-center font-semibold">{error}</p>)}
                                             </div>
@@ -1453,8 +1613,8 @@ export default function InputNilaiClient() {
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-1 h-5 rounded-full" style={{ background: '#e8690a' }}></div>
-                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Penilaian Tengah & Akhir Semester</h3>
+                                    <div className="w-1.5 h-5 rounded-full" style={{ background: ACCENT }}></div>
+                                    <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Penilaian Tengah &amp; Akhir Semester</h3>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     {komponenList.filter(k => /PTS|PAS/i.test(k.nama_komponen)).map(komponen => {
@@ -1464,12 +1624,13 @@ export default function InputNilaiClient() {
                                         const nilai = editingNilai[komponen.id_komponen];
                                         const error = editingErrors[komponen.id_komponen];
                                         return (
-                                            <div key={komponen.id_komponen} className={`rounded-xl p-5 border-2 transition-all relative overflow-hidden ${isActive ? error ? 'border-red-500 bg-red-50' : 'border-orange-400 shadow-lg' : 'border-gray-200 bg-gray-50'}`}>
-                                                {isActive && !error && (<div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-10" style={{ background: '#e8690a', transform: 'translate(30%, -30%)' }}></div>)}
-                                                <div className="relative">
-                                                    <div className="text-center mb-4">
-                                                        <span className="text-base font-bold uppercase tracking-wide" style={{ color: isActive ? error ? '#dc2626' : '#c2410c' : '#9ca3af' }}>{komponen.nama_komponen}</span>
+                                            <div key={komponen.id_komponen} className="rounded-xl overflow-hidden border-2 transition-all" style={{ borderColor: isActive ? (error ? '#fca5a5' : '#fdba74') : '#d1d5db', opacity: isActive ? 1 : 0.6 }}>
+                                                <div className="px-4 py-2.5" style={{ background: isActive ? (error ? '#fef2f2' : '#fff7ed') : '#f3f4f6' }}>
+                                                    <div className="text-center">
+                                                        <span className="text-sm font-bold uppercase tracking-wide" style={{ color: isActive ? (error ? '#dc2626' : '#c2410c') : '#9ca3af' }}>{komponen.nama_komponen}</span>
                                                     </div>
+                                                </div>
+                                                <div className="p-5" style={{ background: isActive ? '#fffaf6' : '#f9fafb' }}>
                                                     <input
                                                         type="text"
                                                         inputMode="numeric"
@@ -1480,8 +1641,8 @@ export default function InputNilaiClient() {
                                                         disabled={isDisabled}
                                                         placeholder="0"
                                                         maxLength={3}
-                                                        className={`w-full px-4 py-4 rounded-xl text-3xl font-bold text-center transition-all border-2 ${isDisabled ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : error ? 'bg-red-50 border-red-500 text-gray-800 focus:ring-2 focus:ring-red-400 focus:border-red-400' : 'bg-white border-orange-200 text-orange-700 focus:ring-2 focus:ring-orange-400 focus:border-orange-400'}`}
-                                                        style={isActive ? error ? { boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)' } : { boxShadow: '0 4px 12px rgba(232,105,10,0.15)' } : {}}
+                                                        className={`text-3xl font-bold text-center ${isDisabled ? inputDisabledCls : error ? inputErrorCls : inputCls}`}
+                                                        style={{ color: isDisabled ? undefined : error ? undefined : ACCENT_DARK }}
                                                     />
                                                     {error && (<p className="text-xs text-red-600 mt-2 text-center font-semibold">{error}</p>)}
                                                     {isActive && !error && (
@@ -1503,40 +1664,11 @@ export default function InputNilaiClient() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
-                            <BtnSecondary onClick={closeEdit} disabled={saving}>Batal</BtnSecondary>
-                            <button
-                                onClick={openConfirmSimpan}
-                                disabled={saving}
-                                className={`px-6 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                style={btnPrimary.style}
-                                onMouseEnter={e => { if (!saving) btnPrimary.hover(e); }}
-                                onMouseLeave={e => { if (!saving) btnPrimary.leave(e); }}
-                            >
-                                {saving ? (<><div className="w-5 h-5 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={14} /> Simpan Nilai</>)}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal konfirmasi */}
-            {showConfirmModal && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 dg-fadeIn" onClick={e => { if (e.target === e.currentTarget && !saving) setShowConfirmModal(false); }}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert size={24} className="text-orange-500" />
-                            </div>
-                            <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">Konfirmasi Penyimpanan Nilai</h3>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-6 whitespace-nowrap">Apakah Anda yakin ingin menyimpan nilai {confirmSiswaNama}?</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowConfirmModal(false)} disabled={saving} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}>Batal</button>
-                            <button onClick={executeSimpanNilai} disabled={saving} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg,#e8690a,#f5a623)', boxShadow: '0 3px 10px rgba(232,105,10,0.3)' }}>
-                                {saving ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block mr-2" />Menyimpan...</>) : (<><Save size={14} /> Simpan</>)}
-                            </button>
+                        <div className="flex justify-end gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+                            <ActionButton variant="neutral" disabled={saving} onClick={closeEdit}>Batal</ActionButton>
+                            <ActionButton variant="primary" disabled={saving} onClick={openConfirmSimpan}>
+                                {saving ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={14} /> Simpan Nilai</>)}
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
@@ -1546,81 +1678,77 @@ export default function InputNilaiClient() {
             {showImportModal && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 dg-fadeIn" onClick={e => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
-                        <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-                                    <Upload size={24} className="text-green-600" />
+                    <div className="relative bg-white rounded-2xl w-full max-w-lg dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="flex items-center justify-between px-4 sm:px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={16} className="text-white" />
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Import Nilai dari Excel</h3>
-                                    <p className="text-xs text-gray-500">{currentMapel?.nama_mapel} - {kelasNama}</p>
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/75 leading-none mb-0.5">Data Massal</p>
+                                    <h2 className="text-sm font-bold text-white leading-tight truncate">Import Nilai dari Excel</h2>
+                                    <p className="text-[10px] text-white/70 mt-0.5">{currentMapel?.nama_mapel} - {kelasNama}</p>
                                 </div>
                             </div>
-                            <button onClick={() => { if (!importing) setShowImportModal(false); }} disabled={importing} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100">
-                                <X size={18} className="text-gray-500" />
+                            <button onClick={() => { if (!importing) setShowImportModal(false); }} disabled={importing} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/15 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                                <X size={16} className="text-white" />
                             </button>
                         </div>
-                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
-                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
-                                <AlertCircle size={16} className="text-blue-600" />
-                                Langkah-langkah Import:
-                            </p>
-                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
-                                <li>Download template Excel (sudah berisi daftar siswa)</li>
-                                <li>Isi nilai pada kolom komponen yang tersedia</li>
-                                <li>Simpan file Excel</li>
-                                <li>Upload file Excel yang sudah diisi</li>
-                                <li>Klik "Import Nilai" untuk memproses</li>
-                            </ol>
-                        </div>
-                        {jenisPenilaianAktif && (
-                            <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
-                                <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-orange-800">
-                                    <strong>Periode {jenisPenilaianAktif} Aktif:</strong>{' '}
-                                    {jenisPenilaianAktif === 'PTS' ? 'Hanya kolom PTS yang akan diimport. Kolom UH dan PAS akan diabaikan.' : 'Kolom UH dan PAS akan diimport. Kolom PTS akan diabaikan (terkunci).'}
+                        <div className="p-6">
+                            <div className="mb-5 p-4 rounded-xl" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                                <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                    <Info size={16} className="text-blue-600" />
+                                    Langkah-langkah Import:
                                 </p>
+                                <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                    <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                    <li>Isi nilai pada kolom komponen yang tersedia</li>
+                                    <li>Simpan file Excel</li>
+                                    <li>Upload file Excel yang sudah diisi</li>
+                                    <li>Klik "Import Nilai" untuk memproses</li>
+                                </ol>
                             </div>
-                        )}
-                        <div className="mb-5">
-                            <button
-                                onClick={handleDownloadTemplate}
-                                disabled={downloadingTemplate}
-                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', boxShadow: '0 3px 10px rgba(245,158,11,0.3)' }}
-                                onMouseEnter={e => { if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)'; }}
-                                onMouseLeave={e => { if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)'; }}
-                            >
-                                {downloadingTemplate ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Mengunduh Template...</>) : (<><Download size={16} /> Download Template Excel</>)}
-                            </button>
-                        </div>
-                        <div className="mb-5">
-                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>Upload File Excel <span className="text-red-500">*</span></label>
-                            <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile ? 'border-green-400 bg-green-50' : 'border-orange-300 bg-orange-50 hover:bg-orange-100'}`} onClick={() => importFileInputRef.current?.click()}>
-                                <input ref={importFileInputRef} type="file" accept=".xlsx,.xls" onChange={handleImportFileChange} className="hidden" />
-                                {importFile ? (
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                                            <CheckCircle2 size={24} className="text-green-600" />
+                            {jenisPenilaianAktif && (
+                                <div className="mb-5 p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
+                                    <AlertCircle size={16} style={{ color: ACCENT_DARK }} className="flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs" style={{ color: '#7a3a0a' }}>
+                                        <strong>Periode {jenisPenilaianAktif} Aktif:</strong>{' '}
+                                        {jenisPenilaianAktif === 'PTS' ? 'Hanya kolom PTS yang akan diimport. Kolom UH dan PAS akan diabaikan.' : 'Kolom UH dan PAS akan diimport. Kolom PTS akan diabaikan (terkunci).'}
+                                    </p>
+                                </div>
+                            )}
+                            <div className="mb-5">
+                                <ActionButton variant="warning" fullWidth disabled={downloadingTemplate} onClick={handleDownloadTemplate}>
+                                    {downloadingTemplate ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Mengunduh Template...</>) : (<><Download size={16} /> Download Template Excel</>)}
+                                </ActionButton>
+                            </div>
+                            <div className="mb-5">
+                                <label className={labelCls} style={labelColor}>Upload File Excel <span className="text-red-500">*</span></label>
+                                <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile ? 'border-green-400 bg-green-50' : 'border-orange-300 bg-orange-50 hover:bg-orange-100'}`} onClick={() => importFileInputRef.current?.click()}>
+                                    <input ref={importFileInputRef} type="file" accept=".xlsx,.xls" onChange={handleImportFileChange} className="hidden" />
+                                    {importFile ? (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                                <CheckCircle2 size={24} className="text-green-600" />
+                                            </div>
+                                            <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                            <p className="text-xs text-green-700">{(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file</p>
                                         </div>
-                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
-                                        <p className="text-xs text-green-700">{(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file</p>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center gap-2">
-                                        <Upload size={32} className="text-orange-400" />
-                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
-                                        <p className="text-xs text-orange-700">Format: .xlsx atau .xls (Maks 10MB)</p>
-                                    </div>
-                                )}
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Upload size={32} className="text-orange-400" />
+                                            <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                            <p className="text-xs text-orange-700">Format: .xlsx atau .xls (Maks 10MB)</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => { setShowImportModal(false); setImportFile(null); }} disabled={importing} className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}>Batal</button>
-                            <button onClick={executeImportNilai} disabled={!importFile || importing} className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg,#10b981,#059669)', boxShadow: '0 3px 10px rgba(16,185,129,0.3)' }}>
-                                {importing ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Mengimport...</>) : (<><Upload size={16} /> Import Nilai</>)}
-                            </button>
+                            <div className="flex gap-2.5">
+                                <ActionButton variant="neutral" fullWidth disabled={importing} onClick={() => { setShowImportModal(false); setImportFile(null); }}>Batal</ActionButton>
+                                <ActionButton variant="success" fullWidth disabled={!importFile || importing} onClick={executeImportNilai}>
+                                    {importing ? (<><div className="w-4 h-4 rounded-full border-2 border-current/40 border-t-current animate-spin" />Mengimport...</>) : (<><Upload size={16} /> Import Nilai</>)}
+                                </ActionButton>
+                            </div>
                         </div>
                     </div>
                 </div>

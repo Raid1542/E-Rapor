@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import {
     X, Search, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, Users,
     Info, Edit3, Check, School, Lock, LogOut,
-    Upload, Download
+    Upload, Download, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -35,7 +35,7 @@ interface AbsensiData {
     total: number;
 }
 
-// ─── NOTIF MODAL ──────────────────────────────────────────────────────────────
+// ─── NOTIF MODAL TYPES ────────────────────────────────────────────────────────
 
 type ModalType = 'success' | 'error' | 'warning' | 'network';
 interface ModalConfig {
@@ -44,53 +44,161 @@ interface ModalConfig {
     message: string;
 }
 
+/* ==========================================================================
+   DESIGN TOKENS — disamakan penuh dengan data_guru_client.tsx / kokurikuler_client.tsx
+   ========================================================================== */
+
+const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
+const ACCENT = '#e8690a';
+const ACCENT_DARK = '#c95b08';
+
+const PAGE_BG = { background: '#f6f7f9' };
+const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
+
+const GRID_COLS = 'minmax(48px,0.5fr) minmax(190px,2.6fr) minmax(90px,1fr) minmax(80px,0.9fr) minmax(80px,0.9fr) minmax(80px,0.9fr) minmax(170px,1.6fr)';
+
+const labelCls = "block text-sm font-bold mb-1.5";
+const labelColor = { color: '#7a3a0a' };
+
+/* ==========================================================================
+   GLOBAL STYLES — identik dengan data_guru_client.tsx / kokurikuler_client.tsx
+   ========================================================================== */
+
 const GlobalStyles = () => (
     <style jsx global>{`
-        @keyframes ab-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes ab-scaleIn { from { opacity: 0; transform: scale(0.93) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes ab-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        .ab-fadeIn  { animation: ab-fadeIn  0.2s ease; }
-        .ab-scaleIn { animation: ab-scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
-        .ab-pulse   { animation: ab-pulse   0.6s ease 0.15s; }
+        @keyframes dg-fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dg-scaleIn { from { opacity: 0; transform: scale(0.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes dg-pulse   { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        @keyframes dg-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+        .dg-fadeIn  { animation: dg-fadeIn  0.18s ease; }
+        .dg-scaleIn { animation: dg-scaleIn 0.22s cubic-bezier(0.4,0,0.2,1); }
+        .dg-pulse   { animation: dg-pulse   0.6s ease 0.1s; }
+        .dg-shimmer {
+            background: linear-gradient(90deg, #f7f7f7 0%, #efefef 50%, #f7f7f7 100%);
+            background-size: 800px 100%;
+            animation: dg-shimmer 1.3s ease-in-out infinite;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0);   }
+        }
+        .anim-in { animation: fadeInUp 0.35s cubic-bezier(0.4,0,0.2,1) forwards; opacity: 0; }
+        .d1 { animation-delay: 0.02s; }
+        .d2 { animation-delay: 0.06s; }
+        .d3 { animation-delay: 0.10s; }
+        .row-in { animation: fadeInUp 0.28s ease forwards; opacity: 0; }
+
+        .card-flat { transition: box-shadow 0.2s ease; }
+        .card-flat:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+        .row-hover { position: relative; transition: background-color 0.15s ease; }
+        .row-hover::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+            background: ${BRAND_GRADIENT}; transform: scaleY(0); transition: transform 0.16s ease;
+        }
+        .row-hover:hover::before { transform: scaleY(1); }
+
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action:hover  { filter: brightness(1.04); }
+        .btn-action:active { filter: brightness(0.98); }
+
+        .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #f0c9a0; border-radius: 10px; }
+
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+            outline: 2.5px solid #f5a623;
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .anim-in, .row-in, .dg-fadeIn, .dg-scaleIn, .dg-pulse, .dg-shimmer, .btn-action, .card-flat, .row-hover {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
     `}</style>
 );
 
-const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string; }> = {
-    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={40} className="text-green-500" />, btn: 'bg-green-500 hover:bg-green-600' },
-    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={40} className="text-red-500" />, btn: 'bg-red-500 hover:bg-red-600' },
-    warning: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={40} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
-    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={40} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+/* ==========================================================================
+   NOTIFICATION MODAL — identik dengan data_guru_client.tsx / kokurikuler_client.tsx
+   ========================================================================== */
+
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+    success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
+    network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
-
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 ab-fadeIn">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-4 ab-scaleIn">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} ab-pulse`}>{s.icon}</div>
-                <div className="text-center">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-2">{modal.message}</p>
+            <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                    <X size={18} />
+                </button>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>{s.icon}</div>
+                <div className="text-center w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
                 </div>
-                <button onClick={onClose} className={`w-full ${s.btn} text-white font-semibold py-3 rounded-xl transition-colors`}>
-                    OK
+                <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>
+                    OK, Mengerti
                 </button>
             </div>
         </div>
     );
 };
 
-// ─── STYLE CONSTANTS ──────────────────────────────────────────────────────────
+/* ==========================================================================
+   INPUT & SISTEM TOMBOL AKSI — identik dengan data_guru_client.tsx / kokurikuler_client.tsx
+   ========================================================================== */
 
-const PAGE_BG = { background: '#fdf6f0' };
-const CARD_STYLE = { border: '1px solid #fde0c8', boxShadow: '0 2px 16px rgba(200,80,10,0.07)' };
-const HEADER_GRAD = { background: 'linear-gradient(135deg,#c95b08,#e8690a,#f5870a)' };
-const TH_GRAD = { background: 'linear-gradient(135deg,#c95b08 0%,#e8690a 60%,#f5870a 100%)' };
+const inputCls = "w-full border rounded-lg px-3 py-2 text-sm text-center text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200";
 
-const inputCls = "w-full border rounded-lg px-3 py-2 text-sm text-center text-gray-800 outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-white border-orange-200";
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
+
+const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
+    primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
+    info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
+    warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
+    neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
+    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
+    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
+};
+
+const ActionButton = ({
+    onClick, children, variant = 'neutral', size = 'md', disabled = false, type = 'button', fullWidth = false, title,
+}: {
+    onClick?: () => void; children: ReactNode; variant?: BtnVariant; size?: 'md' | 'sm';
+    disabled?: boolean; type?: 'button' | 'submit'; fullWidth?: boolean; title?: string;
+}) => {
+    const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2.5 text-sm';
+    return (
+        <button
+            type={type}
+            title={title}
+            onClick={onClick}
+            disabled={disabled}
+            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            style={VARIANT_BASE[variant]}
+        >
+            {children}
+        </button>
+    );
+};
+
+/** Badge angka absensi — konsisten dengan NilaiBadge di kokurikuler_client.tsx */
+const AbsenBadge = ({ value }: { value: number }) => (
+    <span
+        className="inline-block px-2.5 py-1 rounded-lg text-xs font-bold min-w-[28px]"
+        style={{ background: '#fff0e5', color: ACCENT_DARK, border: '1px solid #fde0c8' }}
+    >
+        {value || 0}
+    </span>
+);
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
@@ -115,7 +223,7 @@ export default function AbsensiClient() {
     const [statusPAS, setStatusPAS] = useState<'aktif' | 'nonaktif' | 'selesai'>('nonaktif');
     const [semesterAktif, setSemesterAktif] = useState<string>('Ganjil');
 
-    // 🆕 BARU: STATE untuk Import Absensi
+    // 🆕 STATE untuk Import Absensi
     const [showImportModal, setShowImportModal] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -174,12 +282,12 @@ export default function AbsensiClient() {
                     setJenisPenilaian('PTS');
                     setIsReadOnly(true);
                     setReadOnlyReason('not_open');
-                    
+
                     setTimeout(() => {
                         showModal({
                             type: 'warning',
-                            title: '⏳ Periode Penilaian Belum Aktif',
-                            message: 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data absensi, tetapi belum dapat mengedit.\n\n💡 Tip: Silakan hubungi Administrator untuk membuka periode penilaian.'
+                            title: 'Periode Penilaian Belum Aktif',
+                            message: 'Baik PTS maupun PAS belum dibuka oleh admin. Anda dapat melihat data absensi, tetapi belum dapat mengedit.\n\nTip: Silakan hubungi Administrator untuk membuka periode penilaian.'
                         });
                     }, 500);
                 }
@@ -274,7 +382,7 @@ export default function AbsensiClient() {
             }
 
             const success = await fetchTahunAjaran(token);
-            
+
             if (success) {
                 await fetchAbsensi();
             } else {
@@ -324,7 +432,7 @@ export default function AbsensiClient() {
             } else {
                 showModal({
                     type: 'warning',
-                    title: '⏳ Mode Baca Saja',
+                    title: 'Mode Baca Saja',
                     message: 'Periode penilaian belum aktif.\n\nAnda belum dapat mengedit data absensi.\n\nSilakan tunggu admin membuka periode penilaian.'
                 });
             }
@@ -396,7 +504,7 @@ export default function AbsensiClient() {
                 const ptsSakit = siswa.pts_sakit || 0;
                 const ptsIzin = siswa.pts_izin || 0;
                 const ptsAlpha = siswa.pts_alpha || 0;
-                
+
                 if (data.sakit < ptsSakit) return `Total sakit (${data.sakit}) tidak boleh kurang dari data PTS (${ptsSakit})`;
                 if (data.izin < ptsIzin) return `Total izin (${data.izin}) tidak boleh kurang dari data PTS (${ptsIzin})`;
                 if (data.alpha < ptsAlpha) return `Total alpha (${data.alpha}) tidak boleh kurang dari data PTS (${ptsAlpha})`;
@@ -515,7 +623,7 @@ export default function AbsensiClient() {
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🆕 BARU: IMPORT ABSENSI HANDLERS
+    // IMPORT ABSENSI HANDLERS
     // ═════════════════════════════════════════════════════════════════════════
 
     const openImportModal = () => {
@@ -561,7 +669,7 @@ export default function AbsensiClient() {
             showModal({
                 type: 'success',
                 title: 'Template Berhasil Diunduh',
-                message: 'Template Excel berhasil diunduh.\n\n📝 Langkah selanjutnya:\n1. Buka file Excel\n2. Isi data absensi (Sakit, Izin, Alpha)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Absensi"'
+                message: 'Template Excel berhasil diunduh.\n\nLangkah selanjutnya:\n1. Buka file Excel\n2. Isi data absensi (Sakit, Izin, Alpha)\n3. Simpan file\n4. Upload kembali melalui tombol "Import Absensi"'
             });
         } catch (err: any) {
             showModal({
@@ -679,25 +787,25 @@ export default function AbsensiClient() {
 
             let notifMessage = '';
             if (totalErrors === 0) {
-                notifMessage = `✅ Import berhasil!\n\n👥 ${data.data?.berhasil || 0} siswa berhasil diimport\n📊 ${data.data?.total_records_saved || 0} data absensi disimpan`;
+                notifMessage = `Import berhasil!\n\n${data.data?.berhasil || 0} siswa berhasil diimport\n${data.data?.total_records_saved || 0} data absensi disimpan`;
             } else {
-                notifMessage = `⚠️ Import selesai dengan catatan\n\n✅ Berhasil: ${data.data?.berhasil || 0} siswa\n❌ Gagal: ${totalErrors} baris\n`;
+                notifMessage = `Import selesai dengan catatan\n\nBerhasil: ${data.data?.berhasil || 0} siswa\nGagal: ${totalErrors} baris\n`;
                 if (totalErrors <= 4) {
-                    notifMessage += `\n📋 Detail Error:\n`;
+                    notifMessage += `\nDetail Error:\n`;
                     errors.slice(0, 3).forEach((e: any, i: number) => {
                         notifMessage += `${i + 1}. ${e.message}\n`;
                     });
                 } else {
-                    notifMessage += `\n📋 Contoh Error:\n`;
+                    notifMessage += `\nContoh Error:\n`;
                     errors.slice(0, 2).forEach((e: any, i: number) => {
                         notifMessage += `${i + 1}. ${e.message}\n`;
                     });
-                    notifMessage += `\n📥 File CSV error telah diunduh otomatis!`;
+                    notifMessage += `\nFile CSV error telah diunduh otomatis!`;
                 }
             }
 
             if (data.data?.periode) {
-                notifMessage += `\n\n📊 Periode: ${data.data.periode}`;
+                notifMessage += `\n\nPeriode: ${data.data.periode}`;
             }
 
             setTimeout(() => {
@@ -750,7 +858,7 @@ export default function AbsensiClient() {
         if (status === 'nonaktif') {
             showModal({
                 type: 'warning',
-                title: '⏳ Periode Belum Aktif',
+                title: 'Periode Belum Aktif',
                 message: `Periode ${jenis} belum dibuka oleh admin.\n\nSilakan tunggu admin membuka periode ${jenis}.`
             });
             return;
@@ -780,10 +888,10 @@ export default function AbsensiClient() {
                 <GlobalStyles />
                 {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ab-fadeIn">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 ab-scaleIn">
-                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 ab-pulse">
+                    <div className="relative bg-white rounded-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn" style={CARD_STYLE}>
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100 dg-pulse">
                             <AlertCircle size={48} className="text-red-500" />
                         </div>
                         <div className="text-center">
@@ -794,16 +902,9 @@ export default function AbsensiClient() {
                                 Silakan hubungi Administrator untuk penugasan kelas.
                             </p>
                         </div>
-                        <button
-                            onClick={handleLogout}
-                            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
-                            style={{
-                                background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                boxShadow: '0 3px 12px rgba(232,105,10,0.3)'
-                            }}
-                        >
-                            <LogOut size={18} /> Logout
-                        </button>
+                        <ActionButton variant="primary" fullWidth onClick={handleLogout}>
+                            <LogOut size={16} /> Logout
+                        </ActionButton>
                     </div>
                 </div>
             </div>
@@ -812,51 +913,57 @@ export default function AbsensiClient() {
 
     // ── Render Utama ───────────────────────────────────────────────────────
     return (
-        <div className="flex-1 min-h-screen p-6" style={PAGE_BG}>
+        <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
             <GlobalStyles />
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
             {/* Page Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Absensi Siswa</h1>
-                <p className="text-sm mt-0.5" style={{ color: '#c95b08' }}>
-                    Kelola data kehadiran siswa untuk {absensiData?.kelas || 'kelas Anda'}
+            <div className="mb-4 sm:mb-5 anim-in d1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Absensi Siswa</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">
+                    Kelola data kehadiran siswa untuk <strong>{absensiData?.kelas || 'kelas Anda'}</strong>
                 </p>
             </div>
 
-            {/* ✅ BANNER READ-ONLY */}
+            {/* ✅ BANNER READ-ONLY — konsisten dengan banner read-only di kokurikuler_client.tsx */}
             {isReadOnly && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl"
-                    style={{
-                        background: readOnlyReason === 'locked' ? '#fef2f2' : '#fef3c7',
-                        border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}`
-                    }}>
-                    <Lock className={`w-5 h-5 mt-0.5 flex-shrink-0 ${readOnlyReason === 'locked' ? 'text-red-600' : 'text-yellow-600'}`} />
-                    <div className="flex-1">
-                        <p className={`text-sm font-bold mb-1 ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
-                            Mode Baca Saja (Read Only)
-                        </p>
-                        <p className={`text-xs ${readOnlyReason === 'locked' ? 'text-red-800' : 'text-yellow-800'}`}>
-                            {readOnlyReason === 'locked'
-                                ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat data absensi, tetapi tidak dapat mengedit.'
-                                : 'Periode penilaian belum aktif. Anda dapat melihat data absensi, tetapi belum dapat mengedit. Silakan hubungi admin untuk membuka periode penilaian.'}
-                        </p>
+                <div className="mb-5 rounded-2xl overflow-hidden card-flat anim-in d2" style={{ border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}` }}>
+                    <div
+                        className="flex items-center gap-3 px-5 py-3.5"
+                        style={{ background: readOnlyReason === 'locked' ? '#fee2e2' : '#fef3c7' }}
+                    >
+                        <div
+                            className="w-9 h-9 rounded-lg flex items-center justify-center"
+                            style={{ background: readOnlyReason === 'locked' ? '#fecaca' : '#fde68a' }}
+                        >
+                            <Lock size={18} className={readOnlyReason === 'locked' ? 'text-red-700' : 'text-yellow-700'} />
+                        </div>
+                        <div>
+                            <p className={`text-sm font-bold ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
+                                Mode Baca Saja
+                            </p>
+                            <p className={`text-xs mt-0.5 ${readOnlyReason === 'locked' ? 'text-red-700' : 'text-yellow-700'}`}>
+                                {readOnlyReason === 'locked'
+                                    ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat data absensi, tetapi tidak dapat mengedit.'
+                                    : 'Periode penilaian belum aktif. Anda dapat melihat data absensi, tetapi belum dapat mengedit. Silakan hubungi admin untuk membuka periode penilaian.'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Main Card */}
-            <div className="bg-white rounded-2xl overflow-hidden" style={CARD_STYLE}>
+            <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
 
-                {/* Card Header - Minimalis */}
-                <div className="px-6 py-5" style={HEADER_GRAD}>
+                {/* Card Header */}
+                <div className="px-4 sm:px-6 py-4 sm:py-5" style={{ background: BRAND_GRADIENT }}>
                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-white/25 flex items-center justify-center backdrop-blur-sm shadow-lg">
-                            <School className="w-7 h-7 text-white" />
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/25 flex items-center justify-center backdrop-blur-sm">
+                            <School className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-white">
+                            <h2 className="text-lg sm:text-xl font-bold text-white">
                                 {absensiData?.kelas || 'Memuat...'}
                             </h2>
                             <p className="text-xs text-white/80 mt-0.5">
@@ -867,26 +974,26 @@ export default function AbsensiClient() {
                 </div>
 
                 {/* Tab Toggle PTS/PAS dengan Status */}
-                <div className="px-5 py-3" style={{ background: '#fffaf6', borderBottom: '1px solid #fde0c8' }}>
+                <div className="px-4 sm:px-5 py-3" style={{ background: '#fff5eb', borderBottom: '1px solid #fde0c8' }}>
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium" style={{ color: '#7a3a0a' }}>Periode:</span>
+                        <span className="text-sm font-bold" style={{ color: ACCENT_DARK }}>Periode:</span>
                         <div className="flex gap-2 bg-white rounded-lg p-1" style={{ border: '1px solid #fde0c8' }}>
                             {/* Tab PTS */}
                             <button
                                 onClick={() => handleTabChange('PTS')}
-                                className="px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
+                                className="btn-action px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
                                 style={{
                                     background: jenisPenilaian === 'PTS'
-                                        ? '#c95b08'
+                                        ? BRAND_GRADIENT
                                         : statusPTS === 'aktif'
-                                            ? 'rgba(201,91,8,0.1)'
+                                            ? 'rgba(232,105,10,0.08)'
                                             : statusPTS === 'selesai'
                                                 ? 'rgba(156,163,175,0.1)'
                                                 : 'transparent',
                                     color: jenisPenilaian === 'PTS'
                                         ? '#fff'
                                         : statusPTS === 'aktif'
-                                            ? '#c95b08'
+                                            ? ACCENT_DARK
                                             : statusPTS === 'selesai'
                                                 ? '#6b7280'
                                                 : '#9ca3af',
@@ -896,26 +1003,26 @@ export default function AbsensiClient() {
                             >
                                 <span>PTS</span>
                                 <span className="text-[9px] font-normal">
-                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '✓ Selesai' : '⏳ Menunggu'}
+                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '✓ Selesai' : 'Menunggu'}
                                 </span>
                             </button>
 
                             {/* Tab PAS */}
                             <button
                                 onClick={() => handleTabChange('PAS')}
-                                className="px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
+                                className="btn-action px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
                                 style={{
                                     background: jenisPenilaian === 'PAS'
-                                        ? '#c95b08'
+                                        ? BRAND_GRADIENT
                                         : statusPAS === 'aktif'
-                                            ? 'rgba(201,91,8,0.1)'
+                                            ? 'rgba(232,105,10,0.08)'
                                             : statusPAS === 'selesai'
                                                 ? 'rgba(156,163,175,0.1)'
                                                 : 'transparent',
                                     color: jenisPenilaian === 'PAS'
                                         ? '#fff'
                                         : statusPAS === 'aktif'
-                                            ? '#c95b08'
+                                            ? ACCENT_DARK
                                             : statusPAS === 'selesai'
                                                 ? '#6b7280'
                                                 : '#9ca3af',
@@ -925,23 +1032,22 @@ export default function AbsensiClient() {
                             >
                                 <span>PAS</span>
                                 <span className="text-[9px] font-normal">
-                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '✓ Selesai' : '⏳ Menunggu'}
+                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '✓ Selesai' : 'Menunggu'}
                                 </span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Info Box untuk PAS - Hanya jika PAS aktif */}
+                {/* Info Box untuk PAS — Hanya jika PAS aktif */}
                 {jenisPenilaian === 'PAS' && statusPAS === 'aktif' && (
-                    <div className="mx-5 mt-4 p-4 rounded-xl flex items-start gap-3"
-                        style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                        <Info className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#c95b08' }} />
+                    <div className="mx-4 sm:mx-5 mt-4 p-4 rounded-xl flex items-start gap-3" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
+                        <Info className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: ACCENT_DARK }} />
                         <div className="flex-1">
                             <p className="text-sm font-bold mb-1" style={{ color: '#7a3a0a' }}>
                                 Input Total Absensi Semester
                             </p>
-                            <p className="text-xs" style={{ color: '#c95b08' }}>
+                            <p className="text-xs" style={{ color: ACCENT_DARK }}>
                                 Untuk PAS, input total absensi selama 1 semester penuh.
                                 Total harus lebih besar atau sama dengan data PTS yang sudah diinput sebelumnya.
                             </p>
@@ -950,53 +1056,43 @@ export default function AbsensiClient() {
                 )}
 
                 {/* Toolbar */}
-                <div className="px-5 py-4 mt-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
+                <div className="px-4 sm:px-5 py-3 sm:py-4 mt-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4" style={{ color: '#c95b08' }} />
+                            <Users className="w-4 h-4" style={{ color: ACCENT_DARK }} />
                             <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
                                 Total: {filteredAbsensi.length} siswa
                             </span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            {/* 🆕 BARU: Tombol Import Absensi */}
+                            {/* Tombol Import Absensi */}
                             {!isReadOnly && (
-                                <button
-                                    onClick={openImportModal}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all"
-                                    style={{
-                                        background: 'linear-gradient(135deg,#10b981,#059669)',
-                                        boxShadow: '0 3px 12px rgba(16,185,129,0.3)'
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#059669,#047857)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#10b981,#059669)')}
-                                >
-                                    <Upload size={16} />
-                                    Import Absensi
-                                </button>
+                                <ActionButton variant="success" onClick={openImportModal}>
+                                    <Upload size={15} /> Import Absensi
+                                </ActionButton>
                             )}
 
                             {/* Search */}
                             <div className="relative min-w-[200px] sm:min-w-[250px]">
                                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-4 h-4" style={{ color: '#c95b08' }} />
+                                    <Search className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                                 </div>
                                 <input
                                     type="text"
                                     placeholder="Cari nama atau NIS..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full border rounded-xl pl-9 pr-9 py-1.5 text-sm outline-none transition-all focus:ring-2 focus:ring-orange-400 focus:border-orange-400 bg-orange-50/40 border-orange-200 placeholder:text-gray-400"
+                                    className="w-full border rounded-lg pl-8 pr-8 py-2 text-xs outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400"
                                 />
                                 {searchQuery && (
                                     <button
                                         type="button"
                                         onClick={() => setSearchQuery('')}
-                                        className="absolute inset-y-0 right-2 flex items-center"
-                                        style={{ color: '#c95b08' }}
+                                        className="absolute inset-y-0 right-2.5 flex items-center"
+                                        style={{ color: ACCENT }}
                                     >
-                                        <X className="w-4 h-4" />
+                                        <X className="w-3.5 h-3.5" />
                                     </button>
                                 )}
                             </div>
@@ -1004,216 +1100,173 @@ export default function AbsensiClient() {
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[800px] text-sm border-collapse">
-                        <thead>
-                            <tr style={TH_GRAD}>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white w-12">No.</th>
-                                <th className="px-4 py-3 text-left text-xs font-bold text-white">Nama Siswa</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white w-24">NIS</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white w-24">Sakit</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white w-24">Izin</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white w-24">Alpha</th>
-                                <th className="px-4 py-3 text-center text-xs font-bold text-white w-32">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={7} className="py-12 text-center text-gray-400 text-sm">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin" />
-                                            Memuat data...
+                {/* Table — CSS grid, konsisten dengan data_guru_client.tsx / kokurikuler_client.tsx */}
+                <div className="overflow-x-auto scrollbar-thin">
+                    <div style={{ width: '100%', minWidth: '820px' }}>
+                        <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
+                            <div className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama Siswa</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">NIS</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Sakit</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Izin</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Alpha</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
+                        </div>
+
+                        {loading ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS, borderColor: '#f0f0f0' }}>
+                                    {Array.from({ length: 7 }).map((__, j) => (
+                                        <div key={j} className="px-4 py-4 flex items-center justify-center">
+                                            <div className="dg-shimmer h-4 rounded w-full" style={{ maxWidth: j === 1 ? '85%' : '55%' }} />
                                         </div>
-                                    </td>
-                                </tr>
-                            ) : filteredAbsensi.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="py-16 text-center">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center">
-                                                <Users size={32} style={{ color: '#e8690a' }} />
-                                            </div>
+                                    ))}
+                                </div>
+                            ))
+                        ) : filteredAbsensi.length === 0 ? (
+                            <div className="py-14 text-center">
+                                <div className="flex flex-col items-center gap-2">
+                                    <Users size={32} className="text-gray-300" />
+                                    <p className="text-sm font-semibold text-gray-500">
+                                        {searchQuery ? 'Siswa Tidak Ditemukan' : 'Belum Ada Data Siswa'}
+                                    </p>
+                                    <p className="text-xs text-gray-400 max-w-md mx-auto">
+                                        {searchQuery
+                                            ? `Tidak ada siswa yang cocok dengan kata kunci "${searchQuery}".`
+                                            : 'Belum ada siswa yang terdaftar di kelas Anda.'}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            filteredAbsensi.map((siswa, index) => {
+                                const isEditing = editingRows.has(siswa.id_siswa);
+                                const isSaving = savingRows.has(siswa.id_siswa);
+                                const editedValues = editedData[siswa.id_siswa];
+
+                                return (
+                                    <div
+                                        key={siswa.id_siswa}
+                                        className="grid row-in row-hover border-b transition-colors"
+                                        style={{
+                                            gridTemplateColumns: GRID_COLS,
+                                            borderColor: '#f0f0f0',
+                                            background: '#fff',
+                                            animationDelay: `${Math.min(index, 8) * 0.03}s`,
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                                    >
+                                        <div className="px-4 py-4 flex items-center justify-center text-center text-gray-400">
+                                            {index + 1}
+                                        </div>
+
+                                        <div className="px-4 py-4 flex items-center overflow-hidden">
                                             <div>
-                                                <p className="font-bold text-gray-700 mb-1">
-                                                    {searchQuery ? 'Siswa Tidak Ditemukan' : 'Belum Ada Data Siswa'}
-                                                </p>
-                                                <p className="text-xs text-gray-500 max-w-md mx-auto">
-                                                    {searchQuery
-                                                        ? `Tidak ada siswa yang cocok dengan kata kunci "${searchQuery}".`
-                                                        : `Belum ada siswa yang terdaftar di kelas Anda.`
-                                                    }
-                                                </p>
+                                                <p className="font-bold text-gray-900 truncate" title={siswa.nama}>{siswa.nama}</p>
+                                                {jenisPenilaian === 'PAS' && siswa.pts_sakit !== undefined && (
+                                                    <p className="text-[11px] text-gray-400 mt-0.5">
+                                                        Baseline PTS: S:{siswa.pts_sakit} I:{siswa.pts_izin} A:{siswa.pts_alpha}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredAbsensi.map((siswa, index) => {
-                                    const isEditing = editingRows.has(siswa.id_siswa);
-                                    const isSaving = savingRows.has(siswa.id_siswa);
-                                    const editedValues = editedData[siswa.id_siswa];
 
-                                    return (
-                                        <tr
-                                            key={siswa.id_siswa}
-                                            className="transition-colors"
-                                            style={{
-                                                borderBottom: '1px solid #fde0c8',
-                                                background: index % 2 === 0 ? '#fff' : '#fffaf6'
-                                            }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? '#fff' : '#fffaf6')}
-                                        >
-                                            <td className="px-4 py-3 text-center text-gray-500 font-medium">
-                                                {index + 1}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div>
-                                                    <p className="font-bold text-gray-800">{siswa.nama}</p>
-                                                    {/* ✅ Tampilkan baseline PTS saat di mode PAS */}
-                                                    {jenisPenilaian === 'PAS' && siswa.pts_sakit !== undefined && (
-                                                        <p className="text-xs text-gray-500 mt-0.5">
-                                                            Baseline PTS: S:{siswa.pts_sakit} I:{siswa.pts_izin} A:{siswa.pts_alpha}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-gray-600 font-mono text-xs">
-                                                {siswa.nis}
-                                            </td>
+                                        <div className="px-4 py-4 flex items-center justify-center text-center text-gray-500 font-mono text-xs truncate">
+                                            {siswa.nis}
+                                        </div>
 
-                                            {/* Sakit */}
-                                            <td className="px-4 py-3 text-center">
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="90"
-                                                        value={editedValues?.sakit ?? 0}
-                                                        onChange={(e) => handleInputChange(siswa.id_siswa, 'sakit', e.target.value)}
-                                                        className={inputCls}
-                                                        disabled={isSaving}
-                                                    />
-                                                ) : (
-                                                    <span className="text-gray-700 font-semibold">{siswa.sakit || 0}</span>
-                                                )}
-                                            </td>
+                                        {/* Sakit */}
+                                        <div className="px-4 py-4 flex items-center justify-center">
+                                            {isEditing ? (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="90"
+                                                    value={editedValues?.sakit ?? 0}
+                                                    onChange={(e) => handleInputChange(siswa.id_siswa, 'sakit', e.target.value)}
+                                                    className={inputCls}
+                                                    disabled={isSaving}
+                                                />
+                                            ) : (
+                                                <AbsenBadge value={siswa.sakit} />
+                                            )}
+                                        </div>
 
-                                            {/* Izin */}
-                                            <td className="px-4 py-3 text-center">
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="90"
-                                                        value={editedValues?.izin ?? 0}
-                                                        onChange={(e) => handleInputChange(siswa.id_siswa, 'izin', e.target.value)}
-                                                        className={inputCls}
-                                                        disabled={isSaving}
-                                                    />
-                                                ) : (
-                                                    <span className="text-gray-700 font-semibold">{siswa.izin || 0}</span>
-                                                )}
-                                            </td>
+                                        {/* Izin */}
+                                        <div className="px-4 py-4 flex items-center justify-center">
+                                            {isEditing ? (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="90"
+                                                    value={editedValues?.izin ?? 0}
+                                                    onChange={(e) => handleInputChange(siswa.id_siswa, 'izin', e.target.value)}
+                                                    className={inputCls}
+                                                    disabled={isSaving}
+                                                />
+                                            ) : (
+                                                <AbsenBadge value={siswa.izin} />
+                                            )}
+                                        </div>
 
-                                            {/* Alpha */}
-                                            <td className="px-4 py-3 text-center">
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="90"
-                                                        value={editedValues?.alpha ?? 0}
-                                                        onChange={(e) => handleInputChange(siswa.id_siswa, 'alpha', e.target.value)}
-                                                        className={inputCls}
-                                                        disabled={isSaving}
-                                                    />
-                                                ) : (
-                                                    <span className="text-gray-700 font-semibold">{siswa.alpha || 0}</span>
-                                                )}
-                                            </td>
+                                        {/* Alpha */}
+                                        <div className="px-4 py-4 flex items-center justify-center">
+                                            {isEditing ? (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="90"
+                                                    value={editedValues?.alpha ?? 0}
+                                                    onChange={(e) => handleInputChange(siswa.id_siswa, 'alpha', e.target.value)}
+                                                    className={inputCls}
+                                                    disabled={isSaving}
+                                                />
+                                            ) : (
+                                                <AbsenBadge value={siswa.alpha} />
+                                            )}
+                                        </div>
 
-                                            {/* Aksi */}
-                                            <td className="px-4 py-3 text-center">
-                                                {isEditing ? (
-                                                    <div className="flex justify-center gap-2">
-                                                        <button
-                                                            onClick={() => openConfirmModal(siswa.id_siswa)}
-                                                            disabled={isSaving}
-                                                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                                                            style={{
-                                                                background: 'linear-gradient(135deg,#16a34a,#22c55e)',
-                                                                color: '#fff',
-                                                                boxShadow: '0 2px 8px rgba(22,163,74,0.3)'
-                                                            }}
-                                                        >
-                                                            {isSaving ? (
-                                                                <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                                                            ) : (
-                                                                <Check size={13} />
-                                                            )}
-                                                            Simpan
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleCancelEdit(siswa.id_siswa)}
-                                                            disabled={isSaving}
-                                                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                                                            style={{
-                                                                background: '#f5f5f5',
-                                                                color: '#666',
-                                                                border: '1px solid #ddd'
-                                                            }}
-                                                        >
-                                                            <X size={13} /> Batal
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleEdit(siswa.id_siswa)}
-                                                        disabled={isReadOnly}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        style={{
-                                                            background: isReadOnly ? '#e5e7eb' : '#fff0e5',
-                                                            border: isReadOnly ? '1px solid #d1d5db' : '1px solid #f5a623',
-                                                            color: isReadOnly ? '#6b7280' : '#b35a08'
-                                                        }}
-                                                        onMouseEnter={e => {
-                                                            if (!isReadOnly) {
-                                                                e.currentTarget.style.background = '#ffe4c8';
-                                                            }
-                                                        }}
-                                                        onMouseLeave={e => {
-                                                            if (!isReadOnly) {
-                                                                e.currentTarget.style.background = '#fff0e5';
-                                                            }
-                                                        }}
-                                                    >
-                                                        {isReadOnly ? (
-                                                            <>
-                                                                <Lock size={13} /> Terkunci
-                                                            </>
+                                        {/* Aksi */}
+                                        <div className="px-4 py-4 flex items-center justify-center">
+                                            {isEditing ? (
+                                                <div className="flex justify-center gap-1.5">
+                                                    <ActionButton size="sm" variant="success" disabled={isSaving} onClick={() => openConfirmModal(siswa.id_siswa)}>
+                                                        {isSaving ? (
+                                                            <div className="w-3 h-3 rounded-full border-2 border-current/30 border-t-current animate-spin" />
                                                         ) : (
-                                                            <>
-                                                                <Edit3 size={13} /> Edit
-                                                            </>
+                                                            <Check size={13} />
                                                         )}
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                                                        Simpan
+                                                    </ActionButton>
+                                                    <ActionButton size="sm" variant="neutral" disabled={isSaving} onClick={() => handleCancelEdit(siswa.id_siswa)}>
+                                                        <X size={13} /> Batal
+                                                    </ActionButton>
+                                                </div>
+                                            ) : (
+                                                <ActionButton size="sm" variant="warning" disabled={isReadOnly} onClick={() => handleEdit(siswa.id_siswa)}>
+                                                    {isReadOnly ? (
+                                                        <>
+                                                            <Lock size={13} /> Terkunci
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Edit3 size={13} /> Edit
+                                                        </>
+                                                    )}
+                                                </ActionButton>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer Info */}
-                <div className="px-5 py-4 flex items-start gap-2" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#c95b08' }} />
-                    <div className="text-xs" style={{ color: '#c95b08' }}>
+                <div className="px-4 sm:px-5 py-4 flex items-start gap-2" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+                    <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: ACCENT_DARK }} />
+                    <div className="text-xs" style={{ color: ACCENT_DARK }}>
                         <p className="font-semibold mb-1">Petunjuk Pengisian:</p>
                         <ul className="space-y-0.5 list-disc list-inside">
                             <li>Klik tombol <strong>Edit</strong> pada baris siswa untuk menginput absensi</li>
@@ -1227,228 +1280,174 @@ export default function AbsensiClient() {
                 </div>
             </div>
 
-            {/* Confirmation Modal */}
+            {/* Confirmation Modal — identik dengan pola confirm modal data_guru_client.tsx / kokurikuler_client.tsx */}
             {showConfirmModal && confirmData && (
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 ab-fadeIn"
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
                 >
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 ab-scaleIn">
-                        <div className="w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center ring-8 ring-orange-100 ab-pulse mx-auto mb-4">
-                            <ShieldAlert size={32} className="text-orange-500" />
+                    <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={22} className="text-orange-500" />
+                            </div>
+                            <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
                         </div>
 
-                        <h3 className="text-lg font-bold text-gray-900 text-center mb-2">
-                            Konfirmasi Penyimpanan
-                        </h3>
-
-                        <p className="text-sm text-gray-500 text-center mb-6">
+                        <p className="text-sm text-gray-500 mb-5">
                             Apakah Anda yakin ingin menyimpan data absensi ini?
                         </p>
 
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 py-3 rounded-xl text-sm font-semibold border transition-colors"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#fff0e5')}
-                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                            >
+                        <div className="flex gap-2.5">
+                            <ActionButton variant="neutral" fullWidth onClick={() => setShowConfirmModal(false)}>
                                 Batal
-                            </button>
-                            <button
-                                onClick={executeSave}
-                                className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all"
-                                style={{
-                                    background: 'linear-gradient(135deg,#e8690a,#f5a623)',
-                                    boxShadow: '0 3px 10px rgba(232,105,10,0.3)'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#c95b08,#e8690a)')}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#e8690a,#f5a623)')}
-                            >
+                            </ActionButton>
+                            <ActionButton variant="primary" fullWidth onClick={executeSave}>
                                 Simpan
-                            </button>
+                            </ActionButton>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* 🆕 BARU: Modal Import Absensi */}
+            {/* Modal Import Absensi — konsisten dengan Modal Import Nilai di kokurikuler_client.tsx */}
             {showImportModal && (
                 <div
-                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 ab-fadeIn"
+                    className="fixed inset-0 z-[120] flex items-center justify-center p-4 dg-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget && !importing) setShowImportModal(false); }}
                 >
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 ab-scaleIn">
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-                                    <Upload size={24} className="text-green-600" />
+                    <div className="relative bg-white rounded-2xl w-full max-w-lg dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                        <div className="flex items-center justify-between px-4 sm:px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                                    <Upload size={16} className="text-white" />
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Import Absensi {jenisPenilaian}</h3>
-                                    <p className="text-xs text-gray-500">
-                                        Kelas {absensiData?.kelas} • Semester {semesterAktif}
-                                    </p>
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/75 leading-none mb-0.5">Data Massal</p>
+                                    <h2 className="text-sm font-bold text-white leading-tight truncate">Import Absensi {jenisPenilaian}</h2>
+                                    <p className="text-[10px] text-white/70 mt-0.5">Kelas {absensiData?.kelas} • Semester {semesterAktif}</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => { if (!importing) setShowImportModal(false); }}
                                 disabled={importing}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-gray-100"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/15 flex-shrink-0"
+                                style={{ background: 'rgba(255,255,255,0.15)' }}
                             >
-                                <X size={18} className="text-gray-500" />
+                                <X size={16} className="text-white" />
                             </button>
                         </div>
 
-                        {/* Info Box - Langkah-langkah */}
-                        <div className="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-200">
-                            <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
-                                <AlertCircle size={16} className="text-blue-600" />
-                                Langkah-langkah Import:
-                            </p>
-                            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
-                                <li>Download template Excel (sudah berisi daftar siswa)</li>
-                                <li>Isi data absensi (Sakit, Izin, Alpha)</li>
-                                <li>Simpan file Excel</li>
-                                <li>Upload file Excel yang sudah diisi</li>
-                                <li>Klik "Import Absensi" untuk memproses</li>
-                            </ol>
-                        </div>
-
-                        {/* Info Periode */}
-                        <div className="mb-5 p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-start gap-2">
-                            <AlertCircle size={16} className="text-orange-600 flex-shrink-0 mt-0.5" />
-                            <div className="text-xs text-orange-800 space-y-1">
-                                <p>
-                                    <strong>Periode {jenisPenilaian} Aktif:</strong>
+                        <div className="p-6">
+                            <div className="mb-5 p-4 rounded-xl" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                                <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                                    <AlertCircle size={16} className="text-blue-600" />
+                                    Langkah-langkah Import:
                                 </p>
-                                {jenisPenilaian === 'PTS' ? (
-                                    <>
-                                        <p>• ✅ <strong>Yang diimport:</strong> Data absensi periode PTS</p>
-                                        <p>• 📊 <strong>Format:</strong> Sakit, Izin, Alpha (0-90 hari)</p>
-                                        <p className="mt-1 text-orange-700">
-                                            💡 <strong>Tip:</strong> Data PAS akan diinput saat periode PAS aktif.
-                                        </p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p>• ✅ <strong>Yang diimport:</strong> Total absensi semester</p>
-                                        <p>• 📊 <strong>Format:</strong> Sakit, Izin, Alpha (0-90 hari)</p>
-                                        <p className="mt-1 text-orange-700">
-                                            ⚠️ <strong>Perhatian:</strong> Total harus ≥ data PTS yang sudah diinput.
-                                        </p>
-                                    </>
-                                )}
+                                <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                                    <li>Download template Excel (sudah berisi daftar siswa)</li>
+                                    <li>Isi data absensi (Sakit, Izin, Alpha)</li>
+                                    <li>Simpan file Excel</li>
+                                    <li>Upload file Excel yang sudah diisi</li>
+                                    <li>Klik "Import Absensi" untuk memproses</li>
+                                </ol>
                             </div>
-                        </div>
 
-                        {/* Tombol Download Template */}
-                        <div className="mb-5">
-                            <button
-                                onClick={handleDownloadTemplate}
-                                disabled={downloadingTemplate}
-                                className="w-full px-4 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{
-                                    background: 'linear-gradient(135deg,#f59e0b,#d97706)',
-                                    boxShadow: '0 3px 10px rgba(245,158,11,0.3)'
-                                }}
-                                onMouseEnter={e => {
-                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#d97706,#b45309)';
-                                }}
-                                onMouseLeave={e => {
-                                    if (!downloadingTemplate) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-                                }}
-                            >
-                                {downloadingTemplate ? (
-                                    <>
-                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                        Mengunduh Template...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Download size={16} />
-                                        📥 Download Template Excel
-                                    </>
-                                )}
-                            </button>
-                        </div>
+                            <div className="mb-5 p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff7ed', border: '1px solid #fde0c8' }}>
+                                <AlertCircle size={16} style={{ color: ACCENT_DARK }} className="flex-shrink-0 mt-0.5" />
+                                <div className="text-xs space-y-1" style={{ color: '#7a3a0a' }}>
+                                    <p><strong>Periode {jenisPenilaian} Aktif:</strong></p>
+                                    {jenisPenilaian === 'PTS' ? (
+                                        <>
+                                            <p>- Yang diimport: Data absensi periode PTS</p>
+                                            <p>- Format: Sakit, Izin, Alpha (0-90 hari)</p>
+                                            <p className="mt-1"><strong>Tip:</strong> Data PAS akan diinput saat periode PAS aktif.</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p>- Yang diimport: Total absensi semester</p>
+                                            <p>- Format: Sakit, Izin, Alpha (0-90 hari)</p>
+                                            <p className="mt-1"><strong>Perhatian:</strong> Total harus ≥ data PTS yang sudah diinput.</p>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
 
-                        {/* Upload Area */}
-                        <div className="mb-5">
-                            <label className="block text-sm font-semibold mb-2" style={{ color: '#7a3a0a' }}>
-                                Upload File Excel <span className="text-red-500">*</span>
-                            </label>
-                            <div
-                                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile
-                                    ? 'border-green-400 bg-green-50'
-                                    : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
-                                    }`}
-                                onClick={() => importFileInputRef.current?.click()}
-                            >
-                                <input
-                                    ref={importFileInputRef}
-                                    type="file"
-                                    accept=".xlsx,.xls"
-                                    onChange={handleImportFileChange}
-                                    className="hidden"
-                                />
-                                {importFile ? (
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                                            <CheckCircle2 size={24} className="text-green-600" />
+                            <div className="mb-5">
+                                <ActionButton variant="warning" fullWidth disabled={downloadingTemplate} onClick={handleDownloadTemplate}>
+                                    {downloadingTemplate ? (
+                                        <>
+                                            <div className="w-4 h-4 rounded-full border-2 border-current/30 border-t-current animate-spin" />
+                                            Mengunduh Template...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Download size={16} /> Download Template Excel
+                                        </>
+                                    )}
+                                </ActionButton>
+                            </div>
+
+                            <div className="mb-5">
+                                <label className={labelCls} style={labelColor}>
+                                    Upload File Excel <span className="text-red-500">*</span>
+                                </label>
+                                <div
+                                    className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${importFile ? 'border-green-400 bg-green-50' : 'border-orange-300 bg-orange-50 hover:bg-orange-100'
+                                        }`}
+                                    onClick={() => importFileInputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={importFileInputRef}
+                                        type="file"
+                                        accept=".xlsx,.xls"
+                                        onChange={handleImportFileChange}
+                                        className="hidden"
+                                    />
+                                    {importFile ? (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                                <CheckCircle2 size={24} className="text-green-600" />
+                                            </div>
+                                            <p className="text-sm font-bold text-green-900">{importFile.name}</p>
+                                            <p className="text-xs text-green-700">
+                                                {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
+                                            </p>
                                         </div>
-                                        <p className="text-sm font-bold text-green-900">{importFile.name}</p>
-                                        <p className="text-xs text-green-700">
-                                            {(importFile.size / 1024).toFixed(1)} KB - Klik untuk ganti file
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center gap-2">
-                                        <Upload size={32} className="text-orange-400" />
-                                        <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
-                                        <p className="text-xs text-orange-700">
-                                            Format: .xlsx atau .xls (Maks 10MB)
-                                        </p>
-                                    </div>
-                                )}
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Upload size={32} className="text-orange-400" />
+                                            <p className="text-sm font-bold text-orange-900">Klik untuk pilih file Excel</p>
+                                            <p className="text-xs text-orange-700">Format: .xlsx atau .xls (Maks 10MB)</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => { setShowImportModal(false); setImportFile(null); }}
-                                disabled={importing}
-                                className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{ borderColor: '#fde0c8', color: '#7a3a0a', background: '#fff' }}
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={executeImport}
-                                disabled={!importFile || importing}
-                                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                style={{
-                                    background: 'linear-gradient(135deg,#10b981,#059669)',
-                                    boxShadow: '0 3px 10px rgba(16,185,129,0.3)'
-                                }}
-                            >
-                                {importing ? (
-                                    <>
-                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                        Mengimport...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Upload size={16} />
-                                        Import Absensi
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex gap-2.5">
+                                <ActionButton
+                                    variant="neutral"
+                                    fullWidth
+                                    disabled={importing}
+                                    onClick={() => { setShowImportModal(false); setImportFile(null); }}
+                                >
+                                    Batal
+                                </ActionButton>
+                                <ActionButton variant="success" fullWidth disabled={!importFile || importing} onClick={executeImport}>
+                                    {importing ? (
+                                        <>
+                                            <div className="w-4 h-4 rounded-full border-2 border-current/30 border-t-current animate-spin" />
+                                            Mengimport...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload size={16} /> Import Absensi
+                                        </>
+                                    )}
+                                </ActionButton>
+                            </div>
                         </div>
                     </div>
                 </div>

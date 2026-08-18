@@ -1,16 +1,3 @@
-/**
- * Nama File: data_pembina_ekskul_client.tsx
- * Fungsi: Komponen klien untuk mengelola data pembina ekstrakurikuler
- * UPDATE: Menyamakan desain (warna, tombol, layout, animasi) dengan data_guru_client.tsx
- * UPDATE 2: Field Status disembunyikan saat Tambah (otomatis aktif), hanya muncul saat Edit.
- *           Tempat Lahir & Tanggal Lahir wajib diisi, dengan validasi usia minimal 18 tahun.
- *           Teks & tombol modal konfirmasi disamakan.
- * FIX: Payload ke backend memakai key "nama_lengkap" (sebelumnya "nama"), sesuai
- *      yang dibaca oleh pembinaEkskulController.js — memperbaiki error "Nama lengkap
- *      wajib diisi" saat Tambah/Edit padahal field nama sudah diisi.
- * UPDATE 3: Ganti semua URL hardcoded localhost:5000 dengan API_BASE_URL untuk deployment.
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
@@ -23,8 +10,14 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// FIX: bukan pakai angka batas tetap. fetchPembina di bawah akan mengambil data per
+// "PAGE_SIZE" ini secara berulang (page 1, 2, 3, ...) dan otomatis berhenti begitu
+// backend mengembalikan kurang dari PAGE_SIZE (artinya sudah habis). Jadi berapa pun
+// jumlah data pembina — 50, 500, 5000 — semuanya akan selalu tertarik lengkap, tanpa
+// ada angka maksimum yang membatasi total data.
+const PAGE_SIZE = 500;
 
 /* ==========================================================================
    INTERFACES
@@ -286,40 +279,60 @@ export default function DataPembinaEkskulClient() {
        FETCH
     ------------------------------------------------------------------ */
 
-    const fetchPembina = useCallback(async (page = 1, limit = 100) => {
+    // FIX: mengambil SEMUA data pembina dengan cara mengulang request per PAGE_SIZE
+    // (page 1, 2, 3, ...) dan berhenti otomatis begitu backend mengembalikan data
+    // kurang dari PAGE_SIZE (artinya sudah halaman terakhir). Tidak ada angka batas
+    // total di sini — berapa pun jumlah datanya, semua akan tertarik lengkap.
+    const mapPembina = (p: any): Pembina => {
+        let s = 'aktif';
+        if (typeof p.status === 'string') {
+            s = p.status.trim().toLowerCase();
+            if (s !== 'aktif') s = 'nonaktif';
+        }
+        return {
+            id: p.id_user || p.id,
+            nama: p.nama_lengkap || p.nama,
+            niy: p.niy || '',
+            nuptk: p.nuptk || '',
+            tempat_lahir: p.tempat_lahir || '',
+            tanggal_lahir: p.tanggal_lahir || '',
+            jenis_kelamin: p.jenis_kelamin || '',
+            alamat: p.alamat || '',
+            no_telepon: p.no_telepon || '',
+            status: s,
+        };
+    };
+
+    const fetchPembina = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
             if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
 
-            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
-            const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul?page=${page}&limit=${limit}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            let allData: Pembina[] = [];
+            let page = 1;
 
-            const data = await res.json();
-            if (res.ok) {
-                setPembinaList(Array.isArray(data.data) ? data.data.map((p: any) => {
-                    let s = 'aktif';
-                    if (typeof p.status === 'string') {
-                        s = p.status.trim().toLowerCase();
-                        if (s !== 'aktif') s = 'nonaktif';
-                    }
-                    return {
-                        id: p.id_user || p.id,
-                        nama: p.nama_lengkap || p.nama,
-                        niy: p.niy || '',
-                        nuptk: p.nuptk || '',
-                        tempat_lahir: p.tempat_lahir || '',
-                        tanggal_lahir: p.tanggal_lahir || '',
-                        jenis_kelamin: p.jenis_kelamin || '',
-                        alamat: p.alamat || '',
-                        no_telepon: p.no_telepon || '',
-                        status: s,
-                    };
-                }) : []);
-            } else {
-                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan saat memuat data pembina.' });
+            while (true) {
+                const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul?page=${page}&limit=${PAGE_SIZE}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message || 'Terjadi kesalahan saat memuat data pembina.' });
+                    return;
+                }
+
+                const chunk: any[] = Array.isArray(data.data) ? data.data : [];
+                allData = allData.concat(chunk.map(mapPembina));
+
+                // Kalau jumlah data yang dikembalikan kurang dari PAGE_SIZE, berarti
+                // ini halaman terakhir — berhenti. Kalau pas sama dengan PAGE_SIZE,
+                // masih mungkin ada halaman berikutnya, lanjut ambil.
+                if (chunk.length < PAGE_SIZE) break;
+                page++;
             }
+
+            setPembinaList(allData);
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
         } finally {
@@ -432,7 +445,6 @@ export default function DataPembinaEkskulClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
         try {
-            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -461,7 +473,6 @@ export default function DataPembinaEkskulClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
         try {
-            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -499,7 +510,6 @@ export default function DataPembinaEkskulClient() {
         fd.append('file', importFile);
         try {
             const token = localStorage.getItem('token');
-            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul/import`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
@@ -543,6 +553,11 @@ export default function DataPembinaEkskulClient() {
         return ms && mj && mst;
     });
 
+    // itemsPerPage murni mengatur pagination TAMPILAN di layar (client-side).
+    // Data sumbernya (filteredPembina) sudah berisi SELURUH data dari backend berkat
+    // fetchPembina yang mengambil semua halaman secara otomatis, jadi menaikkan/
+    // menurunkan nilai ini tidak akan pernah menyembunyikan data — hanya mengatur
+    // berapa baris yang ditampilkan per halaman.
     const totalPages = Math.max(1, Math.ceil(filteredPembina.length / itemsPerPage));
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -759,9 +774,19 @@ export default function DataPembinaEkskulClient() {
 
                         <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
                             <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>Tampilkan</span>
+                            {/*
+                              Dropdown ini HANYA mengatur pagination tampilan (client-side).
+                              Karena fetchPembina sekarang menarik SELURUH data dari backend
+                              (lihat fungsi fetchPembina di atas), dropdown ini tidak lagi
+                              berkaitan dengan data yang berhasil diambil — cuma mengatur
+                              berapa baris ditampilkan per halaman di layar.
+                            */}
                             <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                                 className="border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200">
-                                <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
                             </select>
                             <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>data</span>
                         </div>
@@ -971,7 +996,6 @@ export default function DataPembinaEkskulClient() {
                                 <FileSpreadsheet size={19} className="mt-0.5 flex-shrink-0" style={{ color: ACCENT }} />
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Format file: <strong>.xlsx</strong> atau <strong>.xls</strong></p>
-                                    {/* ✅ PERUBAHAN 6: URL template sekarang pakai API_BASE_URL */}
                                     <a href={`${API_BASE_URL}/templates/template_import_pembina.xlsx`} download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
                                         <Download size={13} /> Unduh template Excel
                                     </a>

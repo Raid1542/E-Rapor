@@ -1,19 +1,3 @@
-/**
- * Nama File: data_siswa_client.tsx
- * Fungsi: Komponen klien untuk mengelola data siswa (master data),
- *         mencakup fitur tambah, edit, detail, import Excel, filter,
- *         pencarian, dan pagination.
- * UPDATE: Menggunakan struktur master data (tanpa tahun ajaran)
- * UPDATE 2: Form tambah/edit pakai pola back-button + header card,
- *           tombol Batal/Reset disamakan dengan Data Admin & Tahun Ajaran.
- * UPDATE 3: Animasi disamakan dengan data_admin_client.tsx (fadeInUp, section-card, item-hover, btn-primary)
- * UPDATE 4: Disamakan penuh dengan Data Guru — token desain, sistem tombol
- *           (primary/info/warning/neutral/accent), tabel grid, dan toolbar.
- *           Halaman Detail dirombak total dengan tampilan sendiri yang
- *           sesuai data siswa (tanpa email/NIY/NUPTK/role, dengan status
- *           4 kondisi: Aktif/Lulus/Pindah/Drop Out).
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
@@ -284,10 +268,17 @@ export default function DataSiswaClient() {
     const closeModal = useCallback(() => setModal(null), []);
 
     /* ------------------------------------------------------------------
-       FETCH  (URL sudah diperbaiki pakai API_BASE_URL)
+       FETCH — DIPERBAIKI: loop mengambil SEMUA halaman dari server,
+       bukan cuma satu request dengan limit tetap. Jadi jumlah data
+       yang bisa ditampilkan tidak lagi terpotong di 100 — mau 109,
+       2000, atau 20000 data, semuanya tetap ke-load. Dropdown
+       "Tampilkan X data" (itemsPerPage) tetap hanya mengatur berapa
+       baris ditampilkan PER HALAMAN di tabel, itu logika terpisah
+       dan tidak berubah.
     ------------------------------------------------------------------ */
 
-    const fetchSiswa = useCallback(async (page = 1, limit = 100) => {
+    const fetchSiswa = useCallback(async () => {
+        setLoading(true);
         try {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -295,18 +286,34 @@ export default function DataSiswaClient() {
                 return;
             }
 
-            // ✅ PERUBAHAN 2: URL sekarang pakai API_BASE_URL
-            const res = await fetch(
-                `${API_BASE_URL}/api/admin/siswa-master?page=${page}&limit=${limit}&status=semua`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const PAGE_SIZE = 100; // ukuran per request ke server (bukan batas total data)
+            let page = 1;
+            let allData: Siswa[] = [];
 
-            const data = await res.json();
-            if (res.ok) {
-                setSiswaList(Array.isArray(data.data) ? data.data : []);
-            } else {
-                showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message });
+            while (true) {
+                const res = await fetch(
+                    `${API_BASE_URL}/api/admin/siswa-master?page=${page}&limit=${PAGE_SIZE}&status=semua`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showModal({ type: 'error', title: 'Gagal Memuat Data', message: data.message });
+                    return;
+                }
+
+                const chunk: Siswa[] = Array.isArray(data.data) ? data.data : [];
+                allData = allData.concat(chunk);
+
+                // Kalau chunk yang didapat lebih kecil dari PAGE_SIZE, berarti
+                // ini halaman terakhir dari server — berhenti loop.
+                if (chunk.length < PAGE_SIZE) break;
+
+                page += 1;
             }
+
+            setSiswaList(allData);
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         } finally {
@@ -422,7 +429,6 @@ export default function DataSiswaClient() {
             return;
         }
         try {
-            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/siswa-master`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -457,7 +463,6 @@ export default function DataSiswaClient() {
             return;
         }
         try {
-            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/siswa-master/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -521,7 +526,6 @@ export default function DataSiswaClient() {
 
         try {
             const token = localStorage.getItem('token');
-            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/siswa-master/import`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
@@ -568,7 +572,9 @@ export default function DataSiswaClient() {
     };
 
     /* ------------------------------------------------------------------
-       FILTER & PAGINATION  (tidak diubah)
+       FILTER & PAGINATION  (tidak diubah — ini murni paginasi tampilan
+       di sisi client, jalan di atas siswaList yang sekarang sudah berisi
+       SEMUA data)
     ------------------------------------------------------------------ */
 
     const filteredSiswa = siswaList.filter((siswa) => {
@@ -1005,7 +1011,6 @@ export default function DataSiswaClient() {
                                 <FileSpreadsheet size={19} className="mt-0.5 flex-shrink-0" style={{ color: ACCENT }} />
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Format file: <strong>.xlsx</strong> atau <strong>.xls</strong></p>
-                                    {/* ✅ PERUBAHAN 6: URL template sekarang pakai API_BASE_URL */}
                                     <a href={`${API_BASE_URL}/templates/template_import_siswa.xlsx`} download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
                                         <Download size={13} /> Unduh template Excel
                                     </a>

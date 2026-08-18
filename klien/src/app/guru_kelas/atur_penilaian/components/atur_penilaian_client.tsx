@@ -1,20 +1,10 @@
-/**
- * Nama File: atur_penilaian_client.tsx
- * Fungsi: Komponen klien untuk mengatur konfigurasi penilaian oleh guru kelas
- * UPDATE: ✅ Fix validasi range < 3 poin di frontend
- *         ✅ Fix pesan error spesifik dari backend agar mudah diperbaiki
- *         ✅ Redesign UI - Konsisten dengan design system Data Pembelajaran
- *         ✅ 4 Tab: Kokurikuler, Akademik, Deskripsi Rata-rata, Bobot
- *         ✅ Batch Edit Modal dengan validasi real-time
- *         ✅ Fix layout tabel: table-fixed + lebar kolom tetap agar header sejajar dengan isi
- */
 'use client';
 
 import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
     Pencil, X, Plus, Trash2, CheckCircle2, AlertCircle, WifiOff,
     ShieldAlert, LogOut, Lock, Layers, BookOpen, BarChart3, TrendingUp,
-    AlertTriangle, Award, Calendar, Save, Info, Settings
+    AlertTriangle, Award, Calendar, Save, Info
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -27,13 +17,12 @@ const ASPEK_MUTABAAH_ID = 5;
 const getJenisParam = (jenis: 'PTS' | 'PAS' | null): string => jenis ? `jenis=${jenis}` : '';
 
 // ====== TYPES ======
-type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
+type ModalType = 'success' | 'error' | 'warning' | 'network';
 
 interface ModalConfig {
     type: ModalType;
     title: string;
     message: string;
-    onConfirm?: () => void;
 }
 
 interface AspekKokurikuler {
@@ -92,8 +81,8 @@ interface BatchGradeItem {
 }
 
 // ====== DESIGN TOKENS ======
-// Disamakan persis dengan data_pembelajaran_client.tsx agar seluruh halaman
-// Guru Kelas memiliki tampilan yang konsisten.
+// Disamakan persis dengan atur_penilaian_gbs_client.tsx (Guru Bidang Studi) agar
+// seluruh halaman "Atur Penilaian" untuk peran Guru memiliki tampilan konsisten.
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -104,6 +93,21 @@ const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0
 
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
+
+/* Palet warna semantik untuk banner/badge (bukan tombol) — identik dengan
+   atur_penilaian_gbs_client.tsx supaya kedua halaman Guru terlihat satu sistem. */
+const COLORS = {
+    success: { bg: '#dcfce7', text: '#166534', border: '#86efac' },
+    danger: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
+    warning: { bg: '#fef9c3', text: '#92400e', border: '#fde68a' },
+    info: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+    neutral: { bg: '#f3f4f6', text: '#4b5563', border: '#d1d5db' },
+    accent: { bg: '#fff5eb', text: ACCENT_DARK, border: '#fde0c8' },
+};
+
+/* Kolom grid tabel kategori (Kokurikuler/Akademik/Deskripsi Rata-rata) — header &
+   body memakai lebar identik, sama seperti GRID_COLS_KATEGORI pada halaman GBS. */
+const GRID_COLS_KATEGORI = 'minmax(56px,0.6fr) minmax(160px,1.4fr) minmax(220px,2.6fr)';
 
 // ====== GLOBAL STYLES ======
 const GlobalStyles = () => (
@@ -160,42 +164,38 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ====== SISTEM TOMBOL AKSI (disamakan dengan Data Pembelajaran) ======
-type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent' | 'danger';
+// ====== SISTEM TOMBOL AKSI (disamakan dengan Guru Bidang Studi) ======
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'danger';
 
 const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
     info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
     warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
-    neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
+    neutral: { background: '#fff', color: '#4b5563', border: '1.5px solid #e5e7eb' },
     success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
-    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
     danger: { background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca' },
 };
 
 const ActionButton = ({
-    onClick, children, variant = 'neutral', size = 'md', disabled = false, fullWidth = false, title,
+    onClick, children, variant = 'neutral', disabled = false, fullWidth = false, title,
 }: {
-    onClick?: () => void; children: ReactNode; variant?: BtnVariant; size?: 'md' | 'sm';
+    onClick?: () => void; children: ReactNode; variant?: BtnVariant;
     disabled?: boolean; fullWidth?: boolean; title?: string;
-}) => {
-    const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-5 py-2.5 text-sm';
-    return (
-        <button
-            type="button"
-            title={title}
-            onClick={onClick}
-            disabled={disabled}
-            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
-            style={VARIANT_BASE[variant]}
-        >
-            {children}
-        </button>
-    );
-};
+}) => (
+    <button
+        type="button"
+        title={title}
+        onClick={onClick}
+        disabled={disabled}
+        className={`btn-action inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        style={VARIANT_BASE[variant]}
+    >
+        {children}
+    </button>
+);
 
 // ====== NOTIF MODAL ======
-const MODAL_STYLES: Record<Exclude<ModalType, 'confirm'>, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
+const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
     success: { iconBg: 'bg-green-50', ring: 'ring-green-100', icon: <CheckCircle2 size={38} className="text-green-500" />, btn: 'bg-green-600 hover:bg-green-700' },
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
     warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
@@ -203,37 +203,26 @@ const MODAL_STYLES: Record<Exclude<ModalType, 'confirm'>, { iconBg: string; ring
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
-    const isConfirm = modal.type === 'confirm';
-    const s = isConfirm ? null : MODAL_STYLES[modal.type as Exclude<ModalType, 'confirm'>];
-
+    const s = MODAL_STYLES[modal.type];
     return (
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 dg-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
-                {!isConfirm && (
-                    <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>
-                )}
-                <div className={`w-16 h-16 rounded-full ${isConfirm ? 'bg-amber-50' : s!.iconBg} flex items-center justify-center ring-8 ${isConfirm ? 'ring-amber-100' : s!.ring} dg-pulse`}>
-                    {isConfirm ? <ShieldAlert size={38} className="text-amber-500" /> : s!.icon}
-                </div>
+                <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"><X size={18} /></button>
+                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>{s.icon}</div>
                 <div className="text-center w-full">
                     <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
                     <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
                 </div>
-                {isConfirm ? (
-                    <div className="flex gap-2.5 w-full mt-1">
-                        <ActionButton variant="neutral" onClick={onClose} fullWidth>Batal</ActionButton>
-                        <ActionButton variant="primary" onClick={() => { modal.onConfirm?.(); onClose(); }} fullWidth>Ya, Lanjutkan</ActionButton>
-                    </div>
-                ) : (
-                    <button onClick={onClose} className={`btn-action w-full ${s!.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>OK, Mengerti</button>
-                )}
+                <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>OK, Mengerti</button>
             </div>
         </div>
     );
 };
 
-// ✅ PERBAIKAN: CoverageWarning support array gaps (string[])
+// ✅ CoverageWarning — restyle mengikuti atur_penilaian_gbs_client.tsx (palet
+// COLORS.warning/amber), logika gap tetap mendukung format lama (gap tunggal)
+// maupun format baru (gaps: string[] atau {aspek, gap}[]).
 const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     if (!coverage || coverage.covered) return null;
 
@@ -256,23 +245,25 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
     if (gapsList.length === 0) return null;
 
     return (
-        <div className="mb-4 p-4 rounded-xl flex items-start gap-3 dg-fadeIn" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fde0c8' }}>
-                <AlertTriangle size={18} style={{ color: ACCENT_DARK }} />
+        <div className="mb-5 pl-4 pr-4 py-4 rounded-xl flex items-start gap-3 anim-in"
+            style={{ background: COLORS.warning.bg, border: `1px solid ${COLORS.warning.border}` }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fde68a' }}>
+                <AlertTriangle size={18} style={{ color: COLORS.warning.text }} />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-bold mb-1" style={{ color: ACCENT_DARK }}>Range Nilai 0-100 Belum Lengkap</p>
+                <p className="text-sm font-bold mb-2" style={{ color: COLORS.warning.text }}>Range Nilai 0–100 Belum Lengkap</p>
                 {gapsList.length === 1 ? (
-                    <p className="text-xs" style={{ color: ACCENT_DARK }}>
-                        Ada gap pada rentang <span className="px-2 py-0.5 rounded-md font-semibold" style={{ background: '#fde0c8' }}>{gapsList[0]}</span>
+                    <p className="text-xs" style={{ color: COLORS.warning.text }}>
+                        Ada gap pada rentang <strong className="px-2 py-0.5 rounded bg-amber-200/60">{gapsList[0]}</strong>
                     </p>
                 ) : (
-                    <div className="text-xs" style={{ color: ACCENT_DARK }}>
-                        <p className="mb-2">Ada <strong>{gapsList.length} gap</strong> yang belum dibuat:</p>
-                        <ul className="space-y-1 ml-4 list-disc">
+                    <div className="text-xs" style={{ color: COLORS.warning.text }}>
+                        <p className="mb-2">Ditemukan {gapsList.length} gap yang belum dibuat:</p>
+                        <ul className="space-y-1 ml-4">
                             {gapsList.map((gap, i) => (
-                                <li key={i}>
-                                    Rentang <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: '#fde0c8' }}>{gap}</span>
+                                <li key={i} className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: COLORS.warning.text }}></span>
+                                    <span>Rentang <strong className="px-1.5 py-0.5 rounded bg-amber-200/60">{gap}</strong></span>
                                 </li>
                             ))}
                         </ul>
@@ -286,19 +277,6 @@ const CoverageWarning = ({ coverage }: { coverage: CoverageInfo | null }) => {
 // ====== SHARED STYLE CONSTANTS ======
 const inputCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400";
 const selectCls = "border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 min-w-[200px]";
-
-const BtnEdit = ({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) => (
-    <button onClick={onClick} disabled={disabled}
-        className="btn-action inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{
-            background: disabled ? '#f3f4f6' : '#fff5eb',
-            border: disabled ? '1px solid #d1d5db' : '1.5px solid #f0a94e',
-            color: disabled ? '#9ca3af' : ACCENT_DARK
-        }}
-        onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#fde0c8'; }}
-        onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = '#fff5eb'; }}
-    >{children}</button>
-);
 
 // ====== MAIN COMPONENT ======
 export default function AturPenilaianGuruKelasClient() {
@@ -1328,9 +1306,9 @@ const executeSaveBatchAkademik = async () => {
         return (
             <div className="flex-1 p-6 min-h-screen flex items-center justify-center" style={PAGE_BG}>
                 <GlobalStyles />
-                <div className="text-center">
-                    <div className="w-10 h-10 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
-                    <p className="text-sm text-gray-400">Memuat data...</p>
+                <div className="text-center dg-fadeIn">
+                    <div className="w-10 h-10 rounded-full border-2 border-orange-100 border-t-orange-500 mx-auto mb-4 animate-spin" />
+                    <p className="text-sm font-semibold" style={{ color: ACCENT_DARK }}>Memuat data...</p>
                 </div>
             </div>
         );
@@ -1345,14 +1323,14 @@ const executeSaveBatchAkademik = async () => {
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
                     <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center gap-4 dg-scaleIn">
                         <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center ring-8 ring-red-100">
-                            <AlertCircle size={48} className="text-red-500" />
+                            <AlertCircle size={44} className="text-red-500" />
                         </div>
                         <div className="text-center">
                             <h3 className="text-xl font-bold text-gray-900 mb-2">Akses Ditolak</h3>
-                            <p className="text-sm text-gray-600 leading-relaxed">Anda belum ditugaskan sebagai guru kelas di semester ini.</p>
+                            <p className="text-sm text-gray-600">Anda belum ditugaskan sebagai guru kelas di semester ini.</p>
                         </div>
-                        <ActionButton variant="primary" onClick={handleLogout} fullWidth>
-                            <LogOut size={16} /> Logout
+                        <ActionButton variant="neutral" fullWidth onClick={handleLogout}>
+                            <LogOut size={17} /> Logout
                         </ActionButton>
                     </div>
                 </div>
@@ -1372,52 +1350,42 @@ const executeSaveBatchAkademik = async () => {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Header */}
+            {/* Header — teks polos, konsisten dengan Guru Bidang Studi dan halaman lain */}
             <div className="mb-4 sm:mb-5 anim-in d1">
-                <div className="flex items-center gap-3 mb-1">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: BRAND_GRADIENT }}>
-                        <Settings size={17} className="text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Atur Penilaian</h1>
-                        <p className="text-xs sm:text-sm mt-0.5 text-gray-500">Kelola kategori dan bobot penilaian kelas Anda</p>
-                    </div>
-                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Atur Penilaian</h1>
+                <p className="text-xs sm:text-sm mt-1 text-gray-500">Kelola kategori dan bobot penilaian kelas Anda</p>
             </div>
 
-            {/* Read Only Banner */}
+            {/* Read Only Banner — border-left card, sama gaya dengan Guru Bidang Studi */}
             {isReadOnly && (
-                <div className="mb-4 p-4 rounded-xl flex items-start gap-3 anim-in d2"
-                    style={{ background: readOnlyReason === 'locked' ? '#fef2f2' : '#fff8f2', border: `1.5px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#f0a94e'}` }}>
-                    <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: readOnlyReason === 'locked' ? '#dc2626' : ACCENT_DARK }} />
+                <div className="card-flat mb-4 flex items-start gap-3 px-4 py-3.5 rounded-2xl bg-white anim-in d2"
+                    style={{ ...CARD_STYLE, borderLeft: `4px solid ${readOnlyReason === 'locked' ? COLORS.neutral.text : COLORS.warning.text}` }}>
+                    <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: readOnlyReason === 'locked' ? COLORS.neutral.text : COLORS.warning.text }} />
                     <div className="flex-1">
-                        <p className="text-sm font-bold mb-1" style={{ color: readOnlyReason === 'locked' ? '#991b1b' : ACCENT_DARK }}>
-                            Mode Baca Saja (Read Only)
+                        <p className="text-sm font-bold mb-1" style={{ color: readOnlyReason === 'locked' ? COLORS.neutral.text : COLORS.warning.text }}>
+                            {readOnlyReason === 'locked' ? 'Periode Penilaian Selesai' : 'Periode Penilaian Belum Aktif'}
                         </p>
-                        <p className="text-xs" style={{ color: readOnlyReason === 'locked' ? '#b91c1c' : '#9a5b1f' }}>
+                        <p className="text-xs text-gray-500">
                             {readOnlyReason === 'locked'
-                                ? 'Periode penilaian telah selesai dan data sudah dikunci.'
+                                ? 'Konfigurasi kategori dan bobot sudah dikunci dan tidak dapat diubah.'
                                 : 'Periode penilaian belum aktif. Silakan hubungi admin.'}
                         </p>
                     </div>
                 </div>
             )}
 
-            {/* Active Period Banner */}
+            {/* Active Period Banner — border-left card, sama gaya dengan Guru Bidang Studi */}
             {jenisPenilaianAktif && (
-                <div className="mb-4 p-4 rounded-xl flex items-center gap-3 anim-in d2"
-                    style={{
-                        background: jenisPenilaianAktif === 'PTS' ? '#fff8f2' : '#ecfdf5',
-                        border: `1.5px solid ${jenisPenilaianAktif === 'PTS' ? '#f0a94e' : '#86efac'}`
-                    }}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: jenisPenilaianAktif === 'PTS' ? '#fde0c8' : '#bbf7d0' }}>
-                        {jenisPenilaianAktif === 'PTS' ? <Award className="w-4 h-4" style={{ color: ACCENT_DARK }} /> : <CheckCircle2 className="w-4 h-4 text-green-700" />}
+                <div className="card-flat mb-4 flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-white anim-in d2"
+                    style={{ ...CARD_STYLE, borderLeft: `4px solid ${jenisPenilaianAktif === 'PTS' ? COLORS.accent.text : COLORS.success.text}` }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: jenisPenilaianAktif === 'PTS' ? COLORS.accent.bg : COLORS.success.bg }}>
+                        {jenisPenilaianAktif === 'PTS' ? <Award className="w-4 h-4" style={{ color: COLORS.accent.text }} /> : <CheckCircle2 className="w-4 h-4" style={{ color: COLORS.success.text }} />}
                     </div>
                     <div className="flex-1">
-                        <p className="text-sm font-bold" style={{ color: jenisPenilaianAktif === 'PTS' ? ACCENT_DARK : '#166534' }}>
+                        <p className="text-sm font-bold" style={{ color: jenisPenilaianAktif === 'PTS' ? COLORS.accent.text : COLORS.success.text }}>
                             Mode Konfigurasi: {jenisPenilaianAktif === 'PTS' ? 'PTS (Penilaian Tengah Semester)' : 'PAS (Penilaian Akhir Semester)'}
                         </p>
-                        <p className="text-xs mt-0.5" style={{ color: jenisPenilaianAktif === 'PTS' ? '#9a5b1f' : '#15803d' }}>
+                        <p className="text-xs mt-0.5 text-gray-500">
                             {jenisPenilaianAktif === 'PTS' ? 'Anda sedang mengatur konfigurasi untuk PTS' : 'Anda sedang mengatur konfigurasi untuk PAS'}
                         </p>
                     </div>
@@ -1426,9 +1394,9 @@ const executeSaveBatchAkademik = async () => {
 
             {/* Main Card */}
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
-                {/* Tabs */}
-                <div className="px-5 py-3 border-b" style={{ borderColor: '#ececec', background: '#fafafa' }}>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {/* Tabs — segmented pill, sama persis gaya dengan Guru Bidang Studi */}
+                <div className="px-4 sm:px-6 py-4 border-b" style={{ borderColor: '#f0f0f0' }}>
+                    <div className="inline-flex flex-wrap p-1 rounded-xl gap-1" style={{ background: '#f6f7f9', border: '1px solid #ececec' }}>
                         {[
                             { id: 'kokurikuler', label: 'Kokurikuler', icon: Layers },
                             { id: 'akademik', label: 'Akademik', icon: BookOpen },
@@ -1438,11 +1406,12 @@ const executeSaveBatchAkademik = async () => {
                             <button key={tab.id}
                                 onClick={() => !tab.disabled && handleTabChange(tab.id as typeof activeTab)}
                                 disabled={tab.disabled}
-                                className={`btn-action flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
-                                    ? 'text-white'
-                                    : tab.disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-white text-gray-600 hover:bg-orange-50 hover:text-orange-700 border border-gray-200'
-                                    }`}
-                                style={activeTab === tab.id ? { background: BRAND_GRADIENT, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' } : {}}
+                                className="btn-action px-4 sm:px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                                style={activeTab === tab.id
+                                    ? { background: BRAND_GRADIENT, color: '#fff', boxShadow: '0 2px 8px rgba(232,105,10,0.25)' }
+                                    : tab.disabled
+                                        ? { background: 'transparent', color: '#9ca3af', cursor: 'not-allowed' }
+                                        : { background: 'transparent', color: ACCENT_DARK }}
                                 title={tab.disabled ? getDeskripsiRataRataLockReason() : ''}
                             >
                                 <tab.icon size={15} />
@@ -1454,14 +1423,14 @@ const executeSaveBatchAkademik = async () => {
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-4 sm:p-6">
+                <div className="p-4 sm:p-6" key={activeTab}>
                     {/* KOKURIKULER TAB */}
                     {activeTab === 'kokurikuler' && (
                         <div>
                             <CoverageWarning coverage={coverageInfo} />
                             {kategoriLoading ? (
                                 <div className="py-16 text-center">
-                                    <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                    <div className="w-8 h-8 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin mx-auto mb-3" />
                                     <p className="text-sm text-gray-400">Memuat data...</p>
                                 </div>
                             ) : groupedKokurikuler.length === 0 ? (
@@ -1478,9 +1447,9 @@ const executeSaveBatchAkademik = async () => {
 
                                         return (
                                             <div key={aspek.id_aspek_kokurikuler} className="rounded-xl overflow-hidden transition-all"
-                                                style={{ border: `1.5px solid ${isEditable ? '#fde0c8' : '#e5e7eb'}`, opacity: isEditable ? 1 : 0.75 }}>
+                                                style={{ border: `1.5px solid ${isEditable ? COLORS.accent.border : '#e5e7eb'}`, opacity: isEditable ? 1 : 0.75 }}>
                                                 <div className="px-5 py-3 flex items-center justify-between gap-3"
-                                                    style={{ background: isEditable ? '#fff8f2' : '#f9fafb', borderBottom: `1.5px solid ${isEditable ? '#fde0c8' : '#e5e7eb'}` }}>
+                                                    style={{ background: isEditable ? COLORS.accent.bg : '#f9fafb', borderBottom: `1.5px solid ${isEditable ? COLORS.accent.border : '#e5e7eb'}` }}>
                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                                         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                                                             style={{ background: isEditable ? '#fde0c8' : '#e5e7eb' }}>
@@ -1498,37 +1467,39 @@ const executeSaveBatchAkademik = async () => {
                                                             <p className="text-xs text-gray-400">{grades.length} grade</p>
                                                         </div>
                                                     </div>
-                                                    <BtnEdit onClick={() => openBatchEdit(aspek.id_aspek_kokurikuler)} disabled={!isEditable}>
-                                                        {isEditable ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
-                                                    </BtnEdit>
+                                                    <ActionButton variant={isEditable ? 'warning' : 'neutral'} disabled={!isEditable} onClick={() => openBatchEdit(aspek.id_aspek_kokurikuler)}>
+                                                        {isEditable ? (<><Pencil size={16} /> Edit Semua</>) : (<><Lock size={16} /> Terkunci</>)}
+                                                    </ActionButton>
                                                 </div>
                                                 {grades.length > 0 ? (
                                                     <div className="overflow-x-auto scrollbar-thin">
-                                                        <table className="w-full text-sm table-fixed">
-                                                            <thead style={{ background: '#fafafa' }}>
-                                                                <tr>
-                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-20">Grade</th>
-                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-36">Range Nilai</th>
-                                                                    <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Deskripsi</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y" style={{ borderColor: '#f0f0f0' }}>
-                                                                {grades.map((g) => (
-                                                                    <tr key={g.id} className="transition-colors row-hover" onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                                                                        <td className="px-5 py-3 align-top">
-                                                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold"
-                                                                                style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1.5px solid #f0a94e' }}>
-                                                                                {(g as KategoriKokurikuler).grade}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-5 py-3 align-top text-gray-700 font-medium whitespace-nowrap">
+                                                        <div style={{ width: '100%', minWidth: '420px' }}>
+                                                            <div className="grid" style={{ gridTemplateColumns: GRID_COLS_KATEGORI, background: '#fafafa' }}>
+                                                                <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Grade</div>
+                                                                <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Range Nilai</div>
+                                                                <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Deskripsi</div>
+                                                            </div>
+                                                            {grades.map((g) => (
+                                                                <div key={g.id} className="grid row-hover border-t transition-colors"
+                                                                    style={{ gridTemplateColumns: GRID_COLS_KATEGORI, borderColor: '#f0f0f0' }}
+                                                                    onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                                    <div className="px-5 py-3 flex items-center">
+                                                                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold"
+                                                                            style={{ background: COLORS.accent.bg, color: COLORS.accent.text, border: `1px solid ${COLORS.accent.border}` }}>
+                                                                            {(g as KategoriKokurikuler).grade}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="px-5 py-3 flex items-center">
+                                                                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap"
+                                                                            style={{ background: COLORS.accent.bg, color: COLORS.accent.text, border: `1px solid ${COLORS.accent.border}` }}>
                                                                             {Math.floor(g.min_nilai)} – {Math.floor(g.max_nilai)}
-                                                                        </td>
-                                                                        <td className="px-5 py-3 align-top text-gray-600 break-words">{g.deskripsi}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="px-5 py-3 flex items-center text-gray-700 truncate" title={g.deskripsi}>{g.deskripsi}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <div className="px-5 py-8 text-center text-sm text-gray-400">Belum ada grade untuk aspek ini</div>
@@ -1562,13 +1533,13 @@ const executeSaveBatchAkademik = async () => {
                                     <CoverageWarning coverage={coverageInfo} />
                                     {kategoriLoading ? (
                                         <div className="py-16 text-center">
-                                            <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                            <div className="w-8 h-8 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin mx-auto mb-3" />
                                             <p className="text-sm text-gray-400">Memuat data...</p>
                                         </div>
                                     ) : (
-                                        <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditAkademik() ? '#fde0c8' : '#e5e7eb'}`, opacity: canEditAkademik() ? 1 : 0.75 }}>
+                                        <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditAkademik() ? COLORS.accent.border : '#e5e7eb'}`, opacity: canEditAkademik() ? 1 : 0.75 }}>
                                             <div className="px-5 py-3 flex items-center justify-between gap-3"
-                                                style={{ background: canEditAkademik() ? '#fff8f2' : '#f9fafb', borderBottom: `1.5px solid ${canEditAkademik() ? '#fde0c8' : '#e5e7eb'}` }}>
+                                                style={{ background: canEditAkademik() ? COLORS.accent.bg : '#f9fafb', borderBottom: `1.5px solid ${canEditAkademik() ? COLORS.accent.border : '#e5e7eb'}` }}>
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-9 h-9 rounded-lg flex items-center justify-center"
                                                         style={{ background: canEditAkademik() ? '#fde0c8' : '#e5e7eb' }}>
@@ -1579,35 +1550,34 @@ const executeSaveBatchAkademik = async () => {
                                                         <p className="text-xs text-gray-400">{kategoriList.length} kategori</p>
                                                     </div>
                                                 </div>
-                                                <BtnEdit onClick={openBatchEditAkademik} disabled={!canEditAkademik()}>
-                                                    {canEditAkademik() ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
-                                                </BtnEdit>
+                                                <ActionButton variant={canEditAkademik() ? 'warning' : 'neutral'} disabled={!canEditAkademik()} onClick={openBatchEditAkademik}>
+                                                    {canEditAkademik() ? (<><Pencil size={16} /> Edit Semua</>) : (<><Lock size={16} /> Terkunci</>)}
+                                                </ActionButton>
                                             </div>
                                             {(kategoriList as KategoriAkademik[]).length > 0 ? (
                                                 <div className="overflow-x-auto scrollbar-thin">
-                                                    <table className="w-full text-sm table-fixed">
-                                                        <thead style={{ background: '#fafafa' }}>
-                                                            <tr>
-                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-16">No</th>
-                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-36">Range Nilai</th>
-                                                                <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Deskripsi</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y" style={{ borderColor: '#f0f0f0' }}>
-                                                            {(kategoriList as KategoriAkademik[]).sort((a, b) => b.min_nilai - a.min_nilai).map((k, idx) => (
-                                                                <tr key={k.id} className="transition-colors row-hover" onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                                                                    <td className="px-5 py-3 align-top text-gray-400 font-medium">{idx + 1}</td>
-                                                                    <td className="px-5 py-3 align-top whitespace-nowrap">
-                                                                        <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold"
-                                                                            style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1.5px solid #f0a94e' }}>
-                                                                            {Math.floor(k.min_nilai)} – {Math.floor(k.max_nilai)}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-5 py-3 align-top text-gray-700 break-words">{k.deskripsi}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                    <div style={{ width: '100%', minWidth: '480px' }}>
+                                                        <div className="grid" style={{ gridTemplateColumns: GRID_COLS_KATEGORI, background: '#fafafa' }}>
+                                                            <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">No</div>
+                                                            <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Range Nilai</div>
+                                                            <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Deskripsi</div>
+                                                        </div>
+                                                        {(kategoriList as KategoriAkademik[]).sort((a, b) => b.min_nilai - a.min_nilai).map((k, idx) => (
+                                                            <div key={k.id} className="grid row-hover border-t transition-colors"
+                                                                style={{ gridTemplateColumns: GRID_COLS_KATEGORI, borderColor: '#f0f0f0' }}
+                                                                onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                                                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                                <div className="px-5 py-3 flex items-center text-gray-400 font-medium">{idx + 1}</div>
+                                                                <div className="px-5 py-3 flex items-center">
+                                                                    <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold"
+                                                                        style={{ background: COLORS.accent.bg, color: COLORS.accent.text, border: `1px solid ${COLORS.accent.border}` }}>
+                                                                        {Math.floor(k.min_nilai)} – {Math.floor(k.max_nilai)}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="px-5 py-3 flex items-center text-gray-700 truncate" title={k.deskripsi}>{k.deskripsi}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <div className="px-5 py-8 text-center text-sm text-gray-400">Belum ada kategori untuk mata pelajaran ini</div>
@@ -1628,17 +1598,17 @@ const executeSaveBatchAkademik = async () => {
                     {activeTab === 'deskripsi-rata-rata' && (
                         <div>
                             {!canEditDeskripsiRataRata() && (
-                                <div className="mb-5 p-4 rounded-xl" style={{ background: '#fef2f2', border: '1.5px solid #fca5a5' }}>
+                                <div className="mb-5 p-4 rounded-xl" style={{ background: COLORS.danger.bg, border: `1.5px solid ${COLORS.danger.border}` }}>
                                     <div className="flex items-center gap-2 mb-1">
-                                        <Lock size={16} className="text-red-600" />
-                                        <p className="text-sm font-bold text-red-900">Deskripsi Rata-rata Terkunci</p>
+                                        <Lock size={16} style={{ color: COLORS.danger.text }} />
+                                        <p className="text-sm font-bold" style={{ color: COLORS.danger.text }}>Deskripsi Rata-rata Terkunci</p>
                                     </div>
-                                    <p className="text-xs text-red-700 ml-6">{getDeskripsiRataRataLockReason()}</p>
+                                    <p className="text-xs ml-6" style={{ color: COLORS.danger.text }}>{getDeskripsiRataRataLockReason()}</p>
                                 </div>
                             )}
 
                             {canEditDeskripsiRataRata() && (
-                                <div className="mb-5 p-4 rounded-xl flex items-center gap-3" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                <div className="mb-5 p-4 rounded-xl flex items-center gap-3" style={{ background: COLORS.accent.bg, border: `1.5px solid ${COLORS.accent.border}` }}>
                                     <Calendar size={18} style={{ color: ACCENT_DARK }} className="flex-shrink-0" />
                                     <div>
                                         <p className="text-sm font-bold" style={{ color: ACCENT_DARK }}>Periode PTS Sedang Aktif</p>
@@ -1651,13 +1621,13 @@ const executeSaveBatchAkademik = async () => {
 
                             {deskripsiRataRataLoading ? (
                                 <div className="py-16 text-center">
-                                    <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                    <div className="w-8 h-8 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin mx-auto mb-3" />
                                     <p className="text-sm text-gray-400">Memuat data...</p>
                                 </div>
                             ) : (
-                                <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditDeskripsiRataRata() ? '#fde0c8' : '#e5e7eb'}`, opacity: canEditDeskripsiRataRata() ? 1 : 0.75 }}>
+                                <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${canEditDeskripsiRataRata() ? COLORS.accent.border : '#e5e7eb'}`, opacity: canEditDeskripsiRataRata() ? 1 : 0.75 }}>
                                     <div className="px-5 py-3 flex items-center justify-between gap-3"
-                                        style={{ background: canEditDeskripsiRataRata() ? '#fff8f2' : '#f9fafb', borderBottom: `1.5px solid ${canEditDeskripsiRataRata() ? '#fde0c8' : '#e5e7eb'}` }}>
+                                        style={{ background: canEditDeskripsiRataRata() ? COLORS.accent.bg : '#f9fafb', borderBottom: `1.5px solid ${canEditDeskripsiRataRata() ? COLORS.accent.border : '#e5e7eb'}` }}>
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 rounded-lg flex items-center justify-center"
                                                 style={{ background: canEditDeskripsiRataRata() ? '#fde0c8' : '#e5e7eb' }}>
@@ -1668,35 +1638,34 @@ const executeSaveBatchAkademik = async () => {
                                                 <p className="text-xs text-gray-400">{deskripsiRataRataList.length} kategori</p>
                                             </div>
                                         </div>
-                                        <BtnEdit onClick={openBatchEditDeskripsi} disabled={!canEditDeskripsiRataRata()}>
-                                            {canEditDeskripsiRataRata() ? (<><Pencil size={12} />Edit Semua</>) : (<><Lock size={12} />Terkunci</>)}
-                                        </BtnEdit>
+                                        <ActionButton variant={canEditDeskripsiRataRata() ? 'warning' : 'neutral'} disabled={!canEditDeskripsiRataRata()} onClick={openBatchEditDeskripsi}>
+                                            {canEditDeskripsiRataRata() ? (<><Pencil size={16} /> Edit Semua</>) : (<><Lock size={16} /> Terkunci</>)}
+                                        </ActionButton>
                                     </div>
                                     {deskripsiRataRataList.length > 0 ? (
                                         <div className="overflow-x-auto scrollbar-thin">
-                                            <table className="w-full text-sm table-fixed">
-                                                <thead style={{ background: '#fafafa' }}>
-                                                    <tr>
-                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-16">No</th>
-                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-44">Range Nilai</th>
-                                                        <th className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Deskripsi</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y" style={{ borderColor: '#f0f0f0' }}>
-                                                    {[...deskripsiRataRataList].sort((a, b) => b.min_nilai - a.min_nilai).map((k, idx) => (
-                                                        <tr key={k.id} className="transition-colors row-hover" onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                                                            <td className="px-5 py-3 align-top text-gray-400 font-medium">{idx + 1}</td>
-                                                            <td className="px-5 py-3 align-top whitespace-nowrap">
-                                                                <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold"
-                                                                    style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1.5px solid #f0a94e' }}>
-                                                                    {parseFloat(k.min_nilai).toFixed(2)} – {parseFloat(k.max_nilai).toFixed(2)}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-5 py-3 align-top text-gray-700 break-words">{k.deskripsi}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                            <div style={{ width: '100%', minWidth: '480px' }}>
+                                                <div className="grid" style={{ gridTemplateColumns: GRID_COLS_KATEGORI, background: '#fafafa' }}>
+                                                    <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">No</div>
+                                                    <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Range Nilai</div>
+                                                    <div className="px-5 py-2.5 text-left text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center">Deskripsi</div>
+                                                </div>
+                                                {[...deskripsiRataRataList].sort((a, b) => b.min_nilai - a.min_nilai).map((k, idx) => (
+                                                    <div key={k.id} className="grid row-hover border-t transition-colors"
+                                                        style={{ gridTemplateColumns: GRID_COLS_KATEGORI, borderColor: '#f0f0f0' }}
+                                                        onMouseEnter={e => (e.currentTarget.style.background = '#fff8f2')}
+                                                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                                                        <div className="px-5 py-3 flex items-center text-gray-400 font-medium">{idx + 1}</div>
+                                                        <div className="px-5 py-3 flex items-center">
+                                                            <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold"
+                                                                style={{ background: COLORS.accent.bg, color: COLORS.accent.text, border: `1px solid ${COLORS.accent.border}` }}>
+                                                                {parseFloat(k.min_nilai).toFixed(2)} – {parseFloat(k.max_nilai).toFixed(2)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="px-5 py-3 flex items-center text-gray-700 truncate" title={k.deskripsi}>{k.deskripsi}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="px-5 py-8 text-center text-sm text-gray-400">Belum ada kategori deskripsi rata-rata</div>
@@ -1710,7 +1679,7 @@ const executeSaveBatchAkademik = async () => {
                     {activeTab === 'bobot' && (
                         <div>
                             {isPTSActive && (
-                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: COLORS.accent.bg, border: `1.5px solid ${COLORS.accent.border}` }}>
                                     <Info size={18} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
                                     <div>
                                         <p className="text-sm font-bold mb-1" style={{ color: ACCENT_DARK }}>Periode PTS Sedang Aktif</p>
@@ -1720,11 +1689,11 @@ const executeSaveBatchAkademik = async () => {
                             )}
 
                             {!isPTSActive && !isReadOnly && selectedMapelId && (
-                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: '#eff6ff', border: '1.5px solid #93c5fd' }}>
-                                    <Info size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                <div className="mb-5 p-4 rounded-xl flex items-start gap-3" style={{ background: COLORS.info.bg, border: `1.5px solid ${COLORS.info.border}` }}>
+                                    <Info size={18} style={{ color: COLORS.info.text }} className="mt-0.5 flex-shrink-0" />
                                     <div>
-                                        <p className="text-sm font-bold text-blue-900 mb-1">Info Bobot</p>
-                                        <p className="text-xs text-blue-800">
+                                        <p className="text-sm font-bold mb-1" style={{ color: COLORS.info.text }}>Info Bobot</p>
+                                        <p className="text-xs" style={{ color: COLORS.info.text }}>
                                             Bobot <strong>0% diizinkan</strong> untuk komponen yang tidak digunakan (misal: UH3 jika mapel hanya punya UH1, UH2, UH4, UH5).
                                             <br />
                                             Total bobot harus tetap <strong>100%</strong> dan minimal ada <strong>1 komponen dengan bobot &gt; 0%</strong>.
@@ -1749,7 +1718,7 @@ const executeSaveBatchAkademik = async () => {
                             {selectedMapelId ? (
                                 bobotLoading ? (
                                     <div className="py-16 text-center">
-                                        <div className="w-8 h-8 rounded-full border-2 border-orange-300 border-t-orange-600 animate-spin mx-auto mb-3" />
+                                        <div className="w-8 h-8 rounded-full border-2 border-orange-100 border-t-orange-500 animate-spin mx-auto mb-3" />
                                         <p className="text-sm text-gray-400">Memuat bobot...</p>
                                     </div>
                                 ) : (
@@ -1763,12 +1732,12 @@ const executeSaveBatchAkademik = async () => {
                                             return (
                                                 <div key={bobot.komponen_id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl transition-all"
                                                     style={{
-                                                        background: isPTSActive && isPTS ? '#fff8f2' : isEditable ? '#ffffff' : '#f9fafb',
-                                                        border: `1.5px solid ${isPTSActive && isPTS ? '#f0a94e' : isEditable ? '#fde0c8' : '#e5e7eb'}`
+                                                        background: isPTSActive && isPTS ? COLORS.accent.bg : isEditable ? '#ffffff' : '#f9fafb',
+                                                        border: `1.5px solid ${isPTSActive && isPTS ? COLORS.accent.border : isEditable ? COLORS.accent.border : '#e5e7eb'}`
                                                     }}>
                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                                         <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                                                            style={{ background: isPTSActive && isPTS ? '#fde0c8' : '#fff5eb' }}>
+                                                            style={{ background: isPTSActive && isPTS ? '#fde0c8' : COLORS.accent.bg }}>
                                                             <TrendingUp size={16} style={{ color: ACCENT_DARK }} />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
@@ -1804,25 +1773,25 @@ const executeSaveBatchAkademik = async () => {
                                         })}
 
                                         {/* Total Bobot */}
-                                        <div className="p-5 rounded-xl mt-4" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
+                                        <div className="p-5 rounded-xl mt-4" style={{ background: isBobotValid ? COLORS.success.bg : COLORS.warning.bg, border: `1.5px solid ${isBobotValid ? COLORS.success.border : COLORS.warning.border}` }}>
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fde0c8' }}>
-                                                        <TrendingUp size={16} style={{ color: ACCENT_DARK }} />
+                                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: isBobotValid ? '#bbf7d0' : '#fde68a' }}>
+                                                        <TrendingUp size={16} style={{ color: isBobotValid ? COLORS.success.text : COLORS.warning.text }} />
                                                     </div>
-                                                    <span className="font-bold text-sm" style={{ color: '#7a3a0a' }}>Total Bobot</span>
+                                                    <span className="font-bold text-sm" style={{ color: isBobotValid ? COLORS.success.text : COLORS.warning.text }}>Total Bobot</span>
                                                 </div>
-                                                <span className={`text-2xl font-bold ${isBobotValid ? 'text-green-600' : 'text-red-600'}`}>
+                                                <span className="text-2xl font-bold" style={{ color: isBobotValid ? COLORS.success.text : COLORS.warning.text }}>
                                                     {totalBobot.toFixed(2)}%
                                                 </span>
                                             </div>
                                             <div className="mt-3 h-2 rounded-full overflow-hidden bg-white/50">
                                                 <div className="h-full rounded-full transition-all" style={{
                                                     width: `${Math.min(totalBobot, 100)}%`,
-                                                    background: isBobotValid ? 'linear-gradient(90deg, #16a34a, #22c55e)' : 'linear-gradient(90deg, #dc2626, #ef4444)'
+                                                    background: isBobotValid ? 'linear-gradient(90deg, #16a34a, #22c55e)' : 'linear-gradient(90deg, #eab308, #facc15)'
                                                 }} />
                                             </div>
-                                            <p className="text-xs mt-2" style={{ color: ACCENT_DARK }}>
+                                            <p className="text-xs mt-2" style={{ color: isBobotValid ? COLORS.success.text : COLORS.warning.text }}>
                                                 {isBobotValid ? '✓ Bobot sudah tepat 100%' : `Total harus tepat 100% (saat ini ${totalBobot.toFixed(2)}%)`}
                                             </p>
                                         </div>
@@ -1861,91 +1830,96 @@ const executeSaveBatchAkademik = async () => {
                         style={CARD_STYLE}>
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
-                                <Layers size={20} className="text-white" />
-                                <h2 className="text-base font-bold text-white">Edit Grade Aspek Kokurikuler</h2>
+                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                                    <Layers size={20} className="text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Edit Grade Aspek Kokurikuler</h2>
+                                    <p className="text-xs text-white/80 mt-0.5">Kelola semua grade sekaligus</p>
+                                </div>
                             </div>
-                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeBatchEdit} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
-                                    <Info size={16} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Isi semua grade sekaligus untuk aspek ini. Sistem akan menyimpan semua grade dalam 1 aksi.</p>
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: COLORS.info.bg, border: `1px solid ${COLORS.info.border}` }}>
+                                    <Info size={16} style={{ color: COLORS.info.text }} className="mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs" style={{ color: COLORS.info.text }}><strong>Tips:</strong> Isi semua grade sekaligus untuk aspek ini. Sistem akan menyimpan semua grade dalam 1 aksi.</p>
                                 </div>
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Grade ({batchGrades.length})</h3>
-                                        <button onClick={addBatchGradeRow}
-                                            className="btn-action flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#fde0c8')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff5eb')}>
+                                        <h3 className="text-sm font-bold text-gray-700">Grade ({batchGrades.length})</h3>
+                                        <ActionButton variant="info" onClick={addBatchGradeRow}>
                                             <Plus size={14} /> Tambah Baris
-                                        </button>
+                                        </ActionButton>
                                     </div>
-                                    {batchGrades.map((grade, index) => (
-                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fde0c8' }}>
-                                            <div className="flex items-start gap-3">
-                                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-3">
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Grade <span className="text-red-500">*</span></label>
-                                                        <input type="text" value={grade.grade || ''}
-                                                            onChange={(e) => updateBatchGrade(index, 'grade', e.target.value.toUpperCase().slice(0, 1))}
-                                                            className={inputCls} maxLength={1} placeholder="A" />
+                                    {batchGrades.map((grade, index) => {
+                                        const errors: string[] = [];
+                                        if (!grade.grade) errors.push('Grade kosong');
+                                        if (grade.grade && grade.grade.length !== 1) errors.push('Grade harus 1 karakter');
+                                        if (isNaN(grade.min_nilai) || isNaN(grade.max_nilai)) errors.push('Nilai tidak valid');
+                                        else if (grade.min_nilai >= grade.max_nilai) errors.push(`Min (${grade.min_nilai}) >= Max (${grade.max_nilai})`);
+                                        if (!grade.deskripsi || grade.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
+
+                                        return (
+                                            <div key={index} className="p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
+                                                        style={{ background: BRAND_GRADIENT }}>
+                                                        {index + 1}
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Min <span className="text-red-500">*</span></label>
-                                                        <input type="number" min="0" max="100" value={grade.min_nilai}
-                                                            onChange={(e) => updateBatchGrade(index, 'min_nilai', parseInt(e.target.value) || 0)}
-                                                            className={inputCls} />
+                                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Grade <span className="text-red-500">*</span></label>
+                                                            <input type="text" value={grade.grade || ''}
+                                                                onChange={(e) => updateBatchGrade(index, 'grade', e.target.value.toUpperCase().slice(0, 1))}
+                                                                className={inputCls} maxLength={1} placeholder="A" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Min <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" value={grade.min_nilai}
+                                                                onChange={(e) => updateBatchGrade(index, 'min_nilai', parseInt(e.target.value) || 0)}
+                                                                className={inputCls} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Max <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" value={grade.max_nilai}
+                                                                onChange={(e) => updateBatchGrade(index, 'max_nilai', parseInt(e.target.value) || 0)}
+                                                                className={inputCls} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Deskripsi <span className="text-red-500">*</span></label>
+                                                            <input type="text" value={grade.deskripsi}
+                                                                onChange={(e) => updateBatchGrade(index, 'deskripsi', e.target.value)}
+                                                                className={inputCls} placeholder="Sangat Baik" />
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Max <span className="text-red-500">*</span></label>
-                                                        <input type="number" min="0" max="100" value={grade.max_nilai}
-                                                            onChange={(e) => updateBatchGrade(index, 'max_nilai', parseInt(e.target.value) || 0)}
-                                                            className={inputCls} />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Deskripsi <span className="text-red-500">*</span></label>
-                                                        <input type="text" value={grade.deskripsi}
-                                                            onChange={(e) => updateBatchGrade(index, 'deskripsi', e.target.value)}
-                                                            className={inputCls} placeholder="Sangat Baik" />
-                                                    </div>
+                                                    {batchGrades.length > 1 && (
+                                                        <button onClick={() => removeBatchGradeRow(index)}
+                                                            className="btn-action mt-7 p-2 rounded-lg transition-colors"
+                                                            style={{ background: COLORS.danger.bg, border: `1.5px solid ${COLORS.danger.border}`, color: COLORS.danger.text }}>
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {batchGrades.length > 1 && (
-                                                    <ActionButton size="sm" variant="danger" onClick={() => removeBatchGradeRow(index)} title="Hapus baris">
-                                                        <Trash2 size={16} />
-                                                    </ActionButton>
+                                                {errors.length > 0 && (
+                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: COLORS.danger.bg, color: COLORS.danger.text, border: `1px solid ${COLORS.danger.border}` }}>
+                                                        <AlertCircle size={12} /> {errors.join(' | ')}
+                                                    </div>
                                                 )}
                                             </div>
-                                            {(() => {
-                                                const errors: string[] = [];
-                                                if (!grade.grade) errors.push('Grade kosong');
-                                                if (grade.grade && grade.grade.length !== 1) errors.push('Grade harus 1 karakter');
-                                                if (isNaN(grade.min_nilai) || isNaN(grade.max_nilai)) errors.push('Nilai tidak valid');
-                                                else if (grade.min_nilai >= grade.max_nilai) errors.push(`Min (${grade.min_nilai}) >= Max (${grade.max_nilai})`);
-                                                if (!grade.deskripsi || grade.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
-                                                if (errors.length > 0) {
-                                                    return (
-                                                        <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                                                            <AlertCircle size={12} /> {errors.join(' | ')}
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 {(() => {
                                     const validation = validateBatchGrades();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? '#f0fdf4' : '#fff8f2',
-                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#f0a94e'}`,
-                                            color: validation.valid ? '#166534' : '#7a3a0a'
+                                            background: validation.valid ? COLORS.success.bg : COLORS.warning.bg,
+                                            border: `1.5px solid ${validation.valid ? COLORS.success.border : COLORS.warning.border}`,
+                                            color: validation.valid ? COLORS.success.text : COLORS.warning.text
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
                                             <strong>Status:</strong> {validation.valid ? 'Semua grade valid dan siap disimpan' : `Ada ${validation.errors.length} error yang perlu diperbaiki`}
@@ -1973,83 +1947,88 @@ const executeSaveBatchAkademik = async () => {
                         style={CARD_STYLE}>
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
-                                <BookOpen size={20} className="text-white" />
-                                <h2 className="text-base font-bold text-white">Edit Kategori Akademik</h2>
+                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                                    <BookOpen size={20} className="text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Edit Kategori Akademik</h2>
+                                    <p className="text-xs text-white/80 mt-0.5">Kelola semua kategori sekaligus</p>
+                                </div>
                             </div>
-                            <button onClick={closeBatchEditAkademik} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeBatchEditAkademik} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
-                                    <Info size={16} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Isi semua kategori sekaligus. Sistem akan menyimpan semua kategori dalam 1 aksi.</p>
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: COLORS.info.bg, border: `1px solid ${COLORS.info.border}` }}>
+                                    <Info size={16} style={{ color: COLORS.info.text }} className="mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs" style={{ color: COLORS.info.text }}><strong>Tips:</strong> Isi semua kategori sekaligus. Sistem akan menyimpan semua kategori dalam 1 aksi.</p>
                                 </div>
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchAkademik.length})</h3>
-                                        <button onClick={addBatchAkademikRow}
-                                            className="btn-action flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#fde0c8')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff5eb')}>
+                                        <h3 className="text-sm font-bold text-gray-700">Kategori ({batchAkademik.length})</h3>
+                                        <ActionButton variant="info" onClick={addBatchAkademikRow}>
                                             <Plus size={14} /> Tambah Baris
-                                        </button>
+                                        </ActionButton>
                                     </div>
-                                    {batchAkademik.map((kategori, index) => (
-                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fde0c8' }}>
-                                            <div className="flex items-start gap-3">
-                                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Min <span className="text-red-500">*</span></label>
-                                                        <input type="number" min="0" max="100" value={kategori.min_nilai}
-                                                            onChange={(e) => updateBatchAkademik(index, 'min_nilai', parseInt(e.target.value) || 0)}
-                                                            className={inputCls} />
+                                    {batchAkademik.map((kategori, index) => {
+                                        const errors: string[] = [];
+                                        if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
+                                        else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
+                                        if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
+
+                                        return (
+                                            <div key={index} className="p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
+                                                        style={{ background: BRAND_GRADIENT }}>
+                                                        {index + 1}
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Max <span className="text-red-500">*</span></label>
-                                                        <input type="number" min="0" max="100" value={kategori.max_nilai}
-                                                            onChange={(e) => updateBatchAkademik(index, 'max_nilai', parseInt(e.target.value) || 0)}
-                                                            className={inputCls} />
+                                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Min <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" value={kategori.min_nilai}
+                                                                onChange={(e) => updateBatchAkademik(index, 'min_nilai', parseInt(e.target.value) || 0)}
+                                                                className={inputCls} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Max <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" value={kategori.max_nilai}
+                                                                onChange={(e) => updateBatchAkademik(index, 'max_nilai', parseInt(e.target.value) || 0)}
+                                                                className={inputCls} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Deskripsi <span className="text-red-500">*</span></label>
+                                                            <input type="text" value={kategori.deskripsi}
+                                                                onChange={(e) => updateBatchAkademik(index, 'deskripsi', e.target.value)}
+                                                                className={inputCls} placeholder="Sangat Baik" />
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Deskripsi <span className="text-red-500">*</span></label>
-                                                        <input type="text" value={kategori.deskripsi}
-                                                            onChange={(e) => updateBatchAkademik(index, 'deskripsi', e.target.value)}
-                                                            className={inputCls} placeholder="Sangat Baik" />
-                                                    </div>
+                                                    {batchAkademik.length > 1 && (
+                                                        <button onClick={() => removeBatchAkademikRow(index)}
+                                                            className="btn-action mt-7 p-2 rounded-lg transition-colors"
+                                                            style={{ background: COLORS.danger.bg, border: `1.5px solid ${COLORS.danger.border}`, color: COLORS.danger.text }}>
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {batchAkademik.length > 1 && (
-                                                    <ActionButton size="sm" variant="danger" onClick={() => removeBatchAkademikRow(index)} title="Hapus baris">
-                                                        <Trash2 size={16} />
-                                                    </ActionButton>
+                                                {errors.length > 0 && (
+                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: COLORS.danger.bg, color: COLORS.danger.text, border: `1px solid ${COLORS.danger.border}` }}>
+                                                        <AlertCircle size={12} /> {errors.join(' | ')}
+                                                    </div>
                                                 )}
                                             </div>
-                                            {(() => {
-                                                const errors: string[] = [];
-                                                if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
-                                                else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
-                                                if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
-                                                if (errors.length > 0) {
-                                                    return (
-                                                        <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                                                            <AlertCircle size={12} /> {errors.join(' | ')}
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 {(() => {
                                     const validation = validateBatchAkademik();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? '#f0fdf4' : '#fff8f2',
-                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#f0a94e'}`,
-                                            color: validation.valid ? '#166534' : '#7a3a0a'
+                                            background: validation.valid ? COLORS.success.bg : COLORS.warning.bg,
+                                            border: `1.5px solid ${validation.valid ? COLORS.success.border : COLORS.warning.border}`,
+                                            color: validation.valid ? COLORS.success.text : COLORS.warning.text
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
                                             <strong>Status:</strong> {validation.valid ? 'Semua kategori valid dan siap disimpan' : `Ada ${validation.errors.length} error yang perlu diperbaiki`}
@@ -2077,83 +2056,88 @@ const executeSaveBatchAkademik = async () => {
                         style={CARD_STYLE}>
                         <div className="flex items-center justify-between px-6 py-4 rounded-t-2xl" style={{ background: BRAND_GRADIENT }}>
                             <div className="flex items-center gap-3">
-                                <BarChart3 size={20} className="text-white" />
-                                <h2 className="text-base font-bold text-white">Edit Deskripsi Rata-rata</h2>
+                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                                    <BarChart3 size={20} className="text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Edit Deskripsi Rata-rata</h2>
+                                    <p className="text-xs text-white/80 mt-0.5">Kelola semua kategori sekaligus</p>
+                                </div>
                             </div>
-                            <button onClick={closeBatchEditDeskripsi} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                            <button onClick={closeBatchEditDeskripsi} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style={{ background: 'rgba(255,255,255,0.2)' }}>
                                 <X size={16} className="text-white" />
                             </button>
                         </div>
                         <div className="overflow-y-auto max-h-[calc(90vh-140px)] scrollbar-thin">
                             <div className="p-6 space-y-4">
-                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: '#fff8f2', border: '1.5px solid #f0a94e' }}>
-                                    <Info size={16} style={{ color: ACCENT_DARK }} className="mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs" style={{ color: '#7a3a0a' }}><strong>💡 Tips:</strong> Nilai menggunakan desimal (2 digit). Contoh: 85.50</p>
+                                <div className="p-3 rounded-xl flex items-start gap-2" style={{ background: COLORS.info.bg, border: `1px solid ${COLORS.info.border}` }}>
+                                    <Info size={16} style={{ color: COLORS.info.text }} className="mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs" style={{ color: COLORS.info.text }}><strong>Tips:</strong> Nilai menggunakan desimal (2 digit). Contoh: 85.50</p>
                                 </div>
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-bold" style={{ color: '#7a3a0a' }}>Kategori ({batchDeskripsi.length})</h3>
-                                        <button onClick={addBatchDeskripsiRow}
-                                            className="btn-action flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                                            style={{ background: '#fff5eb', border: '1.5px solid #f0a94e', color: ACCENT_DARK }}
-                                            onMouseEnter={e => (e.currentTarget.style.background = '#fde0c8')}
-                                            onMouseLeave={e => (e.currentTarget.style.background = '#fff5eb')}>
+                                        <h3 className="text-sm font-bold text-gray-700">Kategori ({batchDeskripsi.length})</h3>
+                                        <ActionButton variant="info" onClick={addBatchDeskripsiRow}>
                                             <Plus size={14} /> Tambah Baris
-                                        </button>
+                                        </ActionButton>
                                     </div>
-                                    {batchDeskripsi.map((kategori, index) => (
-                                        <div key={index} className="p-4 rounded-xl" style={{ background: '#fffaf6', border: '1.5px solid #fde0c8' }}>
-                                            <div className="flex items-start gap-3">
-                                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Min <span className="text-red-500">*</span></label>
-                                                        <input type="number" min="0" max="100" step="0.01" value={kategori.min_nilai}
-                                                            onChange={(e) => updateBatchDeskripsi(index, 'min_nilai', parseFloat(e.target.value) || 0)}
-                                                            className={inputCls} />
+                                    {batchDeskripsi.map((kategori, index) => {
+                                        const errors: string[] = [];
+                                        if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
+                                        else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
+                                        if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
+
+                                        return (
+                                            <div key={index} className="p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid #ececec' }}>
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white"
+                                                        style={{ background: BRAND_GRADIENT }}>
+                                                        {index + 1}
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Max <span className="text-red-500">*</span></label>
-                                                        <input type="number" min="0" max="100" step="0.01" value={kategori.max_nilai}
-                                                            onChange={(e) => updateBatchDeskripsi(index, 'max_nilai', parseFloat(e.target.value) || 0)}
-                                                            className={inputCls} />
+                                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Min <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" step="0.01" value={kategori.min_nilai}
+                                                                onChange={(e) => updateBatchDeskripsi(index, 'min_nilai', parseFloat(e.target.value) || 0)}
+                                                                className={inputCls} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Max <span className="text-red-500">*</span></label>
+                                                            <input type="number" min="0" max="100" step="0.01" value={kategori.max_nilai}
+                                                                onChange={(e) => updateBatchDeskripsi(index, 'max_nilai', parseFloat(e.target.value) || 0)}
+                                                                className={inputCls} />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold mb-1.5 text-gray-600">Deskripsi <span className="text-red-500">*</span></label>
+                                                            <input type="text" value={kategori.deskripsi}
+                                                                onChange={(e) => updateBatchDeskripsi(index, 'deskripsi', e.target.value)}
+                                                                className={inputCls} placeholder="Sangat Baik" />
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#7a3a0a' }}>Deskripsi <span className="text-red-500">*</span></label>
-                                                        <input type="text" value={kategori.deskripsi}
-                                                            onChange={(e) => updateBatchDeskripsi(index, 'deskripsi', e.target.value)}
-                                                            className={inputCls} placeholder="Sangat Baik" />
-                                                    </div>
+                                                    {batchDeskripsi.length > 1 && (
+                                                        <button onClick={() => removeBatchDeskripsiRow(index)}
+                                                            className="btn-action mt-7 p-2 rounded-lg transition-colors"
+                                                            style={{ background: COLORS.danger.bg, border: `1.5px solid ${COLORS.danger.border}`, color: COLORS.danger.text }}>
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {batchDeskripsi.length > 1 && (
-                                                    <ActionButton size="sm" variant="danger" onClick={() => removeBatchDeskripsiRow(index)} title="Hapus baris">
-                                                        <Trash2 size={16} />
-                                                    </ActionButton>
+                                                {errors.length > 0 && (
+                                                    <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: COLORS.danger.bg, color: COLORS.danger.text, border: `1px solid ${COLORS.danger.border}` }}>
+                                                        <AlertCircle size={12} /> {errors.join(' | ')}
+                                                    </div>
                                                 )}
                                             </div>
-                                            {(() => {
-                                                const errors: string[] = [];
-                                                if (isNaN(kategori.min_nilai) || isNaN(kategori.max_nilai)) errors.push('Nilai tidak valid');
-                                                else if (kategori.min_nilai >= kategori.max_nilai) errors.push(`Min (${kategori.min_nilai}) >= Max (${kategori.max_nilai})`);
-                                                if (!kategori.deskripsi || kategori.deskripsi.trim().length < 3) errors.push('Deskripsi minimal 3 karakter');
-                                                if (errors.length > 0) {
-                                                    return (
-                                                        <div className="mt-3 p-2 rounded-lg text-xs flex items-center gap-2" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                                                            <AlertCircle size={12} /> {errors.join(' | ')}
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 {(() => {
                                     const validation = validateBatchDeskripsi();
                                     return (
                                         <div className="p-3 rounded-xl flex items-center gap-2" style={{
-                                            background: validation.valid ? '#f0fdf4' : '#fff8f2',
-                                            border: `1.5px solid ${validation.valid ? '#86efac' : '#f0a94e'}`,
-                                            color: validation.valid ? '#166534' : '#7a3a0a'
+                                            background: validation.valid ? COLORS.success.bg : COLORS.warning.bg,
+                                            border: `1.5px solid ${validation.valid ? COLORS.success.border : COLORS.warning.border}`,
+                                            color: validation.valid ? COLORS.success.text : COLORS.warning.text
                                         }}>
                                             {validation.valid ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
                                             <strong>Status:</strong> {validation.valid ? 'Semua kategori valid dan siap disimpan' : `Ada ${validation.errors.length} error yang perlu diperbaiki`}
@@ -2177,10 +2161,10 @@ const executeSaveBatchAkademik = async () => {
                 <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 dg-fadeIn"
                     onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn">
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#fff8f2' }}>
-                                <ShieldAlert size={24} style={{ color: ACCENT }} />
+                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                <ShieldAlert size={24} className="text-orange-500" />
                             </div>
                             <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
                         </div>
