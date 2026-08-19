@@ -315,7 +315,8 @@ export default function DashboardClient() {
 
             const fetchDashboard = async () => {
                 try {
-                    const res = await fetch('http://localhost:5000/api/guru-kelas/dashboard', {
+                    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+                    const res = await fetch(`${API_URL}/api/guru-kelas/dashboard`, {
                         headers: { Authorization: `Bearer ${token}` },
                     });
 

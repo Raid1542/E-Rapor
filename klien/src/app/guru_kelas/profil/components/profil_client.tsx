@@ -448,8 +448,8 @@ const ProfilePage = () => {
 
                             {/* Avatar */}
                             <div className="relative">
-                                <div className="w-28 h-28 rounded-full overflow-hidden flex items-center justify-center ring-4"
-                                    style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)', ringColor: '#fde0c8' }}>
+                                <div className="w-28 h-28 rounded-full overflow-hidden flex items-center justify-center ring-4 ring-orange-200"
+                                    style={{ background: 'linear-gradient(135deg,#fde0c8,#f5a623)' }}>
                                     {(previewImage || profileImage) ? (
                                         <img
                                             src={previewImage || profileImage!}

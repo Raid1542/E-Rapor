@@ -10,7 +10,7 @@ import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // Konstanta untuk API base URL
-const API_BASE_URL = 'http://localhost:5000/api/guru-kelas';
+const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
 
 // Konstanta untuk kode error
 const ERROR_CODES = {

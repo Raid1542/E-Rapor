@@ -105,7 +105,8 @@ export default function RekapanNilaiClient() {
                 return;
             }
 
-            const taRes = await fetch('http://localhost:5000/api/guru-kelas/tahun-ajaran/aktif', {
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+            const taRes = await fetch(`${API_BASE}/api/guru-kelas/tahun-ajaran/aktif`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -117,7 +118,7 @@ export default function RekapanNilaiClient() {
                 else if (status_pas === 'aktif') setJenisPenilaian('PAS');
             }
 
-            const res = await fetch('http://localhost:5000/api/guru-kelas/rekapan-nilai', {
+            const res = await fetch(`${API_BASE}/api/guru-kelas/rekapan-nilai`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -229,7 +230,8 @@ export default function RekapanNilaiClient() {
         setExporting(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch('http://localhost:5000/api/guru-kelas/rekapan-nilai/export-excel', {
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+            const res = await fetch(`${API_BASE}/api/guru-kelas/rekapan-nilai/export-excel`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

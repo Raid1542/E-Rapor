@@ -20,7 +20,7 @@ import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ====== KONSTANTA API ======
-const API = 'http://localhost:5000/api/guru-kelas';
+const API = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
 const ASPEK_MUTABAAH_ID = 5;
 
 // ====== HELPER ======
@@ -959,7 +959,7 @@ const executeSaveBatchAkademik = async () => {
         }
 
         // 3. Update kategori yang ada dan Insert kategori baru
-        const updateInsertPromises = [];
+        const updateInsertPromises: Promise<Response>[] = [];
         
         // Update existing
         originalBatchAkademik.forEach((orig) => {

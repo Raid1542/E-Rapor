@@ -19,8 +19,8 @@ import {
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
-// ====== KONSTANTA API  (tidak diubah) ======
-const API = 'http://localhost:5000/api/guru-kelas';
+// ====== KONSTANTA API ======
+const API = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
 
 // ====== HELPER: Parse Error dari Backend  (tidak diubah) ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {

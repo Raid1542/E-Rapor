@@ -5,7 +5,7 @@ import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ====== KONSTANTA API ======
-const API = 'http://localhost:5000/api/guru-kelas';
+const API = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
 
 // ====== HELPER: Parse Error dari Backend ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
@@ -432,23 +432,24 @@ export default function CatatanWaliClient() {
     };
 
     const downloadErrorReportCatatan = (errors: any[]) => {
-        const headers = ['No', 'Baris', 'Nama Siswa', 'Catatan', 'Alasan Error'];
-        const rows = errors.map((err, index) => {
-            const message = err.message || '';
-            const rowMatch = message.match(/Baris\s+(\d+)/i);
-            const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
-            const catatanMatch = message.match(/catatan\s+(\d+)/i);
-            return [index + 1, rowMatch ? rowMatch[1] : '-', namaMatch ? namaMatch[1] : '-', catatanMatch ? catatanMatch[1] : '-', `"${message.replace(/"/g, '""')}"`].join(',');
-        });
-        const blob = new Blob(['\uFEFF' + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `error_import_catatan_wali_${kelasNama.replace(/[^a-z0-9]/gi, '_')}_${jenisPenilaian}_${new Date().toISOString().split('T')[0]}.csv`;
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+    const headers = ['No', 'Baris', 'Nama Siswa', 'Catatan', 'Alasan Error'];
+    const rows = errors.map((err, index) => {
+        const message = err.message || '';
+        const rowMatch = message.match(/Baris\s+(\d+)/i);
+        const namaMatch = message.match(/siswa\s+"([^"]+)"/i) || message.match(/"([^"]+)"/i);
+        const catatanMatch = message.match(/catatan\s+(\d+)/i);
+        return [index + 1, rowMatch ? rowMatch[1] : '-', namaMatch ? namaMatch[1] : '-', catatanMatch ? catatanMatch[1] : '-', `"${message.replace(/"/g, '""')}"`].join(',');
+    });
+    const blob = new Blob(['\uFEFF' + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);   // ✅ DEKLARASIKAN url
+    const link = document.createElement('a');
+    link.href = url;                         // ✅ Pakai variabel url
+    link.download = `error_import_catatan_wali_${kelasNama.replace(/[^a-z0-9]/gi, '_')}_${jenisPenilaian}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);                // ✅ Sekarang url ada
     };
 
     const executeImport = async () => {
@@ -467,7 +468,7 @@ export default function CatatanWaliClient() {
 
             if (!response.ok) throw new Error(data.message || 'Gagal mengimport catatan wali kelas');
 
-            await fetchCatatan(semester, jenisPenilaian, token);
+            await fetchCatatan(semester, jenisPenilaian, token!);
             setShowImportModal(false);
             setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
