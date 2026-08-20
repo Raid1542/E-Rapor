@@ -203,7 +203,7 @@ const AbsenBadge = ({ value }: { value: number }) => (
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function AbsensiClient() {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/guru-kelas';
+    const API_BASE = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
     const { showSessionExpired, handleLogout } = useSession();
 
     // ── State ──────────────────────────────────────────────────────────────

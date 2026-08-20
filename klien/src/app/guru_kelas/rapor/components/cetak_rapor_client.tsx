@@ -237,7 +237,7 @@ const sanitizeFileName = (str: string): string => {
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 const RaporGuruKelasClient = () => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const API_BASE = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api`;
 
     const { showSessionExpired, handleLogout } = useSession();
     const [tahunAjaranInfo, setTahunAjaranInfo] = useState<TahunAjaranInfo | null>(null);
