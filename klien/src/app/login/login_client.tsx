@@ -416,6 +416,16 @@ export default function LoginClient() {
         }
     }, []);
 
+    useEffect(() => {
+        const handlePageShow = (event: PageTransitionEvent) => {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        };
+        window.addEventListener('pageshow', handlePageShow);
+        return () => window.removeEventListener('pageshow', handlePageShow);
+    }, []);
+
     const handleConfirmLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');
