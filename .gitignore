@@ -8,7 +8,17 @@ node_modules/
 #   ENV FILES (SECRET)
 # =====================
 .env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
 **/.env
+**/.env.*
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.staging
 
 # =====================
 #   NEXT.JS BUILD
