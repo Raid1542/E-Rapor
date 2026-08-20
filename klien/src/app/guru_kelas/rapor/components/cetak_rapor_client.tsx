@@ -775,7 +775,7 @@ const RaporGuruKelasClient = () => {
                             <div className="mx-4 sm:mx-5 my-4 p-3 rounded-xl text-xs font-medium flex items-start gap-2" style={{ background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e' }}>
                                 <AlertCircle size={15} className="mt-0.5 shrink-0" />
                                 <span>
-                                    Rapor <strong>{selectedJenis}</strong> belum tersedia untuk diunduh karena statusnya saat ini adalah &ldquo;{currentStatus === 'selesai' ? 'Terkunci' : 'Belum Dibuka'}&rdquo;.
+                                    Rapor <strong>{selectedJenis}</strong> belum tersedia untuk diunduh karena statusnya saat ini adalah &ldquo;Belum Dibuka&rdquo;.
                                 </span>
                             </div>
                         )}

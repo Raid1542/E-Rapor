@@ -444,14 +444,14 @@ export default function DataEkstrakurikulerPage() {
       const data = await res.json();
       if (res.ok && data.success) {
         const uniqueTA = Array.from(
-          new Map(data.data.map((item: any) => [item.id_induk, {
-            id: item.id_induk,
-            tahun_ajaran: item.tahun_ajaran,
-            is_aktif: item.status === 'AKTIF'
-          }])).values()
-        );
+        new Map(data.data.map((item: any) => [item.id_induk, {
+          id: item.id_induk,
+          tahun_ajaran: item.tahun_ajaran,
+          is_aktif: item.status === 'AKTIF'
+        }])).values()
+      );
 
-        setTahunAjaranList(uniqueTA);
+      setTahunAjaranList(uniqueTA as TahunAjaran[]);
 
         const savedTA = localStorage.getItem('ekskul_selectedTA');
         if (savedTA) {
@@ -490,7 +490,7 @@ export default function DataEkstrakurikulerPage() {
         const savedSemester = localStorage.getItem('ekskul_selectedSemester');
         if (savedSemester) {
           const savedId = Number(savedSemester);
-          const sem = semesters.find(s => s.id === savedId);
+          const sem = semesters.find((s: SemesterOption) => s.id === savedId);
           if (sem) {
             setSelectedSemesterId(savedId);
             setIsSemesterActive(sem.is_aktif);
