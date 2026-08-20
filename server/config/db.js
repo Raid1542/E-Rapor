@@ -13,6 +13,8 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT) || 3306,       
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false, 
     waitForConnections: true,
     connectionLimit: 30,
     connectTimeout: 30000,
@@ -26,10 +28,10 @@ const pool = mysql.createPool({
 // Verifikasi koneksi database saat inisialisasi
 pool.getConnection()
     .then(() => {
-        console.log('Koneksi ke MariaDB berhasil');
+        console.log('Koneksi ke Database berhasil');
     })
     .catch((err) => {
-        console.error('Gagal koneksi ke MariaDB:', err.message);
+        console.error('Gagal koneksi ke Database:', err.message);
         process.exit(1);
     });
 
