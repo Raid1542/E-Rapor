@@ -60,7 +60,7 @@ const QUERY_CHECK_NAMA_EXISTS = `
 `;
 
 class SiswaModel {
-        /**
+    /**
      * Ambil semua siswa dengan fitur pagination dan filter.
      */
     static async getAllSiswa(search = null, status = 'aktif', page = 1, limit = 10) {
@@ -82,8 +82,6 @@ class SiswaModel {
 
             const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-            // ✅ PERBAIKAN: TiDB error "Incorrect arguments to LIMIT" jika pakai parameter '?'
-            // Solusi: masukkan angka langsung ke string query (aman karena sudah di-parseInt)
             const limitNum = parseInt(limit);
             const offsetNum = parseInt(offset);
             const query = `${QUERY_GET_ALL_SISWA} ${whereClause} ORDER BY s.nama_lengkap ASC LIMIT ${limitNum} OFFSET ${offsetNum}`;
