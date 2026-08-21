@@ -60,7 +60,7 @@ const QUERY_CHECK_NAMA_EXISTS = `
 `;
 
 class SiswaModel {
-    /**
+        /**
      * Ambil semua siswa dengan fitur pagination dan filter.
      */
     static async getAllSiswa(search = null, status = 'aktif', page = 1, limit = 10) {
@@ -82,8 +82,11 @@ class SiswaModel {
 
             const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-            const query = `${QUERY_GET_ALL_SISWA} ${whereClause} ORDER BY s.nama_lengkap ASC LIMIT ? OFFSET ?`;
-            params.push(parseInt(limit), parseInt(offset));
+            // ✅ PERBAIKAN: TiDB error "Incorrect arguments to LIMIT" jika pakai parameter '?'
+            // Solusi: masukkan angka langsung ke string query (aman karena sudah di-parseInt)
+            const limitNum = parseInt(limit);
+            const offsetNum = parseInt(offset);
+            const query = `${QUERY_GET_ALL_SISWA} ${whereClause} ORDER BY s.nama_lengkap ASC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
             const [rows] = await db.execute(query, params);
 
@@ -100,13 +103,12 @@ class SiswaModel {
                 data: rows,
                 pagination: {
                     page: parseInt(page),
-                    limit: parseInt(limit),
+                    limit: limitNum,
                     total: countResult[0].total,
-                    totalPages: Math.ceil(countResult[0].total / limit)
+                    totalPages: Math.ceil(countResult[0].total / limitNum)
                 }
             };
         } catch (err) {
-            // ✅ DEBUG: Buka error asli dari database
             console.error('DB Error getAllSiswa:', err.message);
             if (err.sql) console.error('SQL Query:', err.sql);
             throw new Error('Gagal mengambil data siswa');
