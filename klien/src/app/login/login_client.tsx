@@ -3,6 +3,7 @@
  * Fungsi: Halaman login client-side (form, popup notifikasi, validasi, redirect)
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 15 September 2025
+ * Update: Fix popup logout muncul di atas background login (bukan layar hitam)
  */
 
 'use client';
@@ -11,7 +12,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, X } from 'lucide-react';
 
-// PERBAIKAN: API URL diambil dari environment variable, fallback ke localhost untuk dev
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 const DASHBOARD_PATHS = {
@@ -20,7 +20,6 @@ const DASHBOARD_PATHS = {
     guru_bidang_studi: '/guru_bidang_studi/dashboard',
 };
 
-// Definisi tipe data untuk popup notifikasi
 type PopupType = 'success' | 'error' | 'warning';
 
 interface PopupConfig {
@@ -30,20 +29,14 @@ interface PopupConfig {
     onClose?: () => void;
 }
 
-// PERBAIKAN: Fungsi validasi redirect URL untuk mencegah Open Redirect
-// Hanya izinkan path internal yang dimulai dengan '/' dan bukan '//' atau '/\'
 const isSafeRedirect = (url: string | null): boolean => {
     if (!url) return false;
-    // Harus dimulai dengan '/' tunggal
     if (!url.startsWith('/')) return false;
-    // Jangan izinkan '//' (protocol-relative) atau '/\' (bypass)
     if (url.startsWith('//') || url.startsWith('/\\')) return false;
-    // Jangan izinkan karakter berbahaya
     if (url.includes('\n') || url.includes('\r')) return false;
     return true;
 };
 
-/* Komponen untuk menyuntikkan animasi global */
 const GlobalStyles = () => (
     <style jsx global>{`
         @keyframes gk-fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -62,7 +55,6 @@ const GlobalStyles = () => (
     `}</style>
 );
 
-/* Komponen modal popup notifikasi login - KODE SAMA SEPERTI SEBELUMNYA */
 const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => void }) => {
     const handleClose = () => {
         popup.onClose?.();
@@ -329,7 +321,6 @@ const LoginPopup = ({ popup, onClose }: { popup: PopupConfig; onClose: () => voi
     );
 };
 
-/* Komponen modal konfirmasi logout - KODE SAMA SEPERTI SEBELUMNYA */
 const ConfirmLogoutModal = ({
     onConfirm,
     onCancel,
@@ -390,7 +381,6 @@ const ConfirmLogoutModal = ({
     </div>
 );
 
-/* Komponen utama halaman login client-side */
 export default function LoginClient() {
     const router = useRouter();
 
@@ -407,15 +397,16 @@ export default function LoginClient() {
 
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+    // Cek token setelah mounted (hanya di client) — aman dari hydration mismatch
     useEffect(() => {
         const token = localStorage.getItem('token');
         const userData = localStorage.getItem('currentUser');
-
         if (token && userData) {
             setShowLogoutConfirm(true);
         }
     }, []);
 
+    // Tangani tombol back browser (bfcache)
     useEffect(() => {
         const handlePageShow = (event: PageTransitionEvent) => {
             if (event.persisted) {
@@ -430,11 +421,10 @@ export default function LoginClient() {
         localStorage.removeItem('token');
         localStorage.removeItem('currentUser');
         sessionStorage.clear();
-        setShowLogoutConfirm(false);
+        window.location.reload();
     };
 
     const handleCancelLogout = () => {
-        setShowLogoutConfirm(false);
         try {
             const userData = localStorage.getItem('currentUser');
             if (userData) {
@@ -448,6 +438,8 @@ export default function LoginClient() {
         }
     };
 
+    // ✅ PERBAIKAN #3: fetchSekolah JALAN TERUS (jangan di-skip)
+    // supaya logo & nama sekolah tetap di-load walaupun popup logout muncul
     useEffect(() => {
         const fetchSekolah = async () => {
             try {
@@ -533,12 +525,10 @@ export default function LoginClient() {
 
             const roleLabel = role === 'admin' ? 'Admin' : role === 'guru_kelas' ? 'Wali Kelas' : 'Guru Bidang Studi';
 
-            // PERBAIKAN: Validasi redirect URL untuk mencegah Open Redirect
             const urlParams = new URLSearchParams(window.location.search);
             const redirectParam = urlParams.get('redirect');
             const defaultDashboard = DASHBOARD_PATHS[role as keyof typeof DASHBOARD_PATHS] || '/';
             
-            // Hanya gunakan redirect parameter jika aman (path internal)
             const redirectPath = isSafeRedirect(redirectParam) ? redirectParam! : defaultDashboard;
 
             showPopup({
@@ -569,11 +559,15 @@ export default function LoginClient() {
         }));
     };
 
+    // ✅ PERBAIKAN #1 & #2: 
+    // - HAPUS blok "if (showLogoutConfirm) { return ... }" yang bikin background hitam
+    // - PINDAHKAN <ConfirmLogoutModal> ke dalam return utama (setelah GlobalStyles)
     return (
         <>
             <GlobalStyles />
             {popup && <LoginPopup popup={popup} onClose={closePopup} />}
-
+            
+            {/* ✅ Popup logout dirender DI ATAS background login */}
             {showLogoutConfirm && (
                 <ConfirmLogoutModal onConfirm={handleConfirmLogout} onCancel={handleCancelLogout} />
             )}
