@@ -3,6 +3,7 @@
  * Fungsi: Model CRUD siswa (master data) dan validasi duplikasi.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: Tambah console.error untuk debug error TiDB
  */
 
 const db = require('../../config/db');
@@ -105,6 +106,9 @@ class SiswaModel {
                 }
             };
         } catch (err) {
+            // ✅ DEBUG: Buka error asli dari database
+            console.error('DB Error getAllSiswa:', err.message);
+            if (err.sql) console.error('SQL Query:', err.sql);
             throw new Error('Gagal mengambil data siswa');
         }
     }
@@ -117,6 +121,7 @@ class SiswaModel {
             const [rows] = await db.execute(QUERY_GET_SISWA_BY_ID, [id]);
             return rows.length > 0 ? rows[0] : null;
         } catch (err) {
+            console.error('DB Error getSiswaById:', err.message);
             throw new Error('Gagal mengambil detail siswa');
         }
     }
@@ -129,7 +134,7 @@ class SiswaModel {
             const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat } = data;
             const [result] = await db.execute(QUERY_CREATE_SISWA, [
                 nis, 
-                nisn ? String(nisn).trim() : '', // PERBAIKAN: Kirim string kosong, BUKAN null (karena DB NOT NULL)
+                nisn ? String(nisn).trim() : '', 
                 nama_lengkap, 
                 tempat_lahir || null,
                 tanggal_lahir || null, 
@@ -138,7 +143,8 @@ class SiswaModel {
             ]);
             return result.insertId;
         } catch (err) {
-            console.error('DB Error createSiswa:', err);
+            console.error('DB Error createSiswa:', err.message);
+            if (err.sql) console.error('SQL Query:', err.sql);
             throw new Error('Gagal membuat data siswa');
         }
     }
@@ -151,7 +157,7 @@ class SiswaModel {
             const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, status } = data;
             const [result] = await db.execute(QUERY_UPDATE_SISWA, [
                 nis, 
-                nisn ? String(nisn).trim() : '', // PERBAIKAN: Kirim string kosong, BUKAN null
+                nisn ? String(nisn).trim() : '', 
                 nama_lengkap, 
                 tempat_lahir || null,
                 tanggal_lahir || null, 
@@ -162,7 +168,8 @@ class SiswaModel {
             ]);
             return result.affectedRows > 0;
         } catch (err) {
-            console.error('DB Error updateSiswa:', err);
+            console.error('DB Error updateSiswa:', err.message);
+            if (err.sql) console.error('SQL Query:', err.sql);
             throw new Error('Gagal mengupdate data siswa');
         }
     }
@@ -175,7 +182,7 @@ class SiswaModel {
             const [result] = await db.execute(QUERY_DELETE_SISWA, [id]);
             return result.affectedRows > 0;
         } catch (err) {
-            console.error('DB Error deleteSiswa:', err);
+            console.error('DB Error deleteSiswa:', err.message);
             throw new Error('Gagal menghapus data siswa');
         }
     }
@@ -190,6 +197,7 @@ class SiswaModel {
             const [rows] = await db.execute(query, params);
             return rows.length > 0;
         } catch (err) {
+            console.error('DB Error checkNisExists:', err.message);
             throw new Error('Gagal mengecek keberadaan NIS');
         }
     }
@@ -204,6 +212,7 @@ class SiswaModel {
             const [rows] = await db.execute(query, params);
             return rows.length > 0;
         } catch (err) {
+            console.error('DB Error checkNisnExists:', err.message);
             throw new Error('Gagal mengecek keberadaan NISN');
         }
     }
@@ -216,6 +225,7 @@ class SiswaModel {
             const [rows] = await db.execute(QUERY_CHECK_SISWA_IN_KELAS, [id]);
             return rows[0].total;
         } catch (err) {
+            console.error('DB Error checkSiswaInKelas:', err.message);
             throw new Error('Gagal mengecek status kelas siswa');
         }
     }
@@ -228,6 +238,7 @@ class SiswaModel {
             const [rows] = await db.execute(QUERY_CHECK_NAMA_EXISTS, [nama]);
             return rows.length > 0;
         } catch (err) {
+            console.error('DB Error checkNamaExists:', err.message);
             throw new Error('Gagal mengecek keberadaan nama siswa');
         }
     }
