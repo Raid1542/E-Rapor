@@ -1,20 +1,3 @@
-/**
- * Nama File: data_admin_client.tsx
- * Fungsi: Komponen klien untuk mengelola data admin,
- *         mencakup fitur tambah, edit, detail, pencarian, dan pagination.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 15 September 2025
- * UPDATE: Disamakan penuh dengan tampilan Data Guru — token desain, warna
- *         tombol (sistem variant primary/info/warning/neutral), background
- *         halaman, tabel berbasis grid dengan kolom sejajar, ukuran elemen
- *         konsisten, dan letak toolbar (Tambah Admin di kiri, pencarian +
- *         baris per halaman di kanan). Logic tidak diubah sama sekali.
- * UPDATE 2: Halaman detail disamakan dengan Data Guru (kartu ikon per
- *           field + avatar), header halaman disederhanakan tanpa kotak
- *           ikon, dan kolom Nama pada tabel tidak lagi memakai bulatan
- *           inisial — konsisten dengan Data Guru.
- */
-
 "use client";
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
@@ -28,6 +11,14 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// ✅ FIX FOTO PROFIL: Helper untuk melengkapi URL foto jika path masih relatif
+// (mis. backend mengirim "/uploads/admin/xxx.jpg" bukan URL lengkap)
+const resolveImageUrl = (path?: string | null): string | undefined => {
+    if (!path) return undefined;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+};
 
 /* ==========================================================================
    INTERFACES  (tidak diubah)
@@ -272,7 +263,7 @@ export default function DataAdminClient() {
     };
 
     /* ------------------------------------------------------------------
-       STATE  (tidak diubah)
+       STATE  (tidak diubah, + tambahan imgError untuk fallback avatar)
     ------------------------------------------------------------------ */
 
     const [adminList,    setAdminList]    = useState<Admin[]>([]);
@@ -286,6 +277,9 @@ export default function DataAdminClient() {
     const [detailClosing, setDetailClosing] = useState(false);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage,  setCurrentPage]  = useState(1);
+
+    // ✅ FIX FOTO PROFIL: state untuk menandai foto gagal dimuat → fallback ke ikon User
+    const [imgError, setImgError] = useState(false);
 
     const [modal,    setModal]    = useState<ModalConfig | null>(null);
     const showModal  = useCallback((cfg: ModalConfig) => setModal(cfg), []);
@@ -349,10 +343,14 @@ export default function DataAdminClient() {
     useEffect(() => { fetchAdmin(); }, [fetchAdmin]);
 
     /* ------------------------------------------------------------------
-       FORM HANDLERS  (tidak diubah)
+       FORM HANDLERS  (handleDetail ditambah reset imgError)
     ------------------------------------------------------------------ */
 
-    const handleDetail = (admin: Admin): void => { setSelectedAdmin(admin); setShowDetail(true); };
+    const handleDetail = (admin: Admin): void => {
+        setSelectedAdmin(admin);
+        setImgError(false); // ✅ reset status error setiap kali buka detail admin lain
+        setShowDetail(true);
+    };
 
     const handleEdit = (admin: Admin): void => {
         setEditId(admin.id);
@@ -877,6 +875,12 @@ export default function DataAdminClient() {
                 MODAL DETAIL — struktur & gaya identik dengan Data Guru
                 (avatar, badge status, kartu ikon per field). Tidak ada
                 badge Role karena data Admin memang tidak memilikinya.
+
+                ✅ FIX FOTO PROFIL:
+                - URL foto dilengkapi otomatis via resolveImageUrl() jika
+                  path dari backend masih relatif (mis. "/uploads/xxx.jpg").
+                - Jika foto gagal dimuat (onError), imgError diset true
+                  sehingga fallback ke ikon User, bukan lingkaran kosong.
             ================================================================ */}
             {showDetail && selectedAdmin && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -892,9 +896,20 @@ export default function DataAdminClient() {
                         <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
                             <div className="flex justify-center mb-6">
                                 <div className="relative">
-                                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4 overflow-hidden" style={{ background: selectedAdmin.profileImage ? '#fff' : 'linear-gradient(135deg, #fed7aa, #fde0c8)', borderColor: '#fde0c8' }}>
-                                        {selectedAdmin.profileImage ? (
-                                            <img src={selectedAdmin.profileImage} alt={selectedAdmin.nama} className="w-full h-full rounded-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                    <div
+                                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4 overflow-hidden"
+                                        style={{
+                                            background: selectedAdmin.profileImage && !imgError ? '#fff' : 'linear-gradient(135deg, #fed7aa, #fde0c8)',
+                                            borderColor: '#fde0c8',
+                                        }}
+                                    >
+                                        {selectedAdmin.profileImage && !imgError ? (
+                                            <img
+                                                src={resolveImageUrl(selectedAdmin.profileImage)}
+                                                alt={selectedAdmin.nama}
+                                                className="w-full h-full rounded-full object-cover"
+                                                onError={() => setImgError(true)}
+                                            />
                                         ) : (
                                             <User size={48} style={{ color: '#c2410c' }} />
                                         )}
