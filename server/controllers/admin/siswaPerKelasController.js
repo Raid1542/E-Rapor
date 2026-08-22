@@ -21,6 +21,35 @@ const getTahunAjaranAktif = async () => {
 };
 
 /**
+ * Ambil tahun ajaran induk milik kelas tertentu.
+ */
+const getTahunAjaranKelas = async (kelasId) => {
+    const [rows] = await db.execute(
+        'SELECT tahun_ajaran_id FROM kelas WHERE id_kelas = ?',
+        [kelasId]
+    );
+    return rows.length > 0 ? rows[0].tahun_ajaran_id : null;
+};
+
+/**
+ * Tentukan tahun ajaran dengan prioritas:
+ * 1. Query param / body (jika dikirim frontend)
+ * 2. Tahun ajaran milik kelas itu sendiri
+ * 3. Tahun ajaran aktif (fallback terakhir)
+ */
+const resolveTahunAjaran = async (kelasId, dariRequest) => {
+    if (dariRequest) {
+        const parsed = parseInt(dariRequest, 10);
+        if (!isNaN(parsed)) return parsed;
+    }
+    if (kelasId) {
+        const milikKelas = await getTahunAjaranKelas(kelasId);
+        if (milikKelas) return milikKelas;
+    }
+    return await getTahunAjaranAktif();
+};
+
+/**
  * Ambil daftar siswa yang terdaftar di kelas tertentu.
  */
 exports.getSiswaByKelas = async (req, res) => {
@@ -32,12 +61,10 @@ exports.getSiswaByKelas = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Kelas ID wajib diisi' });
         }
 
-        let tahunAjaranId = tahun_ajaran_id ? parseInt(tahun_ajaran_id) : null;
+        // default pakai tahun ajaran milik kelas, bukan tahun aktif
+        const tahunAjaranId = await resolveTahunAjaran(id, tahun_ajaran_id);
         if (!tahunAjaranId) {
-            tahunAjaranId = await getTahunAjaranAktif();
-            if (!tahunAjaranId) {
-                return res.json({ success: true, data: [], message: 'Tidak ada tahun ajaran aktif' });
-            }
+            return res.json({ success: true, data: [], message: 'Tidak ada tahun ajaran aktif' });
         }
 
         const siswaList = await SiswaPerKelasModel.getSiswaByKelas(id, tahunAjaranId);
@@ -55,7 +82,7 @@ exports.getSiswaAvailable = async (req, res) => {
     try {
         const { tahun_ajaran_id, search } = req.query;
 
-        let tahunAjaranId = tahun_ajaran_id ? parseInt(tahun_ajaran_id) : null;
+        let tahunAjaranId = tahun_ajaran_id ? parseInt(tahun_ajaran_id, 10) : null;
         if (!tahunAjaranId) {
             tahunAjaranId = await getTahunAjaranAktif();
             if (!tahunAjaranId) {
@@ -90,7 +117,8 @@ exports.assignSiswaKeKelas = async (req, res) => {
             });
         }
 
-        let tahunAjaranId = tahun_ajaran_id || (await getTahunAjaranAktif());
+        // default pakai tahun ajaran milik kelas
+        const tahunAjaranId = await resolveTahunAjaran(kelasId, tahun_ajaran_id);
         if (!tahunAjaranId) {
             return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
         }
@@ -148,7 +176,7 @@ exports.assignSiswaKeKelas = async (req, res) => {
         console.error('Error assignSiswaKeKelas:', err);
         res.status(500).json({ success: false, message: 'Gagal assign siswa' });
     } finally {
-        connection.release(``);
+        connection.release();
     }
 };
 
@@ -160,7 +188,8 @@ exports.keluarkanSiswaDariKelas = async (req, res) => {
         const { id: kelasId, siswaId } = req.params;
         const { tahun_ajaran_id } = req.query;
 
-        let tahunAjaranId = tahun_ajaran_id || (await getTahunAjaranAktif());
+        // default pakai tahun ajaran milik kelas
+        const tahunAjaranId = await resolveTahunAjaran(kelasId, tahun_ajaran_id);
         if (!tahunAjaranId) {
             return res.status(400).json({ success: false, message: 'Tidak ada tahun ajaran aktif' });
         }
