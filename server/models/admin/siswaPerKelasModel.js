@@ -9,8 +9,8 @@ const db = require('../../config/db');
 
 // Tambahkan created_at & updated_at dengan NOW()
 const QUERY_ASSIGN_SISWA_KE_KELAS = `
-    INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk, created_at, updated_at)
-    VALUES (?, ?, ?, NOW(), NOW())
+    INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk)
+    VALUES (?, ?, ?)
 `;
 
 const QUERY_GET_SISWA_BY_KELAS = `
