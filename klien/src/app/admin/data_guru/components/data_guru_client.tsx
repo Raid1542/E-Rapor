@@ -14,11 +14,53 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 // ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+// 🔧 FIX BARU: Peringatan di console kalau env var belum di-set saat production.
+// NEXT_PUBLIC_* di-bake SAAT BUILD, bukan runtime — kalau ini kepanggil dan
+// hostname bukan localhost, tapi API_BASE_URL masih localhost:5000, berarti
+// env var NEXT_PUBLIC_API_URL belum di-set di server hosting (atau sudah
+// di-set tapi project belum di-rebuild ulang setelah itu).
+if (typeof window !== 'undefined') {
+    const isProdHost = !['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (isProdHost && API_BASE_URL.includes('localhost')) {
+        // eslint-disable-next-line no-console
+        console.warn(
+            '[DataGuruClient] NEXT_PUBLIC_API_URL tampaknya belum ter-set di environment hosting ' +
+            '(masih fallback ke localhost:5000). Foto profil dan request API tidak akan berfungsi. ' +
+            'Set env var NEXT_PUBLIC_API_URL di dashboard hosting lalu REBUILD ulang project.'
+        );
+    }
+}
+
 // ✅ FIX FOTO PROFIL: Helper untuk melengkapi URL foto jika path masih relatif
 // (mis. backend mengirim "/uploads/guru/xxx.jpg" bukan URL lengkap)
+//
+// 🔧 FIX TAMBAHAN: Backend ternyata mengirim field `profileImage` sebagai URL
+// LENGKAP yang di-hardcode ke "http://localhost:10000/..." (alamat komputer
+// development, bukan server produksi). Kalau URL itu dipakai apa adanya,
+// foto hanya bisa tampil di komputer yang backend-nya sedang jalan di
+// localhost:10000 — di hosting manapun lain (termasuk Vercel), foto gagal
+// dimuat karena browser pengunjung tidak punya server di localhost-nya.
+// Solusi: kalau hostname URL foto adalah localhost/127.0.0.1, ambil HANYA
+// path filenya lalu sambung ulang dengan API_BASE_URL milik environment
+// yang sedang berjalan sekarang (dev tetap localhost, prod otomatis pakai
+// domain produksi).
 const resolveImageUrl = (path?: string | null): string | undefined => {
     if (!path) return undefined;
-    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    if (path.startsWith('data:')) return path;
+
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        try {
+            const url = new URL(path);
+            if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+                // Backend salah hardcode localhost — buang host-nya, pakai API_BASE_URL kita sendiri.
+                return `${API_BASE_URL}${url.pathname}`;
+            }
+            return path; // URL absolut yang valid (bukan localhost), pakai apa adanya.
+        } catch {
+            return path;
+        }
+    }
+
     return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
@@ -261,7 +303,7 @@ export default function DataGuruClient() {
     const [importClosing, setImportClosing] = useState(false);
     const [filterClosing, setFilterClosing] = useState(false);
     const [formClosing, setFormClosing] = useState(false);
-    
+
     const [showFilter, setShowFilter] = useState(false);
     const [filterValues, setFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
     const [tempFilterValues, setTempFilterValues] = useState({ role: '', jenisKelamin: '', status: '' });
@@ -338,11 +380,25 @@ export default function DataGuruClient() {
                 if (typeof g.status === 'string') { s = g.status.trim().toLowerCase(); if (s !== 'aktif') s = 'nonaktif'; }
                 let roles: string[] = [];
                 if (g.roles) { const r = Array.isArray(g.roles) ? g.roles : [g.roles]; roles = r.map((x: any) => String(x).toLowerCase().trim()).filter((x: string) => validRoles.includes(x)); }
+
+                // 🔧 FIX FOTO: field yang benar-benar dipakai backend adalah
+                // `foto_path` (path relatif, mis. "/uploads/profil_xxx.jpg")
+                // dan `profileImage` (URL lengkap, tapi backend salah
+                // hardcode ke "http://localhost:10000/..."). Kita utamakan
+                // `foto_path` karena selalu relatif dan aman disambung dengan
+                // API_BASE_URL yang benar oleh resolveImageUrl() di manapun
+                // aplikasi ini dijalankan (dev maupun produksi). `profileImage`
+                // tetap dipakai sebagai fallback (dan localhost di dalamnya
+                // otomatis dikoreksi oleh resolveImageUrl()).
+                const rawFoto =
+                    g.foto_path ?? g.profileImage ?? g.profile_image ??
+                    g.foto ?? g.photo ?? g.avatar ?? null;
+
                 return {
                     id: g.id_user || g.id, nama: g.nama_lengkap || g.nama, email: g.email_sekolah || g.email,
                     niy: g.niy, nuptk: g.nuptk, tempat_lahir: g.tempat_lahir || '', tanggal_lahir: g.tanggal_lahir || '',
                     jenisKelamin: g.jenis_kelamin || '', alamat: g.alamat, no_telepon: g.no_telepon || '',
-                    statusGuru: s, roles, profileImage: g.profileImage || null,
+                    statusGuru: s, roles, profileImage: rawFoto,
                 };
             }));
         } catch {
@@ -383,19 +439,19 @@ export default function DataGuruClient() {
         }, 300);
     };
 
-    const closeDetail = () => { 
-        setDetailClosing(true); 
-        setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 300); 
+    const closeDetail = () => {
+        setDetailClosing(true);
+        setTimeout(() => { setShowDetail(false); setDetailClosing(false); }, 300);
     };
 
-    const closeImport = () => { 
-        setImportClosing(true); 
-        setTimeout(() => { setShowImport(false); setImportClosing(false); }, 300); 
+    const closeImport = () => {
+        setImportClosing(true);
+        setTimeout(() => { setShowImport(false); setImportClosing(false); }, 300);
     };
 
-    const closeFilterModal = () => { 
-        setFilterClosing(true); 
-        setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 300); 
+    const closeFilterModal = () => {
+        setFilterClosing(true);
+        setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 300);
     };
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -459,7 +515,6 @@ export default function DataGuruClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
         try {
-            // ✅ PERUBAHAN 3: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/guru`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -481,7 +536,6 @@ export default function DataGuruClient() {
         const token = localStorage.getItem('token');
         if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
         try {
-            // ✅ PERUBAHAN 4: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/guru/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -513,7 +567,6 @@ export default function DataGuruClient() {
         fd.append('file', importFile);
         try {
             const token = localStorage.getItem('token');
-            // ✅ PERUBAHAN 5: URL sekarang pakai API_BASE_URL
             const res = await fetch(`${API_BASE_URL}/api/admin/guru/import`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
@@ -1035,7 +1088,6 @@ export default function DataGuruClient() {
                                 <FileSpreadsheet size={19} className="mt-0.5 flex-shrink-0" style={{ color: ACCENT }} />
                                 <div>
                                     <p className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Format file: <strong>.xlsx</strong> atau <strong>.xls</strong></p>
-                                    {/* ✅ PERUBAHAN 6: URL template sekarang pakai API_BASE_URL */}
                                     <a href={`${API_BASE_URL}/templates/template_import_guru.xlsx`} download className="text-sm font-bold flex items-center gap-1.5 hover:underline mt-1.5" style={{ color: ACCENT }}>
                                         <Download size={13} /> Unduh template Excel
                                     </a>
