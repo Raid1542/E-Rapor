@@ -81,8 +81,7 @@ if (!fs.existsSync(TEMPLATES_PATH)) fs.mkdirSync(TEMPLATES_PATH, { recursive: tr
 // Sediakan akses file statis untuk folder uploads
 app.use('/uploads', express.static(UPLOADS_PATH));
 
-// Folder templates tidak diakses publik langsung (aman)
-// Jika butuh akses, gunakan controller dengan middleware authenticate
+app.use('/templates', express.static(TEMPLATES_PATH));
 
 // Impor modul routing API
 const authRoutes = require('./routes/authRoutes');
