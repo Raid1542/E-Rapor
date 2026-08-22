@@ -7,7 +7,12 @@
 
 const db = require('../../config/db');
 
-// Konstanta query SQL
+// Tambahkan created_at & updated_at dengan NOW()
+const QUERY_ASSIGN_SISWA_KE_KELAS = `
+    INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk, created_at, updated_at)
+    VALUES (?, ?, ?, NOW(), NOW())
+`;
+
 const QUERY_GET_SISWA_BY_KELAS = `
     SELECT s.id_siswa, s.nis, s.nisn, s.nama_lengkap, s.tempat_lahir, s.tanggal_lahir,
             s.jenis_kelamin, s.alamat, s.status, k.id_kelas, k.nama_kelas, k.fase, sk.id_tahun_ajaran_induk
@@ -22,7 +27,7 @@ const QUERY_GET_SISWA_BELUM_PUNYA_KELAS = `
     FROM siswa s
     WHERE s.status = 'aktif'
     AND NOT EXISTS (
-        SELECT 1 FROM siswa_kelas sk 
+        SELECT 1 FROM siswa_kelas sk
         WHERE sk.siswa_id = s.id_siswa AND sk.id_tahun_ajaran_induk = ?
     )
 `;
@@ -36,16 +41,12 @@ const QUERY_GET_SISWA_BY_ID_IN_KELAS = `
     WHERE s.id_siswa = ? AND sk.kelas_id = ? AND sk.id_tahun_ajaran_induk = ?
 `;
 
-const QUERY_ASSIGN_SISWA_KE_KELAS = `
-    INSERT INTO siswa_kelas (siswa_id, kelas_id, id_tahun_ajaran_induk) VALUES (?, ?, ?)
-`;
-
 const QUERY_HAPUS_SISWA_DARI_KELAS = `
     DELETE FROM siswa_kelas WHERE siswa_id = ? AND kelas_id = ? AND id_tahun_ajaran_induk = ?
 `;
 
 const QUERY_CHECK_SISWA_PUNYA_KELAS = `
-    SELECT sk.kelas_id, k.nama_kelas 
+    SELECT sk.kelas_id, k.nama_kelas
     FROM siswa_kelas sk
     INNER JOIN kelas k ON sk.kelas_id = k.id_kelas
     WHERE sk.siswa_id = ? AND sk.id_tahun_ajaran_induk = ?
@@ -70,6 +71,8 @@ class SiswaPerKelasModel {
             const [rows] = await db.execute(query, params);
             return rows;
         } catch (err) {
+            console.error('DB Error getSiswaByKelas:', err.message);
+            if (err.sql) console.error('SQL:', err.sql);
             throw new Error('Gagal mengambil data siswa di kelas');
         }
     }
@@ -93,6 +96,8 @@ class SiswaPerKelasModel {
             const [rows] = await db.execute(query, params);
             return rows;
         } catch (err) {
+            console.error('DB Error getSiswaBelumPunyaKelas:', err.message);
+            if (err.sql) console.error('SQL:', err.sql);
             throw new Error('Gagal mengambil data siswa belum punya kelas');
         }
     }
@@ -107,12 +112,14 @@ class SiswaPerKelasModel {
             ]);
             return rows.length > 0 ? rows[0] : null;
         } catch (err) {
+            console.error('DB Error getSiswaByIdInKelas:', err.message);
+            if (err.sql) console.error('SQL:', err.sql);
             throw new Error('Gagal mengambil detail siswa di kelas');
         }
     }
 
     /**
-     * Assign siswa ke kelas tertentu.
+     * Assign siswa ke kelas dengan include created_at & updated_at.
      */
     static async assignSiswaKeKelas(siswaId, kelasId, tahunAjaranId, connection = null) {
         try {
@@ -122,7 +129,11 @@ class SiswaPerKelasModel {
             ]);
             return true;
         } catch (err) {
-            throw new Error('Gagal assign siswa ke kelas');
+            // ✅ Buka error asli supaya kelihatan di log
+            console.error('DB Error assignSiswaKeKelas:', err.message);
+            if (err.sql) console.error('SQL:', err.sql);
+            if (err.code) console.error('Error code:', err.code);
+            throw new Error('Gagal assign siswa ke kelas: ' + err.message);
         }
     }
 
@@ -136,6 +147,8 @@ class SiswaPerKelasModel {
             ]);
             return result.affectedRows > 0;
         } catch (err) {
+            console.error('DB Error hapusSiswaDariKelas:', err.message);
+            if (err.sql) console.error('SQL:', err.sql);
             throw new Error('Gagal menghapus siswa dari kelas');
         }
     }
@@ -150,6 +163,8 @@ class SiswaPerKelasModel {
             ]);
             return rows.length > 0 ? rows[0] : null;
         } catch (err) {
+            console.error('DB Error checkSiswaPunyaKelas:', err.message);
+            if (err.sql) console.error('SQL:', err.sql);
             throw new Error('Gagal mengecek status kelas siswa');
         }
     }
