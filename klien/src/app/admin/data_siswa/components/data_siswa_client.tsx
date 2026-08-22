@@ -925,9 +925,12 @@ export default function DataSiswaClient() {
             </div>
 
             {/* ================================================================
-                MODAL DETAIL — dirombak khusus untuk Siswa: tanpa email/NIY/
-                NUPTK/role (memang tidak ada di data siswa), status 4 kondisi,
-                dan ikon topi wisuda sebagai identitas alih-alih foto profil.
+                MODAL DETAIL — untuk Siswa: tanpa email/NIY/NUPTK/role (memang
+                tidak ada di data siswa), status 4 kondisi. Lingkaran ikon topi
+                wisuda DIHAPUS total — identitas siswa langsung ditampilkan
+                berupa nama, NIS, dan badge status tanpa avatar/ikon generik
+                apa pun, supaya modal lebih ringkas dan tidak menampilkan
+                elemen visual yang sebenarnya tidak merepresentasikan data.
             ================================================================ */}
             {showDetail && selectedSiswa && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -941,14 +944,11 @@ export default function DataSiswaClient() {
                         </div>
 
                         <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
-                            {/* Identitas siswa: ikon topi wisuda + nama + NIS, tanpa avatar foto */}
-                            <div className="flex flex-col items-center mb-6">
-                                <div className="w-20 h-20 rounded-full flex items-center justify-center border-4 mb-3" style={{ background: 'linear-gradient(135deg, #fed7aa, #fde0c8)', borderColor: '#fde0c8' }}>
-                                    <GraduationCap size={36} style={{ color: '#c2410c' }} />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900 text-center">{selectedSiswa.nama_lengkap}</h3>
-                                <p className="text-xs text-gray-400 font-mono mt-0.5">NIS: {selectedSiswa.nis || '-'}</p>
-                                <div className="mt-2.5">
+                            {/* Identitas siswa: nama + NIS + badge status, tanpa ikon/avatar lingkaran */}
+                            <div className="flex flex-col items-center justify-center gap-2 mb-6 pb-4 border-b" style={{ borderColor: '#fde0c8' }}>
+                                <h3 className="text-xl font-bold text-gray-900 text-center">{selectedSiswa.nama_lengkap}</h3>
+                                <p className="text-xs text-gray-400 font-mono">NIS: {selectedSiswa.nis || '-'}</p>
+                                <div className="mt-1">
                                     <StatusBadge status={selectedSiswa.status} size="md" />
                                 </div>
                             </div>

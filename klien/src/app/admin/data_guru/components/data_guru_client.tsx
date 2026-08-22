@@ -1,18 +1,3 @@
-/**
- * Nama File: data_guru_client.tsx
- * Fungsi: Komponen klien untuk mengelola data guru
- * UPDATE 12: 
- *   - Menambahkan animasi muncul dan tutup yang halus untuk semua popup (Detail, Filter, Import, Tambah, Edit)
- *   - Menggunakan transisi opacity dan transform (scale/translate) selama 300ms
- *   - Memperbaiki logika penutupan form agar animasi keluar berjalan sempurna
- * UPDATE 13:
- *   - Memperbaiki fetchGuru agar mengambil SEMUA data guru dari server (loop per halaman),
- *     bukan hanya sejumlah data yang dikembalikan backend secara default. Ada pengaman
- *     agar tidak infinite loop / duplikat data jika backend belum mendukung pagination.
- * Pembuat: Raid Aqil Athallah - NIM: 3312401022 & Frima Rizky Lianda - NIM: 3312401016
- * Tanggal: 20 Juli 2026
- */
-
 'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
@@ -28,6 +13,14 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ✅ PERUBAHAN 1: Tambahkan konstanta API_BASE_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// ✅ FIX FOTO PROFIL: Helper untuk melengkapi URL foto jika path masih relatif
+// (mis. backend mengirim "/uploads/guru/xxx.jpg" bukan URL lengkap)
+const resolveImageUrl = (path?: string | null): string | undefined => {
+    if (!path) return undefined;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) return path;
+    return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+};
 
 /* ==========================================================================
    INTERFACES
@@ -260,7 +253,10 @@ export default function DataGuruClient() {
     const [currentPage, setCurrentPage] = useState(1);
     const [showImport, setShowImport] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
-    
+
+    // ✅ FIX FOTO PROFIL: state untuk menandai foto gagal dimuat → fallback ke ikon User
+    const [imgError, setImgError] = useState(false);
+
     const [detailClosing, setDetailClosing] = useState(false);
     const [importClosing, setImportClosing] = useState(false);
     const [filterClosing, setFilterClosing] = useState(false);
@@ -358,7 +354,12 @@ export default function DataGuruClient() {
 
     useEffect(() => { fetchGuru(); }, [fetchGuru]);
 
-    const handleDetail = (guru: Guru) => { setSelectedGuru(guru); setShowDetail(true); };
+    // ✅ FIX FOTO PROFIL: reset imgError setiap kali membuka detail guru lain
+    const handleDetail = (guru: Guru) => {
+        setSelectedGuru(guru);
+        setImgError(false);
+        setShowDetail(true);
+    };
 
     const handleEdit = (guru: Guru) => {
         setEditId(guru.id);
@@ -927,9 +928,22 @@ export default function DataGuruClient() {
                         <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
                             <div className="flex justify-center mb-6">
                                 <div className="relative">
-                                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4 overflow-hidden" style={{ background: selectedGuru.profileImage ? '#fff' : 'linear-gradient(135deg, #fed7aa, #fde0c8)', borderColor: '#fde0c8' }}>
-                                        {selectedGuru.profileImage ? (
-                                            <img src={selectedGuru.profileImage} alt={selectedGuru.nama} className="w-full h-full rounded-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmVkN2FhIi8+PHBhdGggZD0iTTUwIDMwYzExLjA0NiAwIDIwLTguOTU0IDIwLTIwcy04Ljk1NC0yMC0yMC0yMC0yMCA4Ljk1NC0yMCAyMCA4Ljk1NCAyMCAyMCAyMHptMCAxMGMtMjIuMDkxIDAtNDAgMTcuOTA5LTQwIDQwdjEwaDgwdi0xMGMwLTIyLjA5MS0xNy45MDktNDAtNDAtNDB6IiBmaWxsPSIjYzI0MTBjIi8+PC9zdmc+'; }} />
+                                    {/* ✅ FIX FOTO PROFIL: URL foto dilengkapi via resolveImageUrl() dan
+                                        fallback ke ikon User (bukan lingkaran kosong) memakai state imgError */}
+                                    <div
+                                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4 overflow-hidden"
+                                        style={{
+                                            background: selectedGuru.profileImage && !imgError ? '#fff' : 'linear-gradient(135deg, #fed7aa, #fde0c8)',
+                                            borderColor: '#fde0c8',
+                                        }}
+                                    >
+                                        {selectedGuru.profileImage && !imgError ? (
+                                            <img
+                                                src={resolveImageUrl(selectedGuru.profileImage)}
+                                                alt={selectedGuru.nama}
+                                                className="w-full h-full rounded-full object-cover"
+                                                onError={() => setImgError(true)}
+                                            />
                                         ) : (
                                             <User size={48} style={{ color: '#c2410c' }} />
                                         )}

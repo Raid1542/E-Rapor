@@ -5,7 +5,7 @@ import {
     Eye, Pencil, Upload, X, Plus, Search, Filter,
     CheckCircle2, AlertCircle, WifiOff, ShieldAlert,
     ChevronLeft, ChevronRight, Download, RotateCcw, FileSpreadsheet,
-    Users, Phone, MapPin, Calendar, IdCard, User,
+    Users, Phone, MapPin, Calendar, IdCard,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -902,7 +902,15 @@ export default function DataPembinaEkskulClient() {
                 </div>
             </div>
 
-            {/* Modal Detail dengan Animasi (profile card style, seragam dengan Data Guru) */}
+            {/* ================================================================
+                Modal Detail — bagian avatar/lingkaran foto DIHAPUS total.
+                Data Pembina Ekskul tidak punya akun login sehingga tidak pernah
+                punya foto profil sama sekali (beda dari Data Admin & Data Guru
+                yang memang bisa login dan upload foto). Sebagai gantinya, nama
+                dan badge status ditampilkan langsung di header tanpa avatar,
+                supaya modal tidak menampilkan lingkaran ikon generik yang
+                sebenarnya tidak relevan untuk entitas ini.
+            ================================================================ */}
             {showDetail && selectedPembina && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeDetail} />
@@ -915,19 +923,8 @@ export default function DataPembinaEkskulClient() {
                         </div>
 
                         <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
-                            <div className="flex justify-center mb-6">
-                                <div className="relative">
-                                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center border-4 overflow-hidden" style={{ background: 'linear-gradient(135deg, #fed7aa, #fde0c8)', borderColor: '#fde0c8' }}>
-                                        <User size={48} style={{ color: '#c2410c' }} />
-                                    </div>
-                                    <div className="absolute bottom-1 right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border-2" style={{ background: selectedPembina.status === 'aktif' ? '#22c55e' : '#6b7280', borderColor: '#fff' }}>
-                                        <div className="w-2 h-2 rounded-full bg-white" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-center gap-3 mb-6 pb-4 border-b" style={{ borderColor: '#fde0c8' }}>
-                                <h3 className="text-lg font-bold text-gray-800">{selectedPembina.nama}</h3>
+                            <div className="flex flex-col items-center justify-center gap-2 mb-6 pb-4 border-b" style={{ borderColor: '#fde0c8' }}>
+                                <h3 className="text-xl font-bold text-gray-900 text-center">{selectedPembina.nama}</h3>
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold" style={{ background: selectedPembina.status === 'aktif' ? '#dcfce7' : '#f3f4f6', color: selectedPembina.status === 'aktif' ? '#166534' : '#4b5563', border: `1px solid ${selectedPembina.status === 'aktif' ? '#86efac' : '#d1d5db'}` }}>
                                     <span className="w-2 h-2 rounded-full" style={{ background: selectedPembina.status === 'aktif' ? '#22c55e' : '#6b7280' }} />
                                     {selectedPembina.status === 'aktif' ? 'Aktif' : 'Nonaktif'}

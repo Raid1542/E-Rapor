@@ -5,7 +5,7 @@ import {
     X, Search, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, Users,
     Info, Edit3, Check, School, Lock, LogOut,
-    Upload, Download, ChevronLeft, ChevronRight,
+    Upload, Download,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
@@ -37,15 +37,21 @@ interface AbsensiData {
 
 // ─── NOTIF MODAL TYPES ────────────────────────────────────────────────────────
 
-type ModalType = 'success' | 'error' | 'warning' | 'network';
+// ✅ PERBAIKAN TAMPILAN: tambahkan tipe 'confirm' supaya popup konfirmasi
+// memakai sistem notifikasi yang SAMA dengan NotifModal (bukan modal
+// terpisah seperti sebelumnya yang tampilannya tidak konsisten dengan
+// halaman Catatan Wali Kelas). Tidak ada perubahan pada logika/validasi —
+// hanya bentuk tampilannya.
+type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
 interface ModalConfig {
     type: ModalType;
     title: string;
     message: string;
+    onConfirm?: () => void;
 }
 
 /* ==========================================================================
-   DESIGN TOKENS — disamakan penuh dengan data_guru_client.tsx / kokurikuler_client.tsx
+   DESIGN TOKENS — disamakan penuh dengan design system terbaru
    ========================================================================== */
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
@@ -61,7 +67,7 @@ const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
 /* ==========================================================================
-   GLOBAL STYLES — identik dengan data_guru_client.tsx / kokurikuler_client.tsx
+   GLOBAL STYLES — disamakan penuh dengan design system terbaru
    ========================================================================== */
 
 const GlobalStyles = () => (
@@ -86,6 +92,9 @@ const GlobalStyles = () => (
         .d1 { animation-delay: 0.02s; }
         .d2 { animation-delay: 0.06s; }
         .d3 { animation-delay: 0.10s; }
+        .d4 { animation-delay: 0.14s; }
+        .d5 { animation-delay: 0.18s; }
+        .d6 { animation-delay: 0.22s; }
         .row-in { animation: fadeInUp 0.28s ease forwards; opacity: 0; }
 
         .card-flat { transition: box-shadow 0.2s ease; }
@@ -120,7 +129,9 @@ const GlobalStyles = () => (
 );
 
 /* ==========================================================================
-   NOTIFICATION MODAL — identik dengan data_guru_client.tsx / kokurikuler_client.tsx
+   NOTIFICATION MODAL — disamakan penuh dengan design system terbaru
+   (sekarang juga menangani tipe 'confirm', menggantikan modal konfirmasi
+   terpisah agar tampilannya konsisten dengan halaman Catatan Wali Kelas)
    ========================================================================== */
 
 const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: React.ReactNode; btn: string }> = {
@@ -128,35 +139,66 @@ const MODAL_STYLES: Record<ModalType, { iconBg: string; ring: string; icon: Reac
     error: { iconBg: 'bg-red-50', ring: 'ring-red-100', icon: <AlertCircle size={38} className="text-red-500" />, btn: 'bg-red-600 hover:bg-red-700' },
     warning: { iconBg: 'bg-amber-50', ring: 'ring-amber-100', icon: <ShieldAlert size={38} className="text-amber-500" />, btn: 'bg-amber-500 hover:bg-amber-600' },
     network: { iconBg: 'bg-slate-100', ring: 'ring-slate-200', icon: <WifiOff size={38} className="text-slate-500" />, btn: 'bg-slate-600 hover:bg-slate-700' },
+    confirm: { iconBg: 'bg-orange-50', ring: 'ring-orange-100', icon: <ShieldAlert size={38} className="text-orange-500" />, btn: 'bg-orange-500 hover:bg-orange-600' },
 };
 
 const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => void }) => {
     const s = MODAL_STYLES[modal.type];
+    const isConfirm = modal.type === 'confirm';
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 dg-fadeIn">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
-                <button onClick={onClose} aria-label="Tutup" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-                    <X size={18} />
-                </button>
-                <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>{s.icon}</div>
-                <div className="text-center w-full">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={isConfirm ? undefined : onClose} />
+            <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 sm:p-7 flex flex-col items-center gap-3" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
+                <div className="dg-scaleIn contents w-full">
+                    {!isConfirm && (
+                        <button
+                            onClick={onClose}
+                            aria-label="Tutup"
+                            className="absolute top-3.5 right-3.5 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            <X size={18} />
+                        </button>
+                    )}
+                    <div className={`w-16 h-16 rounded-full ${s.iconBg} flex items-center justify-center ring-8 ${s.ring} dg-pulse`}>
+                        {s.icon}
+                    </div>
+                    <div className="text-center w-full">
+                        <h3 className="text-lg font-bold text-gray-900 mb-1.5">{modal.title}</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line text-left mt-1">{modal.message}</p>
+                    </div>
+                    {isConfirm ? (
+                        <div className="flex gap-2.5 w-full mt-1">
+                            <button
+                                onClick={onClose}
+                                className="btn-action flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors"
+                                style={{ borderColor: '#e5e7eb', color: '#4b5563', background: '#fff' }}
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={() => { modal.onConfirm?.(); onClose(); }}
+                                className="btn-action flex-1 text-white font-bold py-2.5 rounded-xl transition-colors text-sm"
+                                style={{ background: BRAND_GRADIENT, boxShadow: '0 4px 14px rgba(232,105,10,0.30)' }}
+                            >
+                                Lanjutkan
+                            </button>
+                        </div>
+                    ) : (
+                        <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>
+                            OK, Mengerti
+                        </button>
+                    )}
                 </div>
-                <button onClick={onClose} className={`btn-action w-full ${s.btn} text-white font-bold py-2.5 rounded-xl transition-colors text-sm mt-1`}>
-                    OK, Mengerti
-                </button>
             </div>
         </div>
     );
 };
 
 /* ==========================================================================
-   INPUT & SISTEM TOMBOL AKSI — identik dengan data_guru_client.tsx / kokurikuler_client.tsx
+   INPUT & SISTEM TOMBOL AKSI — disamakan penuh dengan design system terbaru
    ========================================================================== */
 
-const inputCls = "w-full border rounded-lg px-3 py-2 text-sm text-center text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200";
+const inputCls = "w-full border rounded-xl px-3 py-2 text-sm text-center text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400";
 
 type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
 
@@ -190,7 +232,7 @@ const ActionButton = ({
     );
 };
 
-/** Badge angka absensi — konsisten dengan NilaiBadge di kokurikuler_client.tsx */
+/** Badge angka absensi — konsisten dengan badge di halaman Catatan Wali Kelas */
 const AbsenBadge = ({ value }: { value: number }) => (
     <span
         className="inline-block px-2.5 py-1 rounded-lg text-xs font-bold min-w-[28px]"
@@ -231,11 +273,12 @@ export default function AbsensiClient() {
     const importFileInputRef = useRef<HTMLInputElement>(null);
 
     // ── Modal state ────────────────────────────────────────────────────────
+    // ✅ Konfirmasi sekarang memakai showModal({ type: 'confirm', ... }) yang sama
+    // dengan notifikasi lain, sehingga state showConfirmModal/confirmData yang
+    // terpisah tidak lagi diperlukan. Semua validasi TIDAK diubah sama sekali.
     const [modal, setModal] = useState<ModalConfig | null>(null);
     const showModal = useCallback((cfg: ModalConfig) => setModal(cfg), []);
     const closeModal = useCallback(() => setModal(null), []);
-    const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [confirmData, setConfirmData] = useState<{ siswaId: number; data: any } | null>(null);
 
     // ── Fetch Tahun Ajaran Aktif ───────────────────────────────────────────
     const fetchTahunAjaran = useCallback(async (token: string): Promise<boolean> => {
@@ -527,6 +570,9 @@ export default function AbsensiClient() {
         );
     };
 
+    // ✅ Konfirmasi sekarang memakai showModal({ type: 'confirm', ... }) supaya
+    // tampilannya konsisten dengan sistem notifikasi lainnya. Validasi di
+    // bawah ini TIDAK diubah sama sekali.
     const openConfirmModal = (siswaId: number) => {
         if (!hasChanges(siswaId)) {
             showModal({
@@ -543,14 +589,17 @@ export default function AbsensiClient() {
             return;
         }
 
-        setConfirmData({ siswaId, data: editedData[siswaId] });
-        setShowConfirmModal(true);
+        showModal({
+            type: 'confirm',
+            title: 'Konfirmasi Penyimpanan',
+            message: 'Apakah Anda yakin ingin menyimpan data absensi ini?',
+            onConfirm: () => executeSave(siswaId),
+        });
     };
 
-    const executeSave = async () => {
-        if (!confirmData) return;
-
-        const { siswaId, data } = confirmData;
+    const executeSave = async (siswaId: number) => {
+        const data = editedData[siswaId];
+        if (!data) return;
 
         try {
             setSavingRows(prev => new Set(prev).add(siswaId));
@@ -617,8 +666,6 @@ export default function AbsensiClient() {
                 newSet.delete(siswaId);
                 return newSet;
             });
-            setShowConfirmModal(false);
-            setConfirmData(null);
         }
     };
 
@@ -729,8 +776,8 @@ export default function AbsensiClient() {
         const BOM = '\uFEFF';
         const csvContent = BOM + [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
         const timestamp = new Date().toISOString().split('T')[0];
         const filename = `error_import_absensi_${jenisPenilaian}_${timestamp}.csv`;
 
@@ -918,15 +965,15 @@ export default function AbsensiClient() {
             {modal && <NotifModal modal={modal} onClose={closeModal} />}
             {showSessionExpired && <SessionExpiredModal onConfirm={handleLogout} />}
 
-            {/* Page Header */}
+            {/* HEADER */}
             <div className="mb-4 sm:mb-5 anim-in d1">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Absensi Siswa</h1>
                 <p className="text-xs sm:text-sm mt-1 text-gray-500">
-                    Kelola data kehadiran siswa untuk <strong>{absensiData?.kelas || 'kelas Anda'}</strong>
+                    Kelola data kehadiran siswa kelas {absensiData?.kelas || 'Anda'}
                 </p>
             </div>
 
-            {/* ✅ BANNER READ-ONLY — konsisten dengan banner read-only di kokurikuler_client.tsx */}
+            {/* Banner read only */}
             {isReadOnly && (
                 <div className="mb-5 rounded-2xl overflow-hidden card-flat anim-in d2" style={{ border: `1px solid ${readOnlyReason === 'locked' ? '#fca5a5' : '#fcd34d'}` }}>
                     <div
@@ -941,166 +988,141 @@ export default function AbsensiClient() {
                         </div>
                         <div>
                             <p className={`text-sm font-bold ${readOnlyReason === 'locked' ? 'text-red-900' : 'text-yellow-900'}`}>
-                                Mode Baca Saja
+                                Mode Baca Saja (Read Only)
                             </p>
                             <p className={`text-xs mt-0.5 ${readOnlyReason === 'locked' ? 'text-red-700' : 'text-yellow-700'}`}>
                                 {readOnlyReason === 'locked'
                                     ? 'Periode penilaian telah selesai dan data sudah dikunci. Anda dapat melihat data absensi, tetapi tidak dapat mengedit.'
-                                    : 'Periode penilaian belum aktif. Anda dapat melihat data absensi, tetapi belum dapat mengedit. Silakan hubungi admin untuk membuka periode penilaian.'}
+                                    : 'Periode penilaian belum aktif. Anda dapat melihat data absensi, tetapi belum dapat mengedit. Silakan hubungi Administrator untuk membuka periode penilaian.'}
                             </p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Main Card */}
-            <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d2" style={CARD_STYLE}>
-
-                {/* Card Header */}
-                <div className="px-4 sm:px-6 py-4 sm:py-5" style={{ background: BRAND_GRADIENT }}>
+            {/* KARTU KELAS — card terpisah, berisi info kelas + tab periode */}
+            <div className="card-flat bg-white rounded-2xl overflow-hidden mb-4 anim-in d2" style={CARD_STYLE}>
+                <div className="px-4 sm:px-6 py-5" style={{ background: BRAND_GRADIENT }}>
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/25 flex items-center justify-center backdrop-blur-sm">
-                            <School className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                        <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                            <School className="w-7 h-7 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-lg sm:text-xl font-bold text-white">
-                                {absensiData?.kelas || 'Memuat...'}
-                            </h2>
-                            <p className="text-xs text-white/80 mt-0.5">
-                                Semester {semesterAktif}
-                            </p>
+                            <h2 className="text-xl font-bold text-white">{absensiData?.kelas || 'Memuat...'}</h2>
+                            <p className="text-xs text-white/80 mt-0.5">Semester {semesterAktif}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Tab Toggle PTS/PAS dengan Status */}
-                <div className="px-4 sm:px-5 py-3" style={{ background: '#fff5eb', borderBottom: '1px solid #fde0c8' }}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold" style={{ color: ACCENT_DARK }}>Periode:</span>
-                        <div className="flex gap-2 bg-white rounded-lg p-1" style={{ border: '1px solid #fde0c8' }}>
-                            {/* Tab PTS */}
-                            <button
-                                onClick={() => handleTabChange('PTS')}
-                                className="btn-action px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
-                                style={{
-                                    background: jenisPenilaian === 'PTS'
-                                        ? BRAND_GRADIENT
-                                        : statusPTS === 'aktif'
-                                            ? 'rgba(232,105,10,0.08)'
-                                            : statusPTS === 'selesai'
-                                                ? 'rgba(156,163,175,0.1)'
-                                                : 'transparent',
-                                    color: jenisPenilaian === 'PTS'
-                                        ? '#fff'
-                                        : statusPTS === 'aktif'
-                                            ? ACCENT_DARK
-                                            : statusPTS === 'selesai'
-                                                ? '#6b7280'
-                                                : '#9ca3af',
-                                    cursor: statusPTS !== 'nonaktif' ? 'pointer' : 'not-allowed',
-                                    opacity: statusPTS === 'nonaktif' ? 0.6 : 1
-                                }}
-                            >
-                                <span>PTS</span>
-                                <span className="text-[9px] font-normal">
-                                    {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '✓ Selesai' : 'Menunggu'}
-                                </span>
-                            </button>
+                <div className="mx-4 sm:mx-5 my-5 flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold" style={{ color: ACCENT_DARK }}>Periode:</span>
+                    <div className="flex gap-2 bg-white rounded-lg p-1" style={{ border: '1px solid #fde0c8' }}>
+                        {/* Tab PTS */}
+                        <button
+                            onClick={() => handleTabChange('PTS')}
+                            className="btn-action px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
+                            style={{
+                                background: jenisPenilaian === 'PTS'
+                                    ? BRAND_GRADIENT
+                                    : statusPTS === 'aktif'
+                                        ? 'rgba(232,105,10,0.08)'
+                                        : statusPTS === 'selesai'
+                                            ? 'rgba(156,163,175,0.1)'
+                                            : 'transparent',
+                                color: jenisPenilaian === 'PTS'
+                                    ? '#fff'
+                                    : statusPTS === 'aktif'
+                                        ? ACCENT_DARK
+                                        : statusPTS === 'selesai'
+                                            ? '#6b7280'
+                                            : '#9ca3af',
+                                cursor: statusPTS !== 'nonaktif' ? 'pointer' : 'not-allowed',
+                                opacity: statusPTS === 'nonaktif' ? 0.6 : 1
+                            }}
+                        >
+                            <span>PTS</span>
+                            <span className="text-[9px] font-normal">
+                                {statusPTS === 'aktif' ? '● Aktif' : statusPTS === 'selesai' ? '✓ Selesai' : 'Menunggu'}
+                            </span>
+                        </button>
 
-                            {/* Tab PAS */}
-                            <button
-                                onClick={() => handleTabChange('PAS')}
-                                className="btn-action px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
-                                style={{
-                                    background: jenisPenilaian === 'PAS'
-                                        ? BRAND_GRADIENT
-                                        : statusPAS === 'aktif'
-                                            ? 'rgba(232,105,10,0.08)'
-                                            : statusPAS === 'selesai'
-                                                ? 'rgba(156,163,175,0.1)'
-                                                : 'transparent',
-                                    color: jenisPenilaian === 'PAS'
-                                        ? '#fff'
-                                        : statusPAS === 'aktif'
-                                            ? ACCENT_DARK
-                                            : statusPAS === 'selesai'
-                                                ? '#6b7280'
-                                                : '#9ca3af',
-                                    cursor: statusPAS !== 'nonaktif' ? 'pointer' : 'not-allowed',
-                                    opacity: statusPAS === 'nonaktif' ? 0.6 : 1
-                                }}
-                            >
-                                <span>PAS</span>
-                                <span className="text-[9px] font-normal">
-                                    {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '✓ Selesai' : 'Menunggu'}
-                                </span>
-                            </button>
-                        </div>
+                        {/* Tab PAS */}
+                        <button
+                            onClick={() => handleTabChange('PAS')}
+                            className="btn-action px-4 py-1.5 rounded-md text-xs font-bold transition-all flex flex-col items-center gap-0.5 min-w-[80px]"
+                            style={{
+                                background: jenisPenilaian === 'PAS'
+                                    ? BRAND_GRADIENT
+                                    : statusPAS === 'aktif'
+                                        ? 'rgba(232,105,10,0.08)'
+                                        : statusPAS === 'selesai'
+                                            ? 'rgba(156,163,175,0.1)'
+                                            : 'transparent',
+                                color: jenisPenilaian === 'PAS'
+                                    ? '#fff'
+                                    : statusPAS === 'aktif'
+                                        ? ACCENT_DARK
+                                        : statusPAS === 'selesai'
+                                            ? '#6b7280'
+                                            : '#9ca3af',
+                                cursor: statusPAS !== 'nonaktif' ? 'pointer' : 'not-allowed',
+                                opacity: statusPAS === 'nonaktif' ? 0.6 : 1
+                            }}
+                        >
+                            <span>PAS</span>
+                            <span className="text-[9px] font-normal">
+                                {statusPAS === 'aktif' ? '● Aktif' : statusPAS === 'selesai' ? '✓ Selesai' : 'Menunggu'}
+                            </span>
+                        </button>
                     </div>
                 </div>
 
                 {/* Info Box untuk PAS — Hanya jika PAS aktif */}
                 {jenisPenilaian === 'PAS' && statusPAS === 'aktif' && (
-                    <div className="mx-4 sm:mx-5 mt-4 p-4 rounded-xl flex items-start gap-3" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-                        <Info className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: ACCENT_DARK }} />
-                        <div className="flex-1">
-                            <p className="text-sm font-bold mb-1" style={{ color: '#7a3a0a' }}>
-                                Input Total Absensi Semester
-                            </p>
-                            <p className="text-xs" style={{ color: ACCENT_DARK }}>
-                                Untuk PAS, input total absensi selama 1 semester penuh.
-                                Total harus lebih besar atau sama dengan data PTS yang sudah diinput sebelumnya.
-                            </p>
-                        </div>
+                    <div className="mx-4 sm:mx-5 mb-5 flex items-start gap-3 px-4 py-3 rounded-xl" style={{ background: '#fff5eb', border: '1px solid #f0a94e' }}>
+                        <Info size={18} className="flex-shrink-0 mt-0.5" style={{ color: ACCENT_DARK }} />
+                        <p className="text-sm font-medium" style={{ color: '#7a3a0a' }}>
+                            Input total absensi selama 1 semester penuh. Total harus lebih besar atau sama dengan data PTS yang sudah diinput sebelumnya.
+                        </p>
                     </div>
                 )}
+            </div>
 
-                {/* Toolbar */}
-                <div className="px-4 sm:px-5 py-3 sm:py-4 mt-4" style={{ borderBottom: '1px solid #fde0c8', background: '#fffaf6' }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4" style={{ color: ACCENT_DARK }} />
-                            <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>
-                                Total: {filteredAbsensi.length} siswa
-                            </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                            {/* Tombol Import Absensi */}
-                            {!isReadOnly && (
-                                <ActionButton variant="success" onClick={openImportModal}>
-                                    <Upload size={15} /> Import Absensi
-                                </ActionButton>
+            {/* TOOLBAR — card terpisah */}
+            <div className="card-flat bg-white rounded-2xl px-3 sm:px-4 py-3 sm:py-3.5 mb-4 anim-in d3" style={CARD_STYLE}>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4" style={{ color: ACCENT_DARK }} />
+                        <span className="text-sm font-semibold" style={{ color: '#7a3a0a' }}>Total: {filteredAbsensi.length} siswa</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {!isReadOnly && (
+                            <ActionButton variant="info" onClick={openImportModal}>
+                                <Upload size={16} /> Import Absensi
+                            </ActionButton>
+                        )}
+                        <div className="relative w-full sm:w-64 flex-shrink-0">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Search className="w-3.5 h-3.5" style={{ color: ACCENT }} /></div>
+                            <input
+                                type="text"
+                                placeholder="Cari nama atau NIS..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full border rounded-lg pl-8 pr-8 py-2 text-xs outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400"
+                            />
+                            {searchQuery && (
+                                <button type="button" onClick={() => setSearchQuery('')} className="absolute inset-y-0 right-2.5 flex items-center" style={{ color: ACCENT }}>
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
                             )}
-
-                            {/* Search */}
-                            <div className="relative min-w-[200px] sm:min-w-[250px]">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Search className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Cari nama atau NIS..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full border rounded-lg pl-8 pr-8 py-2 text-xs outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400"
-                                />
-                                {searchQuery && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearchQuery('')}
-                                        className="absolute inset-y-0 right-2.5 flex items-center"
-                                        style={{ color: ACCENT }}
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Table — CSS grid, konsisten dengan data_guru_client.tsx / kokurikuler_client.tsx */}
+            {/* TABEL — card terpisah, CSS grid konsisten dengan design system terbaru */}
+            <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d4" style={CARD_STYLE}>
                 <div className="overflow-x-auto scrollbar-thin">
                     <div style={{ width: '100%', minWidth: '820px' }}>
                         <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
@@ -1171,7 +1193,7 @@ export default function AbsensiClient() {
                                             </div>
                                         </div>
 
-                                        <div className="px-4 py-4 flex items-center justify-center text-center text-gray-500 font-mono text-xs truncate">
+                                        <div className="px-4 py-4 flex items-center justify-center text-center text-gray-600 font-mono text-xs">
                                             {siswa.nis}
                                         </div>
 
@@ -1243,7 +1265,7 @@ export default function AbsensiClient() {
                                                     </ActionButton>
                                                 </div>
                                             ) : (
-                                                <ActionButton size="sm" variant="warning" disabled={isReadOnly} onClick={() => handleEdit(siswa.id_siswa)}>
+                                                <ActionButton size="sm" variant={isReadOnly ? 'neutral' : 'warning'} disabled={isReadOnly} onClick={() => handleEdit(siswa.id_siswa)}>
                                                     {isReadOnly ? (
                                                         <>
                                                             <Lock size={13} /> Terkunci
@@ -1264,7 +1286,7 @@ export default function AbsensiClient() {
                 </div>
 
                 {/* Footer Info */}
-                <div className="px-4 sm:px-5 py-4 flex items-start gap-2" style={{ borderTop: '1px solid #fde0c8', background: '#fffaf6' }}>
+                <div className="px-4 sm:px-5 py-4 flex items-start gap-2 border-t border-gray-200" style={{ background: '#fafafa' }}>
                     <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: ACCENT_DARK }} />
                     <div className="text-xs" style={{ color: ACCENT_DARK }}>
                         <p className="font-semibold mb-1">Petunjuk Pengisian:</p>
@@ -1280,38 +1302,7 @@ export default function AbsensiClient() {
                 </div>
             </div>
 
-            {/* Confirmation Modal — identik dengan pola confirm modal data_guru_client.tsx / kokurikuler_client.tsx */}
-            {showConfirmModal && confirmData && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 dg-fadeIn"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
-                >
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 dg-scaleIn" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.18)' }}>
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                <ShieldAlert size={22} className="text-orange-500" />
-                            </div>
-                            <h3 className="text-base font-bold text-gray-900">Konfirmasi Penyimpanan</h3>
-                        </div>
-
-                        <p className="text-sm text-gray-500 mb-5">
-                            Apakah Anda yakin ingin menyimpan data absensi ini?
-                        </p>
-
-                        <div className="flex gap-2.5">
-                            <ActionButton variant="neutral" fullWidth onClick={() => setShowConfirmModal(false)}>
-                                Batal
-                            </ActionButton>
-                            <ActionButton variant="primary" fullWidth onClick={executeSave}>
-                                Simpan
-                            </ActionButton>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Import Absensi — konsisten dengan Modal Import Nilai di kokurikuler_client.tsx */}
+            {/* Modal Import Absensi */}
             {showImportModal && (
                 <div
                     className="fixed inset-0 z-[120] flex items-center justify-center p-4 dg-fadeIn"
@@ -1327,7 +1318,7 @@ export default function AbsensiClient() {
                                 <div className="min-w-0">
                                     <p className="text-[10px] font-bold uppercase tracking-wider text-white/75 leading-none mb-0.5">Data Massal</p>
                                     <h2 className="text-sm font-bold text-white leading-tight truncate">Import Absensi {jenisPenilaian}</h2>
-                                    <p className="text-[10px] text-white/70 mt-0.5">Kelas {absensiData?.kelas} • Semester {semesterAktif}</p>
+                                    <p className="text-[10px] text-white/70 mt-0.5">Kelas {absensiData?.kelas} - Semester {semesterAktif}</p>
                                 </div>
                             </div>
                             <button
@@ -1343,7 +1334,7 @@ export default function AbsensiClient() {
                         <div className="p-6">
                             <div className="mb-5 p-4 rounded-xl" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                                 <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
-                                    <AlertCircle size={16} className="text-blue-600" />
+                                    <Info size={16} className="text-blue-600" />
                                     Langkah-langkah Import:
                                 </p>
                                 <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
@@ -1379,7 +1370,7 @@ export default function AbsensiClient() {
                                 <ActionButton variant="warning" fullWidth disabled={downloadingTemplate} onClick={handleDownloadTemplate}>
                                     {downloadingTemplate ? (
                                         <>
-                                            <div className="w-4 h-4 rounded-full border-2 border-current/30 border-t-current animate-spin" />
+                                            <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                                             Mengunduh Template...
                                         </>
                                     ) : (
@@ -1438,7 +1429,7 @@ export default function AbsensiClient() {
                                 <ActionButton variant="success" fullWidth disabled={!importFile || importing} onClick={executeImport}>
                                     {importing ? (
                                         <>
-                                            <div className="w-4 h-4 rounded-full border-2 border-current/30 border-t-current animate-spin" />
+                                            <div className="w-4 h-4 rounded-full border-2 border-current/40 border-t-current animate-spin" />
                                             Mengimport...
                                         </>
                                     ) : (
