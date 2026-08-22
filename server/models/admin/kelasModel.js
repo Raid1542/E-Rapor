@@ -29,8 +29,6 @@ const kelasModel = {
       );
       return rows;
     } catch (err) {
-      console.error('DB Error kelasModel.getAll:', err.message);
-      if (err.sql) console.error('SQL:', err.sql);
       throw new Error('Gagal mengambil data kelas');
     }
   },
@@ -46,32 +44,17 @@ const kelasModel = {
       );
       return rows[0] || null;
     } catch (err) {
-      console.error('DB Error kelasModel.getById:', err.message);
-      if (err.sql) console.error('SQL:', err.sql);
       throw new Error('Gagal mengambil detail kelas');
     }
   },
 
   /**
-   * Ambil kelas dengan detail lengkap:
-   * - Data kelas
-   * - Wali kelas
-   * - Jumlah siswa
-   * - Status dan label tahun ajaran
+   * Ambil kelas dengan detail lengkap (wali kelas, jumlah siswa, status tahun ajaran).
    */
   async getByIdWithDetails(id, tahunAjaranIdInduk) {
     try {
-      if (!id) {
-        throw new Error('id_kelas wajib diisi');
-      }
-
-      if (!tahunAjaranIdInduk) {
-        throw new Error('tahunAjaranIdInduk wajib diisi');
-      }
-
-      const [rows] = await db.execute(
-        `
-        SELECT
+      const [rows] = await db.execute(`
+        SELECT 
           k.id_kelas,
           k.nama_kelas,
           k.fase,
@@ -130,8 +113,6 @@ const kelasModel = {
 
       return rows[0] || null;
     } catch (err) {
-      console.error('DB Error kelasModel.getByIdWithDetails:', err.message);
-      if (err.sql) console.error('SQL:', err.sql);
       throw new Error('Gagal mengambil detail lengkap kelas');
     }
   },
@@ -167,9 +148,7 @@ const kelasModel = {
 
       return result.insertId;
     } catch (err) {
-      console.error('DB Error kelasModel.create:', err.message);
-      if (err.sql) console.error('SQL:', err.sql);
-      throw err;
+      throw err; // Lempar error validasi atau error database
     }
   },
 
@@ -204,8 +183,6 @@ const kelasModel = {
 
       return result.affectedRows > 0;
     } catch (err) {
-      console.error('DB Error kelasModel.update:', err.message);
-      if (err.sql) console.error('SQL:', err.sql);
       throw err;
     }
   },
@@ -226,8 +203,6 @@ const kelasModel = {
 
       return rows;
     } catch (err) {
-      console.error('DB Error kelasModel.getByTahunAjaran:', err.message);
-      if (err.sql) console.error('SQL:', err.sql);
       throw new Error('Gagal mengambil data kelas per tahun ajaran');
     }
   }
