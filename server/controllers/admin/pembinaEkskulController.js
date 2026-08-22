@@ -11,6 +11,48 @@ const ExcelJS = require('exceljs');
 const fs = require('fs');
 
 /**
+ * HELPER: Ekstrak nilai teks dari sel Excel (handle semua jenis sel)
+ */
+const getCellTextValue = (cell) => {
+    if (!cell || cell.value === null || cell.value === undefined) return null;
+    
+    const val = cell.value;
+    
+    if (typeof val === 'string') return val.trim();
+    if (typeof val === 'number') return String(val);
+    
+    if (val instanceof Date) {
+        return `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}-${String(val.getDate()).padStart(2, '0')}`;
+    }
+    
+    if (typeof val === 'object' && val.text !== undefined && val.text !== null) {
+        return String(val.text).trim();
+    }
+    
+    if (typeof val === 'object' && val.result !== undefined && val.result !== null) {
+        return String(val.result).trim();
+    }
+    
+    if (typeof val === 'object' && Array.isArray(val.richText)) {
+        return val.richText.map(part => part.text || '').join('').trim();
+    }
+    
+    return String(val).trim();
+};
+
+/**
+ * HELPER: Normalisasi jenis kelamin ke format baku
+ */
+const normalizeJenisKelamin = (input) => {
+    if (!input) return null;
+    const s = String(input).trim().toLowerCase();
+    if (!s) return null;
+    if (s.includes('laki')) return 'Laki-laki';
+    if (s.includes('peremp') || s === 'p') return 'Perempuan';
+    return null;
+};
+
+/**
  * Ambil daftar semua pembina ekstrakurikuler.
  */
 exports.getPembinaEkskul = async (req, res) => {
@@ -224,7 +266,7 @@ exports.editPembinaEkskul = async (req, res) => {
 };
 
 /**
- * Import data pembina dari file Excel (.xlsx) 
+ * Import data pembina dari file Excel (.xlsx)
  */
 exports.importPembinaEkskul = async (req, res) => {
     const connection = await db.getConnection();
@@ -242,11 +284,10 @@ exports.importPembinaEkskul = async (req, res) => {
             throw new Error('File Excel kosong atau tidak ada data');
         }
 
-        // Ambil header dinamis
         const headers = [];
         const headerRow = worksheet.getRow(1);
         headerRow.eachCell((cell, colNumber) => {
-            headers[colNumber - 1] = String(cell.value || '').toLowerCase().trim();
+            headers[colNumber - 1] = (getCellTextValue(cell) || '').toLowerCase();
         });
 
         const colMap = {};
@@ -268,7 +309,12 @@ exports.importPembinaEkskul = async (req, res) => {
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             const rowNum = i;
-            const getCellVal = (colName) => colName in colMap ? row.getCell(colMap[colName] + 1)?.value : null;
+            
+            const getCellVal = (colName) => {
+                if (!(colName in colMap)) return null;
+                const cell = row.getCell(colMap[colName] + 1);
+                return getCellTextValue(cell);
+            };
 
             const rowData = {
                 nama_lengkap: getCellVal('nama_lengkap'),
@@ -282,40 +328,27 @@ exports.importPembinaEkskul = async (req, res) => {
             };
 
             try {
+                if (!rowData.nama_lengkap && !rowData.tempat_lahir) continue;
+
                 if (!rowData.nama_lengkap || !rowData.tempat_lahir || !rowData.tanggal_lahir || !rowData.jenis_kelamin) {
                     skipped.push({ row: rowNum, nama: rowData.nama_lengkap || '-', reason: 'Data tidak lengkap (nama, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)' });
                     continue;
                 }
 
-                if (!['Laki-laki', 'Perempuan'].includes(rowData.jenis_kelamin)) {
+                const jenisKelaminFinal = normalizeJenisKelamin(rowData.jenis_kelamin);
+                if (!jenisKelaminFinal) {
                     skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${rowData.jenis_kelamin}"` });
                     continue;
                 }
 
                 let tanggal_lahir = rowData.tanggal_lahir;
-                if (tanggal_lahir instanceof Date) {
-                    tanggal_lahir = `${tanggal_lahir.getFullYear()}-${String(tanggal_lahir.getMonth() + 1).padStart(2, '0')}-${String(tanggal_lahir.getDate()).padStart(2, '0')}`;
-                } else if (typeof tanggal_lahir === 'number') {
-                    const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
-                    if (!isNaN(date.getTime())) {
-                        tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                    } else {
-                        skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Format tanggal lahir tidak valid' });
-                        continue;
-                    }
-                } else if (typeof tanggal_lahir === 'string') {
-                    tanggal_lahir = tanggal_lahir.trim();
-                    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
-                        skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Format tanggal lahir harus YYYY-MM-DD' });
-                        continue;
-                    }
-                } else {
-                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Tanggal lahir wajib diisi' });
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: `Format tanggal lahir tidak valid (ditemukan: "${tanggal_lahir}"), harus YYYY-MM-DD` });
                     continue;
                 }
 
-                const [existingNiy] = rowData.niy ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?', [String(rowData.niy).trim()]) : [[]];
-                const [existingNuptk] = rowData.nuptk ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?', [String(rowData.nuptk).trim()]) : [[]];
+                const [existingNiy] = rowData.niy ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE niy = ?', [rowData.niy]) : [[]];
+                const [existingNuptk] = rowData.nuptk ? await connection.execute('SELECT id_pembina_ekstrakurikuler FROM pembina_ekstrakurikuler WHERE nuptk = ?', [rowData.nuptk]) : [[]];
 
                 if (existingNiy.length > 0 || existingNuptk.length > 0) {
                     let reason = 'Data duplikat';
@@ -327,14 +360,14 @@ exports.importPembinaEkskul = async (req, res) => {
 
                 await pembinaEkskulModel.create(
                     {
-                        nama_lengkap: String(rowData.nama_lengkap).trim(),
-                        niy: rowData.niy ? String(rowData.niy).trim() : null,
-                        nuptk: rowData.nuptk ? String(rowData.nuptk).trim() : null,
-                        tempat_lahir: String(rowData.tempat_lahir).trim(),
+                        nama_lengkap: rowData.nama_lengkap,
+                        niy: rowData.niy || null,
+                        nuptk: rowData.nuptk || null,
+                        tempat_lahir: rowData.tempat_lahir,
                         tanggal_lahir,
-                        jenis_kelamin: rowData.jenis_kelamin,
-                        alamat: rowData.alamat ? String(rowData.alamat).trim() : null,
-                        no_telepon: rowData.no_telepon ? String(rowData.no_telepon).trim() : null,
+                        jenis_kelamin: jenisKelaminFinal,
+                        alamat: rowData.alamat || null,
+                        no_telepon: rowData.no_telepon || null,
                         status: 'aktif'
                     },
                     connection

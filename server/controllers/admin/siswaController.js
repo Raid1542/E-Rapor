@@ -11,6 +11,48 @@ const fs = require('fs');
 const db = require('../../config/db');
 
 /**
+ * HELPER: Ekstrak nilai teks dari sel Excel (handle semua jenis sel)
+ */
+const getCellTextValue = (cell) => {
+    if (!cell || cell.value === null || cell.value === undefined) return null;
+    
+    const val = cell.value;
+    
+    if (typeof val === 'string') return val.trim();
+    if (typeof val === 'number') return String(val);
+    
+    if (val instanceof Date) {
+        return `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}-${String(val.getDate()).padStart(2, '0')}`;
+    }
+    
+    if (typeof val === 'object' && val.text !== undefined && val.text !== null) {
+        return String(val.text).trim();
+    }
+    
+    if (typeof val === 'object' && val.result !== undefined && val.result !== null) {
+        return String(val.result).trim();
+    }
+    
+    if (typeof val === 'object' && Array.isArray(val.richText)) {
+        return val.richText.map(part => part.text || '').join('').trim();
+    }
+    
+    return String(val).trim();
+};
+
+/**
+ * HELPER: Normalisasi jenis kelamin ke format baku
+ */
+const normalizeJenisKelamin = (input) => {
+    if (!input) return null;
+    const s = String(input).trim().toLowerCase();
+    if (!s) return null;
+    if (s.includes('laki')) return 'Laki-laki';
+    if (s.includes('peremp') || s === 'p') return 'Perempuan';
+    return null;
+};
+
+/**
  * Ambil daftar semua siswa dengan pagination dan filter status.
  */
 exports.getSiswaMaster = async (req, res) => {
@@ -53,7 +95,6 @@ exports.tambahSiswaMaster = async (req, res) => {
     try {
         const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat } = req.body;
 
-        // PERBAIKAN: Tambahkan validasi nisn
         if (!nis || !nisn || !nama_lengkap || !jenis_kelamin) {
             return res.status(400).json({
                 success: false,
@@ -62,7 +103,7 @@ exports.tambahSiswaMaster = async (req, res) => {
         }
 
         const trimmedNis = nis.trim();
-        const trimmedNisn = nisn.trim(); // PERBAIKAN: Pastikan string, bukan null
+        const trimmedNisn = nisn.trim();
         const trimmedNama = nama_lengkap.trim();
 
         const nisExists = await SiswaModel.checkNisExists(trimmedNis);
@@ -126,7 +167,6 @@ exports.editSiswaMaster = async (req, res) => {
         const { id } = req.params;
         const { nis, nisn, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, status } = req.body;
 
-        // PERBAIKAN: Tambahkan validasi nisn
         if (!nis || !nisn || !nama_lengkap || !jenis_kelamin) {
             return res.status(400).json({
                 success: false,
@@ -140,7 +180,7 @@ exports.editSiswaMaster = async (req, res) => {
         }
 
         const trimmedNis = nis.trim();
-        const trimmedNisn = nisn.trim(); // PERBAIKAN: Pastikan string
+        const trimmedNisn = nisn.trim();
         const trimmedNama = nama_lengkap.trim();
 
         if (trimmedNis !== existingSiswa.nis) {
@@ -248,7 +288,7 @@ exports.hapusSiswaMaster = async (req, res) => {
 };
 
 /**
- * Import data siswa dari file Excel 
+ * Import data siswa dari file Excel
  */
 exports.importSiswaMaster = async (req, res) => {
     const connection = await db.getConnection();
@@ -257,7 +297,6 @@ exports.importSiswaMaster = async (req, res) => {
             return res.status(400).json({ success: false, message: 'File Excel diperlukan' });
         }
 
-        // 1. Baca file Excel dengan exceljs
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(req.file.path);
         
@@ -267,14 +306,12 @@ exports.importSiswaMaster = async (req, res) => {
             return res.status(400).json({ success: false, message: 'File Excel kosong atau tidak ada data' });
         }
 
-        // 2. Ambil header dari baris pertama secara dinamis
         const headers = [];
         const headerRow = worksheet.getRow(1);
         headerRow.eachCell((cell, colNumber) => {
-            headers[colNumber - 1] = String(cell.value || '').toLowerCase().trim();
+            headers[colNumber - 1] = (getCellTextValue(cell) || '').toLowerCase();
         });
 
-        // Map nama kolom ke index-nya
         const colMap = {};
         headers.forEach((header, idx) => {
             if (header) colMap[header] = idx;
@@ -284,97 +321,97 @@ exports.importSiswaMaster = async (req, res) => {
         let processedCount = 0;
         const skipped = [];
 
-        // 3. Iterasi dari baris ke-2 (skip header)
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             const rowNumber = i;
 
-            // Ambil nilai dari setiap kolom berdasarkan header
-            const rowData = {
-                nis: row.getCell((colMap['nis'] || 0) + 1)?.value,
-                nisn: row.getCell((colMap['nisn'] || 0) + 1)?.value,
-                nama_lengkap: row.getCell((colMap['nama_lengkap'] || 0) + 1)?.value,
-                tempat_lahir: row.getCell((colMap['tempat_lahir'] || 0) + 1)?.value,
-                tanggal_lahir: row.getCell((colMap['tanggal_lahir'] || 0) + 1)?.value,
-                jenis_kelamin: row.getCell((colMap['jenis_kelamin'] || 0) + 1)?.value,
-                alamat: row.getCell((colMap['alamat'] || 0) + 1)?.value
+            const getCellVal = (colName) => {
+                if (!(colName in colMap)) return null;
+                const cell = row.getCell(colMap[colName] + 1);
+                return getCellTextValue(cell);
             };
 
-            // Validasi kolom wajib
-            if (!rowData.nis || !rowData.nisn || !rowData.nama_lengkap || !rowData.jenis_kelamin) {
-                skipped.push({
-                    row: rowNumber,
-                    nama: rowData.nama_lengkap || '-',
-                    reason: 'Kolom wajib (NIS, NISN, nama lengkap, jenis kelamin) tidak lengkap'
-                });
-                continue;
-            }
-
-            const trimmedNis = String(rowData.nis).trim();
-            const trimmedNisn = String(rowData.nisn).trim();
-            const trimmedNama = String(rowData.nama_lengkap).trim();
-
-            // Cek duplikasi NIS
-            const nisExists = await SiswaModel.checkNisExists(trimmedNis);
-            if (nisExists) {
-                skipped.push({
-                    row: rowNumber,
-                    nama: trimmedNama,
-                    reason: `NIS "${trimmedNis}" sudah terdaftar`
-                });
-                continue;
-            }
-
-            // Cek duplikasi NISN
-            const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
-            if (nisnExists) {
-                skipped.push({
-                    row: rowNumber,
-                    nama: trimmedNama,
-                    reason: `NISN "${trimmedNisn}" sudah terdaftar`
-                });
-                continue;
-            }
-
-            // 4. Konversi tanggal lahir (exceljs otomatis return Date object kalau formatnya tanggal)
-            let tanggal_lahir = rowData.tanggal_lahir || null;
-            if (tanggal_lahir instanceof Date) {
-                tanggal_lahir = `${tanggal_lahir.getFullYear()}-${String(tanggal_lahir.getMonth() + 1).padStart(2, '0')}-${String(tanggal_lahir.getDate()).padStart(2, '0')}`;
-            } else if (typeof tanggal_lahir === 'number') {
-                const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
-                if (!isNaN(date.getTime())) {
-                    tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                } else {
-                    tanggal_lahir = null;
-                }
-            } else if (typeof tanggal_lahir === 'string') {
-                tanggal_lahir = tanggal_lahir.trim();
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
-                    tanggal_lahir = null;
-                }
-            }
+            const rowData = {
+                nis: getCellVal('nis'),
+                nisn: getCellVal('nisn'),
+                nama_lengkap: getCellVal('nama_lengkap'),
+                tempat_lahir: getCellVal('tempat_lahir'),
+                tanggal_lahir: getCellVal('tanggal_lahir'),
+                jenis_kelamin: getCellVal('jenis_kelamin'),
+                alamat: getCellVal('alamat')
+            };
 
             try {
+                if (!rowData.nis && !rowData.nama_lengkap) continue;
+
+                if (!rowData.nis || !rowData.nisn || !rowData.nama_lengkap || !rowData.jenis_kelamin) {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: rowData.nama_lengkap || '-',
+                        reason: 'Kolom wajib (NIS, NISN, nama lengkap, jenis kelamin) tidak lengkap'
+                    });
+                    continue;
+                }
+
+                const trimmedNis = rowData.nis;
+                const trimmedNisn = rowData.nisn;
+                const trimmedNama = rowData.nama_lengkap;
+
+                const nisExists = await SiswaModel.checkNisExists(trimmedNis);
+                if (nisExists) {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: trimmedNama,
+                        reason: `NIS "${trimmedNis}" sudah terdaftar`
+                    });
+                    continue;
+                }
+
+                const nisnExists = await SiswaModel.checkNisnExists(trimmedNisn);
+                if (nisnExists) {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: trimmedNama,
+                        reason: `NISN "${trimmedNisn}" sudah terdaftar`
+                    });
+                    continue;
+                }
+
+                let tanggal_lahir = rowData.tanggal_lahir || null;
+                if (tanggal_lahir && !/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                    tanggal_lahir = null;
+                }
+
+                const jenisKelaminFinal = normalizeJenisKelamin(rowData.jenis_kelamin);
+                if (!jenisKelaminFinal) {
+                    skipped.push({
+                        row: rowNumber,
+                        nama: trimmedNama,
+                        reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${rowData.jenis_kelamin}"`
+                    });
+                    continue;
+                }
+
                 await SiswaModel.createSiswa({
                     nis: trimmedNis,
                     nisn: trimmedNisn,
                     nama_lengkap: trimmedNama,
-                    tempat_lahir: rowData.tempat_lahir ? String(rowData.tempat_lahir).trim() : null,
+                    tempat_lahir: rowData.tempat_lahir || null,
                     tanggal_lahir,
-                    jenis_kelamin: rowData.jenis_kelamin || 'Laki-laki',
-                    alamat: rowData.alamat ? String(rowData.alamat).trim() : null
+                    jenis_kelamin: jenisKelaminFinal,
+                    alamat: rowData.alamat || null
                 });
                 processedCount++;
             } catch (insertErr) {
                 if (insertErr.code === 'ER_DUP_ENTRY' || insertErr.errno === 1062) {
                     skipped.push({
                         row: rowNumber,
-                        nama: trimmedNama,
-                        reason: `NIS "${trimmedNis}" atau NISN "${trimmedNisn}" sudah terdaftar`
+                        nama: rowData.nama_lengkap || '-',
+                        reason: `NIS "${rowData.nis}" atau NISN "${rowData.nisn}" sudah terdaftar`
                     });
                 } else {
                     console.error(`Error import row ${rowNumber}:`, insertErr);
-                    skipped.push({ row: rowNumber, nama: trimmedNama, reason: 'Gagal menyimpan data' });
+                    skipped.push({ row: rowNumber, nama: rowData.nama_lengkap || '-', reason: 'Gagal menyimpan data' });
                 }
             }
         }

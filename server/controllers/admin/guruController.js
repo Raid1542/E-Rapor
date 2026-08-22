@@ -26,21 +26,69 @@ const getFullPhotoUrl = (fotoPath) => {
 };
 
 /**
+ * HELPER: Ekstrak nilai teks dari sel Excel (handle semua jenis sel)
+ * Fungsi ini selalu return string bersih (sudah trim) atau null jika kosong.
+ */
+const getCellTextValue = (cell) => {
+    if (!cell || cell.value === null || cell.value === undefined) return null;
+    
+    const val = cell.value;
+    
+    if (typeof val === 'string') return val.trim();
+    if (typeof val === 'number') return String(val);
+    
+    if (val instanceof Date) {
+        return `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}-${String(val.getDate()).padStart(2, '0')}`;
+    }
+    
+    // Hyperlink / object dengan property `text`
+    if (typeof val === 'object' && val.text !== undefined && val.text !== null) {
+        return String(val.text).trim();
+    }
+    
+    // Formula object
+    if (typeof val === 'object' && val.result !== undefined && val.result !== null) {
+        return String(val.result).trim();
+    }
+    
+    // Rich text
+    if (typeof val === 'object' && Array.isArray(val.richText)) {
+        return val.richText.map(part => part.text || '').join('').trim();
+    }
+    
+    return String(val).trim();
+};
+
+/**
+ * HELPER: Normalisasi jenis kelamin ke format baku "Laki-laki" / "Perempuan".
+ * Menerima berbagai variasi: "Laki-Laki", "laki-laki", "L", "laki", "P", "perempuan", dll.
+ * Return null jika tidak bisa dikenali.
+ */
+const normalizeJenisKelamin = (input) => {
+    if (!input) return null;
+    const s = String(input).trim().toLowerCase();
+    if (!s) return null;
+    if (s.includes('laki')) return 'Laki-laki';
+    if (s.includes('peremp') || s === 'p') return 'Perempuan';
+    return null;
+};
+
+/**
  * Ambil daftar semua guru dengan data profil dan role.
  */
 exports.getGuru = async (req, res) => {
     try {
         const [rows] = await db.execute(`
-        SELECT u.id_user, u.nama_lengkap, u.email_sekolah, u.status,
-                g.niy, g.nuptk, g.tempat_lahir, g.tanggal_lahir, g.jenis_kelamin,
-                g.alamat, g.no_telepon, g.foto_path, GROUP_CONCAT(ur.role) AS roles
-        FROM user u
-        INNER JOIN guru g ON u.id_user = g.user_id
-        INNER JOIN user_role ur ON u.id_user = ur.id_user
-        WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')
-        GROUP BY u.id_user 
-        ORDER BY u.nama_lengkap ASC
-    `);
+            SELECT u.id_user, u.nama_lengkap, u.email_sekolah, u.status,
+                    g.niy, g.nuptk, g.tempat_lahir, g.tanggal_lahir, g.jenis_kelamin,
+                    g.alamat, g.no_telepon, g.foto_path, GROUP_CONCAT(ur.role) AS roles
+            FROM user u
+            INNER JOIN guru g ON u.id_user = g.user_id
+            INNER JOIN user_role ur ON u.id_user = ur.id_user
+            WHERE ur.role IN ('guru_kelas', 'guru_bidang_studi')
+            GROUP BY u.id_user 
+            ORDER BY u.nama_lengkap ASC
+        `);
 
         const guruList = rows.map(row => ({
             ...row,
@@ -75,8 +123,8 @@ exports.getGuruById = async (req, res) => {
             }
         });
     } catch (err) {
-    console.error('Error getGuruById:', err);
-    res.status(500).json({ message: 'Gagal mengambil detail guru' });
+        console.error('Error getGuruById:', err);
+        res.status(500).json({ message: 'Gagal mengambil detail guru' });
     }
 };
 
@@ -96,7 +144,9 @@ exports.tambahGuru = async (req, res) => {
         return res.status(400).json({ message: 'Roles harus berupa array' });
     }
 
-    const normalizedRoles = roles.map(role => (typeof role === 'string' ? role.trim().toLowerCase() : '')).filter(Boolean);
+    const normalizedRoles = roles
+        .map(role => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
+        .filter(Boolean);
     const allowedRoles = ['guru_kelas', 'guru_bidang_studi'];
     const validRoles = normalizedRoles.filter(role => allowedRoles.includes(role));
 
@@ -143,7 +193,9 @@ exports.editGuru = async (req, res) => {
         return res.status(400).json({ message: 'Role wajib dipilih minimal satu' });
     }
 
-    const normalizedRoles = roles.map(role => (typeof role === 'string' ? role.trim().toLowerCase() : '')).filter(Boolean);
+    const normalizedRoles = roles
+        .map(role => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
+        .filter(Boolean);
     const allowedRoles = ['guru_kelas', 'guru_bidang_studi'];
     const validRoles = normalizedRoles.filter(role => allowedRoles.includes(role));
 
@@ -191,11 +243,11 @@ exports.importGuru = async (req, res) => {
             return res.status(400).json({ message: 'File Excel kosong atau tidak ada data' });
         }
 
-        // Ambil header dinamis
+        // Ambil header dinamis (pakai helper agar handle hyperlink/rich text di header)
         const headers = [];
         const headerRow = worksheet.getRow(1);
         headerRow.eachCell((cell, colNumber) => {
-            headers[colNumber - 1] = String(cell.value || '').toLowerCase().trim();
+            headers[colNumber - 1] = (getCellTextValue(cell) || '').toLowerCase();
         });
 
         const colMap = {};
@@ -218,15 +270,28 @@ exports.importGuru = async (req, res) => {
         let processedCount = 0;
 
         const roleMapping = {
-            'guru kelas': 'guru_kelas', 'guru_kelas': 'guru_kelas', 'gurukelas': 'guru_kelas',
-            'guru bidang studi': 'guru_bidang_studi', 'guru_bidang_studi': 'guru_bidang_studi',
-            'gurubidangstudi': 'guru_bidang_studi', 'guru mapel': 'guru_bidang_studi', 'guru_mapel': 'guru_bidang_studi'
+            'guru kelas': 'guru_kelas',
+            'guru_kelas': 'guru_kelas',
+            'gurukelas': 'guru_kelas',
+            'wali kelas': 'guru_kelas',
+            'wali_kelas': 'guru_kelas',
+            'guru bidang studi': 'guru_bidang_studi',
+            'guru_bidang_studi': 'guru_bidang_studi',
+            'gurubidangstudi': 'guru_bidang_studi',
+            'guru mapel': 'guru_bidang_studi',
+            'guru_mapel': 'guru_bidang_studi',
         };
 
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
             const rowNum = i;
-            const getCellVal = (colName) => colName in colMap ? row.getCell(colMap[colName] + 1)?.value : null;
+
+            // ✅ Pakai helper untuk semua cell — handle hyperlink, rich text, dll
+            const getCellVal = (colName) => {
+                if (!(colName in colMap)) return null;
+                const cell = row.getCell(colMap[colName] + 1);
+                return getCellTextValue(cell);
+            };
 
             const rowData = {
                 email_sekolah: getCellVal('email_sekolah'),
@@ -239,59 +304,79 @@ exports.importGuru = async (req, res) => {
                 nuptk: getCellVal('nuptk'),
                 alamat: getCellVal('alamat'),
                 no_telepon: getCellVal('no_telepon'),
-                password: getCellVal('password')
+                password: getCellVal('password'),
             };
 
             try {
+                // Skip baris kosong (semua field wajib kosong)
+                if (!rowData.nama_lengkap && !rowData.email_sekolah) continue;
+
                 if (!rowData.email_sekolah || !rowData.nama_lengkap || !rowData.tempat_lahir || !rowData.tanggal_lahir || !rowData.jenis_kelamin) {
-                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap || '-', reason: 'Data tidak lengkap (nama, email, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)' });
+                    skipped.push({
+                        row: rowNum,
+                        nama: rowData.nama_lengkap || '-',
+                        reason: 'Data tidak lengkap (nama, email, tempat lahir, tanggal lahir, jenis kelamin wajib diisi)'
+                    });
                     continue;
                 }
 
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(String(rowData.email_sekolah))) {
-                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: `Format email "${rowData.email_sekolah}" tidak valid` });
+                if (!emailRegex.test(rowData.email_sekolah)) {
+                    skipped.push({
+                        row: rowNum,
+                        nama: rowData.nama_lengkap,
+                        reason: `Format email "${rowData.email_sekolah}" tidak valid`
+                    });
                     continue;
                 }
 
+                // Normalisasi tanggal lahir
                 let tanggal_lahir = rowData.tanggal_lahir;
-                if (tanggal_lahir instanceof Date) {
-                    tanggal_lahir = `${tanggal_lahir.getFullYear()}-${String(tanggal_lahir.getMonth() + 1).padStart(2, '0')}-${String(tanggal_lahir.getDate()).padStart(2, '0')}`;
-                } else if (typeof tanggal_lahir === 'number') {
-                    const date = new Date((tanggal_lahir - 25569) * 86400 * 1000);
-                    if (!isNaN(date.getTime())) {
-                        tanggal_lahir = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                    } else {
-                        skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Format tanggal lahir tidak valid' });
-                        continue;
-                    }
-                } else if (typeof tanggal_lahir === 'string') {
-                    tanggal_lahir = tanggal_lahir.trim();
-                    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
-                        skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Format tanggal lahir harus YYYY-MM-DD' });
-                        continue;
-                    }
-                } else {
-                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: 'Tanggal lahir wajib diisi' });
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+                    skipped.push({
+                        row: rowNum,
+                        nama: rowData.nama_lengkap,
+                        reason: `Format tanggal lahir tidak valid (ditemukan: "${tanggal_lahir}"), harus YYYY-MM-DD`
+                    });
                     continue;
                 }
 
-                if (!['Laki-laki', 'Perempuan'].includes(rowData.jenis_kelamin)) {
-                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${rowData.jenis_kelamin}"` });
+                // ✅ Normalisasi jenis kelamin case-insensitive
+                const jenisKelaminFinal = normalizeJenisKelamin(rowData.jenis_kelamin);
+                if (!jenisKelaminFinal) {
+                    skipped.push({
+                        row: rowNum,
+                        nama: rowData.nama_lengkap,
+                        reason: `Jenis kelamin harus "Laki-laki" atau "Perempuan", ditemukan: "${rowData.jenis_kelamin}"`
+                    });
                     continue;
                 }
 
-                const roles = rowData.roles ? String(rowData.roles).split(',').map(r => r.trim().toLowerCase()) : [];
+                const roles = rowData.roles
+                    ? rowData.roles.split(',').map(r => r.trim().toLowerCase())
+                    : [];
                 const validRoles = roles.map(r => roleMapping[r]).filter(Boolean);
 
                 if (validRoles.length === 0) {
-                    skipped.push({ row: rowNum, nama: rowData.nama_lengkap, reason: `Role tidak valid: "${rowData.roles}". Gunakan "guru kelas" atau "guru bidang studi"` });
+                    skipped.push({
+                        row: rowNum,
+                        nama: rowData.nama_lengkap,
+                        reason: `Role tidak valid: "${rowData.roles}". Gunakan "guru kelas" atau "guru bidang studi"`
+                    });
                     continue;
                 }
 
-                const [existingEmail] = await connection.execute('SELECT id_user FROM user WHERE email_sekolah = ?', [String(rowData.email_sekolah).trim()]);
-                const [existingNiy] = rowData.niy ? await connection.execute('SELECT id_guru FROM guru WHERE niy = ?', [String(rowData.niy).trim()]) : [[]];
-                const [existingNuptk] = rowData.nuptk ? await connection.execute('SELECT id_guru FROM guru WHERE nuptk = ?', [String(rowData.nuptk).trim()]) : [[]];
+                // Cek duplikasi
+                const [existingEmail] = await connection.execute(
+                    'SELECT id_user FROM user WHERE email_sekolah = ?',
+                    [rowData.email_sekolah]
+                );
+                const [existingNiy] = rowData.niy
+                    ? await connection.execute('SELECT id_guru FROM guru WHERE niy = ?', [rowData.niy])
+                    : [[]];
+                const [existingNuptk] = rowData.nuptk
+                    ? await connection.execute('SELECT id_guru FROM guru WHERE nuptk = ?', [rowData.nuptk])
+                    : [[]];
 
                 if (existingEmail.length > 0 || existingNiy.length > 0 || existingNuptk.length > 0) {
                     let reason = 'Data duplikat';
@@ -303,22 +388,30 @@ exports.importGuru = async (req, res) => {
                 }
 
                 const password = rowData.password || 'sekolah123';
-                const userData = { email_sekolah: String(rowData.email_sekolah).trim(), password, nama_lengkap: String(rowData.nama_lengkap).trim() };
+                const userData = {
+                    email_sekolah: rowData.email_sekolah,
+                    password,
+                    nama_lengkap: rowData.nama_lengkap,
+                };
                 const guruData = {
-                    niy: rowData.niy ? String(rowData.niy).trim() : null,
-                    nuptk: rowData.nuptk ? String(rowData.nuptk).trim() : null,
-                    tempat_lahir: String(rowData.tempat_lahir).trim(),
+                    niy: rowData.niy || null,
+                    nuptk: rowData.nuptk || null,
+                    tempat_lahir: rowData.tempat_lahir,
                     tanggal_lahir,
-                    jenis_kelamin: rowData.jenis_kelamin,
-                    alamat: rowData.alamat ? String(rowData.alamat).trim() : null,
-                    no_telepon: rowData.no_telepon ? String(rowData.no_telepon).trim() : null
+                    jenis_kelamin: jenisKelaminFinal,
+                    alamat: rowData.alamat || null,
+                    no_telepon: rowData.no_telepon || null,
                 };
 
                 await guruModel.createGuru(userData, guruData, validRoles, connection);
                 processedCount++;
 
             } catch (rowErr) {
-                skipped.push({ row: rowNum, nama: rowData.nama_lengkap || '-', reason: rowErr.message || 'Gagal memproses data' });
+                skipped.push({
+                    row: rowNum,
+                    nama: rowData.nama_lengkap || '-',
+                    reason: rowErr.message || 'Gagal memproses data'
+                });
             }
         }
 
@@ -327,9 +420,11 @@ exports.importGuru = async (req, res) => {
 
         res.json({
             success: true,
-            message: skipped.length > 0 ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati` : `Import berhasil: ${processedCount} data guru ditambahkan`,
+            message: skipped.length > 0
+                ? `Import selesai: ${processedCount} berhasil, ${skipped.length} dilewati`
+                : `Import berhasil: ${processedCount} data guru ditambahkan`,
             total: processedCount,
-            skipped
+            skipped,
         });
 
     } catch (err) {
