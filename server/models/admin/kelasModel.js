@@ -29,6 +29,7 @@ const kelasModel = {
       );
       return rows;
     } catch (err) {
+      console.error('DB Error kelasModel.getAll:', err.message);
       throw new Error('Gagal mengambil data kelas');
     }
   },
@@ -44,6 +45,7 @@ const kelasModel = {
       );
       return rows[0] || null;
     } catch (err) {
+      console.error('DB Error kelasModel.getById:', err.message);
       throw new Error('Gagal mengambil detail kelas');
     }
   },
@@ -53,8 +55,12 @@ const kelasModel = {
    */
   async getByIdWithDetails(id, tahunAjaranIdInduk) {
     try {
-      const [rows] = await db.execute(`
-        SELECT 
+      if (!id) throw new Error('id_kelas wajib diisi');
+      if (!tahunAjaranIdInduk) throw new Error('tahunAjaranIdInduk wajib diisi');
+
+      const [rows] = await db.execute(
+        `
+        SELECT
           k.id_kelas,
           k.nama_kelas,
           k.fase,
@@ -65,7 +71,8 @@ const kelasModel = {
 
           COALESCE(jumlah.total_siswa, 0) AS jumlah_siswa,
 
-          ta_info.status AS status_tahun_ajaran,
+          -- status aktif dideteksi dengan flag angka, bukan MAX(status)
+          CASE WHEN ta_info.ada_aktif = 1 THEN 'aktif' ELSE 'nonaktif' END AS status_tahun_ajaran,
           ta_info.tahun_ajaran AS tahun_ajaran
 
         FROM kelas k
@@ -98,7 +105,7 @@ const kelasModel = {
         LEFT JOIN (
           SELECT
             id_tahun_ajaran_induk,
-            MAX(status) AS status,
+            MAX(CASE WHEN status = 'aktif' THEN 1 ELSE 0 END) AS ada_aktif,
             MAX(tahun_ajaran) AS tahun_ajaran
           FROM tahun_ajaran
           GROUP BY id_tahun_ajaran_induk
@@ -113,6 +120,8 @@ const kelasModel = {
 
       return rows[0] || null;
     } catch (err) {
+      console.error('DB Error kelasModel.getByIdWithDetails:', err.message);
+      if (err.sql) console.error('SQL Query:', err.sql);
       throw new Error('Gagal mengambil detail lengkap kelas');
     }
   },
@@ -148,7 +157,8 @@ const kelasModel = {
 
       return result.insertId;
     } catch (err) {
-      throw err; // Lempar error validasi atau error database
+      console.error('DB Error kelasModel.create:', err.message);
+      throw err;
     }
   },
 
@@ -183,6 +193,7 @@ const kelasModel = {
 
       return result.affectedRows > 0;
     } catch (err) {
+      console.error('DB Error kelasModel.update:', err.message);
       throw err;
     }
   },
@@ -203,6 +214,7 @@ const kelasModel = {
 
       return rows;
     } catch (err) {
+      console.error('DB Error kelasModel.getByTahunAjaran:', err.message);
       throw new Error('Gagal mengambil data kelas per tahun ajaran');
     }
   }
