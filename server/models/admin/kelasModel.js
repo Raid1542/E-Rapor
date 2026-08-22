@@ -27,6 +27,7 @@ const kelasModel = {
       const [rows] = await db.execute('SELECT * FROM kelas ORDER BY nama_kelas ASC');
       return rows;
     } catch (err) {
+      console.error('DB Error kelasModel.getAll:', err.message);
       throw new Error('Gagal mengambil data kelas');
     }
   },
@@ -39,44 +40,85 @@ const kelasModel = {
       const [rows] = await db.execute('SELECT * FROM kelas WHERE id_kelas = ?', [id]);
       return rows[0] || null;
     } catch (err) {
+      console.error('DB Error kelasModel.getById:', err.message);
       throw new Error('Gagal mengambil detail kelas');
     }
   },
 
   /**
    * Ambil kelas dengan detail lengkap (wali kelas, jumlah siswa, status tahun ajaran).
+   * Perbaikan: Memecah JOIN dan COUNT ke dalam subquery (derived table) 
+   * agar tidak bentrok dengan aturan GROUP BY di TiDB.
    */
   async getByIdWithDetails(id, tahunAjaranIdInduk) {
     try {
-      const [rows] = await db.execute(`
-        SELECT 
+      if (!id) throw new Error('id_kelas wajib diisi');
+      if (!tahunAjaranIdInduk) throw new Error('tahunAjaranIdInduk wajib diisi');
+
+      const [rows] = await db.execute(
+        `
+        SELECT
           k.id_kelas,
           k.nama_kelas,
           k.fase,
           k.tahun_ajaran_id,
+
           COALESCE(u.nama_lengkap, '-') AS wali_kelas,
-          COALESCE(gk.user_id, NULL) AS wali_kelas_id,
-          COUNT(DISTINCT sk.siswa_id) AS jumlah_siswa,
-          ta.status AS status_tahun_ajaran,
-          ta.tahun_ajaran
+          wali.user_id AS wali_kelas_id,
+
+          COALESCE(jumlah.total_siswa, 0) AS jumlah_siswa,
+
+          ta_info.status AS status_tahun_ajaran,
+          ta_info.tahun_ajaran AS tahun_ajaran
+
         FROM kelas k
-        LEFT JOIN guru_kelas gk ON k.id_kelas = gk.kelas_id 
-          AND gk.tahun_ajaran_id IN (
-            SELECT id_tahun_ajaran 
-            FROM tahun_ajaran 
-            WHERE id_tahun_ajaran_induk = ?
-          )
-        LEFT JOIN user u ON gk.user_id = u.id_user
-        LEFT JOIN siswa_kelas sk ON k.id_kelas = sk.kelas_id 
-          AND sk.id_tahun_ajaran_induk = ?
-        LEFT JOIN tahun_ajaran ta ON k.tahun_ajaran_id = ta.id_tahun_ajaran_induk
+
+        LEFT JOIN (
+          SELECT
+            gk.kelas_id,
+            MAX(gk.user_id) AS user_id
+          FROM guru_kelas gk
+          INNER JOIN tahun_ajaran ta_gk
+            ON gk.tahun_ajaran_id = ta_gk.id_tahun_ajaran
+          WHERE ta_gk.id_tahun_ajaran_induk = ?
+          GROUP BY gk.kelas_id
+        ) wali
+          ON k.id_kelas = wali.kelas_id
+
+        LEFT JOIN user u
+          ON wali.user_id = u.id_user
+
+        LEFT JOIN (
+          SELECT
+            kelas_id,
+            COUNT(DISTINCT siswa_id) AS total_siswa
+          FROM siswa_kelas
+          WHERE id_tahun_ajaran_induk = ?
+          GROUP BY kelas_id
+        ) jumlah
+          ON k.id_kelas = jumlah.kelas_id
+
+        LEFT JOIN (
+          SELECT
+            id_tahun_ajaran_induk,
+            MAX(status) AS status,
+            MAX(tahun_ajaran) AS tahun_ajaran
+          FROM tahun_ajaran
+          GROUP BY id_tahun_ajaran_induk
+        ) ta_info
+          ON k.tahun_ajaran_id = ta_info.id_tahun_ajaran_induk
+
         WHERE k.id_kelas = ?
-        GROUP BY k.id_kelas, k.nama_kelas, k.fase, k.tahun_ajaran_id, 
-                  u.nama_lengkap, gk.user_id, ta.status, ta.tahun_ajaran
-      `, [tahunAjaranIdInduk, tahunAjaranIdInduk, id]);
+        LIMIT 1
+        `,
+        [tahunAjaranIdInduk, tahunAjaranIdInduk, id]
+      );
 
       return rows[0] || null;
     } catch (err) {
+      // ✅ BUKA error asli dari database supaya kelihatan di log Render
+      console.error('DB Error kelasModel.getByIdWithDetails:', err.message);
+      if (err.sql) console.error('SQL Query:', err.sql);
       throw new Error('Gagal mengambil detail lengkap kelas');
     }
   },
@@ -96,7 +138,6 @@ const kelasModel = {
         throw new Error(`Fase tidak valid. Pilih dari: ${VALID_FASE.join(', ')}`);
       }
 
-      // Cek duplikasi berdasarkan tahun_ajaran_induk
       const [existing] = await db.execute(
         'SELECT id_kelas FROM kelas WHERE LOWER(nama_kelas) = LOWER(?) AND tahun_ajaran_id = ?',
         [nama_kelas.trim(), tahun_ajaran_id]
@@ -113,7 +154,8 @@ const kelasModel = {
       
       return result.insertId;
     } catch (err) {
-      throw err; // Lempar error validasi atau error database
+      console.error('DB Error kelasModel.create:', err.message);
+      throw err; 
     }
   },
 
@@ -132,7 +174,6 @@ const kelasModel = {
         throw new Error(`Fase tidak valid. Pilih dari: ${VALID_FASE.join(', ')}`);
       }
 
-      // Cek duplikasi berdasarkan tahun_ajaran_induk, kecualikan ID saat ini
       const [existing] = await db.execute(
         'SELECT id_kelas FROM kelas WHERE LOWER(nama_kelas) = LOWER(?) AND tahun_ajaran_id = ? AND id_kelas != ?',
         [nama_kelas.trim(), tahun_ajaran_id, id]
@@ -149,6 +190,7 @@ const kelasModel = {
       
       return result.affectedRows > 0;
     } catch (err) {
+      console.error('DB Error kelasModel.update:', err.message);
       throw err;
     }
   },
@@ -169,6 +211,7 @@ const kelasModel = {
       
       return rows;
     } catch (err) {
+      console.error('DB Error kelasModel.getByTahunAjaran:', err.message);
       throw new Error('Gagal mengambil data kelas per tahun ajaran');
     }
   }
