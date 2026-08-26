@@ -9,6 +9,9 @@
 const db = require('../../config/db');
 const ExcelJS = require('exceljs');
 
+// ====== BATAS KARAKTER DESKRIPSI EKSKUL (sinkron dengan frontend) ======
+const MAX_CHAR_EKSKUL = 100;
+
 /**
  * Hitung kesamaan string menggunakan Levenshtein Distance.
  */
@@ -154,6 +157,12 @@ exports.updateEkskulSiswa = async (req, res) => {
             }
             if (!item.deskripsi?.trim()) {
                 return res.status(400).json({ success: false, message: `Deskripsi untuk ekskul ke-${i + 1} wajib diisi` });
+            }
+            if (item.deskripsi.trim().length > MAX_CHAR_EKSKUL) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `Deskripsi untuk ekskul ke-${i + 1} maksimal ${MAX_CHAR_EKSKUL} karakter (saat ini: ${item.deskripsi.trim().length}).` 
+                });
             }
         }
 
@@ -661,6 +670,10 @@ exports.importEkskulExcel = async (req, res) => {
                 const deskripsi = idxDeskripsi >= 0 ? String(row[idxDeskripsi] || '').trim() : '';
                 if (!deskripsi) {
                     errors.push({ row: i + 1, message: `Baris ${i + 1}: Deskripsi untuk ekskul "${namaEkskul}" wajib diisi` });
+                    continue;
+                }
+                if (deskripsi.length > MAX_CHAR_EKSKUL) {
+                    errors.push({ row: i + 1, message: `Baris ${i + 1}: Deskripsi untuk ekskul "${namaEkskul}" maksimal ${MAX_CHAR_EKSKUL} karakter (saat ini: ${deskripsi.length})` });
                     continue;
                 }
 

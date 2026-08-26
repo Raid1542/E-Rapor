@@ -5,6 +5,7 @@
  *         Deskripsi rapor dihitung real-time dari konfigurasi_nilai_rapor.
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 10 Juli 2026
+ * Update: Safety Net truncateText untuk data historis yang melebihi batas karakter
  */
 
 const db = require('../../config/db');
@@ -14,23 +15,68 @@ const archiver = require('archiver');
 const path = require('path');
 const fs = require('fs');
 
-// Konstanta path template rapor
-const TEMPLATE_DIR = path.join(__dirname, '..', '..', 'templates', 'rapor');
+// ==========================================================================
+// KONSTANTA PATH & KONFIGURASI
+// ==========================================================================
 
-// Konstanta kompresi ZIP
+const TEMPLATE_DIR = path.join(__dirname, '..', '..', 'templates', 'rapor');
 const ZIP_COMPRESSION_LEVEL = 9;
 
-// Antrian sederhana untuk mencegah race condition saat render DOCX
+// ====== BATAS KARAKTER DESKRIPSI (sinkron dengan frontend & controller lain) ======
+// Aturan: Akademik 190 • Kokurikuler 150 • Rata-rata 200 • Wali 300 • Ekskul 100
+const MAX_CHAR = {
+    akademik: 190,
+    kokurikuler: 150,
+    rataRata: 200,
+    wali: 300,
+    ekskul: 100
+};
+
+// ==========================================================================
+// ANTRIAN RENDER (mencegah race condition DOCX)
+// ==========================================================================
+
 let renderQueue = Promise.resolve();
 
 function runSequentially(fn) {
     const result = renderQueue.then(() => fn());
-    renderQueue = result.then(
-        () => { },
-        () => { }
-    );
+    renderQueue = result.then(() => {}, () => {});
     return result;
 }
+
+// ==========================================================================
+// HELPER: SAFETY NET TRUNCATE TEXT
+// ==========================================================================
+
+/**
+ * Memotong teks dengan aman di batas kata terdekat.
+ * Tidak memotong kata di tengah, menambahkan "..." jika teks dipotong.
+ * Handle null/undefined/empty string dengan aman.
+ *
+ * @param {string|null|undefined} text - Teks yang akan dipotong
+ * @param {number} maxChar - Batas maksimum karakter
+ * @returns {string} Teks yang sudah dipotong dengan aman
+ */
+function truncateText(text, maxChar) {
+    if (!text || typeof text !== 'string') return '–';
+
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return '–';
+    if (trimmed.length <= maxChar) return trimmed;
+
+    let truncated = trimmed.substring(0, maxChar);
+
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > maxChar * 0.7) {
+        truncated = truncated.substring(0, lastSpace);
+    }
+
+    return truncated.trim() + '...';
+}
+
+// ==========================================================================
+// HELPER: SANITASI & FORMAT
+// ==========================================================================
 
 /**
  * Sanitasi string untuk nama file (ganti "/" dengan "-" dan hapus karakter ilegal).
@@ -66,6 +112,10 @@ const formatTanggalIndonesia = (dateString) => {
     }).format(new Date(dateString));
 };
 
+// ==========================================================================
+// HELPER: RENDER DOCX
+// ==========================================================================
+
 /**
  * Render 1 dokumen DOCX dari template + data (dipanggil lewat antrian).
  */
@@ -82,6 +132,10 @@ function renderDocx(templatePath, data) {
     return doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
+// ==========================================================================
+// ROUTE: GENERATE RAPOR PER SISWA (DOCX)
+// ==========================================================================
+
 /**
  * GET /generate-rapor/:siswaId/:jenis/:semester - Generate laporan rapor DOCX untuk satu siswa.
  */
@@ -90,7 +144,6 @@ exports.generateRaporPDF = async (req, res) => {
         const { siswaId, jenis, semester, tahunAjaranId } = req.raporParams || {};
         const userId = req.user.id;
 
-        // Validasi parameter wajib
         if (!siswaId || !jenis || !semester) {
             return res.status(400).json({ success: false, message: 'Parameter tidak lengkap' });
         }
@@ -102,13 +155,11 @@ exports.generateRaporPDF = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Data tahun ajaran tidak ditemukan' });
         }
 
-        // Normalisasi jenis penilaian
         const jenisNorm = jenis.trim().toUpperCase();
         if (!['PTS', 'PAS'].includes(jenisNorm)) {
             return res.status(400).json({ success: false, message: 'Jenis laporan harus PTS atau PAS' });
         }
 
-        // Normalisasi semester
         const rawSemester = semester.trim();
         let semesterNorm = '';
         if (rawSemester.toLowerCase() === 'ganjil') {
@@ -119,7 +170,6 @@ exports.generateRaporPDF = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Semester harus Ganjil atau Genap' });
         }
 
-        // Ambil data tahun ajaran
         let idTahunAjaran;
         let tahunAjaran;
         let semesterDb;
@@ -164,7 +214,6 @@ exports.generateRaporPDF = async (req, res) => {
             tanggalPembagianPts = taAktif.tanggal_pembagian_pts;
             tanggalPembagianPas = taAktif.tanggal_pembagian_pas;
 
-            // Validasi akses untuk non-admin
             if (req.user.role !== 'admin') {
                 if (jenisNorm === 'PTS' && taAktif.status_pts === 'nonaktif') {
                     return res.status(403).json({ success: false, message: 'Rapor PTS belum dibuka oleh admin' });
@@ -179,7 +228,6 @@ exports.generateRaporPDF = async (req, res) => {
             return res.status(500).json({ success: false, message: 'ID tahun ajaran tidak valid' });
         }
 
-        // Validasi kesesuaian semester
         const normalizedDbSem = (semesterDb || '').trim().toLowerCase() === 'ganjil'
             ? 'Ganjil'
             : (semesterDb || '').trim().toLowerCase() === 'genap'
@@ -193,7 +241,6 @@ exports.generateRaporPDF = async (req, res) => {
             });
         }
 
-        // Validasi kelas siswa
         const [kelasRows] = await db.execute(
             `SELECT k.id_kelas, k.nama_kelas 
         FROM guru_kelas gk 
@@ -214,7 +261,6 @@ exports.generateRaporPDF = async (req, res) => {
             return res.status(500).json({ success: false, message: 'ID kelas tidak valid' });
         }
 
-        // Ambil data siswa
         const [siswaRows] = await db.execute(
             `SELECT s.nama_lengkap, s.nis, s.nisn 
         FROM siswa s 
@@ -231,7 +277,6 @@ exports.generateRaporPDF = async (req, res) => {
         const nis = siswaRows[0].nis ?? 'NIS';
         const nisn = siswaRows[0].nisn ?? '–';
 
-        // Generate data rapor dari database
         const raporData = await generateRaporData(
             siswaId,
             jenisNorm,
@@ -247,7 +292,6 @@ exports.generateRaporPDF = async (req, res) => {
             tanggalPembagianPas
         );
 
-        // Pilih template berdasarkan jenis dan semester
         const templateFile = jenisNorm === 'PTS'
             ? (semesterNorm === 'Ganjil' ? 'template_pts_ganjil.docx' : 'template_pts_genap.docx')
             : (semesterNorm === 'Ganjil' ? 'template_pas_ganjil.docx' : 'template_pas_genap.docx');
@@ -258,10 +302,8 @@ exports.generateRaporPDF = async (req, res) => {
             return res.status(404).json({ success: false, message: `Template ${templateFile} tidak ditemukan` });
         }
 
-        // Render lewat antrian untuk mencegah race condition
         const buf = await runSequentially(() => renderDocx(templatePath, raporData));
 
-        // Format nama file rapor
         const cleanTahunAjaran = sanitizeFileName(tahunAjaran || '');
         const cleanNama = sanitizeNameForFile(namaLengkap);
         const cleanNisn = (nisn || 'NISN').toString().replace(/[^0-9]/g, '');
@@ -276,6 +318,10 @@ exports.generateRaporPDF = async (req, res) => {
     }
 };
 
+// ==========================================================================
+// ROUTE: GENERATE RAPOR BULK (ZIP)
+// ==========================================================================
+
 /**
  * GET /generate-rapor-bulk/:jenis/:semester - Generate semua rapor siswa dalam satu file ZIP.
  */
@@ -286,12 +332,10 @@ exports.generateRaporBulk = async (req, res) => {
         const tahunAjaranIndukId = req.idTahunAjaranInduk;
         const semesterId = req.idSemesterAktif;
 
-        // Validasi parameter wajib
         if (!jenis || !semester || !tahunAjaranIndukId || !semesterId) {
             return res.status(400).json({ success: false, message: 'Parameter tidak lengkap' });
         }
 
-        // Normalisasi jenis penilaian
         const jenisNorm = jenis.trim().toUpperCase();
         if (!['PTS', 'PAS'].includes(jenisNorm)) {
             return res.status(400).json({ success: false, message: 'Jenis harus PTS atau PAS' });
@@ -299,7 +343,6 @@ exports.generateRaporBulk = async (req, res) => {
 
         const semesterNorm = semester.trim().toLowerCase() === 'ganjil' ? 'Ganjil' : 'Genap';
 
-        // Ambil data tahun ajaran aktif
         const [taRows] = await db.execute(
             `SELECT ta.id_tahun_ajaran, tai.tahun_ajaran, ta.semester,
         ta.tanggal_pembagian_pts, ta.tanggal_pembagian_pas,
@@ -319,7 +362,6 @@ exports.generateRaporBulk = async (req, res) => {
         const tanggalPembagianPts = taAktif.tanggal_pembagian_pts;
         const tanggalPembagianPas = taAktif.tanggal_pembagian_pas;
 
-        // Validasi akses untuk non-admin
         if (req.user.role !== 'admin') {
             if (jenisNorm === 'PTS' && taAktif.status_pts === 'nonaktif') {
                 return res.status(403).json({ success: false, message: 'Rapor PTS belum dibuka oleh admin' });
@@ -329,7 +371,6 @@ exports.generateRaporBulk = async (req, res) => {
             }
         }
 
-        // Ambil data kelas guru
         const [kelasRows] = await db.execute(
             `SELECT gk.kelas_id, k.nama_kelas 
         FROM guru_kelas gk 
@@ -345,7 +386,6 @@ exports.generateRaporBulk = async (req, res) => {
         const kelasId = kelasRows[0].kelas_id;
         const namaKelas = kelasRows[0].nama_kelas;
 
-        // Ambil semua siswa aktif di kelas
         const [siswaRows] = await db.execute(
             `SELECT s.id_siswa, s.nama_lengkap, s.nis, s.nisn 
         FROM siswa s 
@@ -359,7 +399,6 @@ exports.generateRaporBulk = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Tidak ada siswa di kelas ini' });
         }
 
-        // Format nama file ZIP
         const cleanTahunAjaran = sanitizeFileName(tahunAjaran || '');
         const cleanKelas = sanitizeFileName(namaKelas || 'Kelas');
         const zipFileName = `Rapor_${jenisNorm}_${semesterNorm}_${cleanTahunAjaran}_${cleanKelas}.zip`;
@@ -367,7 +406,6 @@ exports.generateRaporBulk = async (req, res) => {
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
 
-        // Buat ZIP archive
         const archive = archiver('zip', {
             zlib: { level: ZIP_COMPRESSION_LEVEL }
         });
@@ -380,7 +418,6 @@ exports.generateRaporBulk = async (req, res) => {
 
         archive.pipe(res);
 
-        // Pilih template berdasarkan jenis dan semester
         const templateFile = jenisNorm === 'PTS'
             ? (semesterNorm === 'Ganjil' ? 'template_pts_ganjil.docx' : 'template_pts_genap.docx')
             : (semesterNorm === 'Ganjil' ? 'template_pas_ganjil.docx' : 'template_pas_genap.docx');
@@ -391,7 +428,6 @@ exports.generateRaporBulk = async (req, res) => {
             return res.status(404).json({ success: false, message: `Template ${templateFile} tidak ditemukan` });
         }
 
-        // Generate rapor untuk setiap siswa
         let successCount = 0;
 
         for (const siswa of siswaRows) {
@@ -411,10 +447,8 @@ exports.generateRaporBulk = async (req, res) => {
                     tanggalPembagianPas
                 );
 
-                // Render lewat antrian
                 const buf = await runSequentially(() => renderDocx(templatePath, raporData));
 
-                // Format nama file DOCX dalam ZIP
                 const cleanNisn = (siswa.nisn || String(siswa.id_siswa)).replace(/[^0-9]/g, '');
                 const cleanNama = sanitizeNameForFile(siswa.nama_lengkap);
                 const studentFileName = `Rapor_${jenisNorm}_${semesterNorm}_${cleanTahunAjaran}_${cleanNama}_${cleanNisn}.docx`;
@@ -422,7 +456,6 @@ exports.generateRaporBulk = async (req, res) => {
                 archive.append(buf, { name: studentFileName });
                 successCount++;
             } catch (err) {
-                // Lewati error per siswa agar proses bulk tidak terhenti total
                 continue;
             }
         }
@@ -435,6 +468,10 @@ exports.generateRaporBulk = async (req, res) => {
         }
     }
 };
+
+// ==========================================================================
+// HELPER: GENERATE DATA RAPOR DARI DATABASE
+// ==========================================================================
 
 /**
  * Helper function untuk generate data rapor dari database.
@@ -701,7 +738,19 @@ async function generateRaporData(
         }
     }
 
-    // Return data untuk template rapor
+    // ── SAFETY NET: Terapkan truncateText ke semua field deskripsi ──
+    // Potong teks agar tidak merusak layout tabel Word jika data lama kepanjangan
+
+    // 1. Akademik: truncate deskripsi_mapel (batas 190 karakter)
+    const semuaMapelSafe = semuaMapel.map(m => ({
+        ...m,
+        deskripsi_mapel: truncateText(m.deskripsi_mapel, MAX_CHAR.akademik)
+    }));
+
+    const daftarMapel1Safe = semuaMapelSafe.slice(0, 7);
+    const daftarMapel2Safe = semuaMapelSafe.slice(7);
+
+    // Return data untuk template rapor (semua deskripsi sudah dipotong dengan aman)
     return {
         nama: namaLengkap,
         kelas: namaKelas,
@@ -713,34 +762,38 @@ async function generateRaporData(
         namagurukelas: namaGuruKelas,
         tanggalraporpts: tanggalSah,
         tanggalraporpas: tanggalSah,
-        semuaMapel,
-        daftarMapel1,
-        daftarMapel2,
+        semuaMapel: semuaMapelSafe,
+        daftarMapel1: daftarMapel1Safe,
+        daftarMapel2: daftarMapel2Safe,
         ratarata: rataRataDisplay,
-        ckratarata,
+        // 2. Rata-rata: truncate deskripsi rata-rata (batas 200 karakter)
+        ckratarata: truncateText(ckratarata, MAX_CHAR.rataRata),
         my,
         gmy,
-        dmy,
+        // 3. Kokurikuler: truncate semua deskripsi kokurikuler (batas 150 karakter)
+        dmy: truncateText(dmy, MAX_CHAR.kokurikuler),
         bpi,
         gbpi,
-        dbpi,
+        dbpi: truncateText(dbpi, MAX_CHAR.kokurikuler),
         li,
         gli,
-        dli,
+        dli: truncateText(dli, MAX_CHAR.kokurikuler),
         proyek,
         gproyek,
-        dproyek,
+        dproyek: truncateText(dproyek, MAX_CHAR.kokurikuler),
         namaproyek: namaProyek,
         s,
         i,
         a,
         ekskul1,
-        dekskul1,
+        // 4. Ekskul: truncate deskripsi ekskul (batas 100 karakter)
+        dekskul1: truncateText(dekskul1, MAX_CHAR.ekskul),
         ekskul2,
-        dekskul2,
+        dekskul2: truncateText(dekskul2, MAX_CHAR.ekskul),
         ekskul3,
-        dekskul3,
-        cttwalikelas,
+        dekskul3: truncateText(dekskul3, MAX_CHAR.ekskul),
+        // 5. Catatan Wali Kelas: truncate (batas 300 karakter)
+        cttwalikelas: truncateText(cttwalikelas, MAX_CHAR.wali),
         tingkat,
         naikkelas: naikKelas
     };

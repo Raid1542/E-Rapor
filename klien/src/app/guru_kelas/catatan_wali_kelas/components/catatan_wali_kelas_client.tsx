@@ -2,13 +2,37 @@
 import { useState, useEffect, ChangeEvent, ReactNode, useCallback, useRef } from 'react';
 import {
     Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut,
-    Save, School, GraduationCap, Lock, Upload, Download, Info, ChevronLeft, ChevronRight,
+    Save, School, GraduationCap, Lock, Upload, Download, Info, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ====== KONSTANTA API ======
 const API = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
+
+// ====== BATAS KARAKTER CATATAN WALI (sinkron dengan raporController.js) ======
+// Aturan: Catatan Wali Kelas = 300 karakter (sel besar di halaman 4 rapor)
+const MAX_CHAR_WALI = 300;
+
+// ====== COUNTER KARAKTER (info real-time untuk guru) ======
+const CharCounter = ({ current, max }: { current: number; max: number }) => {
+    const isOver = current > max;
+    const isNear = current > max * 0.85;
+    return (
+        <div className="flex items-center gap-1.5 mt-1 text-[10px] font-semibold">
+            <span className={isOver ? 'text-red-600' : isNear ? 'text-orange-600' : 'text-gray-400'}>
+                {current}/{max} karakter
+            </span>
+            {isOver && (
+                <span className="text-red-600 flex items-center gap-0.5">
+                    <AlertTriangle size={10} />
+                    Akan dipotong jadi {max} karakter di rapor
+                </span>
+            )}
+            {!isOver && isNear && <span className="text-orange-600">Mendekati batas</span>}
+        </div>
+    );
+};
 
 // ====== HELPER: Parse Error dari Backend ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
@@ -448,6 +472,15 @@ export default function CatatanWaliClient() {
         }
         if (trimmedCatatan.length < 20) {
             showModal({ type: 'error', title: 'Catatan Terlalu Pendek', message: `Catatan wali kelas minimal 20 karakter.\nSaat ini: ${trimmedCatatan.length} karakter.` });
+            return;
+        }
+        // Validasi batas maksimal karakter Catatan Wali (300)
+        if (trimmedCatatan.length > MAX_CHAR_WALI) {
+            showModal({
+                type: 'warning',
+                title: 'Catatan Terlalu Panjang',
+                message: `Catatan wali kelas melebihi batas maksimal ${MAX_CHAR_WALI} karakter (saat ini: ${trimmedCatatan.length}).\n\nSilakan persingkat catatan terlebih dahulu agar muat di rapor.`
+            });
             return;
         }
         if (isPASGenap && editData.naik_tingkat !== 'ya' && editData.naik_tingkat !== 'tidak') {
@@ -917,9 +950,14 @@ export default function CatatanWaliClient() {
                                 <label className={labelCls} style={labelColor}>Catatan Wali Kelas <span className="text-red-500">*</span></label>
                                 <textarea name="catatan_wali_kelas" value={editData.catatan_wali_kelas} onChange={handleChange} rows={6} placeholder="Tuliskan catatan perkembangan siswa ini (minimal 20 karakter)..." className={inputCls} />
                                 <div className="flex items-center justify-between mt-2">
-                                    <p className="text-xs font-medium" style={{ color: editData.catatan_wali_kelas.trim().length < 20 ? '#dc2626' : '#7a3a0a' }}>{editData.catatan_wali_kelas.trim().length} karakter (minimal 20)</p>
-                                    {editData.catatan_wali_kelas.trim().length < 20 && editData.catatan_wali_kelas.trim().length > 0 && (<p className="text-xs text-red-600 font-semibold">Kurang {20 - editData.catatan_wali_kelas.trim().length} karakter lagi</p>)}
+                                    <p className="text-xs font-medium" style={{ color: editData.catatan_wali_kelas.trim().length < 20 ? '#dc2626' : '#7a3a0a' }}>
+                                        Minimal: {editData.catatan_wali_kelas.trim().length}/20 karakter
+                                        {editData.catatan_wali_kelas.trim().length < 20 && editData.catatan_wali_kelas.trim().length > 0 && (
+                                            <span className="text-red-600 font-semibold ml-2">Kurang {20 - editData.catatan_wali_kelas.trim().length} karakter lagi</span>
+                                        )}
+                                    </p>
                                 </div>
+                                <CharCounter current={(editData.catatan_wali_kelas || '').length} max={MAX_CHAR_WALI} />
                             </div>
                             {isPASGenap ? (
                                 <div>
@@ -936,12 +974,25 @@ export default function CatatanWaliClient() {
                                     <p className="text-xs font-medium leading-relaxed" style={{ color: '#1e40af' }}>Keputusan naik tingkat hanya diisi pada periode <strong>PAS Semester Genap</strong>.</p>
                                 </div>
                             )}
-                            <div className="flex justify-end gap-3 pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
-                                <ActionButton variant="neutral" onClick={closeEdit}>Batal</ActionButton>
-                                <ActionButton variant="primary" disabled={isSaving} onClick={openConfirmModal}>
-                                    {isSaving ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} /> Simpan Perubahan</>)}
-                                </ActionButton>
-                            </div>
+                            {(() => {
+                                const isOverLimit = (editData.catatan_wali_kelas || '').trim().length > MAX_CHAR_WALI;
+                                return (
+                                    <div className="flex flex-col sm:flex-row justify-end items-center gap-3 pt-4 border-t" style={{ borderColor: '#fde0c8' }}>
+                                        {isOverLimit && (
+                                            <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 mr-auto">
+                                                <AlertTriangle size={11} />
+                                                Catatan melebihi {MAX_CHAR_WALI} karakter — persingkat dulu
+                                            </p>
+                                        )}
+                                        <div className="flex gap-3">
+                                            <ActionButton variant="neutral" onClick={closeEdit}>Batal</ActionButton>
+                                            <ActionButton variant="primary" disabled={isSaving || isOverLimit} onClick={openConfirmModal}>
+                                                {isSaving ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} /> Simpan Perubahan</>)}
+                                            </ActionButton>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

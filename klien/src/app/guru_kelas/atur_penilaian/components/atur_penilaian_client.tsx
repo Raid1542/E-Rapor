@@ -13,8 +13,39 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 const API = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
 const ASPEK_MUTABAAH_ID = 5;
 
+// ====== BATAS KARAKTER DESKRIPSI (sinkron dengan raporController.js) ======
+// Aturan: Akademik 190 • Kokurikuler 150 • Rata-rata 200 • Wali 300 • Ekskul 100
+const MAX_CHAR = {
+    akademik: 190,
+    kokurikuler: 150,
+    rataRata: 200,
+};
+
 // ====== HELPER ======
 const getJenisParam = (jenis: 'PTS' | 'PAS' | null): string => jenis ? `jenis=${jenis}` : '';
+
+// ====== COUNTER KARAKTER (info real-time untuk guru) ======
+const CharCounter = ({ current, max }: { current: number; max: number }) => {
+    const isOver = current > max;
+    const isNear = current > max * 0.85;
+    return (
+        <div className="flex items-center gap-1.5 mt-1 text-[10px] font-semibold">
+            <span className={isOver ? 'text-red-600' : isNear ? 'text-orange-600' : 'text-gray-400'}>
+                {current}/{max} karakter
+            </span>
+            {isOver && (
+                <span className="text-red-600 flex items-center gap-0.5">
+                    <AlertTriangle size={10} />
+                    Akan dipotong jadi {max} karakter di rapor
+                </span>
+            )}
+            {!isOver && isNear && <span className="text-orange-600">Mendekati batas</span>}
+        </div>
+    );
+};
+
+// Cek apakah deskripsi melebihi batas (untuk mematikan tombol Simpan)
+const hasOverLimit = (deskripsi: string, max: number): boolean => (deskripsi || '').trim().length > max;
 
 // ====== TYPES ======
 type ModalType = 'success' | 'error' | 'warning' | 'network';
@@ -1894,6 +1925,7 @@ const executeSaveBatchAkademik = async () => {
                                                             <input type="text" value={grade.deskripsi}
                                                                 onChange={(e) => updateBatchGrade(index, 'deskripsi', e.target.value)}
                                                                 className={inputCls} placeholder="Sangat Baik" />
+                                                                <CharCounter current={(grade.deskripsi || '').length} max={MAX_CHAR.kokurikuler} />
                                                         </div>
                                                     </div>
                                                     {batchGrades.length > 1 && (
@@ -1929,10 +1961,17 @@ const executeSaveBatchAkademik = async () => {
                             </div>
                         </div>
                         <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1.5px solid #ececec', background: '#fafafa' }}>
-                            <ActionButton variant="neutral" onClick={closeBatchEdit} disabled={isSavingBatch}>Batal</ActionButton>
-                            <ActionButton variant="primary" onClick={openConfirmSaveBatch} disabled={isSavingBatch}>
-                                {isSavingBatch ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchGrades.length} Grade</>)}
-                            </ActionButton>
+                            {batchGrades.some(g => hasOverLimit(g.deskripsi, MAX_CHAR.kokurikuler)) && (
+                        <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 mr-auto">
+                        <AlertTriangle size={11} />
+                        {batchGrades.filter(g => hasOverLimit(g.deskripsi, MAX_CHAR.kokurikuler)).length} deskripsi melebihi {MAX_CHAR.kokurikuler} karakter — persingkat dulu
+                        </p>
+                        )}
+                        <ActionButton variant="neutral" onClick={closeBatchEdit} disabled={isSavingBatch}>Batal</ActionButton>
+                        <ActionButton variant="primary" onClick={openConfirmSaveBatch}
+                        disabled={isSavingBatch || batchGrades.some(g => hasOverLimit(g.deskripsi, MAX_CHAR.kokurikuler))}>
+                        {isSavingBatch ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchGrades.length} Grade</>)}
+                        </ActionButton>
                         </div>
                     </div>
                 </div>
@@ -2003,6 +2042,7 @@ const executeSaveBatchAkademik = async () => {
                                                             <input type="text" value={kategori.deskripsi}
                                                                 onChange={(e) => updateBatchAkademik(index, 'deskripsi', e.target.value)}
                                                                 className={inputCls} placeholder="Sangat Baik" />
+                                                                <CharCounter current={(kategori.deskripsi || '').length} max={MAX_CHAR.akademik} />
                                                         </div>
                                                     </div>
                                                     {batchAkademik.length > 1 && (
@@ -2038,9 +2078,16 @@ const executeSaveBatchAkademik = async () => {
                             </div>
                         </div>
                         <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1.5px solid #ececec', background: '#fafafa' }}>
+                            {batchAkademik.some(k => hasOverLimit(k.deskripsi, MAX_CHAR.akademik)) && (
+                            <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 mr-auto">
+                            <AlertTriangle size={11} />
+                            {batchAkademik.filter(k => hasOverLimit(k.deskripsi, MAX_CHAR.akademik)).length} deskripsi melebihi {MAX_CHAR.akademik} karakter — persingkat dulu
+                            </p>
+                            )}
                             <ActionButton variant="neutral" onClick={closeBatchEditAkademik} disabled={isSavingBatchAkademik}>Batal</ActionButton>
-                            <ActionButton variant="primary" onClick={openConfirmSaveBatchAkademik} disabled={isSavingBatchAkademik}>
-                                {isSavingBatchAkademik ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchAkademik.length} Kategori</>)}
+                            <ActionButton variant="primary" onClick={openConfirmSaveBatchAkademik}
+                            disabled={isSavingBatchAkademik || batchAkademik.some(k => hasOverLimit(k.deskripsi, MAX_CHAR.akademik))}>
+                            {isSavingBatchAkademik ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchAkademik.length} Kategori</>)}
                             </ActionButton>
                         </div>
                     </div>
@@ -2112,6 +2159,7 @@ const executeSaveBatchAkademik = async () => {
                                                             <input type="text" value={kategori.deskripsi}
                                                                 onChange={(e) => updateBatchDeskripsi(index, 'deskripsi', e.target.value)}
                                                                 className={inputCls} placeholder="Sangat Baik" />
+                                                                <CharCounter current={(kategori.deskripsi || '').length} max={MAX_CHAR.rataRata} />
                                                         </div>
                                                     </div>
                                                     {batchDeskripsi.length > 1 && (
@@ -2147,11 +2195,18 @@ const executeSaveBatchAkademik = async () => {
                             </div>
                         </div>
                         <div className="px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1.5px solid #ececec', background: '#fafafa' }}>
-                            <ActionButton variant="neutral" onClick={closeBatchEditDeskripsi} disabled={isSavingBatchDeskripsi}>Batal</ActionButton>
-                            <ActionButton variant="primary" onClick={openConfirmSaveBatchDeskripsi} disabled={isSavingBatchDeskripsi}>
+                            {batchDeskripsi.some(k => hasOverLimit(k.deskripsi, MAX_CHAR.rataRata)) && (
+                                <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 mr-auto">
+                                <AlertTriangle size={11} />
+                                {batchDeskripsi.filter(k => hasOverLimit(k.deskripsi, MAX_CHAR.rataRata)).length} deskripsi melebihi {MAX_CHAR.rataRata} karakter — persingkat dulu
+                                </p>
+                                )}
+                                <ActionButton variant="neutral" onClick={closeBatchEditDeskripsi} disabled={isSavingBatchDeskripsi}>Batal</ActionButton>
+                                <ActionButton variant="primary" onClick={openConfirmSaveBatchDeskripsi}
+                                disabled={isSavingBatchDeskripsi || batchDeskripsi.some(k => hasOverLimit(k.deskripsi, MAX_CHAR.rataRata))}>
                                 {isSavingBatchDeskripsi ? (<><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />Menyimpan...</>) : (<><Save size={16} />Simpan {batchDeskripsi.length} Kategori</>)}
-                            </ActionButton>
-                        </div>
+                                </ActionButton>
+                            </div>
                     </div>
                 </div>
             )}

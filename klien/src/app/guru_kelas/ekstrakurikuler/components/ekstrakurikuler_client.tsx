@@ -1,11 +1,34 @@
 'use client';
 import { useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Eye, Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Award, Lock, Upload, Download, ChevronLeft, ChevronRight, Info, User } from 'lucide-react';
+import { Eye, Pencil, Search, X, CheckCircle2, AlertCircle, WifiOff, ShieldAlert, Users, LogOut, Award, Lock, Upload, Download, ChevronLeft, ChevronRight, Info, User, AlertTriangle } from 'lucide-react';
 import { useSession } from '@/hooks/useSession';
 import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 // ====== KONSTANTA API ======
 const API = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/guru-kelas`;
+
+// ====== BATAS KARAKTER DESKRIPSI EKSKUL (sinkron dengan raporController.js) ======
+const MAX_CHAR_EKSKUL = 100;
+
+// ====== COUNTER KARAKTER (info real-time untuk guru) ======
+const CharCounter = ({ current, max }: { current: number; max: number }) => {
+    const isOver = current > max;
+    const isNear = current > max * 0.85;
+    return (
+        <div className="flex items-center gap-1.5 mt-1 text-[10px] font-semibold">
+            <span className={isOver ? 'text-red-600' : isNear ? 'text-orange-600' : 'text-gray-400'}>
+                {current}/{max} karakter
+            </span>
+            {isOver && (
+                <span className="text-red-600 flex items-center gap-0.5">
+                    <AlertTriangle size={10} />
+                    Akan dipotong jadi {max} karakter di rapor
+                </span>
+            )}
+            {!isOver && isNear && <span className="text-orange-600">Mendekati batas</span>}
+        </div>
+    );
+};
 
 // ====== HELPER: Parse Error dari Backend ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
@@ -486,6 +509,16 @@ export default function EkskulClient() {
                     type: 'warning',
                     title: 'Deskripsi Kosong',
                     message: `Deskripsi ekstrakurikuler ke-${i + 1} (${validEkskul[i].ekskul_id ? daftarEkskul.find(d => d.id_ekskul === validEkskul[i].ekskul_id)?.nama_ekskul : 'Pilihan'}) wajib diisi.`
+                });
+                return;
+            }
+            // Validasi batas maksimal karakter Ekskul (100)
+            if (validEkskul[i].deskripsi.trim().length > MAX_CHAR_EKSKUL) {
+                const namaEkskul = daftarEkskul.find(d => d.id_ekskul === validEkskul[i].ekskul_id)?.nama_ekskul || `Ekskul ke-${i + 1}`;
+                showModal({
+                    type: 'warning',
+                    title: 'Deskripsi Terlalu Panjang',
+                    message: `Deskripsi untuk "${namaEkskul}" melebihi batas maksimal ${MAX_CHAR_EKSKUL} karakter (saat ini: ${validEkskul[i].deskripsi.trim().length}).\n\nSilakan persingkat deskripsi terlebih dahulu agar muat di rapor.`
                 });
                 return;
             }
@@ -1199,27 +1232,41 @@ export default function EkskulClient() {
                                                 rows={3}
                                                 className={`${inputCls} resize-none`}
                                             />
+                                            <CharCounter current={(item.deskripsi || '').length} max={MAX_CHAR_EKSKUL} />
                                         </div>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="flex justify-end gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
-                            <ActionButton variant="neutral" disabled={isSaving} onClick={closeEdit}>Batal</ActionButton>
-                            <ActionButton variant="primary" disabled={isSaving} onClick={openConfirmSave}>
-                                {isSaving ? (
-                                    <>
-                                        <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                        Menyimpan...
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle2 size={16} /> Simpan
-                                    </>
-                                )}
-                            </ActionButton>
-                        </div>
+                        {(() => {
+                            const overLimitCount = editData.filter(e => e.ekskul_id > 0 && (e.deskripsi || '').trim().length > MAX_CHAR_EKSKUL).length;
+                            return (
+                                <div className="flex flex-col sm:flex-row justify-end items-center gap-3 px-4 sm:px-6 py-4 border-t" style={{ borderColor: '#fde0c8', background: '#fffaf6' }}>
+                                    {overLimitCount > 0 && (
+                                        <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 mr-auto">
+                                            <AlertTriangle size={11} />
+                                            {overLimitCount} deskripsi melebihi {MAX_CHAR_EKSKUL} karakter — persingkat dulu
+                                        </p>
+                                    )}
+                                    <div className="flex gap-3">
+                                        <ActionButton variant="neutral" disabled={isSaving} onClick={closeEdit}>Batal</ActionButton>
+                                        <ActionButton variant="primary" disabled={isSaving || overLimitCount > 0} onClick={openConfirmSave}>
+                                            {isSaving ? (
+                                                <>
+                                                    <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                                    Menyimpan...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle2 size={16} /> Simpan
+                                                </>
+                                            )}
+                                        </ActionButton>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             )}

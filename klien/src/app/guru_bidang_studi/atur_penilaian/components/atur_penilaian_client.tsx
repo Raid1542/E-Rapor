@@ -51,6 +51,34 @@ const COLORS = {
    (pola sama seperti tabel Data Guru/Admin/Siswa/Ekstrakurikuler). */
 const GRID_COLS_KATEGORI = 'minmax(56px,0.6fr) minmax(160px,1.4fr) minmax(220px,2.6fr)';
 
+// ====== BATAS KARAKTER DESKRIPSI (sinkron dengan raporController.js) ======
+const MAX_CHAR = {
+    akademik: 190,
+};
+
+// ====== COUNTER KARAKTER (info real-time untuk guru) ======
+const CharCounter = ({ current, max }: { current: number; max: number }) => {
+    const isOver = current > max;
+    const isNear = current > max * 0.85;
+    return (
+        <div className="flex items-center gap-1.5 mt-1 text-[10px] font-semibold">
+            <span className={isOver ? 'text-red-600' : isNear ? 'text-orange-600' : 'text-gray-400'}>
+                {current}/{max} karakter
+            </span>
+            {isOver && (
+                <span className="text-red-600 flex items-center gap-0.5">
+                    <AlertTriangle size={10} />
+                    Akan dipotong jadi {max} karakter di rapor
+                </span>
+            )}
+            {!isOver && isNear && <span className="text-orange-600">Mendekati batas</span>}
+        </div>
+    );
+};
+
+// Cek apakah deskripsi melebihi batas (untuk mematikan tombol Simpan)
+const hasOverLimit = (deskripsi: string, max: number): boolean => (deskripsi || '').trim().length > max;
+
 // ====== HELPER: Parse Error ======
 const parseBackendError = async (res: Response): Promise<{ message: string; code?: string }> => {
     try {
@@ -644,6 +672,8 @@ export default function AturPenilaianGBSClient() {
 
             if (!k.deskripsi || k.deskripsi.trim().length < 3) {
                 errors.push(`Baris ${i + 1}: Deskripsi minimal 3 karakter.`);
+            } else if (k.deskripsi.trim().length > MAX_CHAR.akademik) {
+                errors.push(`Baris ${i + 1}: Deskripsi maksimal ${MAX_CHAR.akademik} karakter (saat ini ${k.deskripsi.trim().length}).`);
             }
         });
 
@@ -1290,6 +1320,7 @@ export default function AturPenilaianGBSClient() {
                                                             <input type="text" value={kategori.deskripsi}
                                                                 onChange={(e) => updateBatchRow(index, 'deskripsi', e.target.value)}
                                                                 className={inputCls} placeholder="Sangat Baik" />
+                                                            <CharCounter current={(kategori.deskripsi || '').length} max={MAX_CHAR.akademik} />
                                                         </div>
                                                     </div>
 
@@ -1331,10 +1362,16 @@ export default function AturPenilaianGBSClient() {
                         </div>
 
                         <div className="px-4 sm:px-6 py-4 flex justify-end gap-2.5" style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa' }}>
+                            {batchKategori.some(k => hasOverLimit(k.deskripsi, MAX_CHAR.akademik)) && (
+                                <p className="text-[11px] font-semibold text-red-600 flex items-center gap-1 mr-auto">
+                                    <AlertTriangle size={11} />
+                                    {batchKategori.filter(k => hasOverLimit(k.deskripsi, MAX_CHAR.akademik)).length} deskripsi melebihi {MAX_CHAR.akademik} karakter — persingkat dulu
+                                </p>
+                            )}
                             <ActionButton variant="neutral" disabled={isSavingBatch} onClick={closeBatchEdit}>
                                 Batal
                             </ActionButton>
-                            <ActionButton variant="primary" disabled={isSavingBatch} onClick={openConfirmSaveBatch}>
+                            <ActionButton variant="primary" disabled={isSavingBatch || batchKategori.some(k => hasOverLimit(k.deskripsi, MAX_CHAR.akademik))} onClick={openConfirmSaveBatch}>
                                 {isSavingBatch ? (
                                     <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Menyimpan...</>
                                 ) : (

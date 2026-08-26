@@ -12,6 +12,7 @@ const { recomputeNilaiKokurikulerForKelas } = require('./helpers');
 
 // Konstanta ID Aspek Mutaba'ah
 const ASPEK_MUTABAAH_ID = 5;
+const MAX_CHAR_KOKURIKULER = 150;
 
 /**
  * Ambil jenis penilaian dari request.
@@ -125,6 +126,9 @@ exports.saveBatchKategoriKokurikuler = async (req, res) => {
             }
             if (!g.deskripsi || g.deskripsi.trim().length < 3) {
                 throw new Error(`Grade ${g.grade}: Deskripsi minimal 3 karakter`);
+            }
+            if (g.deskripsi.trim().length > MAX_CHAR_KOKURIKULER) {
+                throw new Error(`Grade ${g.grade}: Deskripsi kokurikuler maksimal ${MAX_CHAR_KOKURIKULER} karakter (saat ini: ${g.deskripsi.trim().length}).`);
             }
         }
 

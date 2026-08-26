@@ -8,6 +8,9 @@
 const db = require('../../config/db');
 const ExcelJS = require('exceljs');
 
+// ====== BATAS KARAKTER CATATAN WALI (sinkron dengan frontend) ======
+const MAX_CHAR_WALI = 300;
+
 /**
  * Hitung kesamaan string menggunakan Levenshtein Distance.
  */
@@ -129,6 +132,9 @@ exports.updateCatatanWaliKelas = async (req, res) => {
         }
         if (trimmedCatatan.length < 20) {
             return res.status(400).json({ success: false, message: `Catatan minimal 20 karakter (saat ini ${trimmedCatatan.length})` });
+        }
+        if (trimmedCatatan.length > MAX_CHAR_WALI) {
+            return res.status(400).json({ success: false, message: `Catatan maksimal ${MAX_CHAR_WALI} karakter (saat ini ${trimmedCatatan.length})` });
         }
 
         const sanitizedCatatan = sanitizeInput(trimmedCatatan);
@@ -691,6 +697,11 @@ exports.importCatatanWaliExcel = async (req, res) => {
 
             if (catatan.length < 20) {
                 errors.push({ row: i + 1, message: `Baris ${i + 1}: Catatan minimal 20 karakter (saat ini ${catatan.length} karakter)` });
+                skippedCount++;
+                continue;
+            }
+            if (catatan.length > MAX_CHAR_WALI) {
+                errors.push({ row: i + 1, message: `Baris ${i + 1}: Catatan maksimal ${MAX_CHAR_WALI} karakter (saat ini ${catatan.length} karakter)` });
                 skippedCount++;
                 continue;
             }

@@ -7,6 +7,10 @@
 
 const kategoriModel = require('../../models/guru_bidang_studi/penilaianKategoriModel');
 
+// ====== BATAS KARAKTER DESKRIPSI (sinkron dengan frontend & raporController.js) ======
+// Aturan: Akademik 190
+const MAX_CHAR_AKADEMIK = 190;
+
 /**
  * GET /kategori-akademik - Ambil daftar kategori nilai akademik untuk mapel dan kelas tertentu.
  */
@@ -97,6 +101,12 @@ exports.createKategoriAkademik = async (req, res) => {
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        if (deskripsi.trim().length > MAX_CHAR_AKADEMIK) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Deskripsi maksimal ${MAX_CHAR_AKADEMIK} karakter (saat ini ${deskripsi.trim().length})` 
+            });
+        }
 
         const cleanDeskripsi = deskripsi.trim();
         const mapelIdNum = parseInt(mapel_id, 10);
@@ -185,8 +195,14 @@ exports.updateKategoriAkademik = async (req, res) => {
         if (minNilai >= maxNilai) {
             return res.status(400).json({ success: false, message: `Nilai minimum (${minNilai}) harus lebih kecil dari nilai maksimum (${maxNilai})` });
         }
-        if (!deskripsi || deskripsi.trim().length < 3) {
+                if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
+        }
+        if (deskripsi.trim().length > MAX_CHAR_AKADEMIK) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Deskripsi maksimal ${MAX_CHAR_AKADEMIK} karakter (saat ini ${deskripsi.trim().length})` 
+            });
         }
 
         const cleanDeskripsi = deskripsi.trim();

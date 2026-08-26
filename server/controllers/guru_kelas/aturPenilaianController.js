@@ -20,6 +20,23 @@ const {
 /* Konstanta ID Aspek Mutaba'ah */
 const ASPEK_MUTABAAH_ID = 5;
 
+/* ==========================================================================
+    BATAS MAKSIMAL KARAKTER DESKRIPSI
+   ========================================================================== */
+const MAX_CHAR = {
+    akademik: 190,
+    kokurikuler: 150,
+    rataRata: 200,
+};
+
+const cekDeskripsiOver = (deskripsi, max, label) => {
+    const len = (deskripsi || '').trim().length;
+    if (len > max) {
+        return `${label} maksimal ${max} karakter (saat ini: ${len}). Silakan dipersingkat.`;
+    }
+    return null;
+};
+
 /* Fungsi: Ambil jenis penilaian aktif dari request. */
 const getJenisPenilaian = (req) => {
     return req.jenis_penilaian || req.query?.jenis || req.body?.jenis || 'PTS';
@@ -237,6 +254,8 @@ exports.createKategoriNilaiAkademik = async (req, res) => {
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        const overAkademik = cekDeskripsiOver(deskripsi, MAX_CHAR.akademik, 'Deskripsi akademik');
+        if (overAkademik) return res.status(400).json({ success: false, message: overAkademik });
 
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
@@ -296,6 +315,8 @@ exports.updateKategoriNilaiAkademik = async (req, res) => {
         if (!deskripsi || newDeskripsi.length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        const overAkademik = cekDeskripsiOver(newDeskripsi, MAX_CHAR.akademik, 'Deskripsi akademik');
+        if (overAkademik) return res.status(400).json({ success: false, message: overAkademik });
 
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
@@ -497,6 +518,8 @@ exports.createKategoriNilaiKokurikuler = async (req, res) => {
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        const overKokurikuler = cekDeskripsiOver(deskripsi, MAX_CHAR.kokurikuler, 'Deskripsi kokurikuler');
+        if (overKokurikuler) return res.status(400).json({ success: false, message: overKokurikuler });
 
         const duplikat = await model.cekDuplikasiGrade(id_aspek_kokurikuler, taAktif.id_tahun_ajaran, taAktif.semester, kelasId, gradeClean, jenis);
         if (duplikat.length > 0) {
@@ -550,6 +573,8 @@ exports.updateKategoriNilaiKokurikuler = async (req, res) => {
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        const overKokurikuler = cekDeskripsiOver(deskripsi, MAX_CHAR.kokurikuler, 'Deskripsi kokurikuler');
+        if (overKokurikuler) return res.status(400).json({ success: false, message: overKokurikuler });
 
         const taAktif = await model.getTahunAjaranAktif();
         if (!taAktif) {
@@ -853,6 +878,8 @@ exports.createKategoriDeskripsiRataRata = async (req, res) => {
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        const overRataRata = cekDeskripsiOver(deskripsi, MAX_CHAR.rataRata, 'Deskripsi rata-rata');
+        if (overRataRata) return res.status(400).json({ success: false, message: overRataRata });
 
         const overlaps = await model.cekOverlapDeskripsiRataRata(taAktif.id_tahun_ajaran, taAktif.semester, kelasId, minNilai, maxNilai);
         if (overlaps.length > 0) {
@@ -905,6 +932,8 @@ exports.updateKategoriDeskripsiRataRata = async (req, res) => {
         if (!deskripsi || deskripsi.trim().length < 3) {
             return res.status(400).json({ success: false, message: 'Deskripsi minimal 3 karakter' });
         }
+        const overRataRata = cekDeskripsiOver(deskripsi, MAX_CHAR.rataRata, 'Deskripsi rata-rata');
+        if (overRataRata) return res.status(400).json({ success: false, message: overRataRata });
 
         const existing = await model.getKategoriDeskripsiRataRataByIdAndKelas(id, kelasId);
         if (!existing) {
@@ -1004,6 +1033,8 @@ exports.saveBatchKategoriDeskripsiRataRata = async (req, res) => {
             if (!cat.deskripsi || cat.deskripsi.trim().length < 3) {
                 return res.status(400).json({ success: false, message: `Kategori ${i + 1}: Deskripsi minimal 3 karakter` });
             }
+            const overRataRata = cekDeskripsiOver(cat.deskripsi, MAX_CHAR.rataRata, `Kategori ${i + 1}`);
+            if (overRataRata) return res.status(400).json({ success: false, message: overRataRata });
         }
 
         for (let i = 0; i < categories.length; i++) {
