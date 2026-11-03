@@ -29,9 +29,10 @@ const TEMPLATES_PATH = path.join(__dirname, 'public', 'templates');
 // Konfigurasi opsi CORS
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000').split(',');
 const corsOptions = {
-  origin: allowedOrigins,
+
+  origin: ['http://localhost:3000', 'https://e-rapor-production.up.railway.app'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
 };
 
 // Middleware keamanan dengan CSP diperketat
