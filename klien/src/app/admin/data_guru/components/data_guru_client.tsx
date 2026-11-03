@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import {
-    Eye, Pencil, Upload, X, Plus, Search, Filter,
+    Eye, Pencil, Trash2, Upload, X, Plus, Search, Filter,
     CheckCircle2, AlertCircle, WifiOff, ShieldAlert,
     ChevronLeft, Download, RotateCcw, FileSpreadsheet,
     Users, ChevronRight, Phone, MapPin, Calendar, IdCard, Mail,
@@ -151,6 +151,31 @@ const GlobalStyles = () => (
         .btn-action:hover  { filter: brightness(1.04); }
         .btn-action:active { filter: brightness(0.98); }
 
+        /* ✅ HOVER KONSISTEN: Detail (biru) dan Edit (kuning→oranye tua) ikut berubah solid, tulisan putih */
+        .btn-info:hover, .btn-info:active, .btn-info:focus-visible {
+            background: #2563eb !important;
+            color: #fff !important;
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.35) !important;
+            filter: none;
+        }
+        .btn-warning:hover, .btn-warning:active, .btn-warning:focus-visible {
+            background: #d97706 !important;
+            color: #fff !important;
+            border-color: #b45309 !important;
+            box-shadow: 0 4px 12px rgba(217,119,6,0.40) !important;
+            filter: none;
+        }
+
+        /* ✅ PERUBAHAN HAPUS: hover/klik tombol Hapus jadi merah terang, tulisan putih */
+        .btn-danger:hover, .btn-danger:active, .btn-danger:focus-visible {
+            background: #dc2626 !important;
+            color: #fff !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 4px 12px rgba(220,38,38,0.35) !important;
+            filter: none;
+        }
+
         button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
             outline: 2.5px solid #f5a623;
             outline-offset: 2px;
@@ -215,7 +240,8 @@ const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-80
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(180px,1.6fr)';
+// ✅ PERUBAHAN HAPUS: kolom Aksi dilebarkan (250px) supaya 3 tombol muat
+const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(250px,2fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
@@ -224,7 +250,8 @@ const labelColor = { color: '#7a3a0a' };
    SISTEM TOMBOL AKSI
    ========================================================================== */
 
-type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
+// ✅ PERUBAHAN HAPUS: tambah varian 'danger' (merah)
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent' | 'danger';
 
 const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
@@ -233,6 +260,7 @@ const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
     success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
     accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
+    danger: { background: '#fee2e2', color: '#b91c1c', border: '1.5px solid #fca5a5' },
 };
 
 const ActionButton = ({
@@ -248,7 +276,7 @@ const ActionButton = ({
             title={title}
             onClick={onClick}
             disabled={disabled}
-            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className={`btn-action ${variant === 'danger' ? 'btn-danger' : variant === 'info' ? 'btn-info' : variant === 'warning' ? 'btn-warning' : ''} inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
             style={VARIANT_BASE[variant]}
         >
             {children}
@@ -553,6 +581,37 @@ export default function DataGuruClient() {
         } catch { showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' }); }
     };
 
+    // ✅ PERUBAHAN HAPUS: request DELETE ke backend
+    const executeHapus = async (guru: Guru) => {
+        const token = localStorage.getItem('token');
+        if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Silakan login ulang.' }); return; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/admin/guru/${guru.id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                await fetchGuru();
+                showModal({ type: 'success', title: 'Data Dihapus!', message: `Data guru ${guru.nama} berhasil dihapus.` });
+            } else {
+                showModal({ type: 'error', title: 'Gagal Menghapus', message: data.message || 'Terjadi kesalahan saat menghapus data guru.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        }
+    };
+
+    // ✅ PERUBAHAN HAPUS: tampilkan modal konfirmasi sebelum benar-benar menghapus
+    const handleHapus = (guru: Guru) => {
+        showModal({
+            type: 'confirm',
+            title: 'Hapus Data Guru?',
+            message: `Data guru ${guru.nama} akan dihapus permanen dari database dan tidak bisa dikembalikan.`,
+            onConfirm: () => executeHapus(guru),
+        });
+    };
+
     const handleReset = () => {
         setFormData({ nama: '', niy: '', nuptk: '', tempatLahir: '', tanggalLahir: '', jenisKelamin: '', alamat: '', no_telepon: '', email: '', roles: [], statusGuru: 'aktif' });
         setErrors({});
@@ -619,6 +678,12 @@ export default function DataGuruClient() {
     });
 
     const totalPages = Math.max(1, Math.ceil(filteredGuru.length / itemsPerPage));
+
+    // ✅ PERUBAHAN HAPUS: kalau data di halaman terakhir habis dihapus, mundur ke halaman yang masih ada
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentGuru = filteredGuru.slice(startIndex, endIndex);
@@ -871,7 +936,7 @@ export default function DataGuruClient() {
 
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 <div className="overflow-x-auto">
-                    <div style={{ width: '100%', minWidth: '850px' }}>
+                    <div style={{ width: '100%', minWidth: '920px' }}>
                         <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
                             <div className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama</div>
@@ -940,6 +1005,9 @@ export default function DataGuruClient() {
                                         </ActionButton>
                                         <ActionButton size="sm" variant="warning" onClick={() => handleEdit(guru)} title="Edit data">
                                             <Pencil size={13} /> Edit
+                                        </ActionButton>
+                                        <ActionButton size="sm" variant="danger" onClick={() => handleHapus(guru)} title="Hapus data">
+                                            <Trash2 size={13} /> Hapus
                                         </ActionButton>
                                     </div>
                                 </div>

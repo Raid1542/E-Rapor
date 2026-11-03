@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import {
-    Eye, Pencil, X, Plus, Search, CheckCircle2, AlertCircle,
+    Eye, Pencil, Trash2, X, Plus, Search, CheckCircle2, AlertCircle,
     WifiOff, ShieldAlert, ChevronLeft, ChevronRight, Users, RotateCcw,
     Phone, MapPin, Calendar, IdCard, Mail, User,
 } from 'lucide-react';
@@ -109,9 +109,33 @@ const GlobalStyles = () => (
         }
         .row-hover:hover::before { transform: scaleY(1); }
 
-        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, color 0.14s ease, border-color 0.14s ease, opacity 0.14s ease; }
         .btn-action:hover  { filter: brightness(1.04); }
         .btn-action:active { filter: brightness(0.98); }
+
+        /* ✅ HOVER KONSISTEN: Detail (biru), Edit (kuning→oranye tua), Hapus (merah)
+           semuanya berubah solid dengan tulisan & ikon putih saat kursor diarahkan / diklik */
+        .btn-info:hover, .btn-info:active, .btn-info:focus-visible {
+            background: #2563eb !important;
+            color: #fff !important;
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.35) !important;
+            filter: none;
+        }
+        .btn-warning:hover, .btn-warning:active, .btn-warning:focus-visible {
+            background: #d97706 !important;
+            color: #fff !important;
+            border-color: #b45309 !important;
+            box-shadow: 0 4px 12px rgba(217,119,6,0.40) !important;
+            filter: none;
+        }
+        .btn-danger:hover, .btn-danger:active, .btn-danger:focus-visible {
+            background: #dc2626 !important;
+            color: #fff !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 4px 12px rgba(220,38,38,0.35) !important;
+            filter: none;
+        }
 
         button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
             outline: 2.5px solid #f5a623;
@@ -177,9 +201,10 @@ const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-80
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — sama persis strukturnya dengan Data Guru (7 kolom),
-   dipakai identik oleh header dan setiap baris agar selalu sejajar. */
-const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(180px,1.6fr)';
+/* Kolom grid tabel — 7 kolom, dipakai identik oleh header dan setiap baris
+   agar selalu sejajar. ✅ PERUBAHAN HAPUS: kolom Aksi dilebarkan (250px)
+   supaya 3 tombol (Detail, Edit, Hapus) muat. */
+const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(250px,2fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
@@ -187,18 +212,20 @@ const labelColor = { color: '#7a3a0a' };
 /* ==========================================================================
    SISTEM TOMBOL AKSI — identik dengan Data Guru:
      • primary → gradien oranye (aksi utama/menyimpan)
-     • info    → biru lembut (Detail, Reset)
-     • warning → kuning lembut (Edit)
+     • info    → biru lembut (Detail, Reset) → hover biru solid
+     • warning → kuning (Edit)               → hover oranye tua
+     • danger  → merah muda (Hapus)          → hover merah terang
      • neutral → putih/abu (Batal, Tutup)
    ========================================================================== */
 
-type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral';
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'danger';
 
 const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
     info:    { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
     warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
     neutral: { background: '#fff', color: '#4b5563', border: '1.5px solid #e5e7eb' },
+    danger:  { background: '#fee2e2', color: '#b91c1c', border: '1.5px solid #fca5a5' },
 };
 
 const ActionButton = ({
@@ -214,7 +241,7 @@ const ActionButton = ({
             title={title}
             onClick={onClick}
             disabled={disabled}
-            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className={`btn-action ${variant === 'danger' ? 'btn-danger' : variant === 'info' ? 'btn-info' : variant === 'warning' ? 'btn-warning' : ''} inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
             style={VARIANT_BASE[variant]}
         >
             {children}
@@ -498,6 +525,52 @@ export default function DataAdminClient() {
         }
     };
 
+    // ✅ PERUBAHAN HAPUS: request DELETE ke backend
+    const executeHapus = async (admin: Admin): Promise<void> => {
+        const token = localStorage.getItem('token');
+        if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/admin/admin/${admin.id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                await fetchAdmin();
+                showModal({ type: 'success', title: 'Data Dihapus!', message: `Data admin ${admin.nama} berhasil dihapus.` });
+            } else {
+                showModal({ type: 'error', title: 'Gagal Menghapus', message: data.message || 'Terjadi kesalahan saat menghapus data admin.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.' });
+        }
+    };
+
+    // ✅ PERUBAHAN HAPUS: modal konfirmasi + pengaman agar admin tidak menghapus akunnya sendiri
+    const handleHapus = (admin: Admin): void => {
+        try {
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+                const currentUser = JSON.parse(storedUser);
+                if (currentUser.id === admin.id) {
+                    showModal({
+                        type: 'warning',
+                        title: 'Tidak Bisa Menghapus',
+                        message: 'Anda tidak bisa menghapus akun yang sedang Anda pakai untuk login.',
+                    });
+                    return;
+                }
+            }
+        } catch { /* abaikan jika currentUser tidak valid */ }
+
+        showModal({
+            type: 'confirm',
+            title: 'Hapus Data Admin?',
+            message: `Data admin ${admin.nama} akan dihapus permanen dari database dan tidak bisa dikembalikan.`,
+            onConfirm: () => executeHapus(admin),
+        });
+    };
+
     const handleReset = (): void => {
         setFormData({ nama: '', niy: '', nuptk: '', tempat_lahir: '', tanggal_lahir: '', jenisKelamin: '', alamat: '', no_telepon: '', email: '', statusAdmin: 'aktif' });
         setErrors({});
@@ -531,6 +604,12 @@ export default function DataAdminClient() {
     });
 
     const totalPages = Math.max(1, Math.ceil(filteredAdmin.length / itemsPerPage));
+
+    // ✅ PERUBAHAN HAPUS: kalau data di halaman terakhir habis dihapus, mundur ke halaman yang masih ada
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex   = startIndex + itemsPerPage;
     const currentAdmin = filteredAdmin.slice(startIndex, endIndex);
@@ -769,7 +848,7 @@ export default function DataAdminClient() {
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
 
                 <div className="overflow-x-auto">
-                    <div style={{ width: '100%', minWidth: '850px' }}>
+                    <div style={{ width: '100%', minWidth: '920px' }}>
                         {/* Header — grid kolom sama persis dengan setiap baris di bawahnya */}
                         <div
                             className="grid"
@@ -843,6 +922,9 @@ export default function DataAdminClient() {
                                         </ActionButton>
                                         <ActionButton size="sm" variant="warning" onClick={() => handleEdit(admin)} title="Edit data">
                                             <Pencil size={13} /> Edit
+                                        </ActionButton>
+                                        <ActionButton size="sm" variant="danger" onClick={() => handleHapus(admin)} title="Hapus data">
+                                            <Trash2 size={13} /> Hapus
                                         </ActionButton>
                                     </div>
                                 </div>
