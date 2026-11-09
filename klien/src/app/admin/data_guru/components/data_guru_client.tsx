@@ -241,7 +241,8 @@ const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
 // ✅ PERUBAHAN HAPUS: kolom Aksi dilebarkan (250px) supaya 3 tombol muat
-const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(250px,2fr)';
+// ✅ PERUBAHAN PERAN: tambah kolom Peran (170px) di sebelah NUPTK → total 8 kolom
+const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(170px,1.6fr) minmax(100px,1.1fr) minmax(250px,2fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
@@ -936,13 +937,14 @@ export default function DataGuruClient() {
 
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 <div className="overflow-x-auto">
-                    <div style={{ width: '100%', minWidth: '920px' }}>
+                    <div style={{ width: '100%', minWidth: '1090px' }}>
                         <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
                             <div className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama</div>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Kelamin</div>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">NIY</div>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">NUPTK</div>
+                            <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Peran</div>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Status</div>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
                         </div>
@@ -950,7 +952,7 @@ export default function DataGuruClient() {
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS, borderColor: '#f0f0f0' }}>
-                                    {Array.from({ length: 7 }).map((__, j) => (
+                                    {Array.from({ length: 8 }).map((__, j) => (
                                         <div key={j} className="px-4 py-4 flex items-center justify-center">
                                             <div className="dg-shimmer h-4 rounded w-full" style={{ maxWidth: j === 1 ? '85%' : '55%' }} />
                                         </div>
@@ -985,6 +987,22 @@ export default function DataGuruClient() {
                                 <div className="px-4 py-4 flex items-center justify-center text-center text-gray-600 whitespace-nowrap">{formatGender(guru.jenisKelamin)}</div>
                                 <div className="px-4 py-4 flex items-center justify-center text-center text-gray-500 font-mono text-xs truncate">{guru.niy || '-'}</div>
                                 <div className="px-4 py-4 flex items-center justify-center text-center text-gray-500 font-mono text-xs truncate">{guru.nuptk || '-'}</div>
+
+                                {/* ✅ PERUBAHAN PERAN: badge peran guru (warna sama dengan di modal Detail) */}
+                                <div className="px-4 py-4 flex items-center justify-center">
+                                    {guru.roles && guru.roles.length > 0 ? (
+                                        <div className="flex flex-wrap justify-center gap-1">
+                                            {guru.roles.includes('guru_kelas') && (
+                                                <span className="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap" style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe' }}>Guru Kelas</span>
+                                            )}
+                                            {guru.roles.includes('guru_bidang_studi') && (
+                                                <span className="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap" style={{ background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8' }}>Guru Bid. Studi</span>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-400 text-xs">-</span>
+                                    )}
+                                </div>
 
                                 <div className="px-4 py-4 flex items-center justify-center">
                                     {guru.statusGuru === 'aktif' ? (

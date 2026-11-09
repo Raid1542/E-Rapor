@@ -1,16 +1,3 @@
-/**
- * Nama File: data_mata_pelajaran_client.tsx
- * Fungsi: Komponen utama halaman Data Mata Pelajaran untuk admin.
- *         Menyediakan fitur CRUD mata pelajaran per SEMESTER
- *         (bukan per tahun ajaran induk).
- * Update: Menyamakan tampilan (warna, bentuk tombol, tabel grid, animasi) dengan
- *         data_guru_client.tsx / data_pembina_ekskul_client.tsx / data_kelas_client.tsx /
- *         data_tahun_ajaran_client.tsx / data_sekolah_client.tsx / siswa_per_kelas_client.tsx.
- *         Notifikasi & konfirmasi dirapikan jadi satu sistem modal yang konsisten.
- *         Hanya lapisan UI yang diubah — semua logika, state, dan pemanggilan API
- *         tetap sama persis seperti sebelumnya.
- */
-
 'use client';
 import { useState, useEffect, useRef, useCallback, ChangeEvent, ReactNode } from 'react';
 import {
@@ -117,9 +104,31 @@ const GlobalStyles = () => (
         }
         .row-hover:hover::before { transform: scaleY(1); }
 
-        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, color 0.14s ease, border-color 0.14s ease, opacity 0.14s ease; }
         .btn-action:hover  { filter: brightness(1.04); }
         .btn-action:active { filter: brightness(0.98); }
+
+        .btn-info:hover, .btn-info:active, .btn-info:focus-visible {
+            background: #2563eb !important;
+            color: #fff !important;
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.35) !important;
+            filter: none;
+        }
+        .btn-warning:hover, .btn-warning:active, .btn-warning:focus-visible {
+            background: #d97706 !important;
+            color: #fff !important;
+            border-color: #b45309 !important;
+            box-shadow: 0 4px 12px rgba(217,119,6,0.40) !important;
+            filter: none;
+        }
+        .btn-danger:hover, .btn-danger:active, .btn-danger:focus-visible {
+            background: #dc2626 !important;
+            color: #fff !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 4px 12px rgba(220,38,38,0.35) !important;
+            filter: none;
+        }
 
         button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
             outline: 2.5px solid #f5a623;
@@ -146,7 +155,13 @@ const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
     success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
     accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
-    danger: { background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca' },
+    danger: { background: '#fee2e2', color: '#b91c1c', border: '1.5px solid #fca5a5' },
+};
+
+const VARIANT_CLASS: Partial<Record<BtnVariant, string>> = {
+    info: 'btn-info',
+    warning: 'btn-warning',
+    danger: 'btn-danger',
 };
 
 const ActionButton = ({
@@ -162,7 +177,7 @@ const ActionButton = ({
             title={title}
             onClick={onClick}
             disabled={disabled}
-            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className={`btn-action ${VARIANT_CLASS[variant] || ''} inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
             style={VARIANT_BASE[variant]}
         >
             {children}
@@ -609,6 +624,11 @@ export default function DataMataPelajaranPage() {
     });
 
     const totalPages = Math.max(1, Math.ceil(filteredMapel.length / itemsPerPage));
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentMapel = filteredMapel.slice(startIndex, endIndex);

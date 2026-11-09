@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, ChangeEvent, ReactNode } from 'react';
 import {
-    Eye, Pencil, Upload, X, Plus, Search, Filter,
+    Eye, Pencil, Trash2, Upload, X, Plus, Search, Filter,
     CheckCircle2, AlertCircle, WifiOff, ShieldAlert,
     ChevronLeft, ChevronRight, Download, RotateCcw, FileSpreadsheet,
     Users, Phone, MapPin, Calendar, IdCard,
@@ -12,16 +12,7 @@ import SessionExpiredModal from '@/components/SessionExpiredModal';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// FIX: bukan pakai angka batas tetap. fetchPembina di bawah akan mengambil data per
-// "PAGE_SIZE" ini secara berulang (page 1, 2, 3, ...) dan otomatis berhenti begitu
-// backend mengembalikan kurang dari PAGE_SIZE (artinya sudah habis). Jadi berapa pun
-// jumlah data pembina — 50, 500, 5000 — semuanya akan selalu tertarik lengkap, tanpa
-// ada angka maksimum yang membatasi total data.
 const PAGE_SIZE = 500;
-
-/* ==========================================================================
-   INTERFACES
-   ========================================================================== */
 
 interface Pembina {
     id: number;
@@ -48,16 +39,13 @@ interface FormDataType {
     status: string;
 }
 
-/* ==========================================================================
-   NOTIFICATION MODAL
-   ========================================================================== */
-
 type ModalType = 'success' | 'error' | 'warning' | 'network' | 'confirm';
-interface ModalConfig { type: ModalType; title: string; message: string; onConfirm?: () => void; }
-
-/* ==========================================================================
-   DESIGN TOKENS
-   ========================================================================== */
+interface ModalConfig {
+    type: ModalType;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+}
 
 const BRAND_GRADIENT = 'linear-gradient(135deg,#c95b08 0%,#e8690a 55%,#f5a623 100%)';
 const ACCENT = '#e8690a';
@@ -97,9 +85,31 @@ const GlobalStyles = () => (
         }
         .row-hover:hover::before { transform: scaleY(1); }
 
-        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, opacity 0.14s ease; }
+        .btn-action { transition: box-shadow 0.16s ease, filter 0.14s ease, background 0.14s ease, color 0.14s ease, border-color 0.14s ease, opacity 0.14s ease; }
         .btn-action:hover  { filter: brightness(1.04); }
         .btn-action:active { filter: brightness(0.98); }
+
+        .btn-info:hover, .btn-info:active, .btn-info:focus-visible {
+            background: #2563eb !important;
+            color: #fff !important;
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.35) !important;
+            filter: none;
+        }
+        .btn-warning:hover, .btn-warning:active, .btn-warning:focus-visible {
+            background: #d97706 !important;
+            color: #fff !important;
+            border-color: #b45309 !important;
+            box-shadow: 0 4px 12px rgba(217,119,6,0.40) !important;
+            filter: none;
+        }
+        .btn-danger:hover, .btn-danger:active, .btn-danger:focus-visible {
+            background: #dc2626 !important;
+            color: #fff !important;
+            border-color: #b91c1c !important;
+            box-shadow: 0 4px 12px rgba(220,38,38,0.35) !important;
+            filter: none;
+        }
 
         button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
             outline: 2.5px solid #f5a623;
@@ -155,36 +165,32 @@ const NotifModal = ({ modal, onClose }: { modal: ModalConfig; onClose: () => voi
     );
 };
 
-/* ==========================================================================
-   SHARED STYLE CONSTANTS
-   ========================================================================== */
-
 const inputCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400";
 const inputErrCls = "w-full border rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all focus:ring-4 focus:ring-red-100 focus:border-red-400 bg-red-50/30 border-red-400 placeholder:text-gray-400";
 
 const PAGE_BG = { background: '#f6f7f9' };
 const CARD_STYLE = { border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
-/* Kolom grid tabel — sama persis strukturnya dengan Data Guru (7 kolom),
-   dipakai identik oleh header dan setiap baris agar selalu sejajar. */
-const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(180px,1.6fr)';
+const GRID_COLS = 'minmax(56px,0.5fr) minmax(220px,3fr) minmax(110px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) minmax(100px,1.1fr) minmax(250px,2fr)';
 
 const labelCls = "block text-sm font-bold mb-1.5";
 const labelColor = { color: '#7a3a0a' };
 
-/* ==========================================================================
-   SISTEM TOMBOL AKSI
-   ========================================================================== */
-
-type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'accent';
+type BtnVariant = 'primary' | 'info' | 'warning' | 'neutral' | 'accent' | 'danger';
 
 const VARIANT_BASE: Record<BtnVariant, React.CSSProperties> = {
     primary: { background: BRAND_GRADIENT, color: '#fff', border: `1.5px solid ${ACCENT_DARK}`, boxShadow: '0 2px 8px rgba(232,105,10,0.25)' },
     info: { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' },
     warning: { background: '#facc15', color: '#78350f', border: '1.5px solid #eab308', boxShadow: '0 2px 8px rgba(234,179,8,0.35)' },
     neutral: { background: '#f3f4f6', color: '#4b5563', border: '1.5px solid #d1d5db' },
-    success: { background: '#dcfce7', color: '#166534', border: '1.5px solid #86efac' },
-    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: `1.5px solid #f0a94e`, boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
+    accent: { background: 'linear-gradient(135deg,#fff5eb 0%,#ffe3c2 55%,#fdd7a8 100%)', color: ACCENT_DARK, border: '1.5px solid #f0a94e', boxShadow: '0 2px 8px rgba(232,105,10,0.18)' },
+    danger: { background: '#fee2e2', color: '#b91c1c', border: '1.5px solid #fca5a5' },
+};
+
+const VARIANT_CLASS: Partial<Record<BtnVariant, string>> = {
+    info: 'btn-info',
+    warning: 'btn-warning',
+    danger: 'btn-danger',
 };
 
 const ActionButton = ({
@@ -200,17 +206,13 @@ const ActionButton = ({
             title={title}
             onClick={onClick}
             disabled={disabled}
-            className={`btn-action inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className={`btn-action ${VARIANT_CLASS[variant] || ''} inline-flex items-center justify-center gap-1.5 rounded-xl font-bold whitespace-nowrap ${pad} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
             style={VARIANT_BASE[variant]}
         >
             {children}
         </button>
     );
 };
-
-/* ==========================================================================
-   HELPERS
-   ========================================================================== */
 
 const formatTanggalIndonesia = (dateStr?: string | null): string => {
     if (!dateStr) return '-';
@@ -228,16 +230,28 @@ const formatGender = (g?: string | null) => {
     return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
 };
 
-/* ==========================================================================
-   MAIN COMPONENT
-   ========================================================================== */
+const mapPembina = (p: any): Pembina => {
+    let status = 'aktif';
+    if (typeof p.status === 'string') {
+        status = p.status.trim().toLowerCase();
+        if (status !== 'aktif') status = 'nonaktif';
+    }
+    return {
+        id: p.id_user || p.id,
+        nama: p.nama_lengkap || p.nama,
+        niy: p.niy || '',
+        nuptk: p.nuptk || '',
+        tempat_lahir: p.tempat_lahir || '',
+        tanggal_lahir: p.tanggal_lahir || '',
+        jenis_kelamin: p.jenis_kelamin || '',
+        alamat: p.alamat || '',
+        no_telepon: p.no_telepon || '',
+        status,
+    };
+};
 
 export default function DataPembinaEkskulClient() {
     const { showSessionExpired, handleLogout } = useSession();
-
-    /* ------------------------------------------------------------------
-       STATE
-    ------------------------------------------------------------------ */
 
     const [pembinaList, setPembinaList] = useState<Pembina[]>([]);
     const [loading, setLoading] = useState(true);
@@ -252,7 +266,6 @@ export default function DataPembinaEkskulClient() {
     const [showImport, setShowImport] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
 
-    // State untuk animasi tutup
     const [detailClosing, setDetailClosing] = useState(false);
     const [importClosing, setImportClosing] = useState(false);
     const [filterClosing, setFilterClosing] = useState(false);
@@ -275,45 +288,20 @@ export default function DataPembinaEkskulClient() {
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    /* ------------------------------------------------------------------
-       FETCH
-    ------------------------------------------------------------------ */
-
-    // FIX: mengambil SEMUA data pembina dengan cara mengulang request per PAGE_SIZE
-    // (page 1, 2, 3, ...) dan berhenti otomatis begitu backend mengembalikan data
-    // kurang dari PAGE_SIZE (artinya sudah halaman terakhir). Tidak ada angka batas
-    // total di sini — berapa pun jumlah datanya, semua akan tertarik lengkap.
-    const mapPembina = (p: any): Pembina => {
-        let s = 'aktif';
-        if (typeof p.status === 'string') {
-            s = p.status.trim().toLowerCase();
-            if (s !== 'aktif') s = 'nonaktif';
-        }
-        return {
-            id: p.id_user || p.id,
-            nama: p.nama_lengkap || p.nama,
-            niy: p.niy || '',
-            nuptk: p.nuptk || '',
-            tempat_lahir: p.tempat_lahir || '',
-            tanggal_lahir: p.tanggal_lahir || '',
-            jenis_kelamin: p.jenis_kelamin || '',
-            alamat: p.alamat || '',
-            no_telepon: p.no_telepon || '',
-            status: s,
-        };
-    };
-
     const fetchPembina = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
-            if (!token) { showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' }); return; }
+            if (!token) {
+                showModal({ type: 'warning', title: 'Sesi Tidak Valid', message: 'Silakan login terlebih dahulu.' });
+                return;
+            }
 
             let allData: Pembina[] = [];
             let page = 1;
 
             while (true) {
                 const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul?page=${page}&limit=${PAGE_SIZE}`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 });
                 const data = await res.json();
 
@@ -325,9 +313,6 @@ export default function DataPembinaEkskulClient() {
                 const chunk: any[] = Array.isArray(data.data) ? data.data : [];
                 allData = allData.concat(chunk.map(mapPembina));
 
-                // Kalau jumlah data yang dikembalikan kurang dari PAGE_SIZE, berarti
-                // ini halaman terakhir — berhenti. Kalau pas sama dengan PAGE_SIZE,
-                // masih mungkin ada halaman berikutnya, lanjut ambil.
                 if (chunk.length < PAGE_SIZE) break;
                 page++;
             }
@@ -342,19 +327,23 @@ export default function DataPembinaEkskulClient() {
 
     useEffect(() => { fetchPembina(); }, [fetchPembina]);
 
-    /* ------------------------------------------------------------------
-       FORM HANDLERS & ANIMASI
-    ------------------------------------------------------------------ */
-
-    const handleDetail = (pembina: Pembina) => { setSelectedPembina(pembina); setShowDetail(true); };
+    const handleDetail = (pembina: Pembina) => {
+        setSelectedPembina(pembina);
+        setShowDetail(true);
+    };
 
     const handleEdit = (pembina: Pembina) => {
         setEditId(pembina.id);
         setFormData({
-            nama: pembina.nama || '', niy: pembina.niy || '', nuptk: pembina.nuptk || '',
-            tempat_lahir: pembina.tempat_lahir || '', tanggal_lahir: pembina.tanggal_lahir || '',
-            jenis_kelamin: pembina.jenis_kelamin || '', alamat: pembina.alamat || '',
-            no_telepon: pembina.no_telepon || '', status: pembina.status || 'aktif',
+            nama: pembina.nama || '',
+            niy: pembina.niy || '',
+            nuptk: pembina.nuptk || '',
+            tempat_lahir: pembina.tempat_lahir || '',
+            tanggal_lahir: pembina.tanggal_lahir || '',
+            jenis_kelamin: pembina.jenis_kelamin || '',
+            alamat: pembina.alamat || '',
+            no_telepon: pembina.no_telepon || '',
+            status: pembina.status || 'aktif',
         });
         setShowEdit(true);
     };
@@ -390,8 +379,6 @@ export default function DataPembinaEkskulClient() {
         setErrors(prev => ({ ...prev, [name]: '' }));
     };
 
-    // Validasi tempat lahir, tanggal lahir wajib diisi + usia minimal 18 tahun.
-    // Status hanya wajib divalidasi saat mode Edit (saat Tambah, field-nya disembunyikan dan otomatis "aktif").
     const validate = (isEdit: boolean): boolean => {
         const ne: Record<string, string> = {};
         if (!formData.nama?.trim()) ne.nama = 'Nama wajib diisi';
@@ -429,12 +416,19 @@ export default function DataPembinaEkskulClient() {
             if (!ori) return;
             const norm = (s?: string | null) => (s || '').trim().toLowerCase();
             const changed =
-                formData.nama !== (ori.nama || '') || formData.niy !== (ori.niy || '') ||
-                formData.nuptk !== (ori.nuptk || '') || formData.tempat_lahir !== (ori.tempat_lahir || '') ||
-                formData.tanggal_lahir !== (ori.tanggal_lahir || '') || norm(formData.jenis_kelamin) !== norm(ori.jenis_kelamin) ||
-                formData.alamat !== (ori.alamat || '') || formData.no_telepon !== (ori.no_telepon || '') ||
+                formData.nama !== (ori.nama || '') ||
+                formData.niy !== (ori.niy || '') ||
+                formData.nuptk !== (ori.nuptk || '') ||
+                formData.tempat_lahir !== (ori.tempat_lahir || '') ||
+                formData.tanggal_lahir !== (ori.tanggal_lahir || '') ||
+                norm(formData.jenis_kelamin) !== norm(ori.jenis_kelamin) ||
+                formData.alamat !== (ori.alamat || '') ||
+                formData.no_telepon !== (ori.no_telepon || '') ||
                 formData.status !== (ori.status || 'aktif');
-            if (!changed) { showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' }); return; }
+            if (!changed) {
+                showModal({ type: 'warning', title: 'Tidak Ada Perubahan', message: 'Tidak ada data yang diubah.' });
+                return;
+            }
         }
         if (!validate(action === 'edit')) return;
         setConfirmAction(action);
@@ -443,17 +437,23 @@ export default function DataPembinaEkskulClient() {
 
     const executeTambah = async () => {
         const token = localStorage.getItem('token');
-        if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+            return;
+        }
         try {
             const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    // FIX: backend (pembinaEkskulController.js) membaca "nama_lengkap", bukan "nama"
-                    nama_lengkap: formData.nama, niy: formData.niy || null, nuptk: formData.nuptk || null,
-                    tempat_lahir: formData.tempat_lahir || null, tanggal_lahir: formData.tanggal_lahir || null,
-                    jenis_kelamin: formData.jenis_kelamin, alamat: formData.alamat || null, no_telepon: formData.no_telepon || null,
-                    // Status tidak dikirim karena field-nya disembunyikan saat Tambah dan otomatis diset "aktif" di backend
+                    nama_lengkap: formData.nama,
+                    niy: formData.niy || null,
+                    nuptk: formData.nuptk || null,
+                    tempat_lahir: formData.tempat_lahir || null,
+                    tanggal_lahir: formData.tanggal_lahir || null,
+                    jenis_kelamin: formData.jenis_kelamin,
+                    alamat: formData.alamat || null,
+                    no_telepon: formData.no_telepon || null,
                 }),
             });
             if (res.ok) {
@@ -471,16 +471,24 @@ export default function DataPembinaEkskulClient() {
 
     const executeEdit = async () => {
         const token = localStorage.getItem('token');
-        if (!token) { showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' }); return; }
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+            return;
+        }
         try {
             const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul/${editId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    // FIX: backend (pembinaEkskulController.js) membaca "nama_lengkap", bukan "nama"
-                    nama_lengkap: formData.nama, niy: formData.niy || null, nuptk: formData.nuptk || null,
-                    tempat_lahir: formData.tempat_lahir || null, tanggal_lahir: formData.tanggal_lahir || null,
-                    jenis_kelamin: formData.jenis_kelamin, alamat: formData.alamat || null, no_telepon: formData.no_telepon || null, status: formData.status,
+                    nama_lengkap: formData.nama,
+                    niy: formData.niy || null,
+                    nuptk: formData.nuptk || null,
+                    tempat_lahir: formData.tempat_lahir || null,
+                    tanggal_lahir: formData.tanggal_lahir || null,
+                    jenis_kelamin: formData.jenis_kelamin,
+                    alamat: formData.alamat || null,
+                    no_telepon: formData.no_telepon || null,
+                    status: formData.status,
                 }),
             });
             if (res.ok) {
@@ -494,6 +502,38 @@ export default function DataPembinaEkskulClient() {
         } catch {
             showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
         }
+    };
+
+    const executeHapus = async (pembina: Pembina) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showModal({ type: 'warning', title: 'Sesi Habis', message: 'Sesi login Anda telah berakhir. Silakan login ulang.' });
+            return;
+        }
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/admin/pembina-ekskul/${pembina.id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                await fetchPembina();
+                showModal({ type: 'success', title: 'Data Dihapus!', message: `Data pembina ${pembina.nama} berhasil dihapus.` });
+            } else {
+                showModal({ type: 'error', title: 'Gagal Menghapus', message: data.message || 'Terjadi kesalahan saat menghapus data pembina.' });
+            }
+        } catch {
+            showModal({ type: 'network', title: 'Koneksi Gagal', message: 'Tidak dapat terhubung ke server.' });
+        }
+    };
+
+    const handleHapus = (pembina: Pembina) => {
+        showModal({
+            type: 'confirm',
+            title: 'Hapus Data Pembina?',
+            message: `Data pembina ${pembina.nama} akan dihapus permanen dari database dan tidak bisa dikembalikan.\n\nJika pembina hanya tidak lagi bertugas, lebih aman mengubah statusnya menjadi Nonaktif lewat tombol Edit.`,
+            onConfirm: () => executeHapus(pembina),
+        });
     };
 
     const handleReset = () => {
@@ -541,24 +581,20 @@ export default function DataPembinaEkskulClient() {
         }
     };
 
-    /* ------------------------------------------------------------------
-       FILTER & PAGINATION
-    ------------------------------------------------------------------ */
-
     const filteredPembina = pembinaList.filter((pembina) => {
         const q = searchQuery.toLowerCase().trim();
-        const ms = !q || pembina.nama?.toLowerCase().includes(q) || pembina.niy?.includes(q) || pembina.nuptk?.includes(q);
-        const mj = !filterValues.jenisKelamin || pembina.jenis_kelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
-        const mst = !filterValues.status || pembina.status?.toLowerCase() === filterValues.status.toLowerCase();
-        return ms && mj && mst;
+        const matchesSearch = !q || pembina.nama?.toLowerCase().includes(q) || pembina.niy?.includes(q) || pembina.nuptk?.includes(q);
+        const matchesGender = !filterValues.jenisKelamin || pembina.jenis_kelamin?.toLowerCase() === filterValues.jenisKelamin.toLowerCase();
+        const matchesStatus = !filterValues.status || pembina.status?.toLowerCase() === filterValues.status.toLowerCase();
+        return matchesSearch && matchesGender && matchesStatus;
     });
 
-    // itemsPerPage murni mengatur pagination TAMPILAN di layar (client-side).
-    // Data sumbernya (filteredPembina) sudah berisi SELURUH data dari backend berkat
-    // fetchPembina yang mengambil semua halaman secara otomatis, jadi menaikkan/
-    // menurunkan nilai ini tidak akan pernah menyembunyikan data — hanya mengatur
-    // berapa baris yang ditampilkan per halaman.
     const totalPages = Math.max(1, Math.ceil(filteredPembina.length / itemsPerPage));
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentPembina = filteredPembina.slice(startIndex, endIndex);
@@ -570,8 +606,9 @@ export default function DataPembinaEkskulClient() {
         const btnActive = "text-white border-transparent";
         const btnInactive = "text-gray-600 border-transparent hover:bg-orange-50 bg-transparent";
         const range: number[] = [];
-        if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) range.push(i); }
-        else {
+        if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) range.push(i);
+        } else {
             range.push(1);
             if (currentPage > 3) range.push(-1);
             for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) range.push(i);
@@ -579,19 +616,49 @@ export default function DataPembinaEkskulClient() {
             range.push(totalPages);
         }
         range.forEach(p => {
-            if (p < 0) { pages.push(<span key={p} className="px-1 text-gray-400 text-xs">…</span>); }
-            else { pages.push(<button key={p} onClick={() => setCurrentPage(p)} className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`} style={currentPage === p ? { background: BRAND_GRADIENT, boxShadow: '0 2px 6px rgba(232,105,10,0.30)' } : {}}>{p}</button>); }
+            if (p < 0) {
+                pages.push(<span key={p} className="px-1 text-gray-400 text-xs">…</span>);
+            } else {
+                pages.push(
+                    <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
+                        style={currentPage === p ? { background: BRAND_GRADIENT, boxShadow: '0 2px 6px rgba(232,105,10,0.30)' } : {}}
+                    >
+                        {p}
+                    </button>
+                );
+            }
         });
         return pages;
     };
 
-    const resetFilter = () => { const e = { jenisKelamin: '', status: '' }; setFilterValues(e); setTempFilterValues(e); };
-    const openFilterModal = () => { setTempFilterValues(filterValues); setShowFilter(true); };
-    const applyFilter = () => { setFilterValues(tempFilterValues); setFilterClosing(true); setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 300); };
+    const resetFilter = () => {
+        const e = { jenisKelamin: '', status: '' };
+        setFilterValues(e);
+        setTempFilterValues(e);
+    };
 
-    /* ------------------------------------------------------------------
-       FORM RENDER (DENGAN ANIMASI)
-    ------------------------------------------------------------------ */
+    const openFilterModal = () => {
+        setTempFilterValues(filterValues);
+        setShowFilter(true);
+    };
+
+    const applyFilter = () => {
+        setFilterValues(tempFilterValues);
+        setFilterClosing(true);
+        setTimeout(() => { setShowFilter(false); setFilterClosing(false); }, 300);
+    };
+
+    const submitConfirmed = () => {
+        setShowConfirmModal(false);
+        if (confirmAction === 'add') {
+            executeTambah();
+        } else {
+            executeEdit();
+        }
+    };
 
     const renderForm = (isEdit: boolean) => (
         <div className={`flex-1 min-h-screen p-3 sm:p-6 transition-all duration-300 ${formClosing ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`} style={PAGE_BG}>
@@ -669,7 +736,6 @@ export default function DataPembinaEkskulClient() {
                                 <input type="tel" name="no_telepon" value={formData.no_telepon} onChange={handleInputChange} placeholder="08xxxxxxxxxx" className={inputCls} />
                             </div>
 
-                            {/* Status hanya ditampilkan saat mode Edit; saat Tambah otomatis "aktif" */}
                             {isEdit && (
                                 <div className="flex flex-col gap-1">
                                     <label className={labelCls} style={labelColor}>Status <span className="text-red-500">*</span></label>
@@ -720,7 +786,7 @@ export default function DataPembinaEkskulClient() {
                         </p>
                         <div className="flex gap-2.5">
                             <ActionButton variant="neutral" fullWidth onClick={() => setShowConfirmModal(false)}>Batal</ActionButton>
-                            <ActionButton variant="primary" fullWidth onClick={() => { setShowConfirmModal(false); confirmAction === 'add' ? executeTambah() : executeEdit(); }}>
+                            <ActionButton variant="primary" fullWidth onClick={submitConfirmed}>
                                 Simpan
                             </ActionButton>
                         </div>
@@ -732,10 +798,6 @@ export default function DataPembinaEkskulClient() {
 
     if (showTambah) return renderForm(false);
     if (showEdit) return renderForm(true);
-
-    /* ------------------------------------------------------------------
-       MAIN LIST VIEW
-    ------------------------------------------------------------------ */
 
     return (
         <div className="flex-1 min-h-screen p-3 sm:p-6" style={PAGE_BG}>
@@ -761,7 +823,10 @@ export default function DataPembinaEkskulClient() {
                             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                                 <Search className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                             </div>
-                            <input type="text" placeholder="Cari nama, NIY, NUPTK..." value={searchQuery}
+                            <input
+                                type="text"
+                                placeholder="Cari nama, NIY, NUPTK..."
+                                value={searchQuery}
                                 onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 className="w-full border rounded-lg pl-8 pr-8 py-2 text-xs outline-none transition-all focus:ring-4 focus:ring-orange-100 focus:border-orange-400 bg-white border-gray-200 placeholder:text-gray-400"
                             />
@@ -774,15 +839,11 @@ export default function DataPembinaEkskulClient() {
 
                         <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#fff5eb', border: '1px solid #fde0c8' }}>
                             <span className="text-xs font-bold whitespace-nowrap" style={{ color: ACCENT_DARK }}>Tampilkan</span>
-                            {/*
-                              Dropdown ini HANYA mengatur pagination tampilan (client-side).
-                              Karena fetchPembina sekarang menarik SELURUH data dari backend
-                              (lihat fungsi fetchPembina di atas), dropdown ini tidak lagi
-                              berkaitan dengan data yang berhasil diambil — cuma mengatur
-                              berapa baris ditampilkan per halaman di layar.
-                            */}
-                            <select value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                className="border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200">
+                            <select
+                                value={itemsPerPage}
+                                onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                                className="border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-400 bg-white border-orange-200"
+                            >
                                 <option value={10}>10</option>
                                 <option value={25}>25</option>
                                 <option value={50}>50</option>
@@ -801,11 +862,9 @@ export default function DataPembinaEkskulClient() {
                 </div>
             </div>
 
-            {/* Table card — grid-based, sama persis strukturnya dengan Data Guru */}
             <div className="card-flat bg-white rounded-2xl overflow-hidden anim-in d3" style={CARD_STYLE}>
                 <div className="overflow-x-auto">
-                    <div style={{ width: '100%', minWidth: '850px' }}>
-                        {/* Header — grid kolom sama persis dengan setiap baris di bawahnya */}
+                    <div style={{ width: '100%', minWidth: '920px' }}>
                         <div className="grid" style={{ gridTemplateColumns: GRID_COLS, background: BRAND_GRADIENT }}>
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">No.</div>
                             <div className="px-4 py-4 text-left text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center">Nama</div>
@@ -816,7 +875,6 @@ export default function DataPembinaEkskulClient() {
                             <div className="px-4 py-4 text-center text-xs font-bold text-white uppercase tracking-wide whitespace-nowrap flex items-center justify-center">Aksi</div>
                         </div>
 
-                        {/* Body */}
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <div key={i} className="grid border-b" style={{ gridTemplateColumns: GRID_COLS, borderColor: '#f0f0f0' }}>
@@ -836,7 +894,9 @@ export default function DataPembinaEkskulClient() {
                                 </div>
                             </div>
                         ) : currentPembina.map((pembina, index) => (
-                            <div key={pembina.id} className="grid row-in row-hover border-b transition-colors"
+                            <div
+                                key={pembina.id}
+                                className="grid row-in row-hover border-b transition-colors"
                                 style={{
                                     gridTemplateColumns: GRID_COLS,
                                     borderColor: '#f0f0f0',
@@ -876,6 +936,9 @@ export default function DataPembinaEkskulClient() {
                                         <ActionButton size="sm" variant="warning" onClick={() => handleEdit(pembina)} title="Edit data">
                                             <Pencil size={13} /> Edit
                                         </ActionButton>
+                                        <ActionButton size="sm" variant="danger" onClick={() => handleHapus(pembina)} title="Hapus data">
+                                            <Trash2 size={13} /> Hapus
+                                        </ActionButton>
                                     </div>
                                 </div>
                             </div>
@@ -889,35 +952,34 @@ export default function DataPembinaEkskulClient() {
                     </span>
 
                     <div className="flex items-center gap-1">
-                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors" style={{ color: ACCENT_DARK }}>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                            style={{ color: ACCENT_DARK }}
+                        >
                             <ChevronLeft size={14} /> Sebelumnya
                         </button>
                         <div className="flex items-center gap-1 mx-1">{renderPagination()}</div>
-                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors" style={{ color: ACCENT_DARK }}>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="h-8 px-3 flex items-center gap-1 rounded-lg text-xs font-bold hover:bg-orange-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                            style={{ color: ACCENT_DARK }}
+                        >
                             Berikutnya <ChevronRight size={14} />
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* ================================================================
-                Modal Detail — bagian avatar/lingkaran foto DIHAPUS total.
-                Data Pembina Ekskul tidak punya akun login sehingga tidak pernah
-                punya foto profil sama sekali (beda dari Data Admin & Data Guru
-                yang memang bisa login dan upload foto). Sebagai gantinya, nama
-                dan badge status ditampilkan langsung di header tanpa avatar,
-                supaya modal tidak menampilkan lingkaran ikon generik yang
-                sebenarnya tidak relevan untuk entitas ini.
-            ================================================================ */}
             {showDetail && selectedPembina && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${detailClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${detailClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeDetail} />
                     <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl transform transition-all duration-300 overflow-hidden ${detailClosing ? 'opacity-0 scale-95 translate-y-4' : 'opacity-100 scale-100 translate-y-0'}`}>
                         <div className="flex items-center justify-between px-4 sm:px-6 py-4" style={{ background: BRAND_GRADIENT }}>
                             <h2 className="text-lg sm:text-xl font-bold text-white">Detail Data Pembina</h2>
-                            <button onClick={closeDetail} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                            <button onClick={closeDetail} aria-label="Tutup" className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/20" style={{ background: 'rgba(255,255,255,0.15)' }}>
                                 <X size={18} className="text-white" />
                             </button>
                         </div>
@@ -925,7 +987,14 @@ export default function DataPembinaEkskulClient() {
                         <div className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto">
                             <div className="flex flex-col items-center justify-center gap-2 mb-6 pb-4 border-b" style={{ borderColor: '#fde0c8' }}>
                                 <h3 className="text-xl font-bold text-gray-900 text-center">{selectedPembina.nama}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold" style={{ background: selectedPembina.status === 'aktif' ? '#dcfce7' : '#f3f4f6', color: selectedPembina.status === 'aktif' ? '#166534' : '#4b5563', border: `1px solid ${selectedPembina.status === 'aktif' ? '#86efac' : '#d1d5db'}` }}>
+                                <span
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold"
+                                    style={{
+                                        background: selectedPembina.status === 'aktif' ? '#dcfce7' : '#f3f4f6',
+                                        color: selectedPembina.status === 'aktif' ? '#166534' : '#4b5563',
+                                        border: `1px solid ${selectedPembina.status === 'aktif' ? '#86efac' : '#d1d5db'}`,
+                                    }}
+                                >
                                     <span className="w-2 h-2 rounded-full" style={{ background: selectedPembina.status === 'aktif' ? '#22c55e' : '#6b7280' }} />
                                     {selectedPembina.status === 'aktif' ? 'Aktif' : 'Nonaktif'}
                                 </span>
@@ -969,7 +1038,6 @@ export default function DataPembinaEkskulClient() {
                 </div>
             )}
 
-            {/* Modal Import dengan Animasi */}
             {showImport && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${importClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${importClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeImport} />
@@ -998,10 +1066,17 @@ export default function DataPembinaEkskulClient() {
                                     </a>
                                 </div>
                             </div>
-                            <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl cursor-pointer transition-colors" style={{ border: '2px dashed #e5e5e5', background: '#fafafa' }} onMouseEnter={e => (e.currentTarget.style.background = '#fff5eb')} onMouseLeave={e => (e.currentTarget.style.background = '#fafafa')}>
+                            <label
+                                className="flex flex-col items-center justify-center w-full h-32 rounded-xl cursor-pointer transition-colors"
+                                style={{ border: '2px dashed #e5e5e5', background: '#fafafa' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#fff5eb')}
+                                onMouseLeave={e => (e.currentTarget.style.background = '#fafafa')}
+                            >
                                 <Upload className="w-7 h-7 mb-2" style={{ color: ACCENT }} />
                                 <p className="text-sm">
-                                    {importFile ? <span className="font-bold" style={{ color: ACCENT_DARK }}>{importFile.name}</span> : <span className="text-gray-400 font-medium">Klik untuk pilih file</span>}
+                                    {importFile
+                                        ? <span className="font-bold" style={{ color: ACCENT_DARK }}>{importFile.name}</span>
+                                        : <span className="text-gray-400 font-medium">Klik untuk pilih file</span>}
                                 </p>
                                 <input type="file" accept=".xlsx,.xls" onChange={e => setImportFile(e.target.files?.[0] || null)} className="hidden" />
                             </label>
@@ -1016,7 +1091,6 @@ export default function DataPembinaEkskulClient() {
                 </div>
             )}
 
-            {/* Modal Filter dengan Animasi */}
             {showFilter && (
                 <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${filterClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <div className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${filterClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeFilterModal} />
@@ -1042,7 +1116,11 @@ export default function DataPembinaEkskulClient() {
                             ].map(f => (
                                 <div key={f.name} className="flex flex-col gap-1">
                                     <label className={labelCls} style={labelColor}>{f.label}</label>
-                                    <select value={(tempFilterValues as any)[f.name]} onChange={e => setTempFilterValues(p => ({ ...p, [f.name]: e.target.value }))} className={inputCls}>
+                                    <select
+                                        value={(tempFilterValues as any)[f.name]}
+                                        onChange={e => setTempFilterValues(p => ({ ...p, [f.name]: e.target.value }))}
+                                        className={inputCls}
+                                    >
                                         {f.options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
                                     </select>
                                 </div>
