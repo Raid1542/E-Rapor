@@ -90,6 +90,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const guruKelasRoutes = require('./routes/guruKelasRoutes');
 const guruBidangStudiRoutes = require('./routes/guruBidangStudiRoutes');
 const sekolahPublicRoutes = require('./routes/sekolahPublicRoutes');
+// const guruAlQuranRoutes = require('./routes/guruAlQuranRoutes');
 
 // Daftarkan routing dengan rate limiter
 app.use('/api/auth', authLimiter, authRoutes);
@@ -97,6 +98,7 @@ app.use('/api', apiLimiter);
 app.use('/api/admin', adminRoutes);
 app.use('/api/guru-kelas', guruKelasRoutes);
 app.use('/api/guru-bidang-studi', guruBidangStudiRoutes);
+// app.use('/api/guru-al-quran', guruAlQuranRoutes);
 app.use('/api/sekolah', sekolahPublicRoutes);
 
 // Endpoint debug HANYA aktif di mode development
