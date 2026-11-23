@@ -403,7 +403,7 @@ export default function DataGuruClient() {
                 page += 1;
             }
 
-            const validRoles = ['guru_kelas', 'guru_bidang_studi'];
+            const validRoles = ['guru_kelas', 'guru_bidang_studi', 'guru_alquran'];
             setGuruList(rawList.map((g: any) => {
                 let s = 'aktif';
                 if (typeof g.status === 'string') { s = g.status.trim().toLowerCase(); if (s !== 'aktif') s = 'nonaktif'; }
@@ -817,7 +817,7 @@ export default function DataGuruClient() {
                             <div className="sm:col-span-2 flex flex-col gap-1">
                                 <label className={labelCls} style={labelColor}>Role (Hak Akses) <span className="text-red-500">*</span></label>
                                 <div className="flex flex-wrap gap-2 pt-0.5">
-                                    {[{ key: 'guru_kelas', label: 'Guru Kelas' }, { key: 'guru_bidang_studi', label: 'Guru Bidang Studi' }].map(role => {
+                                    {[{ key: 'guru_kelas', label: 'Guru Kelas' }, { key: 'guru_bidang_studi', label: 'Guru Bidang Studi' }, { key: 'guru_alquran', label: "Guru Al-Qur'an" }].map(role => {
                                         const active = formData.roles.includes(role.key);
                                         return (
                                             <button key={role.key} type="button"
@@ -998,6 +998,9 @@ export default function DataGuruClient() {
                                             {guru.roles.includes('guru_bidang_studi') && (
                                                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap" style={{ background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8' }}>Guru Bid. Studi</span>
                                             )}
+                                            {guru.roles.includes('guru_alquran') && (
+                                                <span className="px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap" style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>Guru Al-Qur&apos;an</span>
+                                            )}
                                         </div>
                                     ) : (
                                         <span className="text-gray-400 text-xs">-</span>
@@ -1101,6 +1104,7 @@ export default function DataGuruClient() {
                                 <span className="text-sm text-gray-600 font-semibold">Role:</span>
                                 <div className="flex gap-2">
                                     {selectedGuru.roles?.includes('guru_bidang_studi') && (<span className="px-3 py-1.5 rounded-lg text-sm font-bold" style={{ background: '#fdf2f8', color: '#9d174d', border: '1px solid #fbcfe8' }}>Guru Bid. Studi</span>)}
+                                    {selectedGuru.roles?.includes('guru_alquran') && (<span className="px-3 py-1.5 rounded-lg text-sm font-bold" style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>Guru Al-Qur&apos;an</span>)}
                                     {selectedGuru.roles?.includes('guru_kelas') && (<span className="px-3 py-1.5 rounded-lg text-sm font-bold" style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe' }}>Guru Kelas</span>)}
                                 </div>
                             </div>
@@ -1217,7 +1221,7 @@ export default function DataGuruClient() {
                         </div>
                         <div className="p-6 space-y-3.5">
                             {[
-                                { label: 'Role', name: 'role', options: [{ v: '', l: 'Semua Role' }, { v: 'guru_kelas', l: 'Guru Kelas' }, { v: 'guru_bidang_studi', l: 'Guru Bidang Studi' }] },
+                                { label: 'Role', name: 'role', options: [{ v: '', l: 'Semua Role' }, { v: 'guru_kelas', l: 'Guru Kelas' }, { v: 'guru_bidang_studi', l: 'Guru Bidang Studi' }, { v: 'guru_alquran', l: "Guru Al-Qur'an" }] },
                                 { label: 'Jenis Kelamin', name: 'jenisKelamin', options: [{ v: '', l: 'Semua' }, { v: 'Laki-laki', l: 'Laki-laki' }, { v: 'Perempuan', l: 'Perempuan' }] },
                                 { label: 'Status', name: 'status', options: [{ v: '', l: 'Semua Status' }, { v: 'aktif', l: 'Aktif' }, { v: 'nonaktif', l: 'Nonaktif' }] },
                             ].map(f => (

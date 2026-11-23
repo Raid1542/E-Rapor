@@ -4,6 +4,7 @@
  * Pembuat: Raid Aqil Athallah - NIM: 3312401022
  * Tanggal: 15 September 2025
  * Update: Fix popup logout muncul di atas background login (bukan layar hitam)
+ * Update: 9 November 2026 - Tambah role Guru Al-Qur'an (Frima Rizky Lianda)
  */
 
 'use client';
@@ -18,6 +19,14 @@ const DASHBOARD_PATHS = {
     admin: '/admin/dashboard',
     guru_kelas: '/guru_kelas/dashboard',
     guru_bidang_studi: '/guru_bidang_studi/dashboard',
+    guru_alquran: '/guru_alquran/dashboard',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+    admin: 'Admin',
+    guru_kelas: 'Guru Kelas',
+    guru_bidang_studi: 'Guru Bidang Studi',
+    guru_alquran: "Guru Al-Qur'an",
 };
 
 type PopupType = 'success' | 'error' | 'warning';
@@ -438,8 +447,7 @@ export default function LoginClient() {
         }
     };
 
-    // ✅ PERBAIKAN #3: fetchSekolah JALAN TERUS (jangan di-skip)
-    // supaya logo & nama sekolah tetap di-load walaupun popup logout muncul
+    // fetchSekolah jalan terus supaya logo & nama sekolah tetap di-load walaupun popup logout muncul
     useEffect(() => {
         const fetchSekolah = async () => {
             try {
@@ -487,12 +495,7 @@ export default function LoginClient() {
 
                 const errorCode = data.code;
                 const userRole = formData.role;
-                const roleLabel =
-                    userRole === 'admin'
-                        ? 'Admin'
-                        : userRole === 'guru_kelas'
-                        ? 'Guru Kelas'
-                        : 'Guru Bidang Studi';
+                const roleLabel = ROLE_LABELS[userRole] || userRole;
 
                 let title = 'Login Gagal';
                 let message = 'Email atau password yang Anda masukkan salah. Silakan periksa kembali dan coba lagi.';
@@ -523,7 +526,7 @@ export default function LoginClient() {
                 window.dispatchEvent(new Event('userDataUpdated'));
             }
 
-            const roleLabel = role === 'admin' ? 'Admin' : role === 'guru_kelas' ? 'Wali Kelas' : 'Guru Bidang Studi';
+            const roleLabel = role === 'guru_kelas' ? 'Wali Kelas' : (ROLE_LABELS[role] || role);
 
             const urlParams = new URLSearchParams(window.location.search);
             const redirectParam = urlParams.get('redirect');
@@ -559,15 +562,11 @@ export default function LoginClient() {
         }));
     };
 
-    // ✅ PERBAIKAN #1 & #2: 
-    // - HAPUS blok "if (showLogoutConfirm) { return ... }" yang bikin background hitam
-    // - PINDAHKAN <ConfirmLogoutModal> ke dalam return utama (setelah GlobalStyles)
     return (
         <>
             <GlobalStyles />
             {popup && <LoginPopup popup={popup} onClose={closePopup} />}
             
-            {/* ✅ Popup logout dirender DI ATAS background login */}
             {showLogoutConfirm && (
                 <ConfirmLogoutModal onConfirm={handleConfirmLogout} onCancel={handleCancelLogout} />
             )}
@@ -1094,6 +1093,7 @@ export default function LoginClient() {
                                             <option value="admin">Admin</option>
                                             <option value="guru_kelas">Guru Kelas</option>
                                             <option value="guru_bidang_studi">Guru Bidang Studi</option>
+                                            <option value="guru_alquran">Guru Al-Qur&apos;an</option>
                                         </select>
                                     </div>
                                 </div>
