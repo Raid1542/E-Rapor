@@ -285,12 +285,13 @@ export default function Sidebar() {
     ];
 
     const akademikSubmenu = [
-        { name: 'Data Kelas', url: '/admin/data_kelas_siswa' },
-        { name: 'Data Mata Pelajaran', url: '/admin/data_mata_pelajaran' },
-        { name: 'Data Pembelajaran', url: '/admin/data_pembelajaran' },
-        { name: 'Data Ekstrakurikuler', url: '/admin/ekstrakurikuler' },
-        { name: 'Arsip Rapor', url: '/admin/arsip_rapor' },
-    ];
+    { name: 'Data Kelas', url: '/admin/data_kelas_siswa' },
+    { name: 'Data Mata Pelajaran', url: '/admin/data_mata_pelajaran' },
+    { name: 'Data Pembelajaran', url: '/admin/data_pembelajaran' },
+    { name: 'Pembelajaran Al-Quran', url: '/admin/pembelajaran_alquran' },
+    { name: 'Data Ekstrakurikuler', url: '/admin/ekstrakurikuler' },
+    { name: 'Arsip Rapor', url: '/admin/arsip_rapor' },
+];
 
     // State aktif berdasarkan pathname saat ini
     const isDashboardActive = pathname === '/admin/dashboard';

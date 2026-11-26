@@ -43,7 +43,7 @@ type GuruQuran = {
 };
 
 type GuruOpsi = { id: number; nama: string };
-type Siswa = { id: number; nama: string; rombel: string };
+type Siswa = { id: number; nis: string; nama: string; rombel: string };
 
 type ModalState =
   | { tipe: 'tambahGuru' }
@@ -62,6 +62,15 @@ const TEMPLATE_KELOMPOK: { nama: NamaKelompok; sesi: string; kelas: string }[] =
   { nama: 'C', sesi: 'Sore', kelas: '5 dan 6' },
 ];
 
+// Fase mengikuti tingkat kelas: kelas 1-2 = Fase A, 3-4 = Fase B, 5-6 = Fase C
+const fasePerKelas = (kelas: string): string => {
+  const tingkat = Number((kelas.match(/\d+/) ?? ['0'])[0]);
+  if (tingkat >= 1 && tingkat <= 2) return 'A';
+  if (tingkat >= 3 && tingkat <= 4) return 'B';
+  if (tingkat >= 5 && tingkat <= 6) return 'C';
+  return '-';
+};
+
 // Mapel Al-Quran nanti diambil dari Data Mata Pelajaran dengan jenis = 'Al-Quran'
 const MAPEL_QURAN = [
   { kode: 'TLW', nama: 'Tilawah' },
@@ -79,16 +88,16 @@ const DAFTAR_GURU_QURAN: GuruOpsi[] = [
 
 // Siswa yang bisa ditempatkan (dari Data Siswa)
 const DAFTAR_SISWA: Siswa[] = [
-  { id: 1, nama: 'Aisyah Rahma', rombel: '1B' },
-  { id: 2, nama: 'Fauzan Pratama', rombel: '1C' },
-  { id: 3, nama: 'Naura Salsabila', rombel: '2A' },
-  { id: 4, nama: 'Khalid Ramadhan', rombel: '2D' },
-  { id: 5, nama: 'Zahra Aulia', rombel: '2D' },
-  { id: 6, nama: 'Rafi Alvaro', rombel: '1B' },
-  { id: 7, nama: 'Syifa Nabila', rombel: '3A' },
-  { id: 8, nama: 'Hanif Maulana', rombel: '3A' },
-  { id: 9, nama: 'Alya Putri', rombel: '4B' },
-  { id: 10, nama: 'Dzaky Firmansyah', rombel: '5A' },
+  { id: 1, nis: '1001', nama: 'Aisyah Rahma', rombel: '1 B' },
+  { id: 2, nis: '1002', nama: 'Fauzan Pratama', rombel: '1 C' },
+  { id: 3, nis: '1003', nama: 'Naura Salsabila', rombel: '2 A' },
+  { id: 4, nis: '1004', nama: 'Khalid Ramadhan', rombel: '2 D' },
+  { id: 5, nis: '1005', nama: 'Zahra Aulia', rombel: '2 D' },
+  { id: 6, nis: '1006', nama: 'Rafi Alvaro', rombel: '1 B' },
+  { id: 7, nis: '1007', nama: 'Syifa Nabila', rombel: '3 A' },
+  { id: 8, nis: '1008', nama: 'Hanif Maulana', rombel: '3 A' },
+  { id: 9, nis: '1009', nama: 'Alya Putri', rombel: '4 B' },
+  { id: 10, nis: '1010', nama: 'Dzaky Firmansyah', rombel: '5 A' },
 ];
 
 const DATA_AWAL: GuruQuran[] = [
@@ -351,6 +360,9 @@ function ModalGantiGuru({
 }
 
 /* ========== Modal: Tambah siswa ========== */
+// Hanya menampilkan siswa dari kelas yang sesuai kelompok (A: kelas 1 dan 2, B: 3 dan 4, C: 5 dan 6),
+// dikelompokkan per rombel. Anggota yang sudah ada di kelompok ini ditandai "sudah" dan tidak bisa
+// dicentang ulang. Mengeluarkan siswa dilakukan di halaman Detail kelompok.
 function ModalTambahSiswa({
   guru,
   kelompok,
@@ -364,23 +376,28 @@ function ModalTambahSiswa({
   onClose: () => void;
   onSimpan: (siswaIds: number[]) => void;
 }) {
-  const [rombel, setRombel] = useState('Semua');
   const [cari, setCari] = useState('');
   const [terpilih, setTerpilih] = useState<number[]>([]);
   const [error, setError] = useState('');
 
-  const daftarRombel = useMemo(
-    () => ['Semua', ...Array.from(new Set(DAFTAR_SISWA.map((s) => s.rombel))).sort()],
-    []
+  // Contoh: "1 dan 2" menjadi [1, 2]
+  const kelasBoleh = useMemo(
+    () => (kelompok.kelas.match(/\d+/g) ?? []).map(Number),
+    [kelompok.kelas]
   );
 
-  const siswaTampil = DAFTAR_SISWA.filter(
-    (s) =>
-      (rombel === 'Semua' || s.rombel === rombel) &&
-      s.nama.toLowerCase().includes(cari.trim().toLowerCase())
-  );
+  // Siswa yang sesuai kelas kelompok dan cocok dengan pencarian, dikelompokkan per rombel
+  const grupRombel = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    const peta = new Map<string, Siswa[]>();
+    DAFTAR_SISWA.filter((s) => kelasBoleh.includes(parseInt(s.rombel, 10)))
+      .filter((s) => s.nama.toLowerCase().includes(kata) || s.nis.includes(kata))
+      .forEach((s) => peta.set(s.rombel, [...(peta.get(s.rombel) ?? []), s]));
+    return Array.from(peta.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [kelasBoleh, cari]);
 
   const sisaSlot = kelompok.kapasitas - kelompok.siswaIds.length - terpilih.length;
+  const totalSiswa = kelompok.siswaIds.length + terpilih.length;
 
   const toggleSiswa = (id: number) => {
     setError('');
@@ -395,78 +412,137 @@ function ModalTambahSiswa({
     setTerpilih((prev) => [...prev, id]);
   };
 
+  // Pilih atau batalkan semua siswa baru dalam satu rombel (sesuai sisa slot)
+  const pilihSemuaRombel = (daftar: Siswa[]) => {
+    setError('');
+    const kandidat = daftar.filter((s) => !penempatan.has(s.id));
+    const sudahTerpilihSemua = kandidat.length > 0 && kandidat.every((s) => terpilih.includes(s.id));
+    if (sudahTerpilihSemua) {
+      setTerpilih((prev) => prev.filter((id) => !kandidat.some((s) => s.id === id)));
+      return;
+    }
+    const belumDipilih = kandidat.filter((s) => !terpilih.includes(s.id));
+    const tambah = belumDipilih.slice(0, Math.max(sisaSlot, 0)).map((s) => s.id);
+    if (tambah.length < belumDipilih.length) {
+      setError('Sebagian siswa tidak dipilih karena kapasitas kelompok penuh.');
+    }
+    setTerpilih((prev) => [...prev, ...tambah]);
+  };
+
   const handleSimpan = () => {
-    if (terpilih.length === 0) return setError('Pilih minimal satu siswa.');
+    if (terpilih.length === 0) return setError('Pilih minimal satu siswa baru.');
     onSimpan(terpilih);
   };
 
   return (
     <ModalShell
-      judul={`Tambah siswa ke Kelompok ${kelompok.nama}`}
+      judul={`Kelompok ${kelompok.nama} — ${guru.nama}`}
       onClose={onClose}
       footer={
         <>
+          <span className="mr-auto self-center text-xs text-gray-500">
+            Total: <span className="font-bold text-orange-600">{totalSiswa}</span> siswa
+            {terpilih.length > 0 && `, ${terpilih.length} baru`}
+          </span>
           <BtnBatal onClick={onClose} />
           <BtnSimpan onClick={handleSimpan} />
         </>
       }
     >
       <p className="-mt-2 text-xs text-gray-500">
-        {kelompok.sesi}, guru pengajar: {guru.nama}
+        Fase {fasePerKelas(kelompok.kelas)} (Kelas {kelompok.kelas.replace(' dan ', ' & ')}), sesi {kelompok.sesi.toLowerCase()}. Centang
+        siswa yang akan belajar Al-Quran di kelompok ini.
       </p>
 
-      <div className="flex gap-2">
-        <select
-          value={rombel}
-          onChange={(e) => setRombel(e.target.value)}
-          className={`${INPUT_CLASS} !w-36`}
-          aria-label="Filter rombel"
-        >
-          {daftarRombel.map((r) => (
-            <option key={r} value={r}>
-              {r === 'Semua' ? 'Semua rombel' : r}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          value={cari}
-          onChange={(e) => setCari(e.target.value)}
-          placeholder="Cari nama siswa"
-          className={INPUT_CLASS}
-        />
-      </div>
+      <input
+        type="text"
+        value={cari}
+        onChange={(e) => setCari(e.target.value)}
+        placeholder="Cari nama atau NIS"
+        className={INPUT_CLASS}
+      />
 
-      <div className="max-h-64 overflow-y-auto rounded-lg border border-orange-100">
-        {siswaTampil.length === 0 ? (
-          <p className="p-4 text-center text-sm text-gray-400">Tidak ada siswa yang cocok</p>
+      <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+        {grupRombel.length === 0 ? (
+          <p className="rounded-lg border border-orange-100 p-4 text-center text-sm text-gray-400">
+            Tidak ada siswa kelas {kelompok.kelas} yang cocok
+          </p>
         ) : (
-          siswaTampil.map((s, i) => {
-            const sudahDi = penempatan.get(s.id);
+          grupRombel.map(([rombel, daftar]) => {
+            const jumlahDipilih = daftar.filter(
+              (s) => kelompok.siswaIds.includes(s.id) || terpilih.includes(s.id)
+            ).length;
+            const adaKandidat = daftar.some((s) => !penempatan.has(s.id));
+
             return (
-              <label
-                key={s.id}
-                className={`flex items-center gap-3 px-3 py-2 text-sm ${
-                  i > 0 ? 'border-t border-orange-100' : ''
-                } ${sudahDi ? 'cursor-not-allowed text-gray-400' : 'cursor-pointer text-gray-800'}`}
-              >
-                <input
-                  type="checkbox"
-                  disabled={Boolean(sudahDi)}
-                  checked={terpilih.includes(s.id)}
-                  onChange={() => toggleSiswa(s.id)}
-                  className="h-4 w-4 accent-orange-600"
-                />
-                <span className="flex-1">{s.nama}</span>
-                <span className="text-xs">{sudahDi ?? s.rombel}</span>
-              </label>
+              <div key={rombel}>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-800">
+                    Kelas {rombel}{' '}
+                    <span className="font-normal text-gray-400">
+                      ({jumlahDipilih}/{daftar.length} dipilih)
+                    </span>
+                  </span>
+                  {adaKandidat && (
+                    <button
+                      type="button"
+                      onClick={() => pilihSemuaRombel(daftar)}
+                      className="text-xs font-semibold text-orange-600 hover:underline"
+                    >
+                      Pilih semua kelas ini
+                    </button>
+                  )}
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-orange-100">
+                  {daftar.map((s, i) => {
+                    const diKelompokIni = kelompok.siswaIds.includes(s.id);
+                    const diKelompokLain = penempatan.has(s.id) && !diKelompokIni;
+                    const tidakBisa = diKelompokIni || diKelompokLain;
+
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-center gap-3 px-3 py-2 text-sm ${
+                          i > 0 ? 'border-t border-orange-100' : ''
+                        } ${diKelompokIni ? 'bg-orange-50' : ''} ${
+                          tidakBisa ? 'cursor-not-allowed' : 'cursor-pointer'
+                        } ${diKelompokLain ? 'text-gray-400' : 'text-gray-800'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={tidakBisa}
+                          checked={diKelompokIni || terpilih.includes(s.id)}
+                          onChange={() => toggleSiswa(s.id)}
+                          className="h-4 w-4 accent-orange-600"
+                        />
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-500">
+                          {s.nis}
+                        </span>
+                        <span className="flex-1">{s.nama}</span>
+                        {diKelompokIni ? (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            sudah
+                          </span>
+                        ) : diKelompokLain ? (
+                          <span className="text-xs">{penempatan.get(s.id)}</span>
+                        ) : (
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500">
+                            baru
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })
         )}
       </div>
 
       <p className="text-xs text-gray-500">
-        Terpilih {terpilih.length}, sisa slot {sisaSlot} dari {kelompok.kapasitas}
+        Sisa slot {Math.max(sisaSlot, 0)} dari {kelompok.kapasitas}
       </p>
 
       <PesanError pesan={error} />
@@ -647,6 +723,7 @@ export default function PembelajaranAlquranClient() {
                       <th className="px-5 py-3 font-semibold">Kelompok</th>
                       <th className="px-5 py-3 font-semibold">Sesi</th>
                       <th className="px-5 py-3 font-semibold">Kelas</th>
+                      <th className="px-5 py-3 font-semibold">Fase</th>
                       <th className="px-5 py-3 font-semibold">Siswa</th>
                       <th className="px-5 py-3 font-semibold">Aksi</th>
                     </tr>
@@ -661,6 +738,11 @@ export default function PembelajaranAlquranClient() {
                           </td>
                           <td className="px-5 py-3 text-gray-600">{kelompok.sesi}</td>
                           <td className="px-5 py-3 text-gray-600">{kelompok.kelas}</td>
+                          <td className="px-5 py-3">
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-xs font-bold text-orange-700">
+                              {fasePerKelas(kelompok.kelas)}
+                            </span>
+                          </td>
                           <td className="px-5 py-3 text-gray-600">
                             {kelompok.siswaIds.length} / {kelompok.kapasitas}
                           </td>

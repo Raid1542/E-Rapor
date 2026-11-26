@@ -423,7 +423,7 @@ export default function DataMataPelajaranPage() {
         if (!kurikulum) ne.kurikulum = 'Kurikulum wajib diisi';
         if (!jenis) {
             ne.jenis = 'Jenis mapel wajib dipilih';
-        } else if (!['wajib', 'pilihan'].includes(jenis)) {
+        } else if (!['wajib', 'pilihan', 'alquran'].includes(jenis)) {
             ne.jenis = `Jenis tidak valid: "${jenis}"`;
         }
         if (kodeMapel && !/^[A-Z0-9-]{2,20}$/.test(kodeMapel)) {
@@ -722,6 +722,7 @@ export default function DataMataPelajaranPage() {
                                     <option value="">-- Pilih --</option>
                                     <option value="wajib">Wajib</option>
                                     <option value="pilihan">Pilihan</option>
+                                    <option value="alquran">Al-Quran</option>
                                 </select>
                                 {errors.jenis && <p className="text-red-600 text-xs font-semibold mt-0.5">{errors.jenis}</p>}
                             </div>
@@ -981,6 +982,8 @@ export default function DataMataPelajaranPage() {
                                         <div className="px-4 py-4 flex items-center justify-center">
                                             {mp.jenis === 'wajib' ? (
                                                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap" style={{ background: '#fff5eb', color: ACCENT_DARK, border: '1px solid #fde0c8' }}>Wajib</span>
+                                            ) : mp.jenis === 'alquran' ? (
+                                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap bg-blue-50 text-blue-700 border border-blue-200">Al-Quran</span>
                                             ) : (
                                                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap bg-green-50 text-green-700 border border-green-200">Pilihan</span>
                                             )}

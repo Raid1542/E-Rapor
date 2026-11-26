@@ -8,7 +8,7 @@
  */
 
 import { Metadata } from 'next';
-import PembelajaranAlquranClient from './components/pembelajaran_alquran_client';
+import PembelajaranAlquranClient from '././components/pembelajaran_alquran_client';
 
 export const metadata: Metadata = {
   title: 'Pembelajaran Al-Quran',
